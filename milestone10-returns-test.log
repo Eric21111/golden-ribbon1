@@ -1,1 +1,0 @@
-Return tests passed: inactive stock, validation, full rollback, idempotency, competing sale/return stock limits, branch isolation, permissions, source-only deduction and pending receipt.

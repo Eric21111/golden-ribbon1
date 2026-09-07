@@ -1,1 +1,0 @@
-Sales database tests passed: migrations, exact totals/change, rollback, duplicate protection, stock limits, frozen prices, shift ownership/closure and direct-write denial.

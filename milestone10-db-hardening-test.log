@@ -1,1 +1,0 @@
-Milestone 10 database hardening tests passed: RLS coverage, SECURITY DEFINER search paths, report aggregation, end-shift idempotency, immutable sales, and return transitions.
