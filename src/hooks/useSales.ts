@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { isReportRangeReady } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getManagerDashboardMetrics,
@@ -35,6 +36,7 @@ export function useSalesByBranch(
   return useQuery({
     queryKey: queryKeys.salesByBranch(rangeType, startDate, endDate),
     queryFn: () => reportSalesByBranch(rangeType, startDate, endDate),
+    enabled: isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 
@@ -47,6 +49,7 @@ export function useProductSales(
   return useQuery({
     queryKey: queryKeys.productSales(rangeType, branchId, startDate, endDate),
     queryFn: () => reportProductSales(rangeType, branchId, startDate, endDate),
+    enabled: isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 

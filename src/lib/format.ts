@@ -77,3 +77,13 @@ export function toNextDayStartManila(dateStr: string): string | undefined {
   return `${yy}-${mm}-${dd}T00:00:00+08:00`;
 }
 
+/** Custom reports must not run until both exclusive-end bounds exist. Today / All Time always run. */
+export function isReportRangeReady(
+  rangeType: 'today' | 'custom' | 'all_time',
+  startDate?: string,
+  endDate?: string
+): boolean {
+  if (rangeType !== 'custom') return true;
+  return Boolean(startDate && endDate);
+}
+

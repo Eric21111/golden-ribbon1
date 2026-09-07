@@ -145,7 +145,7 @@ export function AuditHistoryScreen() {
         />
       )}
 
-      {items.length === 0 && !query.isLoading && !query.error && (
+      {items.length === 0 && !query.isLoading && !query.error && query.isFetched && (
         <EmptyState title="No audit events" message="No matching audit records found." />
       )}
 

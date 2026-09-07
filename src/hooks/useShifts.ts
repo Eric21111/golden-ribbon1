@@ -27,7 +27,9 @@ export function useStartShift(cashierId: string) {
     mutationFn: startCashierShift,
     onSuccess: async () => {
       await Promise.all([
+        client.invalidateQueries({ queryKey: queryKeys.profile(cashierId) }),
         client.invalidateQueries({ queryKey: queryKeys.activeShift(cashierId) }),
+        client.invalidateQueries({ queryKey: ['inventory'] }),
         client.invalidateQueries({ queryKey: ['shifts'] }),
       ]);
     },

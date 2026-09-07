@@ -53,7 +53,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     queryFn: () => getMyProfile(userId),
     enabled: Boolean(userId) && isSupabaseConfigured,
     retry: 1,
+    staleTime: 0,
+    refetchInterval: 10_000,
   });
+
+  const branchId = profileQuery.data?.branch_id ?? null;
+  const role = profileQuery.data?.role;
+  const isActive = profileQuery.data?.is_active;
+  useEffect(() => {
+    if (!userId) return;
+    void queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    void queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
+    void queryClient.invalidateQueries({ queryKey: ['transfers'] });
+    void queryClient.invalidateQueries({ queryKey: ['stock-returns'] });
+    void queryClient.invalidateQueries({ queryKey: ['return-inventory'] });
+    void queryClient.invalidateQueries({ queryKey: ['shifts'] });
+  }, [userId, branchId, role, isActive, queryClient]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured. Add the values from .env.example.');

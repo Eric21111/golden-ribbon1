@@ -18,6 +18,7 @@ export default function CashierLayout() {
           <Stack.Screen name="cashier/payment" options={{ title: 'Checkout' }} />
           <Stack.Screen name="cashier/sales" options={{ title: 'Current Shift Sales' }} />
           <Stack.Screen name="cashier/profile" options={{ title: 'Account' }} />
+          <Stack.Screen name="cashier/change-password" options={{ title: 'Change Password' }} />
         </Stack>
       </RoleNavigation>
     </RoleGuard>

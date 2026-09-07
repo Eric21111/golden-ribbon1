@@ -38,6 +38,14 @@ assert.equal((await send('duplicate-return-check')).rows[0].id,id);
 await assert.rejects(send('duplicate-return-check',items,'different notes'), /different return/);
 await assert.rejects(send('duplicate-return-check',[{product_id:p1,quantity_returned:1}]), /different return/);
 await assert.rejects(send('competing-stock-return',[{product_id:p1,quantity_returned:11}]), /Insufficient stock/);
+const receiveItems = (await db.query('select id, quantity_returned from public.stock_return_items')).rows.map((row) => ({
+  stock_return_item_id: row.id,
+  quantity_received: Number(row.quantity_returned),
+}));
+await assert.rejects(
+  db.query('select public.receive_stock_return($1,$2::jsonb,null,$3)', [id, JSON.stringify(receiveItems), 'selling-manager-cannot-receive']),
+  /only Main Branch managers or owners/
+);
 for (const sql of ["update public.stock_returns set status='received'",'update public.stock_return_items set quantity_received=18','delete from public.stock_returns','update public.branch_inventory set quantity_on_hand=1000',"insert into public.stock_returns(return_number) values ('FAKE')"])
   await assert.rejects(db.exec(sql), /permission denied/);
 await db.exec(`select set_config('request.jwt.claim.sub','${other}',false);`);

@@ -11,7 +11,7 @@ const { outputText } = ts.transpileModule(source, {
 });
 const module = { exports: {} };
 vm.runInNewContext(outputText, { module, exports: module.exports }, { filename: sourcePath });
-const { getErrorMessage, getCheckoutFailure } = module.exports;
+const { getErrorMessage, getCheckoutFailure, getInventoryErrorMessage } = module.exports;
 
 const secretBackendError = new Error('SQL failed at public.sales; service_role token=super-secret; stack trace follows');
 assert.equal(getErrorMessage(secretBackendError), 'Something went wrong. Please try again.');
@@ -31,5 +31,10 @@ assert.equal(deadlockFailure.preserveRequest, true, 'Deadlocks are safe to retry
 const rejectedFailure = getCheckoutFailure({ code: '42501', message: 'permission denied for relation sales' });
 assert.equal(rejectedFailure.preserveRequest, false, 'Definitive authorization rejection must allow the order to be corrected');
 assert.ok(!rejectedFailure.message.includes('relation sales'));
+
+assert.equal(
+  getInventoryErrorMessage(new Error('Insufficient stock for product CHICKEN')),
+  'There is not enough stock to complete this operation.'
+);
 
 console.log('Milestone 10 app error tests passed: backend details are sanitized and retryable/unknown checkout outcomes preserve the identical request.');

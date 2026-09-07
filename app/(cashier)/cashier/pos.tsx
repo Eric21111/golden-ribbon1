@@ -21,7 +21,13 @@ export default function CashierPosScreen() {
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
   const shiftQuery = useActiveShift(cashierId);
-  const inventory = useInventory(shiftQuery.data ? profile?.branch : null, true);
+  const shiftBranch = useMemo(() => {
+    if (!shiftQuery.data) return null;
+    if (profile?.branch?.id === shiftQuery.data.branch_id) return profile.branch;
+    if (!profile?.branch) return null;
+    return { ...profile.branch, id: shiftQuery.data.branch_id };
+  }, [profile?.branch, shiftQuery.data]);
+  const inventory = useInventory(shiftBranch, true);
   const endMutation = useEndShift(cashierId);
   const items = useCartStore((state) => state.items);
   const beginShift = useCartStore((state) => state.beginShift);
@@ -67,7 +73,7 @@ export default function CashierPosScreen() {
 
   return (
     <Screen>
-      <PageHeader title="Point of Sale" subtitle={`${profile.branch.name} · Build the current order`} />
+      <PageHeader title="Point of Sale" subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`} />
       <TextInput
         accessibilityLabel="Search products by name or SKU"
         autoCapitalize="none"

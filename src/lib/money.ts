@@ -15,3 +15,29 @@ export function cartTotalCents(items: { quantity: number; unit_price: number }[]
   if (!Number.isSafeInteger(total)) throw new Error('Order is too large.');
   return total;
 }
+
+export type PricedCartItem = {
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+};
+
+/** Reprices cart lines from live product selling prices. Does not trust stale client unit prices. */
+export function applyLiveCartPrices<T extends PricedCartItem>(
+  items: T[],
+  prices: Record<string, number>
+): { items: T[]; changed: boolean } {
+  let changed = false;
+  const next = items.map((item) => {
+    const live = prices[item.product_id];
+    if (live === undefined || toCents(live) === toCents(item.unit_price)) return item;
+    changed = true;
+    return {
+      ...item,
+      unit_price: live,
+      subtotal: item.quantity * toCents(live) / 100,
+    };
+  });
+  return { items: next, changed };
+}

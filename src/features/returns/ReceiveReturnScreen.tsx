@@ -11,7 +11,6 @@ import { FormField } from '@/components/FormField';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
-import { useAuth } from '@/features/auth/AuthProvider';
 import { useReceiveReturn, useReturn } from '@/hooks/useReturns';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { makeIdempotencyKey } from '@/lib/format';
@@ -29,7 +28,6 @@ type Values = z.infer<typeof schema>;
 export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
   const params = useLocalSearchParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
-  const { profile } = useAuth();
   const query = useReturn(id);
   const mutation = useReceiveReturn();
   const requestKey = useRef(makeIdempotencyKey('return-receive'));
@@ -80,13 +78,11 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
 
   const stockReturn = query.data;
 
-  // Authorization check: only owner or manager assigned to Main Branch
-  const isMainBranchManager = role === 'manager' && profile?.branch?.is_main_branch && profile?.branch_id === stockReturn.to_branch_id;
-  const isOwner = role === 'owner';
-  if (!isOwner && !isMainBranchManager) {
+  // Authorization check: Main Branch receiving is Owner-only.
+  if (role !== 'owner') {
     return (
       <Screen>
-        <PageHeader title="Unauthorized" subtitle="Only Main Branch staff or Owners can receive returns." />
+        <PageHeader title="Unauthorized" subtitle="Only the Owner can receive returns at Main Branch." />
         <AppButton label="Go back" variant="secondary" onPress={() => router.back()} />
       </Screen>
     );

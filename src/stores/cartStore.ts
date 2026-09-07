@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { toCents } from '@/lib/money';
+import { applyLiveCartPrices, cartTotalCents, toCents } from '@/lib/money';
 import { useCheckoutStore } from './checkoutStore';
 
 import type { CartItem, InventoryItem } from '@/types/models';
@@ -12,10 +12,15 @@ interface CartState {
   beginShift: (shiftId: string) => void;
   addProduct: (item: CartProduct) => void;
   decreaseProduct: (productId: string) => void;
+  applyLivePrices: (prices: Record<string, number>) => {
+    changed: boolean;
+    previousTotalCents: number;
+    nextTotalCents: number;
+  };
   clearCart: () => void;
 }
 
-export const useCartStore = create<CartState>((set) => ({
+export const useCartStore = create<CartState>((set, get) => ({
   shiftId: null,
   items: [],
   beginShift: (shiftId) => set((state) => state.shiftId === shiftId ? state : { shiftId, items: [] }),
@@ -54,5 +59,12 @@ export const useCartStore = create<CartState>((set) => ({
         : item),
     };
   }),
-  clearCart: () => set({ shiftId: null, items: [] }),
+  applyLivePrices: (prices) => {
+    const previous = get().items;
+    const previousTotalCents = cartTotalCents(previous);
+    const { items, changed } = applyLiveCartPrices(previous, prices);
+    if (changed) set({ items });
+    return { changed, previousTotalCents, nextTotalCents: cartTotalCents(items) };
+  },
+  clearCart: () => set((state) => ({ ...state, items: [] })),
 }));

@@ -1,5 +1,5 @@
-import { ReceiveReturnScreen } from '@/features/returns/ReceiveReturnScreen';
+import { Redirect } from 'expo-router';
 
 export default function ManagerReceiveReturnRoute() {
-  return <ReceiveReturnScreen role="manager" />;
+  return <Redirect href="/manager/returns" />;
 }

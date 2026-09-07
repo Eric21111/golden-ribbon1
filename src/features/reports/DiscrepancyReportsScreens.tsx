@@ -166,7 +166,11 @@ export function TransferDiscrepanciesReportScreen() {
         />
       )}
 
-      {discrepancies.length === 0 && !query.isLoading && (
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+      )}
+
+      {discrepancies.length === 0 && !query.isLoading && query.isFetched && (
         <EmptyState
           title="No transfer discrepancies"
           message="All transfer receipts matched the quantities sent."
@@ -362,7 +366,11 @@ export function ReturnDiscrepanciesReportScreen() {
         />
       )}
 
-      {discrepancies.length === 0 && !query.isLoading && (
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+      )}
+
+      {discrepancies.length === 0 && !query.isLoading && query.isFetched && (
         <EmptyState
           title="No return discrepancies"
           message="All return receipts matched the quantities returned."

@@ -118,7 +118,10 @@ export function BranchPerformanceReportScreen() {
         />
       )}
 
-      {report.length === 0 && !query.isLoading && (
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+      )}
+      {report.length === 0 && !query.isLoading && query.isFetched && (
         <EmptyState
           title="No selling branches"
           message="No active selling branches found for this period."
@@ -260,6 +263,10 @@ export function BranchPerformanceDetailScreen() {
           message={getErrorMessage(query.error)}
           onRetry={() => void query.refetch()}
         />
+      )}
+
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
       )}
 
       {data && (

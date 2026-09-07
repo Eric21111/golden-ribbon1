@@ -15,7 +15,6 @@ import { formatDate, formatMoney } from '@/lib/format';
 
 export default function ManagerDashboard() {
   const { profile } = useAuth();
-  const isMainBranch = Boolean(profile?.branch?.is_main_branch);
 
   const metricsQuery = useManagerDashboardMetrics();
   const recentSalesQuery = useManagerRecentSales(5);
@@ -105,11 +104,7 @@ export default function ManagerDashboard() {
           <DashboardCard
             title="Stock returns"
             value={metrics?.returns_in_transit_count ?? '—'}
-            description={
-              isMainBranch
-                ? 'Verify and receive unsold stock arriving from branches'
-                : 'Send unsold stock back to Main Branch'
-            }
+            description="Send unsold stock back to Main Branch"
             onPress={() => router.push('/manager/returns')}
           />
           <DashboardCard

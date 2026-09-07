@@ -1,5 +1,7 @@
+import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AppButton } from '@/components/AppButton';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { SignOutButton } from '@/components/SignOutButton';
@@ -19,6 +21,13 @@ export function AccountScreen() {
   const { profile, session } = useAuth();
   if (!profile || !session) return null;
 
+  const changePasswordHref =
+    profile.role === 'owner'
+      ? '/owner/change-password'
+      : profile.role === 'manager'
+        ? '/manager/change-password'
+        : '/cashier/change-password';
+
   return (
     <Screen>
       <PageHeader title="Account" subtitle="Your staff account information." />
@@ -29,6 +38,7 @@ export function AccountScreen() {
         <Detail label="Branch" value={profile.branch?.name ?? 'All branches'} />
         <Detail label="Status" value={profile.is_active ? 'Active' : 'Inactive'} />
       </View>
+      <AppButton label="Change Password" variant="secondary" onPress={() => router.push(changePasswordHref as any)} />
       <SignOutButton />
     </Screen>
   );

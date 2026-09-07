@@ -104,7 +104,10 @@ export function SalesByBranchScreen() {
         />
       )}
 
-      {report.length === 0 && !query.isLoading && (
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+      )}
+      {report.length === 0 && !query.isLoading && query.isFetched && (
         <EmptyState title="No sales recorded" message="Branches have no completed sales for this range." />
       )}
 
@@ -253,7 +256,10 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
         />
       )}
 
-      {products.length === 0 && !query.isLoading && (
+      {rangeType === 'custom' && !query.isFetched && !query.isLoading && (
+        <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+      )}
+      {products.length === 0 && !query.isLoading && query.isFetched && (
         <EmptyState title="No product sales" message="No completed product sales for this range." />
       )}
 

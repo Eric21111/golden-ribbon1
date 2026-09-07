@@ -1,5 +1,5 @@
 import { Redirect, router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppButton } from '@/components/AppButton';
@@ -14,6 +14,8 @@ import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 import { cartTotalCents, centsDecimal, toCents } from '@/lib/money';
 import { formatMoney, makeIdempotencyKey } from '@/lib/format';
+import { invalidateCompletedSaleQueries } from '@/lib/queryClient';
+import { getProductSellingPrices } from '@/services/productService';
 import { colors, spacing, radius } from '@/constants/theme';
 
 export default function PaymentScreen() {
@@ -24,9 +26,46 @@ export default function PaymentScreen() {
   const client = useQueryClient();
   const [paid, setPaid] = useState('');
   const [validation, setValidation] = useState('');
+  const [priceNotice, setPriceNotice] = useState('');
+  const [pricesReady, setPricesReady] = useState(false);
+  const [priceError, setPriceError] = useState('');
+  const [priceRefreshKey, setPriceRefreshKey] = useState(0);
   const total = cartTotalCents(items);
+
+  useEffect(() => {
+    if (checkout.sale) return;
+    let cancelled = false;
+    setPricesReady(false);
+    setPriceError('');
+    void (async () => {
+      try {
+        const ids = useCartStore.getState().items.map((item) => item.product_id);
+        const prices = await getProductSellingPrices(ids);
+        if (cancelled) return;
+        const result = useCartStore.getState().applyLivePrices(prices);
+        if (result.changed) {
+          setPriceNotice(
+            `Order total updated from ${formatMoney(result.previousTotalCents / 100)} to ${formatMoney(result.nextTotalCents / 100)}. Collect the new amount before confirming.`
+          );
+        }
+        setPricesReady(true);
+      } catch {
+        if (!cancelled) {
+          setPriceError('Unable to refresh current product prices. Retry before confirming.');
+          setPricesReady(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [checkout.sale, priceRefreshKey]);
+
+  useEffect(() => {
+    if (!checkout.sale) return;
+    void invalidateCompletedSaleQueries(client);
+  }, [checkout.sale, client]);
+
   const submit = () => {
-    if (!shift.data || checkout.pending) return;
+    if (!shift.data || checkout.pending || !pricesReady) return;
     if (checkout.request) { void checkout.submit(checkout.request); return; }
     try {
       const cents = toCents(paid);
@@ -39,9 +78,7 @@ export default function PaymentScreen() {
   const done = () => {
     useCartStore.getState().clearCart();
     checkout.reset();
-    void client.invalidateQueries({ queryKey: ['inventory'] });
-    void client.invalidateQueries({ queryKey: ['inventory-movements'] });
-    void client.invalidateQueries({ queryKey: ['shift-sales'] });
+    void invalidateCompletedSaleQueries(client);
     router.replace('/cashier/pos');
   };
   if (shift.isLoading) return <LoadingState />;
@@ -50,12 +87,17 @@ export default function PaymentScreen() {
   if (!items.length && !checkout.sale && !checkout.request) return <Redirect href="/cashier/pos" />;
   return <Screen>
     <PageHeader title="Checkout" subtitle="Review the order and collect payment." />
+    {!pricesReady && !priceError && !checkout.sale ? <LoadingState label="Refreshing current prices…" /> : null}
+    {priceError && !checkout.sale ? (
+      <ErrorState message={priceError} onRetry={() => setPriceRefreshKey((key) => key + 1)} />
+    ) : null}
     <OrderSummary items={items} />
+    {priceNotice ? <Text accessibilityRole="alert" style={styles.notice}>{priceNotice}</Text> : null}
     <FormField label="Money Given" keyboardType="decimal-pad" value={checkout.request?.amountPaid ?? paid}
-      editable={!checkout.request && !checkout.pending} onChangeText={setPaid} />
-    <Text>Final prices and available stock are checked when you confirm.</Text>
+      editable={!checkout.request && !checkout.pending && pricesReady} onChangeText={setPaid} />
+    <Text>Final prices and available stock are checked when you confirm. Displayed prices are refreshed from the server before payment.</Text>
     {validation || checkout.error ? <Text accessibilityRole="alert" style={styles.error}>{validation || checkout.error}</Text> : null}
-    <AppButton label={checkout.request ? 'RETRY CONFIRMATION' : 'CONFIRM SALE'} loading={checkout.pending} onPress={submit} />
+    <AppButton label={checkout.request ? 'RETRY CONFIRMATION' : 'CONFIRM SALE'} loading={checkout.pending} disabled={!pricesReady} onPress={submit} />
     <AppButton label="Back to order" variant="secondary" disabled={checkout.pending || !!checkout.request} onPress={() => router.replace('/cashier/pos')} />
     <Modal visible={!!checkout.sale} transparent animationType="fade" onRequestClose={() => {}}>
       <View style={styles.overlay}><View style={styles.card}>
@@ -72,6 +114,7 @@ export default function PaymentScreen() {
 }
 const styles = StyleSheet.create({
   error: { color: colors.danger },
+  notice: { color: '#92400E', backgroundColor: colors.warningSurface, borderRadius: radius.sm, padding: spacing.sm, fontSize: 14, lineHeight: 20 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacing.lg },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md, width: '100%', maxWidth: 440, alignSelf: 'center' },
   title: { fontSize: 20, fontWeight: '800', color: colors.primary },

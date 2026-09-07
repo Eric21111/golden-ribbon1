@@ -11,7 +11,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { createReturn, listReturnStock } from '@/services/returnService';
 import { useReturnStore } from '@/stores/returnStore';
 import { makeIdempotencyKey } from '@/lib/format';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage, getInventoryErrorMessage } from '@/lib/errors';
 import { returnStyles } from './ReturnScreens';
 
 export default function CreateReturnScreen() {
@@ -55,7 +55,7 @@ export default function CreateReturnScreen() {
         useReturnStore.getState().clear(user); setReview(false);
         void query.refetch();
       }
-      setError(getErrorMessage(failure));
+      setError(getInventoryErrorMessage(failure));
     } finally { lock.current = false; setBusy(false); }
   }
   if (saved?.id) return <Screen>

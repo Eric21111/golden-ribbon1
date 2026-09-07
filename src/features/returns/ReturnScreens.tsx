@@ -109,8 +109,6 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
         subtitle={
           role === 'owner'
             ? 'Returns from selling branches to Main Branch.'
-            : isMainBranch
-            ? 'Returns arriving at Main Branch for verification and receipt.'
             : 'Unsold stock returned to Main Branch.'
         }
       />
@@ -136,9 +134,7 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
       )}
 
       {rows?.map((row) => {
-        const canReceive =
-          row.status === 'in_transit' &&
-          (role === 'owner' || (isMainBranch && profile?.branch_id === row.to_branch_id));
+        const canReceive = row.status === 'in_transit' && role === 'owner';
 
         return (
           <View key={row.id} style={returnStyles.card}>
@@ -172,11 +168,7 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
                   <AppButton
                     label="Receive"
                     onPress={() =>
-                      router.push(
-                        role === 'owner'
-                          ? { pathname: '/owner/returns/receive/[id]', params: { id: row.id } }
-                          : { pathname: '/manager/returns/receive/[id]', params: { id: row.id } }
-                      )
+                      router.push({ pathname: '/owner/returns/receive/[id]', params: { id: row.id } })
                     }
                   />
                 </View>
@@ -200,7 +192,6 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
 export function ReturnDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
-  const isMainBranch = Boolean(profile?.branch?.is_main_branch);
   const isOwner = profile?.role === 'owner';
 
   const query = useQuery({
@@ -211,9 +202,7 @@ export function ReturnDetails() {
 
   const row = query.data;
 
-  const canReceive =
-    row?.status === 'in_transit' &&
-    (isOwner || (isMainBranch && profile?.branch_id === row.to_branch_id));
+  const canReceive = row?.status === 'in_transit' && isOwner;
 
   return (
     <Screen>
@@ -271,11 +260,7 @@ export function ReturnDetails() {
             <AppButton
               label="Count & receive return"
               onPress={() =>
-                router.push(
-                  isOwner
-                    ? { pathname: '/owner/returns/receive/[id]', params: { id: row.id } }
-                    : { pathname: '/manager/returns/receive/[id]', params: { id: row.id } }
-                )
+                router.push({ pathname: '/owner/returns/receive/[id]', params: { id: row.id } })
               }
             />
           )}

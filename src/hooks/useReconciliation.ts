@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { isReportRangeReady } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getBranchPerformanceDetails,
@@ -17,6 +18,7 @@ export function useBranchPerformance(
   return useQuery({
     queryKey: queryKeys.branchPerformance(rangeType, startDate, endDate),
     queryFn: () => reportBranchPerformance(rangeType, startDate, endDate),
+    enabled: isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 
@@ -29,7 +31,7 @@ export function useBranchPerformanceDetails(
   return useQuery({
     queryKey: queryKeys.branchPerformanceDetails(branchId, rangeType, startDate, endDate),
     queryFn: () => getBranchPerformanceDetails(branchId, rangeType, startDate, endDate),
-    enabled: Boolean(branchId),
+    enabled: Boolean(branchId) && isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 
@@ -50,6 +52,7 @@ export function useTransferDiscrepanciesReport(
     ),
     queryFn: () =>
       reportTransferDiscrepancies(branchId, discrepancyType, rangeType, startDate, endDate),
+    enabled: isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 
@@ -70,6 +73,7 @@ export function useReturnDiscrepanciesReport(
     ),
     queryFn: () =>
       reportReturnDiscrepancies(branchId, discrepancyType, rangeType, startDate, endDate),
+    enabled: isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 

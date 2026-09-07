@@ -38,6 +38,7 @@ export default function OwnerLayout() {
           <Stack.Screen name="owner/audit/index" options={{ title: 'Audit History' }} />
           <Stack.Screen name="owner/audit/[id]" options={{ title: 'Audit Event Detail' }} />
           <Stack.Screen name="owner/profile" options={{ title: 'Account' }} />
+          <Stack.Screen name="owner/change-password" options={{ title: 'Change Password' }} />
         </Stack>
 
       </RoleNavigation>

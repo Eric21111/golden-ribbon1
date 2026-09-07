@@ -19,6 +19,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="manager/movements" options={{ title: 'Inventory History' }} />
         <Stack.Screen name="manager/products" options={{ title: 'Products' }} />
         <Stack.Screen name="manager/profile" options={{ title: 'Account' }} />
+        <Stack.Screen name="manager/change-password" options={{ title: 'Change Password' }} />
       </Stack>
       </RoleNavigation>
     </RoleGuard>

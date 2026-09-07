@@ -38,6 +38,47 @@ export function getAuthErrorMessage(error: unknown): string {
   return 'Unable to sign in. Please try again.';
 }
 
+export function getChangePasswordErrorMessage(error: unknown): string {
+  const message = readErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes('invalid login credentials') ||
+    message.includes('invalid_credentials') ||
+    message.includes('invalid credentials')
+  ) {
+    return 'Current password is incorrect.';
+  }
+  if (
+    message.includes('session has expired') ||
+    message.includes('auth session missing') ||
+    message.includes('jwt expired') ||
+    message.includes('not authenticated')
+  ) {
+    return 'Your session has expired. Sign in again.';
+  }
+  if (
+    message.includes('different from the old') ||
+    message.includes('same as the old') ||
+    message.includes('should be different')
+  ) {
+    return 'New password must be different from the current password.';
+  }
+  if (
+    message.includes('leaked') ||
+    message.includes('pwned') ||
+    message.includes('weak') ||
+    message.includes('at least') ||
+    message.includes('too short') ||
+    message.includes('characters')
+  ) {
+    return 'New password does not meet the password policy. Use 8 to 72 characters.';
+  }
+  if (isNetworkError(message)) {
+    return 'Unable to connect. Check your internet connection and try again.';
+  }
+  return 'The password could not be changed. Please try again.';
+}
+
 export function getInventoryErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 
