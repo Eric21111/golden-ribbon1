@@ -1,0 +1,64 @@
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync, readdirSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const moneySource = ts.transpileModule(readFileSync('src/lib/money.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { toCents, centsDecimal, cartTotalCents } = await import(`data:text/javascript;base64,${Buffer.from(moneySource).toString('base64')}`);
+assert.equal(toCents('80.10'), 8010);
+assert.equal(cartTotalCents([{ quantity: 3, unit_price: 0.1 }, { quantity: 1, unit_price: 0.2 }]), 50);
+assert.equal(centsDecimal(24000), '240.00');
+assert.throws(() => toCents('1.001'));
+assert.throws(() => toCents('-1'));
+const db = new PGlite();
+await db.exec(`create role anon; create role authenticated; create role service_role;
+create schema auth; create table auth.users(id uuid primary key, email text);
+create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema public, auth to authenticated;
+grant execute on function auth.uid() to authenticated;`);
+for (const file of readdirSync('supabase/migrations').filter(f => f.endsWith('.sql')).sort()) {
+  await db.exec(readFileSync(`supabase/migrations/${file}`, 'utf8').replace('create extension if not exists pgcrypto;', ''));
+}
+const user = '10000000-0000-4000-8000-000000000001';
+const other = '10000000-0000-4000-8000-000000000002';
+const branch = '20000000-0000-4000-8000-000000000001';
+const product = '30000000-0000-4000-8000-000000000001';
+await db.exec(`insert into auth.users values ('${user}','cashier@example.test'),('${other}','other@example.test');
+insert into public.branches(id,name,code) values ('${branch}','Branch 1','BR-01');
+insert into public.profiles(id,full_name,role,branch_id) values ('${user}','Cashier One','cashier','${branch}'),('${other}','Cashier Two','cashier','${branch}');
+insert into public.products(id,name,sku,selling_price) values ('${product}','Chicken Nuggets','CHICKEN',80.10);
+insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values ('${branch}','${product}',5);
+set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);
+const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
+const confirm = (key, quantity = 2, paid = '200.00', shiftId = shift) => db.query(
+  'select (public.confirm_sale($1,$2::jsonb,$3::numeric,$4)).*',
+  [shiftId, JSON.stringify([{ product_id: product, quantity, unit_price: 0.01 }]), paid, key]);
+await assert.rejects(confirm('insufficient-payment-1',2,'100.00'), /Insufficient payment/);
+// Fail after the sale and items have been inserted, proving the complete write rolls back.
+await db.exec(`reset role;
+create function public.test_reject_movement() returns trigger language plpgsql as $$ begin raise exception 'injected movement failure'; end $$;
+create trigger test_sale_rollback before insert on public.inventory_movements for each row execute function public.test_reject_movement();
+set role authenticated;`);
+await assert.rejects(confirm('rollback-after-insert-1'), /injected movement failure/);
+await db.exec('reset role; drop trigger test_sale_rollback on public.inventory_movements; set role authenticated;');
+assert.equal((await db.query('select * from public.sales')).rows.length, 0);
+const first = (await confirm('duplicate-protection-1')).rows[0];
+assert.equal(Number(first.total_amount),160.20);
+assert.equal(Number(first.change_amount),39.80);
+assert.equal((await confirm('duplicate-protection-1')).rows[0].id, first.id);
+await assert.rejects(confirm('duplicate-protection-1',1), /different order/);
+await assert.rejects(confirm('overselling-attempt-1',4,'500'), /Insufficient stock/);
+await assert.rejects(db.exec(`update public.branch_inventory set quantity_on_hand=100`), /permission denied/);
+await assert.rejects(db.exec(`delete from public.sales`), /permission denied/);
+await db.exec(`reset role; update public.products set selling_price=90.00;
+set role authenticated; select set_config('request.jwt.claim.sub','${other}',false);`);
+assert.equal((await db.query('select * from public.sales')).rows.length,0);
+await assert.rejects(confirm('wrong-cashier-shift-1'), /open shift/);
+await db.exec(`select set_config('request.jwt.claim.sub','${user}',false); select public.end_cashier_shift('${shift}');`);
+await assert.rejects(confirm('closed-shift-attempt-1'), /open shift/);
+await db.exec('reset role');
+assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory')).rows[0].quantity_on_hand),3);
+assert.equal((await db.query('select * from public.sales')).rows.length,1);
+assert.equal(Number((await db.query('select unit_price from public.sale_items')).rows[0].unit_price),80.10);
+assert.equal(Number((await db.query("select quantity from public.inventory_movements where reference_type='sale'")).rows[0].quantity),-2);
+await db.close();
+console.log('Sales database tests passed: migrations, exact totals/change, rollback, duplicate protection, stock limits, frozen prices, shift ownership/closure and direct-write denial.');

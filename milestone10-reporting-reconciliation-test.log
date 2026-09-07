@@ -1,0 +1,86 @@
+--- Starting Milestone 8 Automated Verification ---
+Applying 20260904130000_milestone_1_foundation.sql...
+Applying 20260904160000_milestone_2_inventory_transfers.sql...
+Applying 20260906090000_milestone_3_cashier_shifts.sql...
+Applying 20260906100000_milestone_3_5_employee_management.sql...
+Applying 20260906110000_sale_movement_type.sql...
+Applying 20260906110100_milestone_4_sales.sql...
+Applying 20260906120000_return_movement_type.sql...
+Applying 20260906120100_milestone_5_returns.sql...
+Applying 20260906120200_return_in_movement_type.sql...
+Applying 20260906130000_milestone_6_return_receiving.sql...
+Applying 20260906140000_milestone_7_sales_shifts_reports.sql...
+Applying 20260907100000_milestone_8_branch_performance_reconciliation.sql...
+Applying 20260908090000_milestone_9_audit_logs.sql...
+Applying 20260909100000_milestone_10_database_hardening.sql...
+Applying 20260909110000_fix_branch_performance_details_lint.sql...
+Testing Owner-only authorization...
+✓ Authorization properly rejects non-owners.
+Testing Inventory Reconciliation math...
+Reconciliation result (Balanced): {
+  sale: 30,
+  variance: 0,
+  branch_id: '20000000-0000-4000-8000-000000000002',
+  return_in: 0,
+  adjustment: 0,
+  product_id: '30000000-0000-4000-8000-000000000001',
+  return_out: 20,
+  branch_name: 'Branch 1',
+  product_sku: 'CHICKEN-NUG',
+  transfer_in: 50,
+  product_name: 'Chicken Nuggets',
+  transfer_out: 0,
+  current_stock: 100,
+  opening_stock: 100,
+  calculated_stock: 100,
+  return_excess_qty: 0,
+  return_missing_qty: 2,
+  transfer_excess_qty: 0,
+  transfer_missing_qty: 2,
+  has_reconciliation_issue: false
+}
+✓ Balanced reconciliation verified with correct category breakdown.
+Reconciliation result (Issue): {
+  sale: 30,
+  variance: -5,
+  branch_id: '20000000-0000-4000-8000-000000000002',
+  return_in: 0,
+  adjustment: 0,
+  product_id: '30000000-0000-4000-8000-000000000001',
+  return_out: 20,
+  branch_name: 'Branch 1',
+  product_sku: 'CHICKEN-NUG',
+  transfer_in: 50,
+  product_name: 'Chicken Nuggets',
+  transfer_out: 0,
+  current_stock: 95,
+  opening_stock: 100,
+  calculated_stock: 100,
+  return_excess_qty: 0,
+  return_missing_qty: 2,
+  transfer_excess_qty: 0,
+  transfer_missing_qty: 2,
+  has_reconciliation_issue: true
+}
+✓ Variance correctly detected and flagged as Reconciliation Issue.
+Testing Branch Performance report...
+Branch Performance result: {
+  branch_id: '20000000-0000-4000-8000-000000000002',
+  branch_name: 'Branch 1',
+  total_sales: 3600,
+  quantity_sold: 30,
+  total_excess_qty: 0,
+  return_excess_qty: 0,
+  total_missing_qty: 4,
+  transaction_count: 1,
+  return_missing_qty: 2,
+  transfer_excess_qty: 0,
+  transfer_missing_qty: 2
+}
+✓ Branch Performance accurately counts only completed sales and distinguishes missing vs excess.
+Testing Transfer & Return Discrepancy reports...
+✓ Transfer Discrepancy report output verified.
+✓ Return Discrepancy report output verified.
+✓ Branch Performance Details verified.
+
+--- ALL MILESTONE 8 TESTS PASSED SUCCESSFULLY! ---
