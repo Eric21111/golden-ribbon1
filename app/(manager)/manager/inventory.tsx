@@ -1,26 +1,52 @@
-import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
+import { router } from 'expo-router';
+
+import { EmptyState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { InventoryListItem } from '@/features/inventory/InventoryListItem';
+import { InventoryHub } from '@/features/inventory/InventoryHub';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
-import { router } from 'expo-router';
-import { AppButton } from '@/components/AppButton';
 
 export default function ManagerInventoryScreen() {
   const { profile } = useAuth();
-  const query = useInventory(profile?.branch, true);
+  const branch = profile?.branch;
+  const query = useInventory(branch, true);
+
+  if (!branch) {
+    return (
+      <Screen>
+        <PageHeader title="Inventory" subtitle="Assigned branch unavailable" />
+        <EmptyState title="No assigned branch" message="Ask an owner to assign you to a branch." />
+      </Screen>
+    );
+  }
 
   return (
-    <Screen>
-      <PageHeader title="Branch inventory" subtitle={`${profile?.branch?.name ?? 'Assigned branch'} physical stock.`} />
-      <AppButton label="Return unsold stock" onPress={() => router.push('/manager/returns/create')} />
-      <AppButton label="Return history" variant="secondary" onPress={() => router.push('/manager/returns')} />
-      {query.isLoading ? <LoadingState label="Loading branch inventory…" /> : null}
-      {query.error ? <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : null}
-      {query.data?.length === 0 ? <EmptyState title="No inventory initialized" message="Received products will appear here." /> : null}
-      {query.data?.map((item) => <InventoryListItem key={item.product.id} item={item} />)}
-    </Screen>
+    <InventoryHub
+      title="Inventory"
+      subtitle={branch.name}
+      items={query.data}
+      isLoading={query.isLoading}
+      error={query.error ? getErrorMessage(query.error) : null}
+      onRetry={() => void query.refetch()}
+      onRefresh={() => void query.refetch()}
+      isRefreshing={query.isRefetching}
+      loadingLabel="Loading branch inventory…"
+      defaultEmptyTitle="No inventory initialized"
+      defaultEmptyMessage="Received products will appear here."
+      primaryAction={{
+        label: 'Return unsold stock',
+        onPress: () => router.push('/manager/returns/create'),
+      }}
+      sheetPrimaryAction={{
+        label: 'Return unsold stock',
+        onPress: () => router.push('/manager/returns/create'),
+      }}
+      overflowActions={[
+        { label: 'Return history', onPress: () => router.push('/manager/returns') },
+        { label: 'Inventory history', onPress: () => router.push('/manager/movements') },
+      ]}
+    />
   );
 }

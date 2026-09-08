@@ -32,7 +32,7 @@ export function ShiftHistoryScreen({ role }: { role: 'owner' | 'manager' | 'cash
   const shifts = shiftQuery.data ?? [];
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Shift History"
         subtitle={
@@ -138,7 +138,7 @@ export function ShiftDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cash
   if (summaryQuery.isLoading) return <LoadingState label="Loading shift summary…" />;
   if (summaryQuery.error || !summaryQuery.data) {
     return (
-      <Screen>
+      <Screen constrain>
         <ErrorState
           message="Unable to load shift summary."
           onRetry={() => void summaryQuery.refetch()}
@@ -151,7 +151,7 @@ export function ShiftDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cash
   const sales = salesQuery.data ?? [];
 
   return (
-    <Screen>
+    <Screen constrain>
       <View style={styles.headerRow}>
         <PageHeader
           title={shift.cashier_name}

@@ -12,6 +12,20 @@ export default function OwnerTransferDetailsScreen() {
   const id = typeof params.id === 'string' ? params.id : '';
   const query = useTransfer(id);
   if (query.isLoading) return <LoadingState label="Loading transfer…" />;
-  if (query.error || !query.data) return <Screen><ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /></Screen>;
-  return <Screen><PageHeader title="Transfer details" /><TransferDetailsView transfer={query.data} /></Screen>;
+  if (query.error || !query.data) {
+    return (
+      <Screen constrain>
+        <ErrorState
+          message={getErrorMessage(query.error)}
+          onRetry={() => void query.refetch()}
+        />
+      </Screen>
+    );
+  }
+  return (
+    <Screen constrain>
+      <PageHeader title="Transfer details" />
+      <TransferDetailsView transfer={query.data} />
+    </Screen>
+  );
 }

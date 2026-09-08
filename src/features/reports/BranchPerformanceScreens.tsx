@@ -36,7 +36,7 @@ export function BranchPerformanceReportScreen() {
   const totalCompanyExcess = report.reduce((acc, b) => acc + Number(b.total_excess_qty), 0);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Branch Performance"
         subtitle="Compare completed sales, items sold, and discrepancy metrics across selling branches."
@@ -207,7 +207,7 @@ export function BranchPerformanceDetailScreen() {
   const data = query.data;
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title={data?.branch?.name ?? 'Branch Performance'}
         subtitle="In-depth sales, inventory levels, discrepancy audit, and movement logs."

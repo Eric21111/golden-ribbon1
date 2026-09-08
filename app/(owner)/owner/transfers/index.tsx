@@ -1,53 +1,90 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
-import { BranchSelector } from '@/features/inventory/BranchSelector';
-import { TransferListItem } from '@/features/transfers/TransferListItem';
+import { TransferHub } from '@/features/transfers/TransferHub';
+import {
+  OWNER_STATUS_CHOICES,
+  type TransferStatusFilter,
+} from '@/features/transfers/transferFilters';
 import { useBranches } from '@/hooks/useBranches';
 import { useTransfers } from '@/hooks/useTransfers';
 import { getErrorMessage } from '@/lib/errors';
-import type { TransferStatus } from '@/types/models';
-
-const statuses: Array<{ label: string; value: TransferStatus | '' }> = [
-  { label: 'All statuses', value: '' },
-  { label: 'Pending', value: 'pending_receipt' },
-  { label: 'Received', value: 'received' },
-  { label: 'Discrepancy', value: 'received_with_discrepancy' },
-];
 
 export default function TransferHistoryScreen() {
   const [branchId, setBranchId] = useState('');
-  const [status, setStatus] = useState<TransferStatus | ''>('');
+  const [status, setStatus] = useState<TransferStatusFilter>('');
   const branches = useBranches();
   const sellingBranches = branches.data?.filter((branch) => !branch.is_main_branch) ?? [];
   const query = useTransfers(branchId, status);
 
+  if (branches.isLoading && !branches.data) {
+    return (
+      <Screen>
+        <PageHeader title="Transfers" subtitle="Main → branches" />
+        <LoadingState label="Loading transfers…" />
+      </Screen>
+    );
+  }
+
+  if (branches.error) {
+    return (
+      <Screen>
+        <PageHeader title="Transfers" subtitle="Main → branches" />
+        <ErrorState message={getErrorMessage(branches.error)} onRetry={() => void branches.refetch()} />
+      </Screen>
+    );
+  }
+
+  if (sellingBranches.length === 0) {
+    return (
+      <Screen>
+        <PageHeader title="Transfers" subtitle="Main → branches" />
+        <EmptyState
+          title="No destination branches"
+          message="Add an active selling branch before creating transfers."
+        />
+      </Screen>
+    );
+  }
+
   return (
-    <Screen>
-      <PageHeader title="Stock transfers" subtitle="Main Branch distribution history and receipt status." />
-      <AppButton label="Create transfer" onPress={() => router.push('/owner/transfers/create')} />
-      <Text style={styles.filterLabel}>Destination</Text>
-      <BranchSelector branches={sellingBranches} value={branchId} onChange={setBranchId} allowAll />
-      <Text style={styles.filterLabel}>Status</Text>
-      <View style={styles.statuses}>
-        {statuses.map((item) => <AppButton key={item.label} label={item.label} variant={status === item.value ? 'primary' : 'secondary'} onPress={() => setStatus(item.value)} style={styles.filterButton} />)}
-      </View>
-      {query.isLoading ? <LoadingState label="Loading transfers…" /> : null}
-      {query.error ? <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : null}
-      {query.data?.length === 0 ? <EmptyState title="No transfer history" message="Create a transfer or change the current filters." /> : null}
-      {query.data?.map((transfer) => <TransferListItem key={transfer.id} transfer={transfer} onPress={() => router.push({ pathname: '/owner/transfers/[id]', params: { id: transfer.id } })} />)}
-    </Screen>
+    <TransferHub
+      title="Transfers"
+      subtitle="Main → branches"
+      transfers={query.data}
+      isLoading={query.isLoading}
+      error={query.error ? getErrorMessage(query.error) : null}
+      onRetry={() => void query.refetch()}
+      onRefresh={() => {
+        void branches.refetch();
+        void query.refetch();
+      }}
+      isRefreshing={query.isRefetching || branches.isRefetching}
+      defaultEmptyTitle="No transfer history"
+      defaultEmptyMessage="Create a transfer to send Main Branch stock."
+      statusFilter={status}
+      onStatusFilterChange={setStatus}
+      statusChoices={OWNER_STATUS_CHOICES}
+      destinationBranches={sellingBranches}
+      destinationBranchId={branchId}
+      onDestinationChange={setBranchId}
+      primaryAction={{
+        label: 'Create transfer',
+        onPress: () => router.push('/owner/transfers/create'),
+      }}
+      enableMasterDetail={false}
+      overflowActions={[
+        {
+          label: 'Transfer discrepancies',
+          onPress: () => router.push('/owner/reports/transfer-discrepancies' as any),
+        },
+      ]}
+      onPressTransfer={(transfer) =>
+        router.push({ pathname: '/owner/transfers/[id]', params: { id: transfer.id } })
+      }
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  filterLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  statuses: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  filterButton: { minHeight: 42 },
-});

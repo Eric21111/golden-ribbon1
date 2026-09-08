@@ -17,7 +17,7 @@ export default function AllBranchInventoryScreen() {
   const inventory = useInventory(selected);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Inventory by branch" subtitle="Read-only physical balances. Quantities cannot be edited inline." />
       <BranchSelector branches={branches.data ?? []} value={branchId} onChange={setBranchId} />
       {(branches.isLoading || inventory.isLoading) ? <LoadingState label="Loading branch inventory…" /> : null}

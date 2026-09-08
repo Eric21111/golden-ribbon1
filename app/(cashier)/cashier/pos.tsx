@@ -1,6 +1,13 @@
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput } from 'react-native';
+import {
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
@@ -8,16 +15,21 @@ import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { OrderSummary } from '@/features/pos/OrderSummary';
+import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductCard } from '@/features/pos/PosProductCard';
 import { useInventory } from '@/hooks/useInventory';
-import { useActiveShift, useEndShift } from '@/hooks/useShifts';
-import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
-import { useCartStore } from '@/stores/cartStore';
+import { useActiveShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
+import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
+import { formatMoney } from '@/lib/format';
+import { useLayout } from '@/lib/layout';
+import { cartTotalCents } from '@/lib/money';
+import { useCartStore } from '@/stores/cartStore';
+import type { InventoryItem } from '@/types/models';
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
+  const { isTablet, posColumns } = useLayout();
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
   const shiftQuery = useActiveShift(cashierId);
@@ -28,7 +40,6 @@ export default function CashierPosScreen() {
     return { ...profile.branch, id: shiftQuery.data.branch_id };
   }, [profile?.branch, shiftQuery.data]);
   const inventory = useInventory(shiftBranch, true);
-  const endMutation = useEndShift(cashierId);
   const items = useCartStore((state) => state.items);
   const beginShift = useCartStore((state) => state.beginShift);
   const addProduct = useCartStore((state) => state.addProduct);
@@ -39,75 +50,266 @@ export default function CashierPosScreen() {
     if (shiftQuery.data) beginShift(shiftQuery.data.id);
   }, [beginShift, shiftQuery.data]);
 
-
   const filteredInventory = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return inventory.data ?? [];
-    return inventory.data?.filter((item) =>
-      item.product.name.toLowerCase().includes(term) || item.product.sku.toLowerCase().includes(term),
-    ) ?? [];
+    return (
+      inventory.data?.filter(
+        (item) =>
+          item.product.name.toLowerCase().includes(term) ||
+          item.product.sku.toLowerCase().includes(term),
+      ) ?? []
+    );
   }, [inventory.data, search]);
 
-  const quantities = useMemo(() => new Map(items.map((item) => [item.product_id, item.quantity])), [items]);
+  const quantities = useMemo(
+    () => new Map(items.map((item) => [item.product_id, item.quantity])),
+    [items],
+  );
 
-  const requestEndShift = () => {
-    const shiftId = shiftQuery.data?.id;
-    if (!shiftId) return;
-    if (items.length > 0) {
-      Alert.alert('Unfinished cart', 'Remove every item from the cart before ending the shift.');
-      return;
+  const inventoryById = useMemo(() => {
+    const map = new Map<string, InventoryItem>();
+    for (const item of inventory.data ?? []) map.set(item.product.id, item);
+    return map;
+  }, [inventory.data]);
+
+  const stockByProductId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of inventory.data ?? []) {
+      map.set(item.product.id, item.quantity_on_hand);
     }
-    confirmAction('End shift?', 'The end time will be recorded and this shift cannot be reopened.',
-      () => endMutation.mutate(shiftId, {
-          onSuccess: () => {
-            clearCart();
-            router.replace('/cashier/dashboard');
-          },
-        }));
+    return map;
+  }, [inventory.data]);
+
+  const itemCount = useMemo(
+    () => items.reduce((sum, item) => sum + item.quantity, 0),
+    [items],
+  );
+  const totalCents = cartTotalCents(items);
+  const refreshing = inventory.isRefetching || shiftQuery.isRefetching;
+
+  const onRefresh = () => {
+    void Promise.all([inventory.refetch(), shiftQuery.refetch()]);
   };
 
-  if (shiftQuery.isLoading || inventory.isLoading) return <LoadingState label="Opening POS…" />;
-  if (shiftQuery.error) return <Screen><ErrorState message={getShiftErrorMessage(shiftQuery.error)} onRetry={() => void shiftQuery.refetch()} /></Screen>;
+  const increaseFromCart = (productId: string) => {
+    const row = inventoryById.get(productId);
+    if (row) addProduct(row);
+  };
+
+  if (shiftQuery.isLoading || inventory.isLoading) {
+    return <LoadingState label="Opening POS…" />;
+  }
+  if (shiftQuery.error) {
+    return (
+      <Screen>
+        <ErrorState
+          message={getShiftErrorMessage(shiftQuery.error)}
+          onRetry={() => void shiftQuery.refetch()}
+        />
+      </Screen>
+    );
+  }
   if (!shiftQuery.data) return <Redirect href="/cashier/dashboard" />;
-  if (inventory.error || !profile?.branch) return <Screen><ErrorState message={getInventoryErrorMessage(inventory.error)} onRetry={() => void inventory.refetch()} /></Screen>;
+  if (inventory.error || !profile?.branch) {
+    return (
+      <Screen>
+        <ErrorState
+          message={getInventoryErrorMessage(inventory.error)}
+          onRetry={() => void inventory.refetch()}
+        />
+      </Screen>
+    );
+  }
+
+  const productList = (
+    <FlatList
+      key={`pos-cols-${posColumns}`}
+      data={filteredInventory}
+      keyExtractor={(item) => item.product.id}
+      numColumns={posColumns}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+      columnWrapperStyle={posColumns > 1 ? styles.columnWrapper : undefined}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      ItemSeparatorComponent={posColumns === 1 ? () => <View style={styles.separator} /> : undefined}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+      ListEmptyComponent={
+        <EmptyState
+          title="No products found"
+          message={
+            search
+              ? 'Try another product name or SKU.'
+              : 'No active products are available for this branch.'
+          }
+        />
+      }
+      renderItem={({ item }) => (
+        <View style={posColumns > 1 ? styles.gridCell : undefined}>
+          <PosProductCard
+            item={item}
+            compact={posColumns > 1}
+            quantity={quantities.get(item.product.id) ?? 0}
+            onIncrease={() => addProduct(item)}
+            onDecrease={() => decreaseProduct(item.product.id)}
+          />
+        </View>
+      )}
+    />
+  );
+
+  const mobileFooter = (
+    <View style={styles.footer}>
+      <View style={styles.totalRow}>
+        <Text style={styles.totalMeta}>
+          {itemCount === 0
+            ? 'No items in order'
+            : `${itemCount} item${itemCount === 1 ? '' : 's'} in order`}
+        </Text>
+        <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
+      </View>
+      <Text style={styles.notice}>
+        Stock is deducted when you confirm the sale at checkout.
+      </Text>
+      {items.length > 0 ? (
+        <AppButton
+          label="Clear order"
+          variant="secondary"
+          onPress={() =>
+            confirmAction(
+              'Clear order?',
+              'Remove all products from this unfinished order.',
+              clearCart,
+            )
+          }
+        />
+      ) : null}
+      <AppButton
+        label="CHECKOUT"
+        disabled={items.length === 0}
+        onPress={() => router.push('/cashier/payment')}
+      />
+    </View>
+  );
 
   return (
-    <Screen>
-      <PageHeader title="Point of Sale" subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`} />
-      <TextInput
-        accessibilityLabel="Search products by name or SKU"
-        autoCapitalize="none"
-        autoCorrect={false}
-        onChangeText={setSearch}
-        placeholder="Search product name or SKU"
-        placeholderTextColor={colors.muted}
-        style={styles.search}
-        value={search}
-      />
-      {filteredInventory.length === 0 ? <EmptyState title="No products found" message={search ? 'Try another product name or SKU.' : 'No active products are available for this branch.'} /> : null}
-      {filteredInventory.map((item) => (
-        <PosProductCard
-          key={item.product.id}
-          item={item}
-          quantity={quantities.get(item.product.id) ?? 0}
-          onIncrease={() => addProduct(item)}
-          onDecrease={() => decreaseProduct(item.product.id)}
-        />
-      ))}
-      <OrderSummary items={items} />
-      {items.length > 0 ? <AppButton label="Clear order" variant="secondary" onPress={() => confirmAction('Clear order?', 'Remove all products from this unfinished order.', clearCart)} /> : null}
-      <Text style={styles.notice}>Stock is deducted when you confirm the sale at checkout.</Text>
-      <AppButton label="CHECKOUT" disabled={items.length === 0} onPress={() => router.push('/cashier/payment')} />
-      {items.length > 0 ? <Text style={styles.endHint}>Clear the unfinished cart before ending the shift.</Text> : null}
-      {endMutation.error ? <Text style={styles.error}>{getShiftErrorMessage(endMutation.error)}</Text> : null}
-      <AppButton label="END SHIFT" variant="danger" loading={endMutation.isPending} onPress={requestEndShift} />
+    <Screen scroll={false} contentContainerStyle={styles.screen}>
+      {isTablet ? (
+        <View style={styles.split}>
+          <View style={styles.catalog}>
+            <View style={styles.top}>
+              <PageHeader
+                title="Point of Sale"
+                subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
+              />
+              <TextInput
+                accessibilityLabel="Search products by name or SKU"
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                onChangeText={setSearch}
+                placeholder="Search product name or SKU"
+                placeholderTextColor={colors.muted}
+                style={styles.search}
+                value={search}
+              />
+            </View>
+            {productList}
+          </View>
+          <View style={styles.orderPane}>
+            <PosOrderPane
+              items={items}
+              stockByProductId={stockByProductId}
+              onIncrease={increaseFromCart}
+              onDecrease={decreaseProduct}
+              onClear={clearCart}
+              onCheckout={() => router.push('/cashier/payment')}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.layout}>
+          <View style={styles.top}>
+            <PageHeader
+              title="Point of Sale"
+              subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
+            />
+            <TextInput
+              accessibilityLabel="Search products by name or SKU"
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              onChangeText={setSearch}
+              placeholder="Search product name or SKU"
+              placeholderTextColor={colors.muted}
+              style={styles.search}
+              value={search}
+            />
+          </View>
+          {productList}
+          {mobileFooter}
+        </View>
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  search: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: spacing.md, fontSize: 16 },
-  notice: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  endHint: { color: '#92400E', backgroundColor: colors.warningSurface, borderRadius: radius.sm, padding: spacing.sm, textAlign: 'center', fontSize: 13 },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  screen: { flexGrow: 1, padding: 0, gap: 0 },
+  layout: { flex: 1, minHeight: 0 },
+  split: { flex: 1, minHeight: 0, flexDirection: 'row' },
+  catalog: { flex: 1.65, minWidth: 0, minHeight: 0 },
+  orderPane: { flex: 1, minWidth: 280, maxWidth: 420, minHeight: 0 },
+  top: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  search: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  list: { flex: 1, minHeight: 0 },
+  listContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexGrow: 1,
+    gap: spacing.sm,
+  },
+  columnWrapper: { gap: spacing.sm },
+  gridCell: { flex: 1 },
+  separator: { height: spacing.sm },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  totalMeta: { color: colors.muted, fontSize: 14, fontWeight: '600', flex: 1 },
+  totalAmount: { color: colors.primary, fontSize: 22, fontWeight: '900' },
+  notice: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
 });

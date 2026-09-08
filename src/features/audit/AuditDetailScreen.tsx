@@ -35,9 +35,9 @@ export function AuditDetailScreen() {
   const query = useAuditLogDetail(id ?? '');
   const entry = query.data;
 
-  if (query.isLoading) return <Screen><LoadingState label="Loading audit event…" /></Screen>;
+  if (query.isLoading) return <Screen constrain><LoadingState label="Loading audit event…" /></Screen>;
   if (query.error) return (
-    <Screen>
+    <Screen constrain>
       <ErrorState
         message={getErrorMessage(query.error)}
         onRetry={() => void query.refetch()}
@@ -49,7 +49,7 @@ export function AuditDetailScreen() {
   const relatedRoute = getRelatedRoute(entry.entity_type, entry.entity_id);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Audit Event" subtitle="Read-only activity detail" />
 
       {/* Actor */}

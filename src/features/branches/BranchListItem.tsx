@@ -1,3 +1,4 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StatusBadge } from '@/components/StatusBadge';
@@ -5,28 +6,47 @@ import { colors, radius, spacing } from '@/constants/theme';
 import type { Branch } from '@/types/models';
 
 export function BranchListItem({ branch, onPress }: { branch: Branch; onPress?: () => void }) {
+  const typeLabel = branch.is_main_branch ? 'Main Branch' : 'Selling Branch';
+
   return (
-    <Pressable disabled={!onPress} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={styles.topRow}>
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${branch.name}, ${typeLabel}`}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+    >
+      <View style={styles.row}>
         <View style={styles.copy}>
-          <Text style={styles.name}>{branch.name}</Text>
-          <Text style={styles.code}>{branch.code}</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {branch.name}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {branch.code} · {typeLabel}
+          </Text>
         </View>
-        <StatusBadge active={branch.is_active} />
+        <View style={styles.trailing}>
+          <StatusBadge active={branch.is_active} />
+          {onPress ? <Ionicons color={colors.muted} name="chevron-forward" size={18} /> : null}
+        </View>
       </View>
-      <Text style={styles.type}>{branch.is_main_branch ? 'Main Branch' : 'Selling Branch'}</Text>
-      {branch.address ? <Text style={styles.address}>{branch.address}</Text> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
-  pressed: { opacity: 0.8 },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  copy: { flex: 1 },
-  name: { color: colors.text, fontSize: 17, fontWeight: '700' },
-  code: { color: colors.muted, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  type: { color: colors.primary, fontSize: 13, fontWeight: '700' },
-  address: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  pressed: { opacity: 0.82 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  copy: { flex: 1, minWidth: 0 },
+  name: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  meta: { color: colors.muted, fontSize: 13, fontWeight: '600', marginTop: 2 },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

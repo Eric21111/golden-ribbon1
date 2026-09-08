@@ -57,7 +57,7 @@ export function SalesHistoryScreen({ role }: { role: 'owner' | 'manager' | 'cash
   const sales = salesQuery.data ?? [];
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Sales History"
         subtitle={
@@ -233,29 +233,39 @@ export function SalesHistoryScreen({ role }: { role: 'owner' | 'manager' | 'cash
   );
 }
 
-export function SaleDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cashier' }) {
-  const params = useLocalSearchParams<{ id: string }>();
-  const id = typeof params.id === 'string' ? params.id : '';
-  const query = useSale(id);
+type SaleDetailsBodyProps = {
+  saleId: string;
+  role: 'owner' | 'manager' | 'cashier';
+  /** Hide shift link when embedded in a split pane. */
+  showShiftLink?: boolean;
+};
+
+/** Sale detail body reusable for full-page and tablet master–detail. */
+export function SaleDetailsBody({
+  saleId,
+  role,
+  showShiftLink = true,
+}: SaleDetailsBodyProps) {
+  const query = useSale(saleId);
 
   if (query.isLoading) return <LoadingState label="Loading sale details…" />;
   if (query.error || !query.data) {
     return (
-      <Screen>
-        <ErrorState
-          message="Unable to load sale details."
-          onRetry={() => void query.refetch()}
-        />
-      </Screen>
+      <ErrorState
+        message="Unable to load sale details."
+        onRetry={() => void query.refetch()}
+      />
     );
   }
 
   const sale = query.data;
 
   return (
-    <Screen>
+    <View style={styles.detailsBody}>
       <View style={styles.headerRow}>
-        <PageHeader title={sale.sale_number} subtitle={`Sold ${formatDate(sale.sold_at)}`} />
+        <View style={styles.detailsHeaderCopy}>
+          <PageHeader title={sale.sale_number} subtitle={`Sold ${formatDate(sale.sold_at)}`} />
+        </View>
         <SaleStatusBadge status={sale.status} />
       </View>
 
@@ -270,7 +280,9 @@ export function SaleDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cashi
         </View>
         <View style={styles.auditRow}>
           <Text style={styles.metaLabel}>Shift Session:</Text>
-          <Text style={styles.metaValue}>{sale.shift ? formatDate(sale.shift.started_at) : 'Shift session'}</Text>
+          <Text style={styles.metaValue}>
+            {sale.shift ? formatDate(sale.shift.started_at) : 'Shift session'}
+          </Text>
         </View>
         <View style={styles.auditRow}>
           <Text style={styles.metaLabel}>Date / Time:</Text>
@@ -313,7 +325,7 @@ export function SaleDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cashi
         </View>
       </View>
 
-      {sale.shift_id && (
+      {showShiftLink && sale.shift_id ? (
         <AppButton
           label="View shift details"
           variant="secondary"
@@ -322,17 +334,30 @@ export function SaleDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cashi
               role === 'owner'
                 ? `/owner/shifts/${sale.shift_id}`
                 : role === 'manager'
-                ? `/manager/shifts/${sale.shift_id}`
-                : `/cashier/shifts/${sale.shift_id}`;
-            router.push(shiftRoute as any);
+                  ? `/manager/shifts/${sale.shift_id}`
+                  : `/cashier/shifts/${sale.shift_id}`;
+            router.push(shiftRoute as never);
           }}
         />
-      )}
+      ) : null}
+    </View>
+  );
+}
+
+export function SaleDetailsScreen({ role }: { role: 'owner' | 'manager' | 'cashier' }) {
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = typeof params.id === 'string' ? params.id : '';
+
+  return (
+    <Screen constrain>
+      <SaleDetailsBody saleId={id} role={role} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  detailsBody: { gap: spacing.md },
+  detailsHeaderCopy: { flex: 1, minWidth: 0 },
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

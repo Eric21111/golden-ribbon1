@@ -70,7 +70,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
   if (query.isLoading) return <LoadingState label="Loading stock return…" />;
   if (query.error || !query.data) {
     return (
-      <Screen>
+      <Screen constrain>
         <ErrorState message="Unable to load stock return." onRetry={() => void query.refetch()} />
       </Screen>
     );
@@ -81,7 +81,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
   // Authorization check: Main Branch receiving is Owner-only.
   if (role !== 'owner') {
     return (
-      <Screen>
+      <Screen constrain>
         <PageHeader title="Unauthorized" subtitle="Only the Owner can receive returns at Main Branch." />
         <AppButton label="Go back" variant="secondary" onPress={() => router.back()} />
       </Screen>
@@ -90,7 +90,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
 
   if (stockReturn.status !== 'in_transit') {
     return (
-      <Screen>
+      <Screen constrain>
         <PageHeader title="Stock return" subtitle="This return is no longer in transit." />
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -115,7 +115,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
 
   if (review) {
     return (
-      <Screen>
+      <Screen constrain>
         <PageHeader
           title="Review return receipt"
           subtitle={`${stockReturn.return_number} · Confirm actual received physical counts.`}
@@ -188,7 +188,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
   }
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Receive return"
         subtitle={`${stockReturn.return_number} · ${stockReturn.from_branch_name} → ${stockReturn.to_branch_name}`}

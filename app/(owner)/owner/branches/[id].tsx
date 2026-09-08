@@ -15,7 +15,7 @@ export default function EditBranchScreen() {
   const mutation = useUpdateBranch(id);
 
   if (query.isLoading) return <LoadingState label="Loading branch…" />;
-  if (query.error || !query.data) return <Screen><ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /></Screen>;
+  if (query.error || !query.data) return <Screen constrain><ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /></Screen>;
 
   const branch = query.data;
   const submit = (values: BranchFormValues) => {
@@ -23,7 +23,7 @@ export default function EditBranchScreen() {
   };
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Edit branch" subtitle="Use inactive status instead of deleting a branch." />
       <BranchForm
         defaultValues={{ name: branch.name, code: branch.code, address: branch.address ?? '', is_main_branch: branch.is_main_branch, is_active: branch.is_active }}

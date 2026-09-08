@@ -39,7 +39,7 @@ export default function InventorySetupScreen() {
   }, [inventory.data, reset]);
 
   if (branches.isLoading || inventory.isLoading) return <LoadingState label="Preparing inventory setup…" />;
-  if (!mainBranch || branches.error || inventory.error) return <Screen><ErrorState message="Unable to load the active Main Branch inventory." /></Screen>;
+  if (!mainBranch || branches.error || inventory.error) return <Screen constrain><ErrorState message="Unable to load the active Main Branch inventory." /></Screen>;
 
   const submit = (values: Values) => {
     const selected = values.items.flatMap((item) => Number(item.quantity) > 0 ? [{ product_id: item.product_id, quantity: Number(item.quantity) }] : []);
@@ -51,7 +51,7 @@ export default function InventorySetupScreen() {
   };
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Opening stock" subtitle="Initialize products once for the Main Branch. Future corrections must use adjustment movements." />
       {fields.map((field, index) => {
         const item = inventory.data?.[index];

@@ -22,7 +22,7 @@ export function InventoryReconciliationScreen() {
   const balancedCount = totalProducts - issueCount;
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Inventory Reconciliation"
         subtitle="Verify branch physical inventory against cumulative signed movement ledgers."

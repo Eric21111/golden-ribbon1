@@ -3,8 +3,18 @@ import { StyleSheet, Text } from 'react-native';
 import { formatReturnStatus } from '@/lib/format';
 import type { ReturnStatus } from '@/types/returns';
 
-export function ReturnStatusBadge({ status }: { status: ReturnStatus }) {
-  return <Text style={[styles.base, styles[status]]}>{formatReturnStatus(status)}</Text>;
+const compactLabels: Record<ReturnStatus, string> = {
+  draft: 'Draft',
+  in_transit: 'In transit',
+  received: 'Received',
+  received_with_discrepancy: 'Discrepancy',
+  cancelled: 'Cancelled',
+};
+
+export function ReturnStatusBadge({ status, compact = false }: { status: ReturnStatus; compact?: boolean }) {
+  return (
+    <Text style={[styles.base, styles[status]]}>{compact ? compactLabels[status] : formatReturnStatus(status)}</Text>
+  );
 }
 
 const styles = StyleSheet.create({

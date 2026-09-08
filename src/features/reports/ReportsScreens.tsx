@@ -33,7 +33,7 @@ export function SalesByBranchScreen() {
   const totalCompletedSales = report.reduce((acc, r) => acc + Number(r.total_sales), 0);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Sales by Branch"
         subtitle="Completed sales and transactions aggregated by branch."
@@ -155,7 +155,7 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
   const totalProductRevenue = products.reduce((acc, p) => acc + Number(p.total_revenue), 0);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Product Sales"
         subtitle={

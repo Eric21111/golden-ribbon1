@@ -1,25 +1,33 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
-import { PageHeader } from '@/components/PageHeader';
-import { Screen } from '@/components/Screen';
-import { colors } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 import { changePasswordSchema, type ChangePasswordValues } from '@/features/profile/changePasswordSchema';
 import { getChangePasswordErrorMessage } from '@/lib/errors';
 import { changeOwnPassword } from '@/services/accountService';
 
-export function ChangePasswordScreen() {
+type ChangePasswordFormProps = {
+  onSuccess?: () => void;
+  onCancel?: () => void;
+};
+
+export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangePasswordValues>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { current_password: '', new_password: '', confirm_password: '' },
   });
+
+  useEffect(() => {
+    if (!success || !onSuccess) return;
+    const timer = setTimeout(() => onSuccess(), 900);
+    return () => clearTimeout(timer);
+  }, [success, onSuccess]);
 
   const submit = async (values: ChangePasswordValues) => {
     if (lock.current) return;
@@ -42,11 +50,8 @@ export function ChangePasswordScreen() {
   };
 
   return (
-    <Screen>
-      <PageHeader
-        title="Change Password"
-        subtitle="This updates the password for the account you are signed in with. Role and branch are not changed."
-      />
+    <View style={styles.form}>
+      <Text style={styles.hint}>Updates the password for this signed-in account. Role and branch are not changed.</Text>
       <Controller
         control={control}
         name="current_password"
@@ -104,22 +109,21 @@ export function ChangePasswordScreen() {
       {formState.errors.root?.message ? <Text style={styles.error}>{formState.errors.root.message}</Text> : null}
       {success ? <Text style={styles.success}>{success}</Text> : null}
       <AppButton
-        label="Change Password"
+        label="Change password"
         loading={formState.isSubmitting}
         disabled={formState.isSubmitting}
         onPress={handleSubmit(submit)}
       />
-      <AppButton
-        label="Cancel"
-        variant="secondary"
-        disabled={formState.isSubmitting}
-        onPress={() => router.back()}
-      />
-    </Screen>
+      {onCancel ? (
+        <AppButton label="Cancel" variant="secondary" disabled={formState.isSubmitting} onPress={onCancel} />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  form: { gap: spacing.md },
+  hint: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   success: { color: colors.success, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 });

@@ -14,7 +14,7 @@ export function ReturnDiscrepancyHistory({ role }: { role: 'owner' | 'manager' }
   const query = useReturnDiscrepancies();
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Return discrepancies"
         subtitle="Audited differences between branch returned stock and Main Branch receipts."

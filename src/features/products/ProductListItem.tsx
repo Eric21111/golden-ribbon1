@@ -1,34 +1,59 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StatusBadge } from '@/components/StatusBadge';
 import { colors, radius, spacing } from '@/constants/theme';
+import { formatMoney } from '@/lib/format';
 import type { Product } from '@/types/models';
 
-const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
-
 export function ProductListItem({ product, onPress }: { product: Product; onPress?: () => void }) {
-  return (
-    <Pressable disabled={!onPress} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={styles.topRow}>
-        <View style={styles.copy}>
-          <Text style={styles.name}>{product.name}</Text>
-          <Text style={styles.sku}>{product.sku}</Text>
-        </View>
-        <StatusBadge active={product.is_active} />
+  const content = (
+    <View style={styles.row}>
+      <View style={styles.copy}>
+        <Text style={styles.name} numberOfLines={1}>
+          {product.name}
+        </Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {product.sku} · {formatMoney(product.selling_price)}
+        </Text>
       </View>
-      <Text style={styles.price}>{money.format(product.selling_price)}</Text>
-      {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
+      <View style={styles.trailing}>
+        <StatusBadge active={product.is_active} />
+        {onPress ? <Ionicons color={colors.muted} name="chevron-forward" size={18} /> : null}
+      </View>
+    </View>
+  );
+
+  if (!onPress) {
+    return <View style={styles.card}>{content}</View>;
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${product.name}, ${formatMoney(product.selling_price)}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+    >
+      {content}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
-  pressed: { opacity: 0.8 },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  copy: { flex: 1 },
-  name: { color: colors.text, fontSize: 17, fontWeight: '700' },
-  sku: { color: colors.muted, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  price: { color: colors.primary, fontSize: 18, fontWeight: '800' },
-  description: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  card: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  pressed: { opacity: 0.82 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  copy: { flex: 1, minWidth: 0 },
+  name: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  meta: { color: colors.muted, fontSize: 13, fontWeight: '600', marginTop: 2 },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

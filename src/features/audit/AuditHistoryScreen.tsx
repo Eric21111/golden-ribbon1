@@ -64,7 +64,7 @@ export function AuditHistoryScreen() {
   }
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Audit History" subtitle="Company-wide activity trail (Owner only)" />
 
       {/* Date Range Filter */}

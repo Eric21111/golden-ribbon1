@@ -3,12 +3,30 @@ import { StyleSheet, Text } from 'react-native';
 import { formatTransferStatus } from '@/lib/format';
 import type { TransferStatus } from '@/types/models';
 
-export function TransferStatusBadge({ status }: { status: TransferStatus }) {
-  return <Text style={[styles.base, styles[status]]}>{formatTransferStatus(status)}</Text>;
+const compactLabels: Record<TransferStatus, string> = {
+  draft: 'Draft',
+  pending_receipt: 'Pending',
+  received: 'Received',
+  received_with_discrepancy: 'Discrepancy',
+  cancelled: 'Cancelled',
+};
+
+export function TransferStatusBadge({ status, compact = false }: { status: TransferStatus; compact?: boolean }) {
+  return (
+    <Text style={[styles.base, styles[status]]}>{compact ? compactLabels[status] : formatTransferStatus(status)}</Text>
+  );
 }
 
 const styles = StyleSheet.create({
-  base: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', fontSize: 11, fontWeight: '800' },
+  base: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: 'hidden',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   draft: { color: '#57534E', backgroundColor: '#F5F5F4' },
   pending_receipt: { color: '#92400E', backgroundColor: '#FEF3C7' },
   received: { color: '#166534', backgroundColor: '#DCFCE7' },

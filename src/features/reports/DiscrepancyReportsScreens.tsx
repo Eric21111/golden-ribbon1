@@ -48,7 +48,7 @@ export function TransferDiscrepanciesReportScreen() {
     .reduce((acc, d) => acc + Math.abs(Number(d.difference)), 0);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Transfer Discrepancies"
         subtitle="Audited differences between stock sent from Main Branch and quantities received at selling branches."
@@ -248,7 +248,7 @@ export function ReturnDiscrepanciesReportScreen() {
     .reduce((acc, d) => acc + Math.abs(Number(d.difference)), 0);
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader
         title="Return Discrepancies"
         subtitle="Audited differences between branch returned stock and Main Branch verification receipts."

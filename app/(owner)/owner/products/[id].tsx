@@ -15,7 +15,7 @@ export default function EditProductScreen() {
   const mutation = useUpdateProduct(id);
 
   if (query.isLoading) return <LoadingState label="Loading product…" />;
-  if (query.error || !query.data) return <Screen><ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /></Screen>;
+  if (query.error || !query.data) return <Screen constrain><ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /></Screen>;
 
   const product = query.data;
   const submit = (values: ProductFormValues) => {
@@ -26,7 +26,7 @@ export default function EditProductScreen() {
   };
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Edit product" subtitle="Use inactive status instead of deleting historical master data." />
       <ProductForm
         defaultValues={{ name: product.name, sku: product.sku, description: product.description ?? '', selling_price: product.selling_price.toFixed(2), is_active: product.is_active }}

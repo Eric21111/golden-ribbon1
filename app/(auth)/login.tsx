@@ -1,6 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { z } from 'zod';
 
 import { AppButton } from '@/components/AppButton';
@@ -17,8 +26,18 @@ const loginSchema = z.object({
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
+const logoSource = require('../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const passwordRef = useRef<TextInput>(null);
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+  const formMaxWidth = isTablet ? 440 : 420;
+  const logoWidth = Math.min(isTablet ? 300 : width * 0.62, isTablet ? 300 : 260);
+  const logoHeight = logoWidth * 0.72;
+  const horizontalPad = isTablet ? spacing.xl : spacing.lg;
+
   const { control, handleSubmit, setError, formState } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
@@ -32,41 +51,140 @@ export default function LoginScreen() {
     }
   };
 
+  const onSubmit = handleSubmit(submit);
+
   return (
-    <Screen contentContainerStyle={styles.screen}>
-      <View style={styles.brand}>
-        <Text style={styles.eyebrow}>STAFF OPERATIONS</Text>
-        <Text style={styles.title}>Golden Ribbon</Text>
-        <Text style={styles.subtitle}>Inventory and point-of-sale foundation</Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Log in</Text>
-        <Text style={styles.helper}>Use the staff account created by your administrator.</Text>
-        {!isSupabaseConfigured ? (
-          <Text style={styles.configError}>Supabase is not configured. Copy .env.example to .env and add your project values.</Text>
-        ) : null}
-        <Controller control={control} name="email" render={({ field, fieldState }) => (
-          <FormField label="Email" value={field.value} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} autoCapitalize="none" autoComplete="email" keyboardType="email-address" />
-        )} />
-        <Controller control={control} name="password" render={({ field, fieldState }) => (
-          <FormField label="Password" value={field.value} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} autoCapitalize="none" autoComplete="current-password" secureTextEntry />
-        )} />
-        {formState.errors.root?.message ? <Text style={styles.error}>{formState.errors.root.message}</Text> : null}
-        <AppButton disabled={!isSupabaseConfigured} label="Log in" loading={formState.isSubmitting} onPress={handleSubmit(submit)} />
+    <Screen
+      edges={['top', 'bottom']}
+      contentContainerStyle={[
+        styles.screen,
+        {
+          padding: 0,
+          paddingHorizontal: horizontalPad,
+          paddingVertical: isTablet ? spacing.xl : spacing.lg,
+          paddingBottom: spacing.xl + (Platform.OS === 'ios' ? 24 : 48),
+        },
+      ]}
+    >
+      <View style={[styles.column, { maxWidth: formMaxWidth }]}>
+        <View style={styles.brand}>
+          <Image
+            accessibilityLabel="Golden Ribbons Catering"
+            source={logoSource}
+            resizeMode="contain"
+            style={{ width: logoWidth, height: logoHeight }}
+          />
+          <Text style={styles.subtitle}>Staff sign-in</Text>
+        </View>
+
+        <View style={styles.card}>
+          {!isSupabaseConfigured ? (
+            <Text style={styles.configError}>
+              Supabase is not configured. Copy .env.example to .env and add your project values.
+            </Text>
+          ) : null}
+
+          <Controller
+            control={control}
+            name="email"
+            render={({ field, fieldState }) => (
+              <FormField
+                label="Email"
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={field.onChange}
+                error={fieldState.error?.message}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+                keyboardType="email-address"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="password"
+            render={({ field, fieldState }) => (
+              <FormField
+                ref={passwordRef}
+                label="Password"
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={field.onChange}
+                error={fieldState.error?.message}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password"
+                textContentType="password"
+                secureTextEntry
+                returnKeyType="go"
+                onSubmitEditing={() => void onSubmit()}
+              />
+            )}
+          />
+
+          {formState.errors.root?.message ? (
+            <Text style={styles.error}>{formState.errors.root.message}</Text>
+          ) : null}
+
+          <AppButton
+            disabled={!isSupabaseConfigured}
+            label="Log in"
+            loading={formState.isSubmitting}
+            onPress={() => void onSubmit()}
+          />
+        </View>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { justifyContent: 'center', padding: spacing.lg },
-  brand: { gap: spacing.xs, marginBottom: spacing.md },
-  eyebrow: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
-  title: { color: colors.text, fontSize: 34, fontWeight: '900' },
-  subtitle: { color: colors.muted, fontSize: 15 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.md },
-  cardTitle: { color: colors.text, fontSize: 23, fontWeight: '800' },
-  helper: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  configError: { color: colors.danger, backgroundColor: '#FEF2F2', padding: 12, borderRadius: radius.sm, lineHeight: 20 },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  screen: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  column: {
+    width: '100%',
+    gap: spacing.lg,
+    alignItems: 'center',
+  },
+  brand: {
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  subtitle: {
+    color: colors.muted,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  configError: {
+    color: colors.danger,
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: radius.sm,
+    lineHeight: 20,
+    fontSize: 14,
+  },
+  error: {
+    color: colors.danger,
+    fontSize: 14,
+    lineHeight: 20,
+  },
 });

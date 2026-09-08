@@ -52,12 +52,12 @@ export default function CreateTransferScreen() {
   }) ?? [], [inventory.data, review]);
 
   if (branches.isLoading || inventory.isLoading) return <LoadingState label="Preparing stock transfer…" />;
-  if (!mainBranch || branches.error || inventory.error) return <Screen><ErrorState message="Unable to load Main Branch inventory." /></Screen>;
+  if (!mainBranch || branches.error || inventory.error) return <Screen constrain><ErrorState message="Unable to load Main Branch inventory." /></Screen>;
 
   if (review) {
     const destination = destinations.find((branch) => branch.id === review.destinationBranchId);
     return (
-      <Screen>
+      <Screen constrain>
         <PageHeader title="Review transfer" subtitle={`Main Branch → ${destination?.name ?? 'Unknown branch'}`} />
         {selectedItems.map((item) => (
           <View key={item.product.id} style={styles.card}>
@@ -81,7 +81,7 @@ export default function CreateTransferScreen() {
   }
 
   return (
-    <Screen>
+    <Screen constrain>
       <PageHeader title="Send stock" subtitle="Choose a selling branch and enter quantities from current Main Branch stock." />
       <Text style={styles.label}>Destination branch</Text>
       <BranchSelector branches={destinations} value={selectedBranchId} onChange={(id) => setValue('destinationBranchId', id, { shouldValidate: true })} />
