@@ -88,10 +88,16 @@ export async function listShiftSales(shiftId: string): Promise<SaleWithRelations
   return data as unknown as SaleWithRelations[];
 }
 
-export async function listSales(filters: SaleFilters = {}, page = 0): Promise<SaleWithRelations[]> {
+export async function listSales(
+  filters: SaleFilters = {},
+  page = 0,
+  pageSize = 8,
+): Promise<{ items: SaleWithRelations[]; total: number }> {
   let query = supabase
     .from('sales')
-    .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name)')
+    .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name)', {
+      count: 'exact',
+    })
     .order('sold_at', { ascending: false });
 
   if (filters.branchId) {
@@ -110,11 +116,16 @@ export async function listSales(filters: SaleFilters = {}, page = 0): Promise<Sa
     query = query.gte('sold_at', dayStart).lt('sold_at', nextDay);
   }
 
-  query = query.range(page * 50, page * 50 + 49);
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  query = query.range(from, to);
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) throw error;
-  return data as unknown as SaleWithRelations[];
+  return {
+    items: (data as unknown as SaleWithRelations[]) ?? [],
+    total: count ?? 0,
+  };
 }
 
 export async function getSale(id: string): Promise<SaleDetails> {

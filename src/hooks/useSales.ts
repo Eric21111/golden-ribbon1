@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { isReportRangeReady } from '@/lib/format';
+import { PAGE_SIZE } from '@/lib/pagination';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getManagerDashboardMetrics,
@@ -13,10 +14,10 @@ import {
   type SaleFilters,
 } from '@/services/saleService';
 
-export function useSales(filters: SaleFilters = {}, page = 0) {
+export function useSales(filters: SaleFilters = {}, page = 0, pageSize = PAGE_SIZE) {
   return useQuery({
-    queryKey: queryKeys.sales({ ...filters, page }),
-    queryFn: () => listSales(filters, page),
+    queryKey: queryKeys.sales({ ...filters, page, pageSize }),
+    queryFn: () => listSales(filters, page, pageSize),
   });
 }
 

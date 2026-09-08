@@ -7,24 +7,15 @@ import type { EmployeeRecord } from '@/types/models';
 
 interface EmployeeListItemProps {
   employee: EmployeeRecord;
-  busy: boolean;
   onEdit: () => void;
-  onResetPassword: () => void;
-  onToggleActive: () => void;
 }
 
-export function EmployeeListItem({
-  employee,
-  busy,
-  onEdit,
-  onResetPassword,
-  onToggleActive,
-}: EmployeeListItemProps) {
+export function EmployeeListItem({ employee, onEdit }: EmployeeListItemProps) {
   const roleLabel = employee.role === 'manager' ? 'Manager' : 'Cashier';
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
+      <View style={styles.body}>
         <View style={styles.copy}>
           <Text style={styles.name} numberOfLines={1}>
             {employee.full_name}
@@ -36,24 +27,11 @@ export function EmployeeListItem({
             {roleLabel} · {employee.branch_name}
           </Text>
         </View>
-        <StatusBadge active={employee.is_active} />
+        <View style={styles.aside}>
+          <StatusBadge active={employee.is_active} />
+          <AppButton label="Edit" variant="secondary" onPress={onEdit} style={styles.edit} />
+        </View>
       </View>
-      <View style={styles.actions}>
-        <AppButton label="Edit" variant="secondary" disabled={busy} onPress={onEdit} style={styles.action} />
-        <AppButton
-          label="Reset"
-          variant="secondary"
-          disabled={busy}
-          onPress={onResetPassword}
-          style={styles.action}
-        />
-      </View>
-      <AppButton
-        label={employee.is_active ? 'Deactivate' : 'Activate'}
-        variant={employee.is_active ? 'danger' : 'primary'}
-        loading={busy}
-        onPress={onToggleActive}
-      />
     </View>
   );
 }
@@ -65,13 +43,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: spacing.sm,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm },
-  copy: { flex: 1, minWidth: 0 },
+  body: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  copy: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  meta: { color: colors.muted, fontSize: 13, marginTop: 2 },
-  detail: { color: colors.text, fontSize: 13, fontWeight: '600', marginTop: 4 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  action: { flex: 1 },
+  meta: { color: colors.muted, fontSize: 13 },
+  detail: { color: colors.text, fontSize: 13, fontWeight: '600', marginTop: 2 },
+  aside: { alignItems: 'flex-end', gap: spacing.sm, flexShrink: 0 },
+  edit: { minWidth: 88, alignSelf: 'stretch' },
 });

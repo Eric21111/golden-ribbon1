@@ -16,9 +16,11 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { MasterDetailLayout, masterDetailStyles } from '@/components/MasterDetailLayout';
 import { OverflowSheet, type OverflowAction } from '@/components/OverflowSheet';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { ChoiceChips } from '@/features/employees/ChoiceChips';
 import { colors, radius, spacing } from '@/constants/theme';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useLayout } from '@/lib/layout';
 import type { InventoryItem } from '@/types/models';
 
@@ -101,6 +103,8 @@ export function InventoryHub({
     });
   }, [items, filter, search]);
 
+  const pagination = useClientPagination(filtered, `${search}|${filter}`);
+
   useEffect(() => {
     if (!useSplit) return;
     if (filtered.length === 0) {
@@ -158,7 +162,7 @@ export function InventoryHub({
 
   const list = !error && (!isLoading || items) ? (
     <FlatList
-      data={filtered}
+      data={pagination.pageItems}
       keyExtractor={(item) => item.product.id}
       contentContainerStyle={styles.listContent}
       style={styles.list}
@@ -168,6 +172,17 @@ export function InventoryHub({
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
         isLoading ? <LoadingState label={loadingLabel} /> : <EmptyState title={empty.title} message={empty.message} />
+      }
+      ListFooterComponent={
+        pagination.showPagination ? (
+          <View style={styles.pager}>
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              onPageChange={pagination.setPage}
+            />
+          </View>
+        ) : null
       }
       renderItem={({ item }) => (
         <InventoryListItem
@@ -272,6 +287,7 @@ const styles = StyleSheet.create({
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexGrow: 1 },
   separator: { height: spacing.sm },
+  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   footer: {
     borderTopWidth: 1,
     borderTopColor: colors.border,

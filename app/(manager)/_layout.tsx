@@ -18,6 +18,11 @@ export default function ManagerLayout() {
         <Stack.Screen name="manager/incoming/[id]" options={{ title: 'Receive Stock' }} />
         <Stack.Screen name="manager/movements" options={{ title: 'Inventory History' }} />
         <Stack.Screen name="manager/products" options={{ title: 'Products' }} />
+        <Stack.Screen name="manager/sales/index" options={{ title: 'Sales History' }} />
+        <Stack.Screen name="manager/sales/[id]" options={{ title: 'Sale Details' }} />
+        <Stack.Screen name="manager/shifts/index" options={{ title: 'Shift History' }} />
+        <Stack.Screen name="manager/shifts/[id]" options={{ title: 'Shift Details' }} />
+        <Stack.Screen name="manager/reports/product-sales" options={{ title: 'Product Sales' }} />
         <Stack.Screen name="manager/profile" options={{ title: 'Account' }} />
         <Stack.Screen name="manager/change-password" options={{ title: 'Change Password' }} />
       </Stack>

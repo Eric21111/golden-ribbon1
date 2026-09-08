@@ -3,9 +3,11 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useBranches } from '@/hooks/useBranches';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventoryReconciliation } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
 import type { InventoryReconciliationItem } from '@/types/models';
@@ -16,6 +18,7 @@ export function InventoryReconciliationScreen() {
 
   const query = useInventoryReconciliation(selectedBranchId || undefined);
   const items = query.data ?? [];
+  const pagination = useClientPagination(items, selectedBranchId);
 
   const totalProducts = items.length;
   const issueCount = items.filter((i) => i.has_reconciliation_issue).length;
@@ -86,12 +89,21 @@ export function InventoryReconciliationScreen() {
         />
       )}
 
-      {items.map((item) => (
+      {pagination.pageItems.map((item) => (
         <ReconciliationItemCard
           key={`${item.branch_id}-${item.product_id}`}
           item={item}
         />
       ))}
+      {pagination.showPagination ? (
+        <View style={styles.pager}>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -188,6 +200,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
 }
 
 const styles = StyleSheet.create({
+  pager: { paddingVertical: spacing.sm },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1.5,

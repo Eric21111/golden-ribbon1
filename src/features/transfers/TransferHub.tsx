@@ -16,10 +16,12 @@ import { FilterDropdown } from '@/components/FilterDropdown';
 import { MasterDetailLayout } from '@/components/MasterDetailLayout';
 import { OverflowSheet, type OverflowAction } from '@/components/OverflowSheet';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { ChoiceChips } from '@/features/employees/ChoiceChips';
 import { BranchSelector } from '@/features/inventory/BranchSelector';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useLayout } from '@/lib/layout';
 import type { Branch, StockTransferSummary } from '@/types/models';
 
@@ -109,6 +111,11 @@ export function TransferHub({
       return haystack.includes(query);
     });
   }, [transfers, search]);
+
+  const pagination = useClientPagination(
+    filtered,
+    `${search}|${statusFilter}|${destinationBranchId}`,
+  );
 
   useEffect(() => {
     if (!useSplit) return;
@@ -207,7 +214,7 @@ export function TransferHub({
 
   const list = !error && (transfers || !isLoading) ? (
     <FlatList
-      data={filtered}
+      data={pagination.pageItems}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       style={styles.list}
@@ -217,6 +224,17 @@ export function TransferHub({
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
         isLoading ? <LoadingState label={loadingLabel} /> : <EmptyState title={empty.title} message={empty.message} />
+      }
+      ListFooterComponent={
+        pagination.showPagination ? (
+          <View style={styles.pager}>
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              onPageChange={pagination.setPage}
+            />
+          </View>
+        ) : null
       }
       renderItem={({ item }) => (
         <TransferListItem
@@ -316,6 +334,7 @@ const styles = StyleSheet.create({
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexGrow: 1 },
   separator: { height: spacing.sm },
+  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   footer: {
     borderTopWidth: 1,
     borderTopColor: colors.border,

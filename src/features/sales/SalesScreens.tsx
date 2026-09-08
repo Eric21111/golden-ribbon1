@@ -5,6 +5,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppButton } from '@/components/AppButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -13,6 +14,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useSale, useSales } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
+import { PAGE_SIZE, PAGINATION_MIN_ITEMS, totalPagesFor } from '@/lib/pagination';
 import type { SaleStatus } from '@/types/models';
 
 function SaleStatusBadge({ status }: { status: SaleStatus }) {
@@ -51,10 +53,14 @@ export function SalesHistoryScreen({ role }: { role: 'owner' | 'manager' | 'cash
       cashierId,
       date: dateFilter || undefined,
     },
-    page
+    page,
+    PAGE_SIZE,
   );
 
-  const sales = salesQuery.data ?? [];
+  const sales = salesQuery.data?.items ?? [];
+  const total = salesQuery.data?.total ?? 0;
+  const totalPages = totalPagesFor(total, PAGE_SIZE);
+  const showPagination = total >= PAGINATION_MIN_ITEMS;
 
   return (
     <Screen constrain>
@@ -213,22 +219,16 @@ export function SalesHistoryScreen({ role }: { role: 'owner' | 'manager' | 'cash
         </View>
       ))}
 
-      {/* Pagination Controls */}
-      <View style={styles.paginationRow}>
-        <AppButton
-          label="Previous"
-          variant="secondary"
-          disabled={page === 0 || salesQuery.isLoading}
-          onPress={() => setPage((p) => Math.max(0, p - 1))}
-        />
-        <Text style={styles.pageIndicator}>Page {page + 1}</Text>
-        <AppButton
-          label="Next"
-          variant="secondary"
-          disabled={sales.length < 50 || salesQuery.isLoading}
-          onPress={() => setPage((p) => p + 1)}
-        />
-      </View>
+      {showPagination ? (
+        <View style={styles.pager}>
+          <Pagination
+            page={Math.min(page, totalPages - 1)}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            visible={!salesQuery.isLoading}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -498,15 +498,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
-  paginationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  pageIndicator: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: '600',
+  pager: {
+    paddingVertical: spacing.sm,
   },
 });

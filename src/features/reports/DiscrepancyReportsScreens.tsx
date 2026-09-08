@@ -3,9 +3,11 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useBranches } from '@/hooks/useBranches';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import {
   useReturnDiscrepanciesReport,
   useTransferDiscrepanciesReport,
@@ -40,6 +42,10 @@ export function TransferDiscrepanciesReportScreen() {
   );
 
   const discrepancies = query.data ?? [];
+  const pagination = useClientPagination(
+    discrepancies,
+    `${selectedBranchId}|${discrepancyType}|${rangeType}|${customStart}|${customEnd}`,
+  );
   const totalMissing = discrepancies
     .filter((d) => d.discrepancy_type === 'missing')
     .reduce((acc, d) => acc + Number(d.difference), 0);
@@ -177,9 +183,18 @@ export function TransferDiscrepanciesReportScreen() {
         />
       )}
 
-      {discrepancies.map((item) => (
+      {pagination.pageItems.map((item) => (
         <TransferDiscrepancyCard key={item.id} item={item} />
       ))}
+      {pagination.showPagination ? (
+        <View style={styles.pager}>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -421,6 +436,7 @@ function ReturnDiscrepancyCard({ item }: { item: ReturnDiscrepancyReportItem }) 
 }
 
 const styles = StyleSheet.create({
+  pager: { paddingVertical: spacing.sm },
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

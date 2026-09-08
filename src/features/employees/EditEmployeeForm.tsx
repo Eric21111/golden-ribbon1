@@ -5,7 +5,6 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
-import { SwitchField } from '@/components/SwitchField';
 import { colors, radius, spacing } from '@/constants/theme';
 import { ChoiceChips } from '@/features/employees/ChoiceChips';
 import { editEmployeeSchema, type EditEmployeeValues } from '@/features/employees/employeeSchemas';
@@ -17,8 +16,10 @@ type EditEmployeeFormProps = {
   branches: Branch[];
   error?: string;
   loading?: boolean;
+  togglingActive?: boolean;
   onSubmit: (values: EditEmployeeValues) => void;
   onResetPassword?: () => void;
+  onToggleActive?: () => void;
 };
 
 export function EditEmployeeForm({
@@ -26,8 +27,10 @@ export function EditEmployeeForm({
   branches,
   error,
   loading,
+  togglingActive,
   onSubmit,
   onResetPassword,
+  onToggleActive,
 }: EditEmployeeFormProps) {
   const { control, handleSubmit, reset, formState } = useForm<EditEmployeeValues>({
     resolver: zodResolver(editEmployeeSchema),
@@ -94,22 +97,33 @@ export function EditEmployeeForm({
           </>
         )}
       />
-      <Controller
-        control={control}
-        name="is_active"
-        render={({ field }) => (
-          <SwitchField
-            label="Active employee"
-            description="Deactivation is blocked while the employee has an open shift."
-            value={field.value}
-            onValueChange={field.onChange}
-          />
-        )}
-      />
+      <Text style={styles.statusHint}>
+        Status: {employee.is_active ? 'Active' : 'Inactive'}. Deactivation is blocked while the
+        employee has an open shift.
+      </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton label="Save employee" loading={loading} onPress={handleSubmit(onSubmit)} />
+      <AppButton
+        label="Save employee"
+        loading={Boolean(loading) && !togglingActive}
+        disabled={togglingActive}
+        onPress={handleSubmit(onSubmit)}
+      />
+      {onToggleActive ? (
+        <AppButton
+          label={employee.is_active ? 'Deactivate' : 'Activate'}
+          variant={employee.is_active ? 'danger' : 'primary'}
+          loading={togglingActive}
+          disabled={loading}
+          onPress={onToggleActive}
+        />
+      ) : null}
       {onResetPassword ? (
-        <AppButton label="Reset password" variant="secondary" disabled={loading} onPress={onResetPassword} />
+        <AppButton
+          label="Reset password"
+          variant="secondary"
+          disabled={loading || togglingActive}
+          onPress={onResetPassword}
+        />
       ) : null}
       {Object.keys(formState.errors).length > 0 ? (
         <Text style={styles.formHint}>Correct the highlighted fields and try again.</Text>
@@ -131,6 +145,7 @@ const styles = StyleSheet.create({
   readOnlyLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   readOnlyValue: { color: colors.text, fontSize: 16 },
   label: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  statusHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 13 },
   formHint: { color: colors.danger, fontSize: 13, textAlign: 'center' },
 });

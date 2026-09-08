@@ -6,10 +6,12 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { ChoiceChips } from '@/features/employees/ChoiceChips';
 import { useCreateBranch } from '@/hooks/useBranches';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { getErrorMessage } from '@/lib/errors';
 import { useLayout } from '@/lib/layout';
 import type { Branch } from '@/types/models';
@@ -58,6 +60,8 @@ export function BranchHub({
     });
   }, [branches, filter, search]);
 
+  const pagination = useClientPagination(filtered, `${search}|${filter}`);
+
   const empty =
     filter === 'all' && !search.trim()
       ? { title: 'No branches yet', message: 'Create the Main Branch to get started.' }
@@ -100,7 +104,7 @@ export function BranchHub({
 
           {!error && (branches || !isLoading) ? (
             <FlatList
-              data={filtered}
+              data={pagination.pageItems}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               style={styles.list}
@@ -114,6 +118,17 @@ export function BranchHub({
                 ) : (
                   <EmptyState title={empty.title} message={empty.message} />
                 )
+              }
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
               }
               renderItem={({ item }) => (
                 <BranchListItem branch={item} onPress={() => onPressBranch(item)} />
@@ -163,6 +178,7 @@ const styles = StyleSheet.create({
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexGrow: 1 },
   separator: { height: spacing.sm },
+  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   footer: {
     borderTopWidth: 1,
     borderTopColor: colors.border,

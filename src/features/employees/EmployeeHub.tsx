@@ -7,6 +7,7 @@ import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { FilterDropdown } from '@/components/FilterDropdown';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { CreateEmployeeForm } from '@/features/employees/CreateEmployeeForm';
@@ -27,6 +28,7 @@ import {
   useResetEmployeePassword,
   useUpdateEmployee,
 } from '@/hooks/useEmployees';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { getEmployeeErrorMessage } from '@/lib/errors';
 import { useLayout } from '@/lib/layout';
 import type { Branch, EmployeeRecord } from '@/types/models';
@@ -88,6 +90,8 @@ export function EmployeeHub({
     [employees, search, role, branchId, status]
   );
 
+  const pagination = useClientPagination(filtered, `${search}|${role}|${branchId}|${status}`);
+
   const hasFilters = Boolean(search.trim() || role !== 'all' || branchId || status !== 'all');
   const empty = employeeFilterEmptyMessage(hasFilters);
 
@@ -113,11 +117,20 @@ export function EmployeeHub({
                 branchId: employee.branch_id,
                 isActive: !employee.is_active,
               },
-              { onSettled: () => setBusyId('') }
+              {
+                onSuccess: () => {
+                  setEditEmployee((current) =>
+                    current?.id === employee.id
+                      ? { ...current, is_active: !employee.is_active }
+                      : current,
+                  );
+                },
+                onSettled: () => setBusyId(''),
+              },
             );
           },
         },
-      ]
+      ],
     );
   };
 
@@ -228,7 +241,7 @@ export function EmployeeHub({
 
           {!error && (employees || !isLoading) ? (
             <FlatList
-              data={filtered}
+              data={pagination.pageItems}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               style={styles.list}
@@ -243,20 +256,25 @@ export function EmployeeHub({
                   <EmptyState title={empty.title} message={empty.message} />
                 )
               }
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
+              }
               renderItem={({ item }) => (
                 <EmployeeListItem
                   employee={item}
-                  busy={updateMutation.isPending && busyId === item.id}
                   onEdit={() => {
                     createMutation.reset();
                     updateMutation.reset();
                     setEditEmployee(item);
                   }}
-                  onResetPassword={() => {
-                    resetMutation.reset();
-                    setResetEmployee(item);
-                  }}
-                  onToggleActive={() => toggleEmployee(item)}
                 />
               )}
             />
@@ -299,8 +317,10 @@ export function EmployeeHub({
             employee={editEmployee}
             branches={activeSellingBranches}
             error={updateMutation.error ? getEmployeeErrorMessage(updateMutation.error) : undefined}
-            loading={updateMutation.isPending}
+            loading={updateMutation.isPending && busyId !== editEmployee.id}
+            togglingActive={updateMutation.isPending && busyId === editEmployee.id}
             onSubmit={submitEdit}
+            onToggleActive={() => toggleEmployee(editEmployee)}
             onResetPassword={() => {
               const current = editEmployee;
               setEditEmployee(null);
@@ -351,6 +371,7 @@ const styles = StyleSheet.create({
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexGrow: 1 },
   separator: { height: spacing.sm },
+  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   footer: {
     borderTopWidth: 1,
     borderTopColor: colors.border,

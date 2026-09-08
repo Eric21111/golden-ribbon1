@@ -6,9 +6,11 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { ChoiceChips } from '@/features/employees/ChoiceChips';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCreateProduct } from '@/hooks/useProducts';
 import { getErrorMessage } from '@/lib/errors';
 import { useLayout } from '@/lib/layout';
@@ -64,6 +66,8 @@ export function ProductHub({
     return (products ?? []).filter((product) => matchesProductFilter(product.is_active, filter));
   }, [products, filter]);
 
+  const pagination = useClientPagination(filtered, `${search}|${filter}`);
+
   const empty =
     filter === 'all' && !search.trim()
       ? productFilterEmptyMessage('all', false, canCreate)
@@ -114,7 +118,7 @@ export function ProductHub({
           {!error && (products || !isLoading) ? (
             <FlatList
               key={`product-cols-${columns}`}
-              data={filtered}
+              data={pagination.pageItems}
               keyExtractor={(item) => item.id}
               numColumns={columns}
               contentContainerStyle={styles.listContent}
@@ -136,6 +140,17 @@ export function ProductHub({
                 ) : (
                   <EmptyState title={empty.title} message={empty.message} />
                 )
+              }
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
               }
               renderItem={({ item }) => (
                 <View style={columns > 1 ? styles.gridCell : undefined}>
@@ -206,6 +221,7 @@ const styles = StyleSheet.create({
   columnWrapper: { gap: spacing.sm },
   gridCell: { flex: 1 },
   separator: { height: spacing.sm },
+  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   footer: {
     borderTopWidth: 1,
     borderTopColor: colors.border,

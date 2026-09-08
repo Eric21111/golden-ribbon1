@@ -28,6 +28,8 @@ export default function OwnerLayout() {
           <Stack.Screen name="owner/employees/index" options={{ title: 'Employees' }} />
           <Stack.Screen name="owner/employees/create" options={{ title: 'Create Employee' }} />
           <Stack.Screen name="owner/employees/[id]/index" options={{ title: 'Edit Employee' }} />
+          <Stack.Screen name="owner/sales/index" options={{ title: 'Sales History' }} />
+          <Stack.Screen name="owner/sales/[id]" options={{ title: 'Sale Details' }} />
           <Stack.Screen name="owner/reports/sales-by-branch" options={{ title: 'Sales by Branch' }} />
           <Stack.Screen name="owner/reports/product-sales" options={{ title: 'Product Sales' }} />
           <Stack.Screen name="owner/reports/branch-performance/index" options={{ title: 'Branch Performance' }} />
