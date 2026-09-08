@@ -76,6 +76,7 @@ export default function TransferHistoryScreen() {
         onPress: () => router.push('/owner/transfers/create'),
       }}
       enableMasterDetail={false}
+      filterPresentation="dropdown"
       overflowActions={[
         {
           label: 'Transfer discrepancies',

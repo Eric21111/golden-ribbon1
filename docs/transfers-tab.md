@@ -18,8 +18,7 @@ Shared: `src/features/transfers/TransferHub.tsx`
 ```
 Header (title + context)     [⋯]
 Search
-Status chips
-Destination chips (Owner only)
+Status filter (+ Destination for Owner)
 Transfer list (pull to refresh)
 Sticky primary CTA (Owner only)
 ```
@@ -27,8 +26,8 @@ Sticky primary CTA (Owner only)
 | Element | Behavior |
 |---------|----------|
 | Search | Transfer #, from/to branch name (client-side) |
-| Status chips | All / Pending / Received / Discrepancy |
-| Destination | Owner: selling branches + All (server filter `to_branch_id`) |
+| Status | Owner: dropdown (default **All Status**). Manager: chips (default Pending) |
+| Destination | Owner: dropdown (default **All Branches**) |
 | Status filter | Server filter via `useTransfers` |
 | Row tap | Stack detail / receive screen |
 | Pull to refresh | Refetch list |
@@ -38,7 +37,7 @@ Sticky primary CTA (Owner only)
 ## Owner — Transfers
 
 **Context:** Main → branches  
-**Default status:** All  
+**Default status:** All Status (`''`) — shows Pending, Received, and Discrepancy until filtered.
 **Primary CTA:** Create transfer → `/owner/transfers/create`
 
 **Overflow**

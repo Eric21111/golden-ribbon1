@@ -2,7 +2,7 @@
 
 Owner-only **Employee hub**. Managers and Cashiers have no Employees tab.
 
-Matches other hubs: search, chips, sticky CTA, `FlatList` + pull-to-refresh. Create / edit / reset password open as **bottom-sheet modals**.
+Matches other hubs: search, filter dropdowns, sticky CTA, `FlatList` + pull-to-refresh. Create / edit / reset password open as **bottom-sheet modals**.
 
 | Role | Route | Screen |
 |------|-------|--------|
@@ -17,9 +17,7 @@ Shared: `src/features/employees/EmployeeHub.tsx`
 ```
 Header · Managers and Cashiers
 Search (name or email)
-Role chips: All | Managers | Cashiers
-Branch chips (selling branches + All)
-Status chips: All | Active | Inactive
+Dropdowns (defaults): All Roles · All Branches · All Status
 Employee list (pull to refresh)
 Sticky CTA: [ Create employee ] → modal
 ```

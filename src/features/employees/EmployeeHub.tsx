@@ -5,10 +5,10 @@ import { AppButton } from '@/components/AppButton';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
+import { FilterDropdown } from '@/components/FilterDropdown';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
-import { ChoiceChips } from '@/features/employees/ChoiceChips';
 import { CreateEmployeeForm } from '@/features/employees/CreateEmployeeForm';
 import { EditEmployeeForm } from '@/features/employees/EditEmployeeForm';
 import { EmployeeListItem } from '@/features/employees/EmployeeListItem';
@@ -22,7 +22,6 @@ import {
   type EmployeeStatusFilter,
 } from '@/features/employees/employeeFilters';
 import type { CreateEmployeeValues, EditEmployeeValues, ResetPasswordValues } from '@/features/employees/employeeSchemas';
-import { BranchSelector } from '@/features/inventory/BranchSelector';
 import {
   useCreateEmployee,
   useResetEmployeePassword,
@@ -72,6 +71,13 @@ export function EmployeeHub({
   const activeSellingBranches = useMemo(
     () => sellingBranches.filter((branch) => branch.is_active),
     [sellingBranches]
+  );
+  const branchFilterOptions = useMemo(
+    () => [
+      { label: 'All Branches', value: '' },
+      ...sellingBranches.map((branch) => ({ label: branch.name, value: branch.id })),
+    ],
+    [sellingBranches],
   );
 
   const filtered = useMemo(
@@ -185,9 +191,32 @@ export function EmployeeHub({
               style={styles.search}
             />
 
-            <ChoiceChips choices={EMPLOYEE_ROLE_CHOICES} value={role} onChange={setRole} />
-            <BranchSelector branches={sellingBranches} value={branchId} onChange={setBranchId} allowAll />
-            <ChoiceChips choices={EMPLOYEE_STATUS_CHOICES} value={status} onChange={setStatus} />
+            <View style={styles.filterRow}>
+              <View style={styles.filterItem}>
+                <FilterDropdown
+                  label="Role"
+                  options={EMPLOYEE_ROLE_CHOICES}
+                  value={role}
+                  onChange={setRole}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <FilterDropdown
+                  label="Branch"
+                  options={branchFilterOptions}
+                  value={branchId}
+                  onChange={setBranchId}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <FilterDropdown
+                  label="Status"
+                  options={EMPLOYEE_STATUS_CHOICES}
+                  value={status}
+                  onChange={setStatus}
+                />
+              </View>
+            </View>
 
             {updateMutation.error && !editEmployee ? (
               <Text style={styles.error}>{getEmployeeErrorMessage(updateMutation.error)}</Text>
@@ -306,6 +335,8 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
   top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
   search: {
     minHeight: 44,
     borderWidth: 1,

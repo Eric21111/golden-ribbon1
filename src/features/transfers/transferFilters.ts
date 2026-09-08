@@ -3,7 +3,7 @@ import type { TransferStatus } from '@/types/models';
 export type TransferStatusFilter = TransferStatus | '';
 
 export const OWNER_STATUS_CHOICES: Array<{ label: string; value: TransferStatusFilter }> = [
-  { label: 'All', value: '' },
+  { label: 'All Status', value: '' },
   { label: 'Pending', value: 'pending_receipt' },
   { label: 'Received', value: 'received' },
   { label: 'Discrepancy', value: 'received_with_discrepancy' },
@@ -11,7 +11,7 @@ export const OWNER_STATUS_CHOICES: Array<{ label: string; value: TransferStatusF
 
 export const MANAGER_STATUS_CHOICES: Array<{ label: string; value: TransferStatusFilter }> = [
   { label: 'Pending', value: 'pending_receipt' },
-  { label: 'All', value: '' },
+  { label: 'All Status', value: '' },
   { label: 'Received', value: 'received' },
   { label: 'Discrepancy', value: 'received_with_discrepancy' },
 ];

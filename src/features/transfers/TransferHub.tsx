@@ -12,6 +12,7 @@ import {
 import { AppButton } from '@/components/AppButton';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
+import { FilterDropdown } from '@/components/FilterDropdown';
 import { MasterDetailLayout } from '@/components/MasterDetailLayout';
 import { OverflowSheet, type OverflowAction } from '@/components/OverflowSheet';
 import { PageHeader } from '@/components/PageHeader';
@@ -57,6 +58,8 @@ type TransferHubProps = {
    * Tablet master–detail (Manager Incoming). Owner Transfers set false.
    */
   enableMasterDetail?: boolean;
+  /** Owner uses compact dropdowns; Manager Incoming keeps chips. */
+  filterPresentation?: 'chips' | 'dropdown';
 };
 
 export function TransferHub({
@@ -83,9 +86,11 @@ export function TransferHub({
   showReceiveAction = false,
   receiveActionLabel = 'Receive stock',
   enableMasterDetail = true,
+  filterPresentation = 'chips',
 }: TransferHubProps) {
   const { isTablet, hubMaxWidth } = useLayout();
   const useSplit = isTablet && enableMasterDetail;
+  const useDropdowns = filterPresentation === 'dropdown';
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -157,16 +162,46 @@ export function TransferHub({
         style={styles.search}
       />
 
-      <ChoiceChips choices={statusChoices} value={statusFilter} onChange={onStatusFilterChange} />
-
-      {destinationBranches && onDestinationChange ? (
-        <BranchSelector
-          branches={destinationBranches}
-          value={destinationBranchId}
-          onChange={onDestinationChange}
-          allowAll
-        />
-      ) : null}
+      {useDropdowns ? (
+        <View style={styles.filterRow}>
+          <View style={styles.filterItem}>
+            <FilterDropdown
+              label="Status"
+              options={statusChoices}
+              value={statusFilter}
+              onChange={onStatusFilterChange}
+            />
+          </View>
+          {destinationBranches && onDestinationChange ? (
+            <View style={styles.filterItem}>
+              <FilterDropdown
+                label="Destination"
+                options={[
+                  { label: 'All Branches', value: '' },
+                  ...destinationBranches.map((branch) => ({
+                    label: branch.name,
+                    value: branch.id,
+                  })),
+                ]}
+                value={destinationBranchId}
+                onChange={onDestinationChange}
+              />
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <>
+          <ChoiceChips choices={statusChoices} value={statusFilter} onChange={onStatusFilterChange} />
+          {destinationBranches && onDestinationChange ? (
+            <BranchSelector
+              branches={destinationBranches}
+              value={destinationBranchId}
+              onChange={onDestinationChange}
+              allowAll
+            />
+          ) : null}
+        </>
+      )}
     </View>
   );
 
@@ -251,6 +286,8 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
   top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   headerCopy: { flex: 1, minWidth: 0 },
   overflowButton: {
