@@ -58,6 +58,7 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
         render={({ field, fieldState }) => (
           <FormField
             label="Current Password"
+            placeholder="Enter current password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -76,6 +77,7 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
         render={({ field, fieldState }) => (
           <FormField
             label="New Password"
+            placeholder="Enter new password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -94,6 +96,7 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
         render={({ field, fieldState }) => (
           <FormField
             label="Confirm New Password"
+            placeholder="Re-enter new password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}

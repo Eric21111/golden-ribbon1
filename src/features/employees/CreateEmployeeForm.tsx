@@ -39,6 +39,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
         render={({ field, fieldState }) => (
           <FormField
             label="Full Name"
+            placeholder="Jane Doe"
             autoCapitalize="words"
             value={field.value}
             onBlur={field.onBlur}
@@ -53,6 +54,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
         render={({ field, fieldState }) => (
           <FormField
             label="Email"
+            placeholder="name@example.com"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -69,6 +71,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
         render={({ field, fieldState }) => (
           <FormField
             label="Temporary Password"
+            placeholder="8–72 characters"
             secureTextEntry
             value={field.value}
             onBlur={field.onBlur}

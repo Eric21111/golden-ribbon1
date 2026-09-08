@@ -90,6 +90,7 @@ export default function LoginScreen() {
             render={({ field, fieldState }) => (
               <FormField
                 label="Email"
+                placeholder="name@example.com"
                 value={field.value}
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}
@@ -113,6 +114,7 @@ export default function LoginScreen() {
               <FormField
                 ref={passwordRef}
                 label="Password"
+                placeholder="Enter your password"
                 value={field.value}
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}

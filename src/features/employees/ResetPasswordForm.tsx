@@ -41,6 +41,7 @@ export function ResetPasswordForm({
         render={({ field, fieldState }) => (
           <FormField
             label="New Temporary Password"
+            placeholder="Enter new temporary password"
             secureTextEntry
             value={field.value}
             onBlur={field.onBlur}
@@ -55,6 +56,7 @@ export function ResetPasswordForm({
         render={({ field, fieldState }) => (
           <FormField
             label="Confirm Temporary Password"
+            placeholder="Re-enter temporary password"
             secureTextEntry
             value={field.value}
             onBlur={field.onBlur}

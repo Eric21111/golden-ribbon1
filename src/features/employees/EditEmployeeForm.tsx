@@ -63,6 +63,7 @@ export function EditEmployeeForm({
         render={({ field, fieldState }) => (
           <FormField
             label="Full Name"
+            placeholder="Jane Doe"
             autoCapitalize="words"
             value={field.value}
             onBlur={field.onBlur}
