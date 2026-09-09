@@ -60,11 +60,14 @@ export function ProductHub({
   const { isTablet, productColumns, catalogMaxWidth } = useLayout();
   const [filter, setFilter] = useState<ProductFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
+  const [createKey, setCreateKey] = useState(0);
   const createMutation = useCreateProduct();
 
   const filtered = useMemo(() => {
     return (products ?? []).filter((product) => matchesProductFilter(product.is_active, filter));
   }, [products, filter]);
+
+  const existingSkus = useMemo(() => (products ?? []).map((product) => product.sku), [products]);
 
   const pagination = useClientPagination(filtered, `${search}|${filter}`);
 
@@ -169,6 +172,7 @@ export function ProductHub({
                 label="Create product"
                 onPress={() => {
                   createMutation.reset();
+                  setCreateKey((key) => key + 1);
                   setCreateOpen(true);
                 }}
               />
@@ -185,6 +189,9 @@ export function ProductHub({
           onClose={() => setCreateOpen(false)}
         >
           <ProductForm
+            key={createKey}
+            autoGenerateSku
+            existingSkus={existingSkus}
             submitLabel="Create product"
             loading={createMutation.isPending}
             error={createMutation.error ? getErrorMessage(createMutation.error) : undefined}

@@ -3,6 +3,9 @@ import { useWindowDimensions } from 'react-native';
 /** Shortest side ≥ 600 matches login and typical phone/tablet split. */
 export const TABLET_MIN_EDGE = 600;
 
+/** Phone landscape wide enough for catalog | order split. */
+export const POS_SPLIT_MIN_WIDTH = 700;
+
 export const layoutWidths = {
   /** Home / reading columns */
   content: 640,
@@ -23,14 +26,19 @@ export const layoutWidths = {
 export function useLayout() {
   const { width, height } = useWindowDimensions();
   const shortest = Math.min(width, height);
+  const isLandscape = width > height;
   const isTablet = shortest >= TABLET_MIN_EDGE;
-  const posColumns = !isTablet ? 1 : width >= 1100 ? 3 : 2;
+  /** Split catalog | cart on tablet, or phone landscape with enough width. */
+  const posSplit = isTablet || (isLandscape && width >= POS_SPLIT_MIN_WIDTH);
+  const posColumns = !posSplit ? 1 : width >= 1100 ? 3 : 2;
   const productColumns = !isTablet ? 1 : 2;
 
   return {
     width,
     height,
     isTablet,
+    isLandscape,
+    posSplit,
     posColumns,
     productColumns,
     contentMaxWidth: layoutWidths.content,

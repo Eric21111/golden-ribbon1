@@ -61,6 +61,7 @@ export function Screen({
       contentContainerStyle={[styles.content, contentContainerStyle]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -76,7 +77,7 @@ export function Screen({
   return (
     <SafeAreaView edges={safeEdges} style={[styles.safeArea, { backgroundColor }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >

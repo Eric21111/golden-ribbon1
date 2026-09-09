@@ -149,7 +149,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   column: {

@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing } from '@/constants/theme';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 
 type BottomSheetProps = PropsWithChildren<{
   visible: boolean;
@@ -22,12 +23,16 @@ type BottomSheetProps = PropsWithChildren<{
 
 export function BottomSheet({ visible, title, onClose, children, scroll = false }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
+  const bottomPad = Math.max(insets.bottom, spacing.md) + (Platform.OS === 'android' ? keyboardInset : 0);
 
   const body = scroll ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      contentContainerStyle={[styles.scrollContent, keyboardInset > 0 ? styles.scrollContentKeyboard : null]}
     >
       {children}
     </ScrollView>
@@ -39,7 +44,7 @@ export function BottomSheet({ visible, title, onClose, children, scroll = false 
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
         <Pressable accessibilityLabel="Dismiss" accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <View style={[styles.sheet, { paddingBottom: bottomPad, maxHeight: keyboardInset > 0 ? '88%' : '92%' }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
@@ -78,4 +83,5 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 18, fontWeight: '800', flexShrink: 1 },
   close: { color: colors.primary, fontSize: 15, fontWeight: '700' },
   scrollContent: { gap: spacing.md, paddingBottom: spacing.sm },
+  scrollContentKeyboard: { paddingBottom: spacing.lg },
 });

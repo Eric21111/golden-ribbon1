@@ -17,6 +17,7 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductCard } from '@/features/pos/PosProductCard';
+import { filterPosInventory } from '@/features/pos/posInventory';
 import { useInventory } from '@/hooks/useInventory';
 import { useActiveShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
@@ -29,7 +30,7 @@ import type { InventoryItem } from '@/types/models';
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
-  const { isTablet, posColumns } = useLayout();
+  const { posSplit, posColumns } = useLayout();
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
   const shiftQuery = useActiveShift(cashierId);
@@ -50,17 +51,10 @@ export default function CashierPosScreen() {
     if (shiftQuery.data) beginShift(shiftQuery.data.id);
   }, [beginShift, shiftQuery.data]);
 
-  const filteredInventory = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return inventory.data ?? [];
-    return (
-      inventory.data?.filter(
-        (item) =>
-          item.product.name.toLowerCase().includes(term) ||
-          item.product.sku.toLowerCase().includes(term),
-      ) ?? []
-    );
-  }, [inventory.data, search]);
+  const filteredInventory = useMemo(
+    () => filterPosInventory(inventory.data ?? [], search),
+    [inventory.data, search],
+  );
 
   const quantities = useMemo(
     () => new Map(items.map((item) => [item.product_id, item.quantity])),
@@ -139,11 +133,11 @@ export default function CashierPosScreen() {
       }
       ListEmptyComponent={
         <EmptyState
-          title="No products found"
+          title={search.trim() ? 'No products found' : 'No products in stock'}
           message={
-            search
+            search.trim()
               ? 'Try another product name or SKU.'
-              : 'No active products are available for this branch.'
+              : 'In-stock items appear here. Search by name or SKU to find out-of-stock products.'
           }
         />
       }
@@ -158,6 +152,20 @@ export default function CashierPosScreen() {
           />
         </View>
       )}
+    />
+  );
+
+  const searchField = (
+    <TextInput
+      accessibilityLabel="Search products by name or SKU"
+      autoCapitalize="none"
+      autoCorrect={false}
+      clearButtonMode="while-editing"
+      onChangeText={setSearch}
+      placeholder="Search product name or SKU"
+      placeholderTextColor={colors.muted}
+      style={styles.search}
+      value={search}
     />
   );
 
@@ -197,7 +205,7 @@ export default function CashierPosScreen() {
 
   return (
     <Screen scroll={false} contentContainerStyle={styles.screen}>
-      {isTablet ? (
+      {posSplit ? (
         <View style={styles.split}>
           <View style={styles.catalog}>
             <View style={styles.top}>
@@ -205,17 +213,7 @@ export default function CashierPosScreen() {
                 title="Point of Sale"
                 subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
               />
-              <TextInput
-                accessibilityLabel="Search products by name or SKU"
-                autoCapitalize="none"
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-                onChangeText={setSearch}
-                placeholder="Search product name or SKU"
-                placeholderTextColor={colors.muted}
-                style={styles.search}
-                value={search}
-              />
+              {searchField}
             </View>
             {productList}
           </View>
@@ -237,17 +235,7 @@ export default function CashierPosScreen() {
               title="Point of Sale"
               subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
             />
-            <TextInput
-              accessibilityLabel="Search products by name or SKU"
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              onChangeText={setSearch}
-              placeholder="Search product name or SKU"
-              placeholderTextColor={colors.muted}
-              style={styles.search}
-              value={search}
-            />
+            {searchField}
           </View>
           {productList}
           {mobileFooter}

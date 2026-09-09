@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.goldenribbon",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",

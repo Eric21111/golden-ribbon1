@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/theme';
+import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import type { UserRole } from '@/types/models';
 
 type NavigationItem = {
@@ -49,15 +50,17 @@ export function useBottomNavigationVisible() {
 export function RoleNavigation({ role, children }: PropsWithChildren<{ role: UserRole }>) {
   const pathname = usePathname().replace(/\/$/, '');
   const items = menus[role];
+  const keyboardInset = useKeyboardBottomInset();
   // Only primary pages have a menu. Forms, details, and inventory drill-downs
   // keep their existing stack navigation back to the parent page.
   const visible = items.some((item) => item.href === pathname);
+  const showNav = visible && keyboardInset === 0;
 
   return (
     <BottomNavigationContext.Provider value={visible}>
       <View style={styles.layout}>
         <View style={styles.content}>{children}</View>
-        {visible ? (
+        {showNav ? (
           <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.footer}>
             <View style={styles.menu} accessibilityLabel={`${role} navigation`}>
               {items.map((item) => {

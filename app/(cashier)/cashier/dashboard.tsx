@@ -9,11 +9,18 @@ import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import {
+  formatOutOfStockWarning,
+  hasSellableStock,
+  outOfStockProductNames,
+} from '@/features/pos/posInventory';
+import { useInventory } from '@/hooks/useInventory';
 import { useActiveShift, useEndShift, useShiftSummary, useStartShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
-import { getShiftErrorMessage } from '@/lib/errors';
+import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useCartStore } from '@/stores/cartStore';
+import type { InventoryItem } from '@/types/models';
 
 export default function CashierDashboard() {
   const { profile } = useAuth();
@@ -22,13 +29,55 @@ export default function CashierDashboard() {
   const summaryQuery = useShiftSummary(shiftQuery.data?.id ?? '');
   const startMutation = useStartShift(cashierId);
   const endMutation = useEndShift(cashierId);
+  const inventory = useInventory(profile?.branch, true);
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
 
+  const ensureStockAllowsPos = (onAllowed: () => void) => {
+    if (inventory.isLoading || inventory.isFetching) {
+      Alert.alert('Please wait', 'Checking branch stock before continuing.');
+      return;
+    }
+    if (inventory.error) {
+      Alert.alert('Stock unavailable', getInventoryErrorMessage(inventory.error));
+      return;
+    }
+
+    const rows: InventoryItem[] = inventory.data ?? [];
+    if (rows.length === 0 || !hasSellableStock(rows)) {
+      Alert.alert(
+        'Cannot open POS',
+        rows.length === 0
+          ? 'This branch has no active products. Ask an owner or manager to add stock first.'
+          : 'All products are out of stock. Restock this branch before starting or opening POS.',
+      );
+      return;
+    }
+
+    const oosNames = outOfStockProductNames(rows);
+    if (oosNames.length === 0) {
+      onAllowed();
+      return;
+    }
+
+    Alert.alert(
+      'Some products are out of stock',
+      `You can continue, but these products have no stock:\n\n${formatOutOfStockWarning(oosNames)}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: onAllowed },
+      ],
+    );
+  };
+
   const startShift = () =>
-    startMutation.mutate(undefined, {
-      onSuccess: () => router.replace('/cashier/pos'),
-    });
+    ensureStockAllowsPos(() =>
+      startMutation.mutate(undefined, {
+        onSuccess: () => router.replace('/cashier/pos'),
+      }),
+    );
+
+  const openPos = () => ensureStockAllowsPos(() => router.push('/cashier/pos'));
 
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
@@ -62,11 +111,14 @@ export default function CashierDashboard() {
   }
 
   const refreshing =
-    shiftQuery.isRefetching || (Boolean(shiftQuery.data) && summaryQuery.isRefetching);
+    shiftQuery.isRefetching ||
+    inventory.isRefetching ||
+    (Boolean(shiftQuery.data) && summaryQuery.isRefetching);
 
   const onRefresh = () => {
     void Promise.all([
       shiftQuery.refetch(),
+      inventory.refetch(),
       shiftQuery.data ? summaryQuery.refetch() : Promise.resolve(),
     ]);
   };
@@ -97,7 +149,11 @@ export default function CashierDashboard() {
             {startMutation.error ? (
               <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
             ) : null}
-            <AppButton label="START SHIFT" loading={startMutation.isPending} onPress={startShift} />
+            <AppButton
+              label="START SHIFT"
+              loading={startMutation.isPending || inventory.isLoading}
+              onPress={startShift}
+            />
           </View>
         ) : null}
 
@@ -141,7 +197,7 @@ export default function CashierDashboard() {
               <Text style={styles.error}>{getShiftErrorMessage(endMutation.error)}</Text>
             ) : null}
 
-            <AppButton label="OPEN POS" onPress={() => router.push('/cashier/pos')} />
+            <AppButton label="OPEN POS" loading={inventory.isLoading} onPress={openPos} />
             <AppButton
               label="CURRENT SHIFT SALES"
               variant="secondary"
