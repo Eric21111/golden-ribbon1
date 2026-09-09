@@ -33,6 +33,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ace20e77-911e-4b50-8ca9-abe668abebca"
+      }
+    },
+    "owner": "danrebmaster220"
   }
 }
