@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { colors, spacing } from '@/constants/theme';
 import { AppButton } from './AppButton';
@@ -21,12 +21,22 @@ export function EmptyState({ title, message }: { title: string; message: string 
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+interface ErrorStateProps {
+  message: string;
+  onRetry?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
+  messageStyle?: StyleProp<TextStyle>;
+  retryLabelStyle?: StyleProp<TextStyle>;
+}
+
+export function ErrorState({ message, onRetry, titleStyle, messageStyle, retryLabelStyle }: ErrorStateProps) {
   return (
     <View style={styles.center}>
-      <Text style={styles.errorTitle}>Unable to load</Text>
-      <Text style={styles.muted}>{message}</Text>
-      {onRetry ? <AppButton label="Try again" onPress={onRetry} variant="secondary" /> : null}
+      <Text style={[styles.errorTitle, titleStyle]}>Unable to load</Text>
+      <Text style={[styles.muted, messageStyle]}>{message}</Text>
+      {onRetry ? (
+        <AppButton label="Try again" onPress={onRetry} variant="secondary" labelStyle={retryLabelStyle} />
+      ) : null}
     </View>
   );
 }

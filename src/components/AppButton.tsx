@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps, type StyleProp, type TextStyle } from 'react-native';
 
 import { colors, radius, spacing } from '@/constants/theme';
 
@@ -6,9 +6,18 @@ interface AppButtonProps extends Omit<PressableProps, 'children'> {
   label: string;
   loading?: boolean;
   variant?: 'primary' | 'secondary' | 'danger';
+  labelStyle?: StyleProp<TextStyle>;
 }
 
-export function AppButton({ label, loading = false, variant = 'primary', disabled, style, ...props }: AppButtonProps) {
+export function AppButton({
+  label,
+  loading = false,
+  variant = 'primary',
+  disabled,
+  style,
+  labelStyle,
+  ...props
+}: AppButtonProps) {
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -26,7 +35,7 @@ export function AppButton({ label, loading = false, variant = 'primary', disable
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' ? colors.primary : colors.surface} />
       ) : (
-        <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel]}>{label}</Text>
+        <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );

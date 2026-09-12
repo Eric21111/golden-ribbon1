@@ -1,14 +1,17 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
+import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
+import { NavTile } from '@/components/dashboard/NavTile';
+import { RecentSaleRow } from '@/components/dashboard/RecentSaleRow';
+import { StatTile } from '@/components/dashboard/StatTile';
+import { managerColors } from '@/components/dashboard/theme';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { DashboardCard } from '@/components/DashboardCard';
 import { ErrorState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useManagerDashboardMetrics, useManagerRecentSales } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
@@ -56,49 +59,81 @@ export default function ManagerDashboard() {
     void recentSalesQuery.refetch();
   };
 
-  return (
-    <Screen refreshing={refreshing} onRefresh={refresh}>
-      <ConstrainedWidth style={styles.column}>
-        <PageHeader
-          title={`Hello, ${profile?.full_name ?? 'Manager'}`}
-          subtitle={profile?.branch?.name ?? 'Assigned branch unavailable'}
-        />
-        <Text style={styles.role}>BRANCH MANAGER</Text>
+  const managerName = profile?.full_name ?? 'Manager';
 
+  return (
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      refreshing={refreshing}
+      onRefresh={refresh}
+      contentContainerStyle={styles.screenContent}
+    >
+      <View style={styles.header}>
+        <View style={styles.topRow}>
+          <HamburgerButton />
+        </View>
+        <View style={styles.identity}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            Hi, {managerName}
+          </Text>
+          <View style={styles.pillRow}>
+            <View style={styles.rolePill}>
+              <View style={styles.roleDot} />
+              <Text style={styles.rolePillText}>BRANCH MANAGER</Text>
+            </View>
+            <View style={styles.branchPill}>
+              <Ionicons name="storefront-outline" size={12} color={managerColors.subtext} />
+              <Text style={styles.branchPillText} numberOfLines={1}>
+                {profile?.branch?.name ?? 'Unassigned'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <ConstrainedWidth style={styles.column}>
         {metricsQuery.error ? (
-          <ErrorState message={getErrorMessage(metricsQuery.error)} onRetry={refresh} />
+          <ErrorState
+            message={getErrorMessage(metricsQuery.error)}
+            onRetry={refresh}
+            titleStyle={styles.errorTitle}
+            messageStyle={styles.errorMessage}
+            retryLabelStyle={styles.errorRetryLabel}
+          />
         ) : (
           <View style={styles.content}>
             <Section title="BRANCH SNAPSHOT">
               <Row>
-                <DashboardCard
+                <StatTile
                   style={styles.half}
-                  title="Today's Sales"
+                  emphasis
+                  icon="cash-outline"
+                  label="Today's Sales"
                   value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                  description="Revenue today (PH)"
                   onPress={() => router.push('/manager/sales' as never)}
                 />
-                <DashboardCard
+                <StatTile
                   style={styles.half}
-                  title="Orders Today"
+                  icon="receipt-outline"
+                  label="Orders Today"
                   value={metrics?.today_transactions ?? '—'}
-                  description="Completed transactions (PH)"
                   onPress={() => router.push('/manager/sales' as never)}
                 />
               </Row>
               <Row>
-                <DashboardCard
+                <StatTile
                   style={styles.half}
-                  title="Products in stock"
+                  icon="cube-outline"
+                  label="Products in stock"
                   value={metrics?.current_inventory_count ?? '—'}
-                  description="SKUs with quantity on hand"
                   onPress={() => router.push('/manager/inventory')}
                 />
-                <DashboardCard
+                <StatTile
                   style={styles.half}
-                  title="Pending incoming"
+                  icon="download-outline"
+                  label="Pending incoming"
                   value={metrics?.pending_incoming_transfers_count ?? '—'}
-                  description="Transfers awaiting receipt"
                   onPress={() => router.push('/manager/incoming')}
                 />
               </Row>
@@ -106,58 +141,65 @@ export default function ManagerDashboard() {
 
             <Section title="SALES">
               <Row>
-                <DashboardCard
-                  style={styles.half}
+                <NavTile
+                  layout="tile"
+                  icon="bar-chart-outline"
+                  accent="blue"
                   title="Branch Product Sales"
-                  description="Units sold and revenue"
                   onPress={() => router.push('/manager/reports/product-sales' as never)}
                 />
-                <DashboardCard
-                  style={styles.half}
+                <NavTile
+                  layout="tile"
+                  icon="time-outline"
+                  accent="gold"
                   title="Sales History"
-                  description="Completed branch orders"
                   onPress={() => router.push('/manager/sales' as never)}
                 />
+                <NavTile
+                  layout="tile"
+                  icon="people-outline"
+                  accent="teal"
+                  title="Shift History"
+                  onPress={() => router.push('/manager/shifts' as never)}
+                />
               </Row>
-              <DashboardCard
-                title="Shift History"
-                description="Cashier shifts and shift totals"
-                onPress={() => router.push('/manager/shifts' as never)}
-              />
 
               {recentSales.length > 0 ? (
-                <View style={styles.recentSection}>
+                <>
                   <View style={styles.recentHeader}>
                     <Text style={styles.recentTitle}>Recent Sales</Text>
-                    <AppButton
-                      label="View all"
-                      variant="secondary"
+                    <Pressable
+                      accessibilityRole="button"
+                      hitSlop={8}
                       onPress={() => router.push('/manager/sales' as never)}
-                    />
+                    >
+                      <Text style={styles.viewAll}>View all</Text>
+                    </Pressable>
                   </View>
                   {recentSales.map((sale) => (
-                    <View key={sale.id} style={styles.recentCard}>
-                      <View style={styles.recentRow}>
-                        <Text style={styles.saleNumber}>{sale.sale_number}</Text>
-                        <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
-                      </View>
-                      <Text style={styles.saleMeta}>
-                        {sale.cashier_name ?? 'Cashier'} · {formatDate(sale.sold_at)}
-                      </Text>
-                    </View>
+                    <RecentSaleRow
+                      key={sale.id}
+                      saleNumber={sale.sale_number}
+                      amount={formatMoney(sale.total_amount)}
+                      cashierName={sale.cashier_name ?? 'Cashier'}
+                      date={formatDate(sale.sold_at)}
+                    />
                   ))}
-                </View>
+                </>
               ) : null}
             </Section>
 
             <Section title="NEEDS ATTENTION">
               {attentionItems.length === 0 ? (
-                <Text style={styles.quiet}>Nothing needs attention</Text>
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>Nothing needs attention</Text>
+                </View>
               ) : (
                 attentionItems.map((item) => (
-                  <DashboardCard
+                  <NavTile
                     key={item.title}
                     variant="alert"
+                    icon="alert-circle-outline"
                     title={item.title}
                     value={item.value}
                     description={item.description}
@@ -169,16 +211,18 @@ export default function ManagerDashboard() {
 
             <Section title="INVENTORY">
               <Row>
-                <DashboardCard
-                  style={styles.half}
+                <NavTile
+                  layout="tile"
+                  icon="return-up-back-outline"
+                  accent="lilac"
                   title="Stock returns"
-                  description="Return unsold stock to Main"
                   onPress={() => router.push('/manager/returns')}
                 />
-                <DashboardCard
-                  style={styles.half}
+                <NavTile
+                  layout="tile"
+                  icon="swap-vertical-outline"
+                  accent="blue"
                   title="Inventory history"
-                  description="Signed stock movements"
                   onPress={() => router.push('/manager/movements')}
                 />
               </Row>
@@ -191,66 +235,77 @@ export default function ManagerDashboard() {
 }
 
 const styles = StyleSheet.create({
-  column: { gap: spacing.md },
-  role: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: managerColors.cardBorder,
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center' },
+  identity: { gap: spacing.sm },
+  greeting: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 24 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  rolePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EAF0FB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  roleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: managerColors.gold },
+  rolePillText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 0.6 },
+  branchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: managerColors.cardSurface,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    maxWidth: 200,
+  },
+  branchPillText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.lg },
   section: { gap: spacing.sm },
   sectionTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
-  quiet: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    paddingVertical: spacing.sm,
+  quietCard: {
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
   },
-  recentSection: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
+  quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
   recentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+    marginBottom: 2,
   },
   recentTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  recentCard: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.xs,
-    gap: 2,
-  },
-  recentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  saleNumber: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  saleAmount: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  saleMeta: {
-    color: colors.muted,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
+  viewAll: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  errorTitle: { fontFamily: 'Inter_700Bold' },
+  errorMessage: { fontFamily: 'Inter_400Regular' },
+  errorRetryLabel: { fontFamily: 'Inter_700Bold' },
 });
