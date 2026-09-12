@@ -1,18 +1,21 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
+import { NavTile } from '@/components/dashboard/NavTile';
+import { RecentSaleRow } from '@/components/dashboard/RecentSaleRow';
+import { StatTile } from '@/components/dashboard/StatTile';
+import { managerColors } from '@/components/dashboard/theme';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { DashboardCard } from '@/components/DashboardCard';
-import { ErrorState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
+import { ErrorState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { isMainBranchManager } from '@/features/auth/roles';
-import { useManagerDashboardMetrics } from '@/hooks/useSales';
+import { useManagerDashboardMetrics, useManagerRecentSales } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -30,176 +33,167 @@ function Row({ children }: { children: ReactNode }) {
 export default function ManagerDashboard() {
   const { profile } = useAuth();
   const metricsQuery = useManagerDashboardMetrics();
-  const metrics = metricsQuery.data;
-  const isMain = isMainBranchManager(profile);
+  const recentSalesQuery = useManagerRecentSales(5);
 
-  const attentionItems = (
-    isMain
-      ? [
-          {
-            title: 'Returns awaiting receipt',
-            value: metrics?.returns_in_transit_count,
-            description: 'Physically count and receive stock back at Main',
-            href: '/manager/returns',
-          },
-        ]
-      : [
-          {
-            title: 'Pending incoming',
-            value: metrics?.pending_incoming_transfers_count,
-            description: 'Count and receive stock sent to this branch',
-            href: '/manager/incoming',
-          },
-          {
-            title: 'Returns in transit',
-            value: metrics?.returns_in_transit_count,
-            description: 'Unsold stock returning to Main Branch',
-            href: '/manager/returns',
-          },
-        ]
-  ).filter((item) => typeof item.value === 'number' && item.value > 0);
+  const metrics = metricsQuery.data;
+  const recentSales = recentSalesQuery.data ?? [];
+  const refreshing = metricsQuery.isRefetching || recentSalesQuery.isRefetching;
+
+  const attentionItems = [
+    {
+      title: 'Pending incoming',
+      value: metrics?.pending_incoming_transfers_count,
+      description: 'Count and receive stock sent to this branch',
+      href: '/manager/incoming',
+    },
+    {
+      title: 'Returns in transit',
+      value: metrics?.returns_in_transit_count,
+      description: 'Unsold stock returning to Main Branch',
+      href: '/manager/returns',
+    },
+  ].filter((item) => typeof item.value === 'number' && item.value > 0);
 
   const refresh = () => {
     void metricsQuery.refetch();
+    void recentSalesQuery.refetch();
   };
 
-  return (
-    <Screen refreshing={metricsQuery.isRefetching} onRefresh={refresh}>
-      <ConstrainedWidth style={styles.column}>
-        <PageHeader
-          title={`Hello, ${profile?.full_name ?? 'Manager'}`}
-          subtitle={profile?.branch?.name ?? 'Assigned branch unavailable'}
-        />
-        <Text style={styles.role}>{isMain ? 'MAIN BRANCH MANAGER' : 'BRANCH MANAGER'}</Text>
+  const managerName = profile?.full_name ?? 'Manager';
 
+  return (
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      refreshing={refreshing}
+      onRefresh={refresh}
+      contentContainerStyle={styles.screenContent}
+    >
+      <View style={styles.header}>
+        <View style={styles.topRow}>
+          <HamburgerButton />
+        </View>
+        <View style={styles.identity}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            Hi, {managerName}
+          </Text>
+          <View style={styles.pillRow}>
+            <View style={styles.rolePill}>
+              <View style={styles.roleDot} />
+              <Text style={styles.rolePillText}>BRANCH MANAGER</Text>
+            </View>
+            <View style={styles.branchPill}>
+              <Ionicons name="storefront-outline" size={12} color={managerColors.subtext} />
+              <Text style={styles.branchPillText} numberOfLines={1}>
+                {profile?.branch?.name ?? 'Unassigned'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <ConstrainedWidth style={styles.column}>
         {metricsQuery.error ? (
           <ErrorState message={getErrorMessage(metricsQuery.error)} onRetry={refresh} />
         ) : (
           <View style={styles.content}>
-            {isMain ? (
-              <>
-                <Section title="OPERATIONS">
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Products"
-                      description="Create, edit, and price the catalog"
-                      onPress={() => router.push('/manager/products')}
+            <Section title="BRANCH SNAPSHOT">
+              <Row>
+                <StatTile
+                  style={styles.half}
+                  emphasis
+                  icon="cash-outline"
+                  label="Today's Sales"
+                  value={metrics ? formatMoney(metrics.today_sales) : '—'}
+                  onPress={() => router.push('/manager/sales' as never)}
+                />
+                <StatTile
+                  style={styles.half}
+                  icon="receipt-outline"
+                  label="Orders Today"
+                  value={metrics?.today_transactions ?? '—'}
+                  onPress={() => router.push('/manager/sales' as never)}
+                />
+              </Row>
+              <Row>
+                <StatTile
+                  style={styles.half}
+                  icon="cube-outline"
+                  label="Products in stock"
+                  value={metrics?.current_inventory_count ?? '—'}
+                  onPress={() => router.push('/manager/inventory')}
+                />
+                <StatTile
+                  style={styles.half}
+                  icon="download-outline"
+                  label="Pending incoming"
+                  value={metrics?.pending_incoming_transfers_count ?? '—'}
+                  onPress={() => router.push('/manager/incoming')}
+                />
+              </Row>
+            </Section>
+
+            <Section title="SALES">
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="bar-chart-outline"
+                  accent="blue"
+                  title="Branch Product Sales"
+                  onPress={() => router.push('/manager/reports/product-sales' as never)}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="time-outline"
+                  accent="gold"
+                  title="Sales History"
+                  onPress={() => router.push('/manager/sales' as never)}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="people-outline"
+                  accent="teal"
+                  title="Shift History"
+                  onPress={() => router.push('/manager/shifts' as never)}
+                />
+              </Row>
+
+              {recentSales.length > 0 ? (
+                <>
+                  <View style={styles.recentHeader}>
+                    <Text style={styles.recentTitle}>Recent Sales</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => router.push('/manager/sales' as never)}
+                    >
+                      <Text style={styles.viewAll}>View all</Text>
+                    </Pressable>
+                  </View>
+                  {recentSales.map((sale) => (
+                    <RecentSaleRow
+                      key={sale.id}
+                      saleNumber={sale.sale_number}
+                      amount={formatMoney(sale.total_amount)}
+                      cashierName={sale.cashier_name ?? 'Cashier'}
+                      date={formatDate(sale.sold_at)}
                     />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Branches"
-                      description="Create and maintain selling branches"
-                      onPress={() => router.push('/manager/branches' as never)}
-                    />
-                  </Row>
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Main Inventory"
-                      description="Opening stock and Main Branch balances"
-                      onPress={() => router.push('/manager/inventory')}
-                    />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Transfers"
-                      description="Send stock and view transfer history"
-                      onPress={() => router.push('/manager/transfers' as never)}
-                    />
-                  </Row>
-                  <DashboardCard
-                    title="Returns"
-                    description="Receive returns and view return history"
-                    onPress={() => router.push('/manager/returns')}
-                  />
-                </Section>
-                <Section title="SNAPSHOT">
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Products in stock"
-                      value={metrics?.current_inventory_count ?? '—'}
-                      description="SKUs with quantity on hand"
-                      onPress={() => router.push('/manager/inventory')}
-                    />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Returns in transit"
-                      value={metrics?.returns_in_transit_count ?? '—'}
-                      description="Awaiting Main Branch receipt"
-                      onPress={() => router.push('/manager/returns')}
-                    />
-                  </Row>
-                </Section>
-              </>
-            ) : (
-              <>
-                <Section title="BRANCH SNAPSHOT">
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Today's Sales"
-                      value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                      description="Revenue today (PH)"
-                      onPress={() => router.push('/manager/reports/product-sales')}
-                    />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Orders Today"
-                      value={metrics?.today_transactions ?? '—'}
-                      description="Completed transactions (PH)"
-                      onPress={() => router.push('/manager/reports/product-sales')}
-                    />
-                  </Row>
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Products in stock"
-                      value={metrics?.current_inventory_count ?? '—'}
-                      description="SKUs with quantity on hand"
-                      onPress={() => router.push('/manager/inventory')}
-                    />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Pending incoming"
-                      value={metrics?.pending_incoming_transfers_count ?? '—'}
-                      description="Transfers awaiting receipt"
-                      onPress={() => router.push('/manager/incoming')}
-                    />
-                  </Row>
-                </Section>
-                <Section title="OPERATIONS">
-                  <Row>
-                    <DashboardCard
-                      style={styles.half}
-                      title="Transfer History"
-                      description="Transfers sent to this branch"
-                      onPress={() => router.push('/manager/transfers' as never)}
-                    />
-                    <DashboardCard
-                      style={styles.half}
-                      title="Stock returns"
-                      description="Return unsold stock to Main"
-                      onPress={() => router.push('/manager/returns')}
-                    />
-                  </Row>
-                  <DashboardCard
-                    title="Branch Product Sales"
-                    description="Units sold and revenue for this branch"
-                    onPress={() => router.push('/manager/reports/product-sales')}
-                  />
-                </Section>
-              </>
-            )}
+                  ))}
+                </>
+              ) : null}
+            </Section>
 
             <Section title="NEEDS ATTENTION">
               {attentionItems.length === 0 ? (
-                <Text style={styles.quiet}>Nothing needs attention</Text>
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>Nothing needs attention</Text>
+                </View>
               ) : (
                 attentionItems.map((item) => (
-                  <DashboardCard
+                  <NavTile
                     key={item.title}
                     variant="alert"
+                    icon="alert-circle-outline"
                     title={item.title}
                     value={item.value}
                     description={item.description}
@@ -207,6 +201,25 @@ export default function ManagerDashboard() {
                   />
                 ))
               )}
+            </Section>
+
+            <Section title="INVENTORY">
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="return-up-back-outline"
+                  accent="lilac"
+                  title="Stock returns"
+                  onPress={() => router.push('/manager/returns')}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="swap-vertical-outline"
+                  accent="blue"
+                  title="Inventory history"
+                  onPress={() => router.push('/manager/movements')}
+                />
+              </Row>
             </Section>
           </View>
         )}
@@ -216,22 +229,74 @@ export default function ManagerDashboard() {
 }
 
 const styles = StyleSheet.create({
-  column: { gap: spacing.md },
-  role: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: managerColors.cardBorder,
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center' },
+  identity: { gap: spacing.sm },
+  greeting: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 24 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  rolePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EAF0FB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  roleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: managerColors.gold },
+  rolePillText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 0.6 },
+  branchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: managerColors.cardSurface,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    maxWidth: 200,
+  },
+  branchPillText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.lg },
   section: { gap: spacing.sm },
   sectionTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
-  quiet: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    paddingVertical: spacing.sm,
+  quietCard: {
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
   },
+  quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    marginBottom: 2,
+  },
+  recentTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  viewAll: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });

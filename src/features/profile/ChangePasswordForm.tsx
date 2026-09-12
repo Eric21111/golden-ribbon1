@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
@@ -13,9 +13,24 @@ import { changeOwnPassword } from '@/services/accountService';
 type ChangePasswordFormProps = {
   onSuccess?: () => void;
   onCancel?: () => void;
+  hintStyle?: StyleProp<TextStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+  errorStyle?: StyleProp<TextStyle>;
+  successStyle?: StyleProp<TextStyle>;
+  buttonLabelStyle?: StyleProp<TextStyle>;
+  accentColor?: string;
 };
 
-export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormProps) {
+export function ChangePasswordForm({
+  onSuccess,
+  onCancel,
+  hintStyle,
+  labelStyle,
+  errorStyle,
+  successStyle,
+  buttonLabelStyle,
+  accentColor,
+}: ChangePasswordFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangePasswordValues>({
@@ -51,7 +66,9 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
 
   return (
     <View style={styles.form}>
-      <Text style={styles.hint}>Updates the password for this signed-in account. Role and branch are not changed.</Text>
+      <Text style={[styles.hint, hintStyle]}>
+        Updates the password for this signed-in account. Role and branch are not changed.
+      </Text>
       <Controller
         control={control}
         name="current_password"
@@ -68,6 +85,9 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
             autoComplete="current-password"
             textContentType="password"
             secureTextEntry
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
           />
         )}
       />
@@ -87,6 +107,9 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
             autoComplete="new-password"
             textContentType="newPassword"
             secureTextEntry
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
           />
         )}
       />
@@ -106,19 +129,31 @@ export function ChangePasswordForm({ onSuccess, onCancel }: ChangePasswordFormPr
             autoComplete="new-password"
             textContentType="newPassword"
             secureTextEntry
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
           />
         )}
       />
-      {formState.errors.root?.message ? <Text style={styles.error}>{formState.errors.root.message}</Text> : null}
-      {success ? <Text style={styles.success}>{success}</Text> : null}
+      {formState.errors.root?.message ? (
+        <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
+      ) : null}
+      {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
       <AppButton
         label="Change password"
         loading={formState.isSubmitting}
         disabled={formState.isSubmitting}
         onPress={handleSubmit(submit)}
+        labelStyle={buttonLabelStyle}
       />
       {onCancel ? (
-        <AppButton label="Cancel" variant="secondary" disabled={formState.isSubmitting} onPress={onCancel} />
+        <AppButton
+          label="Cancel"
+          variant="secondary"
+          disabled={formState.isSubmitting}
+          onPress={onCancel}
+          labelStyle={buttonLabelStyle}
+        />
       ) : null}
     </View>
   );

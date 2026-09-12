@@ -1,32 +1,54 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { colors, spacing } from '@/constants/theme';
 import { AppButton } from './AppButton';
 
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
+interface LoadingStateProps {
+  label?: string;
+  labelStyle?: StyleProp<TextStyle>;
+}
+
+export function LoadingState({ label = 'Loading…', labelStyle }: LoadingStateProps) {
   return (
     <View style={styles.center}>
       <ActivityIndicator color={colors.primary} size="large" />
-      <Text style={styles.muted}>{label}</Text>
+      <Text style={[styles.muted, labelStyle]}>{label}</Text>
     </View>
   );
 }
 
-export function EmptyState({ title, message }: { title: string; message: string }) {
+interface EmptyStateProps {
+  title: string;
+  message: string;
+  titleStyle?: StyleProp<TextStyle>;
+  messageStyle?: StyleProp<TextStyle>;
+}
+
+export function EmptyState({ title, message, titleStyle, messageStyle }: EmptyStateProps) {
   return (
     <View style={styles.center}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.muted}>{message}</Text>
+      <Text style={[styles.title, titleStyle]}>{title}</Text>
+      <Text style={[styles.muted, messageStyle]}>{message}</Text>
     </View>
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+interface ErrorStateProps {
+  message: string;
+  onRetry?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
+  messageStyle?: StyleProp<TextStyle>;
+  retryLabelStyle?: StyleProp<TextStyle>;
+}
+
+export function ErrorState({ message, onRetry, titleStyle, messageStyle, retryLabelStyle }: ErrorStateProps) {
   return (
     <View style={styles.center}>
-      <Text style={styles.errorTitle}>Unable to load</Text>
-      <Text style={styles.muted}>{message}</Text>
-      {onRetry ? <AppButton label="Try again" onPress={onRetry} variant="secondary" /> : null}
+      <Text style={[styles.errorTitle, titleStyle]}>Unable to load</Text>
+      <Text style={[styles.muted, messageStyle]}>{message}</Text>
+      {onRetry ? (
+        <AppButton label="Try again" onPress={onRetry} variant="secondary" labelStyle={retryLabelStyle} />
+      ) : null}
     </View>
   );
 }

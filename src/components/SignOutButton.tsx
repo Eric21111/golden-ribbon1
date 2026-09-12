@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors } from '@/constants/theme';
@@ -10,9 +10,10 @@ import { getErrorMessage } from '@/lib/errors';
 
 type SignOutButtonProps = {
   variant?: 'primary' | 'secondary' | 'danger';
+  labelStyle?: StyleProp<TextStyle>;
 };
 
-export function SignOutButton({ variant = 'secondary' }: SignOutButtonProps) {
+export function SignOutButton({ variant = 'secondary', labelStyle }: SignOutButtonProps) {
   const { signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +40,13 @@ export function SignOutButton({ variant = 'secondary' }: SignOutButtonProps) {
   return (
     <>
       {error ? <Text style={styles.error}>Could not log out. {error}</Text> : null}
-      <AppButton label="Log out" loading={isSigningOut} onPress={confirmSignOut} variant={variant} />
+      <AppButton
+        label="Log out"
+        loading={isSigningOut}
+        onPress={confirmSignOut}
+        variant={variant}
+        labelStyle={labelStyle}
+      />
     </>
   );
 }

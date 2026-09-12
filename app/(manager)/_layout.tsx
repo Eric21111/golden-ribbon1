@@ -1,39 +1,66 @@
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import { Drawer } from 'react-native-drawer-layout';
+
+import { ManagerSidebar } from '@/components/dashboard/ManagerSidebar';
+import { LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { RoleNavigation } from '@/components/RoleNavigation';
-
-import { colors } from '@/constants/theme';
 import { RoleGuard } from '@/features/auth/RoleGuard';
+import { ManagerDrawerProvider, useManagerDrawer } from '@/features/navigation/ManagerDrawerContext';
 
-export default function ManagerLayout() {
+function ManagerNavigator() {
+  const { open, openDrawer, closeDrawer } = useManagerDrawer();
+
   return (
-    <RoleGuard role="manager">
+    <Drawer
+      open={open}
+      onOpen={openDrawer}
+      onClose={closeDrawer}
+      drawerPosition="left"
+      drawerType="front"
+      drawerStyle={{ width: 300, backgroundColor: '#FFFFFF' }}
+      renderDrawerContent={() => <ManagerSidebar onClose={closeDrawer} onNavigate={closeDrawer} />}
+    >
       <RoleNavigation role="manager">
-        <Stack screenOptions={{ headerTintColor: colors.primary, headerBackTitle: 'Back' }}>
-          <Stack.Screen name="manager/dashboard" options={{ title: 'Manager Dashboard' }} />
-          <Stack.Screen name="manager/inventory/index" options={{ title: 'Inventory' }} />
-          <Stack.Screen name="manager/inventory/setup" options={{ title: 'Opening Stock' }} />
-          <Stack.Screen name="manager/products/index" options={{ title: 'Products' }} />
-          <Stack.Screen name="manager/products/[id]" options={{ title: 'Edit Product' }} />
-          <Stack.Screen name="manager/employees/index" options={{ title: 'Unauthorized' }} />
-          <Stack.Screen name="manager/employees/[id]/index" options={{ title: 'Unauthorized' }} />
-          <Stack.Screen name="manager/employees/[id]/reset-password" options={{ title: 'Unauthorized' }} />
-          <Stack.Screen name="manager/branches/index" options={{ title: 'Branches' }} />
-          <Stack.Screen name="manager/branches/[id]" options={{ title: 'Edit Branch' }} />
-          <Stack.Screen name="manager/transfers/index" options={{ title: 'Transfers' }} />
-          <Stack.Screen name="manager/transfers/create" options={{ title: 'Send Stock' }} />
-          <Stack.Screen name="manager/transfers/[id]" options={{ title: 'Transfer Details' }} />
-          <Stack.Screen name="manager/incoming/index" options={{ title: 'Incoming Transfers' }} />
-          <Stack.Screen name="manager/incoming/[id]" options={{ title: 'Receive Stock' }} />
-          <Stack.Screen name="manager/returns/index" options={{ title: 'Stock Returns' }} />
-          <Stack.Screen name="manager/returns/create" options={{ title: 'Create Return' }} />
-          <Stack.Screen name="manager/returns/[id]" options={{ title: 'Return Details' }} />
-          <Stack.Screen name="manager/returns/receive/[id]" options={{ title: 'Receive Return' }} />
-          <Stack.Screen name="manager/reports/product-sales" options={{ title: 'Product Sales' }} />
-          <Stack.Screen name="manager/profile" options={{ title: 'Account' }} />
-          <Stack.Screen name="manager/change-password" options={{ title: 'Change Password' }} />
-          <Stack.Screen name="manager/change-email" options={{ title: 'Change Email' }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="manager/dashboard" />
+          <Stack.Screen name="manager/inventory" />
+          <Stack.Screen name="manager/returns/index" />
+          <Stack.Screen name="manager/returns/create" />
+          <Stack.Screen name="manager/returns/[id]" />
+          <Stack.Screen name="manager/incoming/index" />
+          <Stack.Screen name="manager/incoming/[id]" />
+          <Stack.Screen name="manager/movements" />
+          <Stack.Screen name="manager/products" />
+          <Stack.Screen name="manager/sales/index" />
+          <Stack.Screen name="manager/sales/[id]" />
+          <Stack.Screen name="manager/shifts/index" />
+          <Stack.Screen name="manager/shifts/[id]" />
+          <Stack.Screen name="manager/reports/product-sales" />
+          <Stack.Screen name="manager/profile" />
+          <Stack.Screen name="manager/change-password" />
         </Stack>
       </RoleNavigation>
+    </Drawer>
+  );
+}
+
+export default function ManagerLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  if (!fontsLoaded) return <LoadingState label="Loading…" />;
+
+  return (
+    <RoleGuard role="manager">
+      <ManagerDrawerProvider>
+        <ManagerNavigator />
+      </ManagerDrawerProvider>
     </RoleGuard>
   );
 }
