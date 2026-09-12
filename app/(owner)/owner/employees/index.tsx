@@ -3,7 +3,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { useEmployees } from '@/hooks/useEmployees';
 import { getEmployeeErrorMessage } from '@/lib/errors';
 
-export default function EmployeeListScreen() {
+export default function OwnerEmployeeListScreen() {
   const employees = useEmployees();
   const branches = useBranches();
 

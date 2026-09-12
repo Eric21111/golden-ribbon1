@@ -50,7 +50,7 @@ await db.exec(`
 const businessTables = [
   'profiles','branches','products','branch_inventory','inventory_movements','stock_transfers',
   'stock_transfer_items','transfer_discrepancies','shifts','sales','sale_items','stock_returns',
-  'stock_return_items','return_discrepancies','audit_logs',
+  'stock_return_items','return_discrepancies',
 ];
 const rls = await db.query(`select relname from pg_class where relname = any($1::text[]) and relrowsecurity`, [businessTables]);
 assert.deepEqual(new Set(rls.rows.map((row) => row.relname)), new Set(businessTables));

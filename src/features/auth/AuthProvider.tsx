@@ -72,7 +72,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured. Add the values from .env.example.');
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) throw error;
   }, []);
 

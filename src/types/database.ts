@@ -25,8 +25,7 @@ import type {
   TransferDiscrepancyReportItem,
   ReturnDiscrepancyReportItem,
   InventoryReconciliationItem,
-  AuditLogsPage,
-  AuditLogEntry,
+  OwnerDailyProductSummaryItem,
 } from './models';
 
 import type { Sale, SaleWithRelations } from '@/services/saleService';
@@ -78,26 +77,6 @@ type ShiftInsert = Omit<Shift, 'id' | 'created_at' | 'updated_at'> & {
 export type Database = {
   public: {
     Tables: {
-      audit_logs: {
-        Row: {
-          id: string;
-          actor_user_id: string | null;
-          actor_name_snapshot: string;
-          actor_role_snapshot: string;
-          branch_id: string | null;
-          action: string;
-          entity_type: string;
-          entity_id: string | null;
-          metadata: Record<string, unknown> | null;
-          created_at: string;
-        };
-        Insert: never;
-        Update: never;
-        Relationships: [
-          { foreignKeyName: 'audit_logs_actor_user_id_fkey'; columns: ['actor_user_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] },
-          { foreignKeyName: 'audit_logs_branch_id_fkey'; columns: ['branch_id']; isOneToOne: false; referencedRelation: 'branches'; referencedColumns: ['id'] },
-        ];
-      };
       stock_returns: { Row: StockReturn; Insert: never; Update: never; Relationships: [] };
       stock_return_items: { Row: ReturnItem; Insert: never; Update: never; Relationships: [
         { foreignKeyName: 'stock_return_items_stock_return_id_fkey'; columns: ['stock_return_id']; isOneToOne: false; referencedRelation: 'stock_returns'; referencedColumns: ['id'] },
@@ -209,13 +188,12 @@ export type Database = {
       current_user_branch_id: { Args: Record<string, never>; Returns: string | null };
       current_user_role: { Args: Record<string, never>; Returns: UserRole | null };
       is_owner: { Args: Record<string, never>; Returns: boolean };
+      is_main_branch_manager: { Args: Record<string, never>; Returns: boolean };
+      can_change_own_email: { Args: Record<string, never>; Returns: boolean };
+      assert_can_change_own_email: { Args: Record<string, never>; Returns: undefined };
       start_cashier_shift: { Args: Record<string, never>; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       get_shift_summary: { Args: { p_shift_id: string }; Returns: ShiftSummary };
-      list_shift_summaries: {
-        Args: { p_page?: number; p_page_size?: number; p_branch_id?: string | null; p_cashier_id?: string | null };
-        Returns: ShiftSummary[];
-      };
       report_sales_by_branch: {
         Args: { p_range_type?: string; p_start_date?: string | null; p_end_date?: string | null };
         Returns: BranchSalesReportItem[];
@@ -225,6 +203,7 @@ export type Database = {
         Returns: ProductSalesReportItem[];
       };
       get_owner_dashboard_metrics: { Args: Record<string, never>; Returns: OwnerDashboardMetrics };
+      get_owner_daily_product_summary: { Args: Record<string, never>; Returns: OwnerDailyProductSummaryItem[] };
       get_manager_dashboard_metrics: { Args: Record<string, never>; Returns: ManagerDashboardMetrics };
       get_manager_recent_sales: { Args: { p_limit?: number }; Returns: SaleWithRelations[] };
       list_employees: { Args: Record<string, never>; Returns: EmployeeRecord[] };
@@ -267,24 +246,6 @@ export type Database = {
       report_inventory_reconciliation: {
         Args: { p_branch_id?: string | null };
         Returns: InventoryReconciliationItem[];
-      };
-      list_audit_logs: {
-        Args: {
-          p_page?: number;
-          p_page_size?: number;
-          p_branch_id?: string | null;
-          p_actor_id?: string | null;
-          p_action?: string | null;
-          p_entity_type?: string | null;
-          p_range_type?: string;
-          p_start_date?: string | null;
-          p_end_date?: string | null;
-        };
-        Returns: AuditLogsPage;
-      };
-      get_audit_log_detail: {
-        Args: { p_log_id: string };
-        Returns: AuditLogEntry;
       };
     };
 

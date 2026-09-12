@@ -28,6 +28,67 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+async function findAuthUserByEmail(
+  adminClient: ReturnType<typeof createClient>,
+  email: string,
+) {
+  const admin = adminClient.auth.admin as typeof adminClient.auth.admin & {
+    getUserByEmail?: (value: string) => Promise<{ data: { user?: { id: string } } | null; error: { message: string } | null }>;
+  };
+  if (typeof admin.getUserByEmail === 'function') {
+    const { data, error } = await admin.getUserByEmail(email);
+    if (!error && data?.user) return data.user;
+  }
+
+  let page = 1;
+  const perPage = 200;
+  while (page <= 20) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const found = data.users.find((user) => user.email?.toLowerCase() === email);
+    if (found) return found;
+    if (data.users.length < perPage) return null;
+    page += 1;
+  }
+  return null;
+}
+
+async function ensureEmployeeProfile(
+  adminClient: ReturnType<typeof createClient>,
+  requesterId: string,
+  employeeId: string,
+  fullName: string,
+  role: EmployeeRole,
+  branchId: string,
+  isActive: boolean,
+) {
+  const { data: existing, error: existingError } = await adminClient
+    .from('profiles')
+    .select('id, full_name, role, branch_id, is_active')
+    .eq('id', employeeId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) {
+    const sameAccount =
+      existing.role === role
+      && existing.branch_id === branchId
+      && existing.full_name === fullName
+      && existing.is_active === isActive;
+    return { reused: true as const, sameAccount };
+  }
+
+  const { error: profileError } = await adminClient.rpc('create_employee_profile_from_server', {
+    p_requester_id: requesterId,
+    p_employee_id: employeeId,
+    p_full_name: fullName,
+    p_role: role,
+    p_branch_id: branchId,
+    p_is_active: isActive,
+  });
+  if (profileError) throw profileError;
+  return { reused: false as const, sameAccount: true };
+}
+
 function employeeProfileError(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes('active selling branch') || normalized.includes('selling branch')) {
@@ -35,7 +96,9 @@ function employeeProfileError(message: string) {
   }
   if (normalized.includes('full name')) return 'Enter a valid full name.';
   if (normalized.includes('employee role')) return 'Select Manager or Cashier.';
-  if (normalized.includes('owner access')) return 'Owner access is required.';
+  if (normalized.includes('owner access') || normalized.includes('main branch manager')) {
+    return 'Owner access is required.';
+  }
   return 'Employee account could not be created.';
 }
 
@@ -61,15 +124,15 @@ Deno.serve(async (request) => {
     const { data: userData, error: userError } = await authClient.auth.getUser(token);
     if (userError || !userData.user) return response(401, { message: 'Your session is invalid or expired.' });
 
-    const { data: owner, error: ownerError } = await adminClient
+    const { data: requester, error: requesterError } = await adminClient
       .from('profiles')
-      .select('id')
+      .select('id, role')
       .eq('id', userData.user.id)
       .eq('role', 'owner')
       .eq('is_active', true)
       .maybeSingle();
-    if (ownerError) throw ownerError;
-    if (!owner) return response(403, { message: 'Owner access is required.' });
+    if (requesterError) throw requesterError;
+    if (!requester) return response(403, { message: 'Owner access is required.' });
 
     const body = await request.json() as Record<string, unknown>;
 
@@ -85,18 +148,41 @@ Deno.serve(async (request) => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return response(400, { message: 'Enter a valid email address.' });
       if (password.length < 8 || password.length > 72) return response(400, { message: 'Temporary password must contain 8 to 72 characters.' });
       if (role !== 'manager' && role !== 'cashier') return response(400, { message: 'Select Manager or Cashier.' });
-      if (!isUuid(branchId)) return response(400, { message: 'Select an active selling branch.' });
+      if (!isUuid(branchId)) return response(400, { message: 'Select an active branch.' });
       if (typeof isActive !== 'boolean') return response(400, { message: 'Employee status is required.' });
 
       const { data: branch, error: branchError } = await adminClient
         .from('branches')
-        .select('id')
+        .select('id, is_main_branch')
         .eq('id', branchId)
         .eq('is_active', true)
-        .eq('is_main_branch', false)
         .maybeSingle();
       if (branchError) throw branchError;
-      if (!branch) return response(400, { message: 'Select an active selling branch.' });
+      if (!branch) return response(400, { message: role === 'cashier' ? 'Select an active selling branch.' : 'Select an active branch.' });
+      if (role === 'cashier' && branch.is_main_branch) {
+        return response(400, { message: 'Select an active selling branch.' });
+      }
+
+      const existingUser = await findAuthUserByEmail(adminClient, email);
+      if (existingUser) {
+        try {
+          const result = await ensureEmployeeProfile(
+            adminClient,
+            userData.user.id,
+            existingUser.id,
+            fullName,
+            role,
+            branchId,
+            isActive,
+          );
+          if (!result.sameAccount) {
+            return response(409, { message: 'That email is already registered.' });
+          }
+          return response(200, { employeeId: existingUser.id, reused: true });
+        } catch (error) {
+          return response(400, { message: employeeProfileError(error instanceof Error ? error.message : '') });
+        }
+      }
 
       const { data: created, error: createError } = await adminClient.auth.admin.createUser({
         email,
@@ -106,6 +192,28 @@ Deno.serve(async (request) => {
       });
       if (createError) {
         const duplicate = createError.code === 'email_exists' || createError.message.toLowerCase().includes('already');
+        if (duplicate) {
+          const raced = await findAuthUserByEmail(adminClient, email);
+          if (raced) {
+            try {
+              const result = await ensureEmployeeProfile(
+                adminClient,
+                userData.user.id,
+                raced.id,
+                fullName,
+                role,
+                branchId,
+                isActive,
+              );
+              if (!result.sameAccount) {
+                return response(409, { message: 'That email is already registered.' });
+              }
+              return response(200, { employeeId: raced.id, reused: true });
+            } catch (error) {
+              return response(400, { message: employeeProfileError(error instanceof Error ? error.message : '') });
+            }
+          }
+        }
         return response(duplicate ? 409 : 400, {
           message: duplicate
             ? 'That email is already registered.'
@@ -113,18 +221,20 @@ Deno.serve(async (request) => {
         });
       }
 
-      const { error: profileError } = await adminClient.rpc('create_employee_profile_from_server', {
-        p_requester_id: userData.user.id,
-        p_employee_id: created.user.id,
-        p_full_name: fullName,
-        p_role: role,
-        p_branch_id: branchId,
-        p_is_active: isActive,
-      });
-      if (profileError) {
+      try {
+        await ensureEmployeeProfile(
+          adminClient,
+          userData.user.id,
+          created.user.id,
+          fullName,
+          role,
+          branchId,
+          isActive,
+        );
+      } catch (error) {
         const { error: cleanupError } = await adminClient.auth.admin.deleteUser(created.user.id);
         if (cleanupError) console.error('Unable to compensate failed employee profile creation.', cleanupError.message);
-        return response(400, { message: employeeProfileError(profileError.message) });
+        return response(400, { message: employeeProfileError(error instanceof Error ? error.message : '') });
       }
 
       return response(201, { employeeId: created.user.id });

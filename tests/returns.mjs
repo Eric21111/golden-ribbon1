@@ -44,7 +44,7 @@ const receiveItems = (await db.query('select id, quantity_returned from public.s
 }));
 await assert.rejects(
   db.query('select public.receive_stock_return($1,$2::jsonb,null,$3)', [id, JSON.stringify(receiveItems), 'selling-manager-cannot-receive']),
-  /only Main Branch managers or owners/
+  /Main Branch Manager/
 );
 for (const sql of ["update public.stock_returns set status='received'",'update public.stock_return_items set quantity_received=18','delete from public.stock_returns','update public.branch_inventory set quantity_on_hand=1000',"insert into public.stock_returns(return_number) values ('FAKE')"])
   await assert.rejects(db.exec(sql), /permission denied/);

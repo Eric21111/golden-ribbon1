@@ -108,7 +108,7 @@ assert.equal(service.includes('confirm_sale'), false);
 assert.equal(service.includes('branch_inventory'), false);
 assert.equal(service.includes('profiles'), false);
 
-const screen = readFileSync('src/features/profile/ChangePasswordScreen.tsx', 'utf8');
+const screen = readFileSync('src/features/profile/ChangePasswordForm.tsx', 'utf8');
 assert.equal(screen.includes('console.log'), false);
 assert.equal(screen.includes('user_id'), false);
 assert.equal(screen.includes('userId'), false);
@@ -120,7 +120,7 @@ for (const file of [
   'app/(cashier)/cashier/change-password.tsx',
 ]) {
   const route = readFileSync(file, 'utf8');
-  assert.match(route, /export default ChangePasswordScreen/);
+  assert.match(route, /export default (function )?ChangePasswordScreen/);
   assert.equal(route.includes('userId'), false);
 }
 

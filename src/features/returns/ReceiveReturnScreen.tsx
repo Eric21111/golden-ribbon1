@@ -11,6 +11,8 @@ import { FormField } from '@/components/FormField';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 import { useReceiveReturn, useReturn } from '@/hooks/useReturns';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { makeIdempotencyKey } from '@/lib/format';
@@ -25,7 +27,8 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
+export function ReceiveReturnScreen() {
+  const { profile } = useAuth();
   const params = useLocalSearchParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
   const query = useReturn(id);
@@ -78,11 +81,10 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
 
   const stockReturn = query.data;
 
-  // Authorization check: Main Branch receiving is Owner-only.
-  if (role !== 'owner') {
+  if (!isMainBranchManager(profile)) {
     return (
       <Screen constrain>
-        <PageHeader title="Unauthorized" subtitle="Only the Owner can receive returns at Main Branch." />
+        <PageHeader title="Unauthorized" subtitle="Only the Main Branch Manager can receive returns." />
         <AppButton label="Go back" variant="secondary" onPress={() => router.back()} />
       </Screen>
     );
@@ -105,7 +107,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
           label="View details"
           variant="secondary"
           onPress={() => {
-            const detailRoute = role === 'owner' ? `/owner/returns/${stockReturn.id}` : `/manager/returns/${stockReturn.id}`;
+            const detailRoute = `/manager/returns/${stockReturn.id}`;
             router.replace(detailRoute as any);
           }}
         />
@@ -165,7 +167,7 @@ export function ReceiveReturnScreen({ role }: { role: 'owner' | 'manager' }) {
                       {
                         text: 'View details',
                         onPress: () => {
-                          const detailRoute = role === 'owner' ? `/owner/returns/${stockReturn.id}` : `/manager/returns/${stockReturn.id}`;
+                          const detailRoute = `/manager/returns/${stockReturn.id}`;
                           router.replace(detailRoute as any);
                         },
                       },

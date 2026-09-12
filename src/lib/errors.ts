@@ -79,6 +79,65 @@ export function getChangePasswordErrorMessage(error: unknown): string {
   return 'The password could not be changed. Please try again.';
 }
 
+export function getChangeEmailErrorMessage(error: unknown): string {
+  const message = readErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes('invalid login credentials') ||
+    message.includes('invalid_credentials') ||
+    message.includes('invalid credentials')
+  ) {
+    return 'Current password is incorrect.';
+  }
+  if (
+    message.includes('session has expired') ||
+    message.includes('auth session missing') ||
+    message.includes('jwt expired') ||
+    message.includes('not authenticated')
+  ) {
+    return 'Your session has expired. Sign in again.';
+  }
+  if (
+    message.includes('unauthorized') ||
+    message.includes('main branch manager') ||
+    message.includes('limited to the owner')
+  ) {
+    return 'You are not authorized to change this email.';
+  }
+  if (
+    message.includes('already registered') ||
+    message.includes('already been registered') ||
+    message.includes('already exists')
+  ) {
+    return 'That email is already registered.';
+  }
+  if (
+    message.includes('different from the current') ||
+    message.includes('same as the current') ||
+    message.includes('must be different')
+  ) {
+    return 'New email must be different from the current email.';
+  }
+  if (message.includes('do not match')) {
+    return 'Emails do not match.';
+  }
+  if (
+    message.includes('invalid email') ||
+    message.includes('email address is invalid') ||
+    message.includes('unable to validate email') ||
+    message.includes('valid email')
+  ) {
+    return 'Enter a valid email address.';
+  }
+  if (message.includes('rate limit') || message.includes('too many')) {
+    return 'Too many email-change attempts. Please try again later.';
+  }
+  if (isNetworkError(message)) {
+    return 'Unable to connect. Check your internet connection and try again.';
+  }
+  return 'The email could not be changed. Please try again.';
+}
+
 export function getInventoryErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 

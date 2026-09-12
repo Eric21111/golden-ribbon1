@@ -1,5 +1,10 @@
-import { Redirect } from 'expo-router';
+import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
+import { ReceiveReturnScreen } from '@/features/returns/ReceiveReturnScreen';
 
 export default function ManagerReceiveReturnRoute() {
-  return <Redirect href="/manager/returns" />;
+  return (
+    <MainBranchGuard>
+      <ReceiveReturnScreen />
+    </MainBranchGuard>
+  );
 }

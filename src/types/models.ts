@@ -240,11 +240,24 @@ export type ProductSalesReportItem = {
 export type OwnerDashboardMetrics = {
   today_sales: number;
   today_transactions: number;
+  today_units_sold: number;
   active_products_count: number;
   pending_transfers_count: number;
   in_transit_returns_count: number;
   transfer_discrepancies_count: number;
   return_discrepancies_count: number;
+};
+
+export type OwnerDailyProductSummaryItem = {
+  product_id: string;
+  product_name: string;
+  quantity_sold: number;
+  quantity_returned: number;
+  revenue: number;
+  returned_declared_qty: number;
+  returned_received_qty: number;
+  return_missing_qty: number;
+  return_excess_qty: number;
 };
 
 export type ManagerDashboardMetrics = {
@@ -385,56 +398,6 @@ export type ReturnDiscrepancyReportItem = {
   discrepancy_type: 'missing' | 'excess';
   created_at: string;
   notes: string | null;
-};
-
-export type AuditAction =
-  | 'employee_created'
-  | 'employee_updated'
-  | 'employee_deactivated'
-  | 'product_created'
-  | 'product_updated'
-  | 'product_price_changed'
-  | 'inventory_adjusted'
-  | 'transfer_created'
-  | 'transfer_received'
-  | 'transfer_discrepancy_detected'
-  | 'shift_started'
-  | 'shift_ended'
-  | 'sale_completed'
-  | 'return_created'
-  | 'return_received'
-  | 'return_discrepancy_detected';
-
-export type AuditLogEntry = {
-  id: string;
-  actor_user_id: string | null;
-  actor_name_snapshot: string;
-  actor_role_snapshot: string;
-  branch_id: string | null;
-  branch_name: string | null;
-  action: AuditAction;
-  entity_type: string;
-  entity_id: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-};
-
-export type AuditLogsPage = {
-  items: AuditLogEntry[];
-  page: number;
-  page_size: number;
-  has_more: boolean;
-  total: number;
-};
-
-export type AuditLogFilters = {
-  branchId?: string;
-  actorId?: string;
-  action?: AuditAction | '';
-  entityType?: string;
-  rangeType?: 'today' | 'all_time' | 'custom';
-  startDate?: string;
-  endDate?: string;
 };
 
 export type InventoryReconciliationItem = {

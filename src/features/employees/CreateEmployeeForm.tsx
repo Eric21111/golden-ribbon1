@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -19,7 +20,7 @@ type CreateEmployeeFormProps = {
 };
 
 export function CreateEmployeeForm({ branches, error, loading, onSubmit }: CreateEmployeeFormProps) {
-  const { control, handleSubmit, formState } = useForm<CreateEmployeeValues>({
+  const { control, handleSubmit, formState, watch, setValue } = useForm<CreateEmployeeValues>({
     resolver: zodResolver(createEmployeeSchema),
     defaultValues: {
       full_name: '',
@@ -30,6 +31,13 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
       is_active: true,
     },
   });
+  const locked = useRef(false);
+  useEffect(() => {
+    if (!loading) locked.current = false;
+  }, [loading]);
+  const selectedRole = watch('role');
+  const assignableBranches =
+    selectedRole === 'cashier' ? branches.filter((branch) => !branch.is_main_branch) : branches;
 
   return (
     <View style={styles.form}>
@@ -88,7 +96,13 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
           <ChoiceChips
             label="Role"
             value={field.value}
-            onChange={field.onChange}
+            onChange={(value) => {
+              field.onChange(value);
+              if (value === 'cashier') {
+                const current = branches.find((branch) => branch.id === watch('branch_id'));
+                if (current?.is_main_branch) setValue('branch_id', '');
+              }
+            }}
             choices={[
               { label: 'Manager', value: 'manager' },
               { label: 'Cashier', value: 'cashier' },
@@ -102,7 +116,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
         name="branch_id"
         render={({ field, fieldState }) => (
           <>
-            <BranchSelector branches={branches} value={field.value} onChange={field.onChange} />
+            <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
             {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
           </>
         )}
@@ -120,7 +134,15 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
         )}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton label="Create employee" loading={loading} onPress={handleSubmit(onSubmit)} />
+      <AppButton
+        label="Create employee"
+        loading={loading}
+        onPress={handleSubmit((values) => {
+          if (locked.current || loading) return;
+          locked.current = true;
+          onSubmit(values);
+        })}
+      />
       {Object.keys(formState.errors).length > 0 ? (
         <Text style={styles.formHint}>Correct the highlighted fields and try again.</Text>
       ) : null}

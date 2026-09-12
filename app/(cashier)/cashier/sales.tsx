@@ -156,7 +156,7 @@ export default function CurrentShiftSales() {
                 contentContainerStyle={styles.detailContent}
                 keyboardShouldPersistTaps="handled"
               >
-                <SaleDetailsBody saleId={selectedId} role="cashier" />
+                <SaleDetailsBody saleId={selectedId} />
               </ScrollView>
             ) : (
               <View style={styles.detailEmpty}>

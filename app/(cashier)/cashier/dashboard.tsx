@@ -3,7 +3,6 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { DashboardCard } from '@/components/DashboardCard';
 import { ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
@@ -48,7 +47,7 @@ export default function CashierDashboard() {
       Alert.alert(
         'Cannot open POS',
         rows.length === 0
-          ? 'This branch has no active products. Ask an owner or manager to add stock first.'
+          ? 'This branch has no active products. Ask a manager to add stock first.'
           : 'All products are out of stock. Restock this branch before starting or opening POS.',
       );
       return;
@@ -93,13 +92,7 @@ export default function CashierDashboard() {
           Alert.alert(
             'Shift Ended',
             `Completed Orders: ${summary.completed_transaction_count}\nTotal Sales: ${formatMoney(summary.total_sales)}`,
-            [
-              { text: 'OK' },
-              {
-                text: 'View Details',
-                onPress: () => router.push(`/cashier/shifts/${summary.id}` as never),
-              },
-            ],
+            [{ text: 'OK' }],
           );
         },
       }),
@@ -212,11 +205,6 @@ export default function CashierDashboard() {
           </View>
         ) : null}
 
-        <DashboardCard
-          title="Shift History"
-          description="Review your past shift sessions and sales"
-          onPress={() => router.push('/cashier/shifts' as never)}
-        />
       </ConstrainedWidth>
     </Screen>
   );

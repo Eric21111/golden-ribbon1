@@ -3,13 +3,12 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { DashboardCard } from '@/components/DashboardCard';
-import { ErrorState } from '@/components/Feedback';
+import { ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
+import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useBranches } from '@/hooks/useBranches';
-import { useOwnerDashboardMetrics } from '@/hooks/useSales';
+import { useOwnerDailyProductSummary, useOwnerDashboardMetrics } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 
@@ -22,111 +21,99 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ children }: { children: ReactNode }) {
+function Row({ children }: { title?: string; children: ReactNode }) {
   return <View style={styles.row}>{children}</View>;
 }
 
 export default function OwnerDashboard() {
   const { profile } = useAuth();
-  const branches = useBranches();
   const metricsQuery = useOwnerDashboardMetrics();
+  const summaryQuery = useOwnerDailyProductSummary();
 
   const metrics = metricsQuery.data;
-  const activeBranchCount = branches.data?.filter((branch) => branch.is_active).length;
-  const refreshing = branches.isRefetching || metricsQuery.isRefetching;
-
-  const attentionItems = [
-    {
-      title: 'Pending Transfers',
-      value: metrics?.pending_transfers_count,
-      description: 'Stock awaiting branch receipt',
-      href: '/owner/transfers',
-    },
-    {
-      title: 'Pending Return Receipts',
-      value: metrics?.in_transit_returns_count,
-      description: 'Returns awaiting Main Branch receipt',
-      href: '/owner/returns',
-    },
-    {
-      title: 'Transfer Discrepancies',
-      value: metrics?.transfer_discrepancies_count,
-      description: 'Missing or excess items on transfer receive',
-      href: '/owner/reports/transfer-discrepancies',
-    },
-    {
-      title: 'Return Discrepancies',
-      value: metrics?.return_discrepancies_count,
-      description: 'Missing or excess items on return receive',
-      href: '/owner/reports/return-discrepancies',
-    },
-  ].filter((item) => typeof item.value === 'number' && item.value > 0);
+  const summary = summaryQuery.data ?? [];
+  const refreshing = metricsQuery.isRefetching || summaryQuery.isRefetching;
 
   const refresh = () => {
-    void branches.refetch();
     void metricsQuery.refetch();
+    void summaryQuery.refetch();
   };
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh} constrain>
-      <PageHeader title={`Hello, ${profile?.full_name ?? 'Owner'}`} subtitle="Company-wide administration" />
+      <PageHeader title={`Hello, ${profile?.full_name ?? 'Owner'}`} subtitle="Company-wide analytics" />
       <Text style={styles.role}>OWNER</Text>
 
-      {branches.error || metricsQuery.error ? (
+      {metricsQuery.error || summaryQuery.error ? (
         <ErrorState
-          message={getErrorMessage(branches.error ?? metricsQuery.error)}
+          message={getErrorMessage(metricsQuery.error ?? summaryQuery.error)}
           onRetry={refresh}
         />
       ) : (
         <View style={styles.content}>
-          <Section title="BUSINESS SNAPSHOT">
+          <Section title="TODAY">
             <Row>
               <DashboardCard
                 style={styles.half}
-                title="Today's Sales"
+                title="Today's Revenue"
                 value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                description="Revenue today (PH)"
-                onPress={() => router.push('/owner/sales' as any)}
+                description="Completed sales (PH)"
+                onPress={() => router.push('/owner/reports/sales-by-branch')}
               />
               <DashboardCard
                 style={styles.half}
-                title="Orders Today"
+                title="Today's Transactions"
                 value={metrics?.today_transactions ?? '—'}
                 description="Completed orders (PH)"
-                onPress={() => router.push('/owner/sales' as any)}
+                onPress={() => router.push('/owner/reports/sales-by-branch')}
               />
             </Row>
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Active Branches"
-                value={activeBranchCount ?? '—'}
-                description="Selling locations"
-                onPress={() => router.push('/owner/branches')}
-              />
-              <DashboardCard
-                style={styles.half}
-                title="Active Products"
-                value={metrics?.active_products_count ?? '—'}
-                description="Catalog items for sale"
-                onPress={() => router.push('/owner/products')}
-              />
-            </Row>
+            <DashboardCard
+              title="Units Sold"
+              value={metrics?.today_units_sold ?? '—'}
+              description="Completed sale quantities today (PH)"
+              onPress={() => router.push('/owner/reports/product-sales')}
+            />
           </Section>
 
-          <Section title="SALES & PERFORMANCE">
+          <Section title="TODAY'S PRODUCT PERFORMANCE">
+            {summaryQuery.isLoading && summary.length === 0 ? (
+              <LoadingState label="Loading daily product summary…" />
+            ) : summary.length === 0 ? (
+              <Text style={styles.quiet}>No completed sales or declared returns today.</Text>
+            ) : (
+              <View style={styles.table}>
+                <View style={[styles.tableRow, styles.tableHeader]}>
+                  <Text style={[styles.cellProduct, styles.headerCell]}>Product</Text>
+                  <Text style={[styles.cellQty, styles.headerCell]}>Sold</Text>
+                  <Text style={[styles.cellQty, styles.headerCell]}>Returned</Text>
+                  <Text style={[styles.cellMoney, styles.headerCell]}>Revenue</Text>
+                </View>
+                {summary.map((row) => (
+                  <View key={row.product_id} style={styles.tableRow}>
+                    <Text style={styles.cellProduct}>{row.product_name}</Text>
+                    <Text style={styles.cellQty}>{row.quantity_sold}</Text>
+                    <Text style={styles.cellQty}>{row.quantity_returned}</Text>
+                    <Text style={styles.cellMoney}>{formatMoney(row.revenue)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Section>
+
+          <Section title="REPORTS">
             <Row>
               <DashboardCard
                 style={styles.half}
                 title="Sales by Branch"
                 description="Revenue and volume by branch"
-                onPress={() => router.push('/owner/reports/sales-by-branch' as any)}
+                onPress={() => router.push('/owner/reports/sales-by-branch')}
               />
               <DashboardCard
                 style={styles.half}
-                title="Product Sales Summary"
-                description="Units sold and revenue per product"
-                onPress={() => router.push('/owner/reports/product-sales' as any)}
+                title="Product Sales"
+                description="Units sold and historical revenue"
+                onPress={() => router.push('/owner/reports/product-sales')}
               />
             </Row>
             <Row>
@@ -134,73 +121,37 @@ export default function OwnerDashboard() {
                 style={styles.half}
                 title="Branch Performance"
                 description="Sales and discrepancy comparison"
-                onPress={() => router.push('/owner/reports/branch-performance' as any)}
+                onPress={() => router.push('/owner/reports/branch-performance' as never)}
               />
               <DashboardCard
                 style={styles.half}
-                title="Sales History"
-                description="Search company-wide sales"
-                onPress={() => router.push('/owner/sales' as any)}
-              />
-            </Row>
-            <DashboardCard
-              title="Shift History"
-              description="Review all cashier shift sessions and sales totals"
-              onPress={() => router.push('/owner/shifts' as any)}
-            />
-            <DashboardCard
-              title="Audit History"
-              description="Company-wide activity and change trail"
-              onPress={() => router.push('/owner/audit' as any)}
-            />
-          </Section>
-
-          <Section title="INVENTORY">
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Inventory by Branch"
+                title="Inventory Summary"
                 description="Read-only balances across branches"
                 onPress={() => router.push('/owner/inventory-by-branch')}
               />
-              <DashboardCard
-                style={styles.half}
-                title="Inventory Reconciliation"
-                description="Physical stock vs movement ledger"
-                onPress={() => router.push('/owner/reports/inventory-reconciliation' as any)}
-              />
             </Row>
             <Row>
               <DashboardCard
                 style={styles.half}
-                title="Inventory History"
-                description="Signed inventory movements"
-                onPress={() => router.push('/owner/movements')}
+                title="Reconciliation"
+                description="Physical stock vs movement ledger"
+                onPress={() => router.push('/owner/reports/inventory-reconciliation')}
               />
               <DashboardCard
                 style={styles.half}
-                title="Stock Returns"
-                description="All branch stock returns"
-                onPress={() => router.push('/owner/returns')}
+                title="Discrepancy Analytics"
+                description="Missing and excess transfer/return qty"
+                onPress={() => router.push('/owner/reports/discrepancies' as never)}
               />
             </Row>
           </Section>
 
-          <Section title="NEEDS ATTENTION">
-            {attentionItems.length === 0 ? (
-              <Text style={styles.quiet}>Nothing needs attention</Text>
-            ) : (
-              attentionItems.map((item) => (
-                <DashboardCard
-                  key={item.title}
-                  variant="alert"
-                  title={item.title}
-                  value={item.value}
-                  description={item.description}
-                  onPress={() => router.push(item.href as any)}
-                />
-              ))
-            )}
+          <Section title="ADMINISTRATION">
+            <DashboardCard
+              title="Employees"
+              description="Create managers and cashiers, assign branches, and manage access"
+              onPress={() => router.push('/owner/employees' as never)}
+            />
           </Section>
         </View>
       )}
@@ -226,4 +177,28 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingVertical: spacing.sm,
   },
+  table: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  tableHeader: {
+    borderTopWidth: 0,
+    backgroundColor: colors.background,
+  },
+  headerCell: { color: colors.muted, fontWeight: '800', fontSize: 11 },
+  cellProduct: { flex: 1.4, color: colors.text, fontSize: 13, fontWeight: '700' },
+  cellQty: { width: 64, color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'right' },
+  cellMoney: { width: 84, color: colors.primary, fontSize: 13, fontWeight: '800', textAlign: 'right' },
 });

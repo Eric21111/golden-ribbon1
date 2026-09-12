@@ -32,7 +32,7 @@ export function EditEmployeeForm({
   onResetPassword,
   onToggleActive,
 }: EditEmployeeFormProps) {
-  const { control, handleSubmit, reset, formState } = useForm<EditEmployeeValues>({
+  const { control, handleSubmit, reset, formState, watch, setValue } = useForm<EditEmployeeValues>({
     resolver: zodResolver(editEmployeeSchema),
     defaultValues: {
       full_name: employee.full_name,
@@ -50,6 +50,10 @@ export function EditEmployeeForm({
       is_active: employee.is_active,
     });
   }, [employee, reset]);
+
+  const selectedRole = watch('role');
+  const assignableBranches =
+    selectedRole === 'cashier' ? branches.filter((branch) => !branch.is_main_branch) : branches;
 
   return (
     <View style={styles.form}>
@@ -79,7 +83,13 @@ export function EditEmployeeForm({
           <ChoiceChips
             label="Role"
             value={field.value}
-            onChange={field.onChange}
+            onChange={(value) => {
+              field.onChange(value);
+              if (value === 'cashier') {
+                const current = branches.find((branch) => branch.id === watch('branch_id'));
+                if (current?.is_main_branch) setValue('branch_id', '');
+              }
+            }}
             choices={[
               { label: 'Manager', value: 'manager' },
               { label: 'Cashier', value: 'cashier' },
@@ -93,7 +103,7 @@ export function EditEmployeeForm({
         name="branch_id"
         render={({ field, fieldState }) => (
           <>
-            <BranchSelector branches={branches} value={field.value} onChange={field.onChange} />
+            <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
             {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
           </>
         )}

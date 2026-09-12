@@ -1,25 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { isReportRangeReady } from '@/lib/format';
-import { PAGE_SIZE } from '@/lib/pagination';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getManagerDashboardMetrics,
-  getManagerRecentSales,
+  getOwnerDailyProductSummary,
   getOwnerDashboardMetrics,
   getSale,
-  listSales,
   reportProductSales,
   reportSalesByBranch,
-  type SaleFilters,
 } from '@/services/saleService';
-
-export function useSales(filters: SaleFilters = {}, page = 0, pageSize = PAGE_SIZE) {
-  return useQuery({
-    queryKey: queryKeys.sales({ ...filters, page, pageSize }),
-    queryFn: () => listSales(filters, page, pageSize),
-  });
-}
 
 export function useSale(id: string) {
   return useQuery({
@@ -61,16 +51,16 @@ export function useOwnerDashboardMetrics() {
   });
 }
 
+export function useOwnerDailyProductSummary() {
+  return useQuery({
+    queryKey: queryKeys.ownerDailyProductSummary,
+    queryFn: getOwnerDailyProductSummary,
+  });
+}
+
 export function useManagerDashboardMetrics() {
   return useQuery({
     queryKey: queryKeys.managerDashboard,
     queryFn: getManagerDashboardMetrics,
-  });
-}
-
-export function useManagerRecentSales(limit = 5) {
-  return useQuery({
-    queryKey: queryKeys.managerRecentSales,
-    queryFn: () => getManagerRecentSales(limit),
   });
 }

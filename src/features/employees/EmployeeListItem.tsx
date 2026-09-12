@@ -3,15 +3,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '@/components/AppButton';
 import { StatusBadge } from '@/components/StatusBadge';
 import { colors, radius, spacing } from '@/constants/theme';
-import type { EmployeeRecord } from '@/types/models';
+import { employeeScopeLabel } from '@/features/employees/employeeFilters';
+import type { Branch, EmployeeRecord } from '@/types/models';
 
 interface EmployeeListItemProps {
   employee: EmployeeRecord;
+  branches?: Branch[];
   onEdit: () => void;
 }
 
-export function EmployeeListItem({ employee, onEdit }: EmployeeListItemProps) {
-  const roleLabel = employee.role === 'manager' ? 'Manager' : 'Cashier';
+export function EmployeeListItem({ employee, branches = [], onEdit }: EmployeeListItemProps) {
+  const roleLabel = employeeScopeLabel(employee, branches);
 
   return (
     <View style={styles.card}>

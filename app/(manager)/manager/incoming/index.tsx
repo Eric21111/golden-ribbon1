@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { SellingBranchGuard } from '@/features/auth/SellingBranchGuard';
 import { TransferHub } from '@/features/transfers/TransferHub';
 import {
   MANAGER_STATUS_CHOICES,
@@ -14,6 +15,14 @@ import { useTransfers } from '@/hooks/useTransfers';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function IncomingTransfersScreen() {
+  return (
+    <SellingBranchGuard>
+      <IncomingTransfersBody />
+    </SellingBranchGuard>
+  );
+}
+
+function IncomingTransfersBody() {
   const { profile } = useAuth();
   const branchId = profile?.branch_id ?? '';
   const [status, setStatus] = useState<TransferStatusFilter>('pending_receipt');
@@ -23,7 +32,7 @@ export default function IncomingTransfersScreen() {
     return (
       <Screen>
         <PageHeader title="Incoming" subtitle="Assigned branch unavailable" />
-        <EmptyState title="No assigned branch" message="Ask an owner to assign you to a branch." />
+        <EmptyState title="No assigned branch" message="Ask a Main Branch Manager to assign you to a branch." />
       </Screen>
     );
   }

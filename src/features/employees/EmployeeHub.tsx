@@ -66,20 +66,19 @@ export function EmployeeHub({
   const updateMutation = useUpdateEmployee();
   const resetMutation = useResetEmployeePassword();
 
-  const sellingBranches = useMemo(
-    () => branches?.filter((branch) => !branch.is_main_branch) ?? [],
+  const assignableBranches = useMemo(
+    () => branches?.filter((branch) => branch.is_active) ?? [],
     [branches]
-  );
-  const activeSellingBranches = useMemo(
-    () => sellingBranches.filter((branch) => branch.is_active),
-    [sellingBranches]
   );
   const branchFilterOptions = useMemo(
     () => [
       { label: 'All Branches', value: '' },
-      ...sellingBranches.map((branch) => ({ label: branch.name, value: branch.id })),
+      ...(branches ?? []).map((branch) => ({
+        label: branch.is_main_branch ? `${branch.name} (Main)` : branch.name,
+        value: branch.id,
+      })),
     ],
-    [sellingBranches],
+    [branches],
   );
 
   const filtered = useMemo(
@@ -135,6 +134,7 @@ export function EmployeeHub({
   };
 
   const submitCreate = (values: CreateEmployeeValues) => {
+    if (createMutation.isPending) return;
     createMutation.mutate(
       {
         fullName: values.full_name.trim(),
@@ -154,7 +154,7 @@ export function EmployeeHub({
   };
 
   const submitEdit = (values: EditEmployeeValues) => {
-    if (!editEmployee) return;
+    if (!editEmployee || updateMutation.isPending) return;
     updateMutation.mutate(
       {
         id: editEmployee.id,
@@ -270,6 +270,7 @@ export function EmployeeHub({
               renderItem={({ item }) => (
                 <EmployeeListItem
                   employee={item}
+                  branches={assignableBranches}
                   onEdit={() => {
                     createMutation.reset();
                     updateMutation.reset();
@@ -299,7 +300,7 @@ export function EmployeeHub({
         onClose={() => setCreateOpen(false)}
       >
         <CreateEmployeeForm
-          branches={activeSellingBranches}
+          branches={assignableBranches}
           error={createMutation.error ? getEmployeeErrorMessage(createMutation.error) : undefined}
           loading={createMutation.isPending}
           onSubmit={submitCreate}
@@ -315,7 +316,7 @@ export function EmployeeHub({
         {editEmployee ? (
           <EditEmployeeForm
             employee={editEmployee}
-            branches={activeSellingBranches}
+            branches={assignableBranches}
             error={updateMutation.error ? getEmployeeErrorMessage(updateMutation.error) : undefined}
             loading={updateMutation.isPending && busyId !== editEmployee.id}
             togglingActive={updateMutation.isPending && busyId === editEmployee.id}

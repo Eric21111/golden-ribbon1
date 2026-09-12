@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 import { useReturns } from '@/hooks/useReturns';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -20,12 +21,12 @@ export { returnStyles } from './returnStyles';
 
 export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
   const { profile } = useAuth();
-  const isMainBranch = Boolean(profile?.branch?.is_main_branch);
+  const isMainBranch = isMainBranchManager(profile);
   const [status, setStatus] = useState<ReturnStatusFilter>(
     role === 'manager' ? 'in_transit' : '',
   );
 
-  const branchId = role === 'manager' ? (profile?.branch_id ?? '') : '';
+  const branchId = role === 'manager' && !isMainBranch ? (profile?.branch_id ?? '') : '';
   const query = useReturns(branchId, status);
   const returns = query.data as StockReturnSummary[] | undefined;
 
@@ -33,16 +34,16 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
     return (
       <Screen constrain>
         <PageHeader title="Returns" subtitle="Assigned branch unavailable" />
-        <EmptyState title="No assigned branch" message="Ask an owner to assign you to a branch." />
+        <EmptyState title="No assigned branch" message="Ask a Main Branch Manager to assign you to a branch." />
       </Screen>
     );
   }
 
   return (
     <ReturnHub
-      title="Returns"
+      title={isMainBranch ? 'Return History' : 'Returns'}
       subtitle={
-        role === 'owner'
+        isMainBranch
           ? 'Branches → Main Branch'
           : profile?.branch?.name ?? 'Unsold stock to Main Branch'
       }
@@ -54,13 +55,13 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
       isRefreshing={query.isRefetching}
       defaultEmptyTitle="No returns yet"
       defaultEmptyMessage={
-        role === 'manager'
-          ? 'Create a return to send unsold stock to Main Branch.'
-          : 'Confirmed stock returns will appear here.'
+        isMainBranch
+          ? 'Confirmed stock returns will appear here.'
+          : 'Create a return to send unsold stock to Main Branch.'
       }
       statusFilter={status}
       onStatusFilterChange={setStatus}
-      statusChoices={role === 'owner' ? OWNER_RETURN_STATUS_CHOICES : MANAGER_RETURN_STATUS_CHOICES}
+      statusChoices={isMainBranch ? OWNER_RETURN_STATUS_CHOICES : MANAGER_RETURN_STATUS_CHOICES}
       primaryAction={
         role === 'manager' && !isMainBranch
           ? {
@@ -69,24 +70,11 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
             }
           : undefined
       }
-      overflowActions={
-        role === 'owner'
-          ? [
-              {
-                label: 'Return discrepancies',
-                onPress: () => router.push('/owner/returns/discrepancies'),
-              },
-            ]
-          : []
-      }
+      overflowActions={[]}
       onPressReturn={(stockReturn) =>
-        router.push(
-          role === 'owner'
-            ? { pathname: '/owner/returns/[id]', params: { id: stockReturn.id } }
-            : { pathname: '/manager/returns/[id]', params: { id: stockReturn.id } },
-        )
+        router.push({ pathname: '/manager/returns/[id]', params: { id: stockReturn.id } })
       }
-      enableMasterDetail={role === 'manager'}
+      enableMasterDetail
     />
   );
 }

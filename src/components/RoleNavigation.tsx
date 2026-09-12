@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import type { UserRole } from '@/types/models';
 
@@ -15,31 +17,45 @@ type NavigationItem = {
   selectedIcon: IoniconsIconName;
 };
 
-const menus: Record<UserRole, NavigationItem[]> = {
-  owner: [
-    { label: 'Home', href: '/owner/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'Inventory', href: '/owner/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
-    { label: 'Transfers', href: '/owner/transfers', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
-    { label: 'Branches', href: '/owner/branches', icon: 'storefront-outline', selectedIcon: 'storefront' },
-    { label: 'Products', href: '/owner/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-    { label: 'Employees', href: '/owner/employees', icon: 'people-outline', selectedIcon: 'people' },
-    { label: 'Profile', href: '/owner/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-  ],
-  manager: [
-    { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'Inventory', href: '/manager/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
-    { label: 'Incoming', href: '/manager/incoming', icon: 'download-outline', selectedIcon: 'download' },
-    { label: 'Returns', href: '/manager/returns', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-    { label: 'Products', href: '/manager/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-    { label: 'Profile', href: '/manager/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-  ],
-  cashier: [
-    { label: 'Home', href: '/cashier/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'POS', href: '/cashier/pos', icon: 'cart-outline', selectedIcon: 'cart' },
-    { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
-    { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-  ],
-};
+function menuHref(href: string): Href {
+  return href as Href;
+}
+
+const ownerMenu: NavigationItem[] = [
+  { label: 'Home', href: menuHref('/owner/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
+  { label: 'Reports', href: menuHref('/owner/reports'), icon: 'stats-chart-outline', selectedIcon: 'stats-chart' },
+  { label: 'Performance', href: menuHref('/owner/reports/branch-performance'), icon: 'git-branch-outline', selectedIcon: 'git-branch' },
+  { label: 'Reconcile', href: menuHref('/owner/reports/inventory-reconciliation'), icon: 'checkmark-done-outline', selectedIcon: 'checkmark-done' },
+  { label: 'Discrepancies', href: menuHref('/owner/reports/discrepancies'), icon: 'alert-circle-outline', selectedIcon: 'alert-circle' },
+  { label: 'Employees', href: menuHref('/owner/employees'), icon: 'people-outline', selectedIcon: 'people' },
+  { label: 'Account', href: menuHref('/owner/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
+];
+
+const mainManagerMenu: NavigationItem[] = [
+  { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
+  { label: 'Products', href: menuHref('/manager/products'), icon: 'fast-food-outline', selectedIcon: 'fast-food' },
+  { label: 'Branches', href: menuHref('/manager/branches'), icon: 'git-branch-outline', selectedIcon: 'git-branch' },
+  { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
+  { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
+  { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
+];
+
+const sellingManagerMenu: NavigationItem[] = [
+  { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
+  { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
+  { label: 'Incoming', href: menuHref('/manager/incoming'), icon: 'download-outline', selectedIcon: 'download' },
+  { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
+  { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
+];
+
+const cashierMenu: NavigationItem[] = [
+  { label: 'Home', href: '/cashier/dashboard', icon: 'home-outline', selectedIcon: 'home' },
+  { label: 'POS', href: '/cashier/pos', icon: 'cart-outline', selectedIcon: 'cart' },
+  { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
+  { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
+];
 
 const BottomNavigationContext = createContext(false);
 
@@ -48,8 +64,16 @@ export function useBottomNavigationVisible() {
 }
 
 export function RoleNavigation({ role, children }: PropsWithChildren<{ role: UserRole }>) {
+  const { profile } = useAuth();
   const pathname = usePathname().replace(/\/$/, '');
-  const items = menus[role];
+  const items =
+    role === 'owner'
+      ? ownerMenu
+      : role === 'manager'
+        ? isMainBranchManager(profile)
+          ? mainManagerMenu
+          : sellingManagerMenu
+        : cashierMenu;
   const keyboardInset = useKeyboardBottomInset();
   // Only primary pages have a menu. Forms, details, and inventory drill-downs
   // keep their existing stack navigation back to the parent page.

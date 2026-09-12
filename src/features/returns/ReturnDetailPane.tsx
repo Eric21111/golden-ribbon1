@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { masterDetailStyles } from '@/components/MasterDetailLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { getReturn } from '@/services/returnService';
@@ -20,7 +21,7 @@ type ReturnDetailsBodyProps = {
 
 export function ReturnDetailsBody({ returnId }: ReturnDetailsBodyProps) {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner';
+  const canReceiveReturns = isMainBranchManager(profile);
 
   const query = useQuery({
     queryKey: ['stock-returns', profile?.id, returnId],
@@ -39,7 +40,7 @@ export function ReturnDetailsBody({ returnId }: ReturnDetailsBodyProps) {
   }
 
   const row = query.data;
-  const canReceive = row.status === 'in_transit' && isOwner;
+  const canReceive = row.status === 'in_transit' && canReceiveReturns;
 
   return (
     <View style={returnStyles.detailsBody}>
@@ -96,7 +97,7 @@ export function ReturnDetailsBody({ returnId }: ReturnDetailsBodyProps) {
         <AppButton
           label="Count & receive return"
           onPress={() =>
-            router.push({ pathname: '/owner/returns/receive/[id]', params: { id: row.id } })
+            router.push({ pathname: '/manager/returns/receive/[id]', params: { id: row.id } })
           }
         />
       ) : null}

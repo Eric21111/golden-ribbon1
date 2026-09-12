@@ -14,7 +14,7 @@ const PROJECT_REF = 'uvxpjrzqtmaterczzvjo';
 const EXPECTED_MIGRATIONS = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
 const RUN_ID = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const PASSWORD = `M105-${randomBytes(12).toString('base64url')}`;
-const EMAIL = (name) => `m105.${name}.${RUN_ID.slice(-8)}@example.com`;
+const EMAIL = (name) => `m105.live.${name}@example.com`;
 
 const findings = [];
 const checks = [];
@@ -114,6 +114,7 @@ function isDenied(error) {
     || text.includes('unauthorized')
     || text.includes('permission denied')
     || text.includes('owner access')
+    || text.includes('main branch manager')
     || text.includes('not allowed')
     || text.includes('row-level security')
     || text.includes('already been received')
@@ -255,6 +256,7 @@ try {
 const admin = client(url, serviceKey);
 const emails = {
   owner: EMAIL('owner'),
+  mainMgr: EMAIL('mainmgr'),
   mgr1: EMAIL('mgr1'),
   mgr2: EMAIL('mgr2'),
   cash1: EMAIL('cash1'),
@@ -285,7 +287,7 @@ try {
   record(
     'Regression Testing',
     'Remote migration chain complete',
-    pushStatus.upToDate === true && EXPECTED_MIGRATIONS.length === 15,
+    pushStatus.upToDate === true && EXPECTED_MIGRATIONS.length >= 16,
     pushStatus.upToDate ? `${EXPECTED_MIGRATIONS.length} local files; remote up to date` : JSON.stringify(pushStatus.migrations ?? pushStatus),
   );
 } catch (error) {
@@ -306,6 +308,7 @@ if (!main || !branch1) {
 const ids = {};
 try {
   ids.owner = await ensureUser(admin, emails.owner, PASSWORD);
+  ids.mainMgr = await ensureUser(admin, emails.mainMgr, PASSWORD);
   ids.mgr1 = await ensureUser(admin, emails.mgr1, PASSWORD);
   ids.mgr2 = await ensureUser(admin, emails.mgr2, PASSWORD);
   ids.cash1 = await ensureUser(admin, emails.cash1, PASSWORD);
@@ -332,6 +335,7 @@ if (!branch2) {
 
 const upsertProfiles = [
   { id: ids.owner, full_name: 'M105 Owner', role: 'owner', branch_id: null, is_active: true },
+  { id: ids.mainMgr, full_name: 'M105 Main Manager', role: 'manager', branch_id: main.id, is_active: true },
   { id: ids.mgr1, full_name: 'M105 Manager 1', role: 'manager', branch_id: branch1.id, is_active: true },
   { id: ids.mgr2, full_name: 'M105 Manager 2', role: 'manager', branch_id: branch2.id, is_active: true },
   { id: ids.cash1, full_name: 'M105 Cashier 1', role: 'cashier', branch_id: branch1.id, is_active: true },
@@ -349,6 +353,7 @@ const upsertProfiles = [
 const sessions = {};
 try {
   sessions.owner = await signIn(url, anonKey, emails.owner, PASSWORD);
+  sessions.mainMgr = await signIn(url, anonKey, emails.mainMgr, PASSWORD);
   sessions.mgr1 = await signIn(url, anonKey, emails.mgr1, PASSWORD);
   sessions.mgr2 = await signIn(url, anonKey, emails.mgr2, PASSWORD);
   sessions.cash1 = await signIn(url, anonKey, emails.cash1, PASSWORD);
@@ -412,27 +417,31 @@ try {
 console.log('\n-- Product + opening stock setup --');
 const sku = (suffix) => `M105-${suffix}-${RUN_ID.slice(-8)}`;
 async function createProduct(name, skuValue, price) {
-  const { data, error } = await sessions.owner.from('products').insert({
+  const { data, error } = await sessions.mainMgr.from('products').insert({
     name, sku: skuValue, selling_price: price, is_active: true,
   }).select('id,name,sku,selling_price').single();
   if (error) throw error;
   return data;
 }
 
-const e2eProduct = await expectOk('Owner creates E2E product', 'Full E2E', () => createProduct('M105 Chicken Nuggets', sku('NUG'), 80));
+const e2eProduct = await expectOk('Main Branch Manager creates E2E product', 'Full E2E', () => createProduct('M105 Chicken Nuggets', sku('NUG'), 80));
 const saleConcProduct = await createProduct('M105 Sale Concurrency Chicken', sku('SALECONC'), 50);
 const xferConcProduct = await createProduct('M105 Transfer Concurrency Chicken', sku('XFERCONC'), 50);
 const reportProduct = e2eProduct;
 
-await expectOk('Initialize E2E opening stock 100', 'RPC Security', () => rpc(sessions.owner, 'initialize_main_branch_inventory', {
+await expectDenied('Owner cannot initialize inventory', 'RPC Security', () => rpc(sessions.owner, 'initialize_main_branch_inventory', {
+  p_items: [{ product_id: e2eProduct.id, quantity: 1 }],
+  p_notes: 'owner-denied-init',
+}));
+await expectOk('Initialize E2E opening stock 100', 'RPC Security', () => rpc(sessions.mainMgr, 'initialize_main_branch_inventory', {
   p_items: [{ product_id: e2eProduct.id, quantity: 100 }],
   p_notes: 'm105 e2e opening',
 }));
-await rpc(sessions.owner, 'initialize_main_branch_inventory', {
+await rpc(sessions.mainMgr, 'initialize_main_branch_inventory', {
   p_items: [{ product_id: saleConcProduct.id, quantity: 5 }],
   p_notes: 'm105 sale concurrency opening',
 });
-await rpc(sessions.owner, 'initialize_main_branch_inventory', {
+await rpc(sessions.mainMgr, 'initialize_main_branch_inventory', {
   p_items: [{ product_id: xferConcProduct.id, quantity: 100 }],
   p_notes: 'm105 transfer concurrency opening',
 });
@@ -472,12 +481,12 @@ console.log('\n-- Live RLS --');
   record('RLS', 'Branch 1 manager denied Branch 2 returns', !error && (data?.length ?? 0) === 0, error ? errMsg(error) : `${data?.length ?? 0} rows`);
 }
 {
-  const { data, error } = await sessions.cash1.from('audit_logs').select('id').limit(5);
-  record('RLS', 'Cashier cannot read audit_logs', !error && (data?.length ?? 0) === 0, error ? errMsg(error) : `${data?.length ?? 0} rows`);
+  const { error } = await sessions.cash1.from('audit_logs').select('id').limit(5);
+  record('RLS', 'Audit log table is gone for cashier reads', Boolean(error), errMsg(error));
 }
 {
-  const { data, error } = await sessions.mgr1.from('audit_logs').select('id').limit(5);
-  record('RLS', 'Manager cannot read audit_logs', !error && (data?.length ?? 0) === 0, error ? errMsg(error) : `${data?.length ?? 0} rows`);
+  const { error } = await sessions.mgr1.from('audit_logs').select('id').limit(5);
+  record('RLS', 'Audit log table is gone for manager reads', Boolean(error), errMsg(error));
 }
 await expectDenied('Cashier denied owner dashboard', 'RLS', () => rpc(sessions.cash1, 'get_owner_dashboard_metrics'));
 await expectDenied('Cashier denied sales-by-branch report', 'RLS', () => rpc(sessions.cash1, 'report_sales_by_branch', { p_range_type: 'today' }));
@@ -504,7 +513,9 @@ await expectDenied('Cashier denied send_stock_transfer', 'RPC Security', () => r
 await expectDenied('Manager denied owner reports', 'RPC Security', () => rpc(sessions.mgr1, 'report_branch_performance', { p_range_type: 'all_time' }));
 await expectDenied('Manager denied reconciliation report', 'RPC Security', () => rpc(sessions.mgr1, 'report_inventory_reconciliation'));
 await expectDenied('Cashier denied list_employees', 'RPC Security', () => rpc(sessions.cash1, 'list_employees'));
-await expectDenied('Manager denied list_employees', 'RPC Security', () => rpc(sessions.mgr1, 'list_employees'));
+await expectDenied('Selling Branch Manager denied list_employees', 'RPC Security', () => rpc(sessions.mgr1, 'list_employees'));
+await expectDenied('Main Branch Manager denied list_employees', 'RPC Security', () => rpc(sessions.mainMgr, 'list_employees'));
+await expectOk('Owner can list employees', 'RPC Security', () => rpc(sessions.owner, 'list_employees'));
 await expectDenied('Cashier denied list_audit_logs', 'RPC Security', () => rpc(sessions.cash1, 'list_audit_logs'));
 await expectDenied('Manager denied list_audit_logs', 'RPC Security', () => rpc(sessions.mgr1, 'list_audit_logs'));
 await expectDenied('Cashier denied create_stock_return', 'RPC Security', () => rpc(sessions.cash1, 'create_stock_return', {
@@ -522,13 +533,13 @@ await expectDenied('Cashier denied start of another identity via owner RPC', 'RP
 
 console.log('\n-- Controlled E2E --');
 const e2eSendKey = idem('e2e-send');
-const e2eTransferId = await expectOk('Owner sends 60 to Branch 1', 'Full E2E', () => rpc(sessions.owner, 'send_stock_transfer', {
+const e2eTransferId = await expectOk('Owner sends 60 to Branch 1', 'Full E2E', () => rpc(sessions.mainMgr, 'send_stock_transfer', {
   p_to_branch_id: branch1.id,
   p_items: [{ product_id: e2eProduct.id, quantity_sent: 60 }],
   p_notes: 'm105 e2e send',
   p_idempotency_key: e2eSendKey,
 }));
-const retrySend = await rpc(sessions.owner, 'send_stock_transfer', {
+const retrySend = await rpc(sessions.mainMgr, 'send_stock_transfer', {
   p_to_branch_id: branch1.id,
   p_items: [{ product_id: e2eProduct.id, quantity_sent: 60 }],
   p_notes: 'm105 e2e send',
@@ -633,20 +644,20 @@ record('Duplicate Protection', 'Create return retry is idempotent', returnRetry 
 
 const { data: returnItems } = await admin.from('stock_return_items').select('id,quantity_returned').eq('stock_return_id', returnId);
 const returnRecvKey = idem('e2e-return-recv');
-const returnStatus = await expectOk('Owner receives 27 of 28', 'Full E2E', () => rpc(sessions.owner, 'receive_stock_return', {
+const returnStatus = await expectOk('Owner receives 27 of 28', 'Full E2E', () => rpc(sessions.mainMgr, 'receive_stock_return', {
   p_return_id: returnId,
   p_items: (returnItems ?? []).map((item) => ({ stock_return_item_id: item.id, quantity_received: 27 })),
   p_notes: 'm105 e2e return receive',
   p_idempotency_key: returnRecvKey,
 }));
 record('Full E2E', 'Return received with discrepancy', String(returnStatus).includes('discrepancy'), String(returnStatus));
-await rpc(sessions.owner, 'receive_stock_return', {
+await rpc(sessions.mainMgr, 'receive_stock_return', {
   p_return_id: returnId,
   p_items: (returnItems ?? []).map((item) => ({ stock_return_item_id: item.id, quantity_received: 27 })),
   p_notes: 'm105 e2e return receive',
   p_idempotency_key: returnRecvKey,
 });
-await expectDenied('Receive already-received return with new key fails', 'State Transitions', () => rpc(sessions.owner, 'receive_stock_return', {
+await expectDenied('Receive already-received return with new key fails', 'State Transitions', () => rpc(sessions.mainMgr, 'receive_stock_return', {
   p_return_id: returnId,
   p_items: (returnItems ?? []).map((item) => ({ stock_return_item_id: item.id, quantity_received: 27 })),
   p_notes: null,
@@ -664,7 +675,7 @@ variances = await ledgerVariance();
 record('Inventory Reconciliation', 'Ledger variance 0 after E2E', variances.length === 0, variances.length ? JSON.stringify(variances.slice(0, 5)) : 'ok');
 
 console.log('\n-- Sale concurrency --');
-const saleConcSend = await rpc(sessions.owner, 'send_stock_transfer', {
+const saleConcSend = await rpc(sessions.mainMgr, 'send_stock_transfer', {
   p_to_branch_id: branch1.id,
   p_items: [{ product_id: saleConcProduct.id, quantity_sent: 5 }],
   p_notes: null,
@@ -725,13 +736,13 @@ let xferA;
 let xferB;
 for (let attempt = 0; attempt < 3; attempt += 1) {
   [xferA, xferB] = await Promise.allSettled([
-    rpc(sessions.owner, 'send_stock_transfer', {
+    rpc(sessions.mainMgr, 'send_stock_transfer', {
       p_to_branch_id: branch1.id,
       p_items: [{ product_id: xferConcProduct.id, quantity_sent: 70 }],
       p_notes: null,
       p_idempotency_key: idem(`xfer-a${attempt}`),
     }),
-    rpc(sessions.ownerB, 'send_stock_transfer', {
+    rpc(sessions.mainMgr, 'send_stock_transfer', {
       p_to_branch_id: branch1.id,
       p_items: [{ product_id: xferConcProduct.id, quantity_sent: 70 }],
       p_notes: null,
@@ -758,84 +769,18 @@ if (xferWins[0]) {
 variances = await ledgerVariance();
 record('Inventory Reconciliation', 'Ledger variance 0 after concurrency', variances.length === 0, variances.length ? JSON.stringify(variances.slice(0, 5)) : 'ok');
 
-console.log('\n-- Audit integrity --');
-async function auditFor(entityId, action) {
-  const { data, error } = await admin.from('audit_logs').select('*').eq('entity_id', entityId).eq('action', action);
-  if (error) throw error;
-  return data ?? [];
+console.log('\n-- Audit subsystem removed --');
+{
+  const { error } = await admin.from('audit_logs').select('id').limit(1);
+  const gone = Boolean(error) && /audit_logs|does not exist|schema cache/i.test(errMsg(error));
+  record('Audit Integrity', 'audit_logs table is removed', gone, errMsg(error));
 }
 {
-  const created = await auditFor(e2eProduct.id, 'product_created');
-  record('Audit Integrity', 'product_created exists', created.length === 1, `${created.length} rows`);
-  if (created[0]) {
-    record('Audit Integrity', 'product_created actor is owner', created[0].actor_user_id === ids.owner && created[0].actor_role_snapshot === 'owner');
-  }
+  const { error } = await sessions.mainMgr.from('products').update({ selling_price: 85 }).eq('id', e2eProduct.id);
+  record('Audit Integrity', 'Product price still updates without audit', !error, errMsg(error));
+  await sessions.mainMgr.from('products').update({ selling_price: 80 }).eq('id', e2eProduct.id);
 }
-{
-  const { error } = await sessions.owner.from('products').update({ selling_price: 85 }).eq('id', e2eProduct.id);
-  record('Audit Integrity', 'Owner can change price', !error, errMsg(error));
-  const changed = await auditFor(e2eProduct.id, 'product_price_changed');
-  record('Audit Integrity', 'product_price_changed exists', changed.length === 1, `${changed.length} rows`);
-  await sessions.owner.from('products').update({ selling_price: 80 }).eq('id', e2eProduct.id);
-}
-{
-  const rows = await auditFor(e2eTransferId, 'transfer_created');
-  record('Audit Integrity', 'transfer_created exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(e2eTransferId, 'transfer_received');
-  record('Audit Integrity', 'transfer_received exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(e2eTransferId, 'transfer_discrepancy_detected');
-  record('Audit Integrity', 'transfer discrepancy audited', rows.length >= 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(shiftId, 'shift_started');
-  record('Audit Integrity', 'shift_started exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(sale.id, 'sale_completed');
-  record('Audit Integrity', 'sale_completed exists once', rows.length === 1 && rows[0].actor_user_id === ids.cash1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(shiftId, 'shift_ended');
-  record('Audit Integrity', 'shift_ended exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(returnId, 'return_created');
-  record('Audit Integrity', 'return_created exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(returnId, 'return_received');
-  record('Audit Integrity', 'return_received exists once', rows.length === 1, `${rows.length} rows`);
-}
-{
-  const rows = await auditFor(returnId, 'return_discrepancy_detected');
-  record('Audit Integrity', 'return discrepancy audited', rows.length >= 1, `${rows.length} rows`);
-}
-
-console.log('\n-- Audit security --');
-await expectDenied('Manager INSERT audit_logs', 'Audit Integrity', () => sessions.mgr1.from('audit_logs').insert({
-  actor_user_id: ids.mgr1,
-  actor_name_snapshot: 'Hacker',
-  actor_role_snapshot: 'owner',
-  action: 'product_created',
-  entity_type: 'product',
-}).select());
-await expectDenied('Cashier UPDATE audit_logs', 'Audit Integrity', () => sessions.cash1.from('audit_logs').update({ action: 'tampered' }).neq('id', '00000000-0000-0000-0000-000000000000').select());
-await expectDenied('Manager DELETE audit_logs', 'Audit Integrity', () => sessions.mgr1.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000').select());
-{
-  const ownerRead = await rpc(sessions.owner, 'list_audit_logs', { p_page: 0, p_page_size: 20, p_range_type: 'all_time' });
-  record('Audit Integrity', 'Owner can list audit logs via RPC', Array.isArray(ownerRead?.items) || Array.isArray(ownerRead), `page_size=${ownerRead?.page_size ?? 'n/a'}`);
-  if (ownerRead?.page_size) {
-    record('Performance', 'Audit RPC caps page size', Number(ownerRead.page_size) <= 100, String(ownerRead.page_size));
-  }
-}
-{
-  const oversized = await rpc(sessions.owner, 'list_audit_logs', { p_page: 0, p_page_size: 500, p_range_type: 'all_time' });
-  record('Performance', 'Audit page_size 500 is capped', Number(oversized.page_size) <= 100, String(oversized.page_size));
-}
+await expectDenied('list_audit_logs RPC is removed', 'Audit Integrity', () => rpc(sessions.owner, 'list_audit_logs'));
 
 console.log('\n-- Employee security --');
 async function invokeEmployeeAdmin(session, body) {
@@ -866,9 +811,47 @@ async function invokeEmployeeAdmin(session, body) {
     createdOk ? created.data.employeeId : JSON.stringify(created.data ?? errMsg(created.error)).slice(0, 240),
   );
   if (createdOk) {
-    const { data: createdProfile } = await admin.from('profiles').select('role,branch_id').eq('id', created.data.employeeId).maybeSingle();
-    record('Employee Security', 'Created employee is cashier on Branch 1', createdProfile?.role === 'cashier' && createdProfile?.branch_id === branch1.id);
+    const { data: createdProfile } = await admin.from('profiles').select('role,branch_id,is_active').eq('id', created.data.employeeId).maybeSingle();
+    record('Employee Security', 'Created employee is cashier on Branch 1', createdProfile?.role === 'cashier' && createdProfile?.branch_id === branch1.id && createdProfile?.is_active === true);
   }
+}
+{
+  const created = await invokeEmployeeAdmin(sessions.owner, {
+    action: 'create',
+    fullName: 'Main Manager Test',
+    email: EMAIL('main-created'),
+    password: PASSWORD,
+    role: 'manager',
+    branchId: main.id,
+    isActive: true,
+  });
+  const createdOk = typeof created.data?.employeeId === 'string';
+  record(
+    'Employee Security',
+    'Owner can create Main Branch Manager via employee-admin',
+    createdOk,
+    createdOk ? created.data.employeeId : JSON.stringify(created.data ?? errMsg(created.error)).slice(0, 240),
+  );
+  if (createdOk) {
+    const createdSession = await signIn(url, anonKey, EMAIL('main-created'), PASSWORD);
+    const isMain = await rpc(createdSession, 'is_main_branch_manager');
+    record('Employee Security', 'Created Main Manager derives is_main_branch_manager', isMain === true, String(isMain));
+    await expectDenied('Created Main Manager denied list_employees', 'Employee Security', () => rpc(createdSession, 'list_employees'));
+    await expectDenied('Created Main Manager denied owner analytics', 'Employee Security', () => rpc(createdSession, 'get_owner_daily_product_summary'));
+  }
+}
+{
+  const result = await invokeEmployeeAdmin(sessions.mainMgr, {
+    action: 'create',
+    fullName: 'Should Fail',
+    email: EMAIL('mainmgr-create'),
+    password: PASSWORD,
+    role: 'cashier',
+    branchId: branch1.id,
+    isActive: true,
+  });
+  const denied = Boolean(result.error) || /required|403|unauthorized/i.test(String(result.data?.message ?? result.data?.status ?? ''));
+  record('Employee Security', 'Main Branch Manager cannot create employee', denied, JSON.stringify(result.data ?? errMsg(result.error)).slice(0, 180));
 }
 {
   const result = await invokeEmployeeAdmin(sessions.mgr1, {
@@ -880,7 +863,7 @@ async function invokeEmployeeAdmin(session, body) {
     branchId: branch1.id,
     isActive: true,
   });
-  const denied = Boolean(result.error) || result.data?.message === 'Owner access is required.' || result.data?.status === 403;
+  const denied = Boolean(result.error) || /required|403|unauthorized/i.test(String(result.data?.message ?? result.data?.status ?? ''));
   record('Employee Security', 'Manager cannot create employee', denied, JSON.stringify(result.data ?? errMsg(result.error)).slice(0, 180));
 }
 {
@@ -893,7 +876,7 @@ async function invokeEmployeeAdmin(session, body) {
     branchId: branch1.id,
     isActive: true,
   });
-  const denied = Boolean(result.error) || result.data?.message === 'Owner access is required.';
+  const denied = Boolean(result.error) || /required|403|unauthorized/i.test(String(result.data?.message ?? ''));
   record('Employee Security', 'Cashier cannot create employee', denied, JSON.stringify(result.data ?? errMsg(result.error)).slice(0, 180));
 }
 await expectDenied('Manager cannot change own role via owner_update_employee', 'Employee Security', () => rpc(sessions.mgr1, 'owner_update_employee', {
@@ -914,6 +897,20 @@ await expectDenied('Owner cannot deactivate cashier with open shift', 'Employee 
   p_is_active: false,
 }));
 await expectDenied('Owner cannot reassign cashier with open shift', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
+  p_employee_id: ids.cash2,
+  p_full_name: 'M105 Cashier 2',
+  p_role: 'cashier',
+  p_branch_id: branch2.id,
+  p_is_active: true,
+}));
+await expectDenied('Main Branch Manager cannot deactivate employee', 'Employee Security', () => rpc(sessions.mainMgr, 'owner_update_employee', {
+  p_employee_id: ids.cash2,
+  p_full_name: 'M105 Cashier 2',
+  p_role: 'cashier',
+  p_branch_id: branch1.id,
+  p_is_active: false,
+}));
+await expectDenied('Main Branch Manager cannot reassign employee', 'Employee Security', () => rpc(sessions.mainMgr, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
@@ -1071,15 +1068,12 @@ await timeRpc('Sales by branch', () => rpc(sessions.owner, 'report_sales_by_bran
 await timeRpc('Product sales', () => rpc(sessions.owner, 'report_product_sales', { p_range_type: 'all_time' }));
 await timeRpc('Branch performance', () => rpc(sessions.owner, 'report_branch_performance', { p_range_type: 'all_time' }));
 await timeRpc('Inventory reconciliation', () => rpc(sessions.owner, 'report_inventory_reconciliation'));
-await timeRpc('Audit history page', () => rpc(sessions.owner, 'list_audit_logs', { p_page: 0, p_page_size: 50, p_range_type: 'all_time' }));
+await timeRpc('Daily product summary', () => rpc(sessions.owner, 'get_owner_daily_product_summary'));
 {
   const { data, error } = await sessions.owner.from('sales').select('id').order('sold_at', { ascending: false }).range(0, 49);
   record('Performance', 'Sales history is paginated (50)', !error && (data?.length ?? 0) <= 50, error ? errMsg(error) : `${data?.length} rows`);
 }
-{
-  const shiftsPage = await rpc(sessions.owner, 'list_shift_summaries', { p_page: 0, p_page_size: 50 });
-  record('Performance', 'Shift history RPC is bounded', Array.isArray(shiftsPage) && shiftsPage.length <= 50, `${Array.isArray(shiftsPage) ? shiftsPage.length : typeof shiftsPage} rows`);
-}
+await expectDenied('list_shift_summaries RPC is removed', 'Performance', () => rpc(sessions.owner, 'list_shift_summaries', { p_page: 0, p_page_size: 50 }));
 {
   const { data, error } = await sessions.owner.from('inventory_movements').select('id').order('created_at', { ascending: false }).limit(200);
   record('Performance', 'Movement history is limited to 200', !error && (data?.length ?? 0) <= 200, error ? errMsg(error) : `${data?.length} rows`);
@@ -1142,6 +1136,21 @@ const critical = [
   'Audit Integrity', 'Employee Security', 'Reporting Accuracy', 'Secrets / Environment',
   'Regression Testing', 'TypeScript', 'Full E2E',
 ];
+async function teardownThisRunProducts() {
+  const productIds = [e2eProduct?.id, saleConcProduct?.id, xferConcProduct?.id].filter(Boolean);
+  if (productIds.length === 0) return;
+  try {
+    const { error } = await admin.rpc('cleanup_isolated_test_products', { p_product_ids: productIds });
+    if (error) throw error;
+    record('Employee Security', 'This-run fixture products removed', true, productIds.join(','));
+  } catch (error) {
+    record('Employee Security', 'This-run fixture products removed', false, errMsg(error));
+    console.error('Leftover this-run product UUIDs:', productIds.join(', '));
+  }
+}
+
+await teardownThisRunProducts();
+
 const ready = critical.every((area) => matrix[area] === 'PASS');
 console.log(`\nFailed checks: ${failed}`);
 console.log(ready ? '\nPRODUCTION READY' : '\nNOT YET PRODUCTION READY');

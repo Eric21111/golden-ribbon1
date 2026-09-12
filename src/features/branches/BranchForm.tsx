@@ -13,10 +13,20 @@ interface BranchFormProps {
   error?: string;
   loading?: boolean;
   submitLabel: string;
+  hideMainToggle?: boolean;
+  protectMainBranch?: boolean;
   onSubmit: (values: BranchFormValues) => void;
 }
 
-export function BranchForm({ defaultValues, error, loading, submitLabel, onSubmit }: BranchFormProps) {
+export function BranchForm({
+  defaultValues,
+  error,
+  loading,
+  submitLabel,
+  hideMainToggle = false,
+  protectMainBranch = false,
+  onSubmit,
+}: BranchFormProps) {
   const { control, handleSubmit } = useForm<BranchFormValues>({
     resolver: zodResolver(branchSchema),
     defaultValues: defaultValues ?? {
@@ -39,11 +49,22 @@ export function BranchForm({ defaultValues, error, loading, submitLabel, onSubmi
       <Controller control={control} name="address" render={({ field, fieldState }) => (
         <FormField label="Address (optional)" value={field.value ?? ''} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} multiline numberOfLines={3} textAlignVertical="top" />
       )} />
-      <Controller control={control} name="is_main_branch" render={({ field }) => (
-        <SwitchField label="Main Branch" description="Only one branch can be the Main Branch." value={field.value} onValueChange={field.onChange} />
-      )} />
+      {hideMainToggle ? null : (
+        <Controller control={control} name="is_main_branch" render={({ field }) => (
+          <SwitchField label="Main Branch" description="Only one branch can be the Main Branch." value={field.value} onValueChange={field.onChange} />
+        )} />
+      )}
       <Controller control={control} name="is_active" render={({ field }) => (
-        <SwitchField label="Active" description="Inactive branches remain available for historical records." value={field.value} onValueChange={field.onChange} />
+        <SwitchField
+          label="Active"
+          description={
+            protectMainBranch
+              ? 'The Main Branch cannot be deactivated.'
+              : 'Inactive branches remain available for historical records.'
+          }
+          value={field.value}
+          onValueChange={protectMainBranch ? () => undefined : field.onChange}
+        />
       )} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <AppButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />

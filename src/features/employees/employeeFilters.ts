@@ -1,4 +1,10 @@
-import type { EmployeeRecord, EmployeeRole } from '@/types/models';
+import type { Branch, EmployeeRecord, EmployeeRole } from '@/types/models';
+
+export function employeeScopeLabel(employee: EmployeeRecord, branches: Branch[] = []): string {
+  if (employee.role === 'cashier') return 'Cashier';
+  const assigned = branches.find((branch) => branch.id === employee.branch_id);
+  return assigned?.is_main_branch ? 'Main Branch Manager' : 'Selling Branch Manager';
+}
 
 export type EmployeeRoleFilter = 'all' | EmployeeRole;
 export type EmployeeStatusFilter = 'all' | 'active' | 'inactive';

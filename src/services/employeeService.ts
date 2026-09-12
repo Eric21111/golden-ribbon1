@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import type { CreateEmployeeInput, EmployeeRecord, UpdateEmployeeInput } from '@/types/models';
 
+const createInFlight = new Map<string, Promise<string>>();
+
 async function invokeEmployeeAdmin(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.functions.invoke('employee-admin', { body });
   if (error) {
@@ -25,9 +27,24 @@ export async function listEmployees(): Promise<EmployeeRecord[]> {
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<string> {
-  const data = await invokeEmployeeAdmin({ action: 'create', ...input });
-  if (typeof data.employeeId !== 'string') throw new Error('Employee account creation returned an invalid response.');
-  return data.employeeId;
+  const email = input.email.trim().toLowerCase();
+  const pending = createInFlight.get(email);
+  if (pending) return pending;
+
+  const request = invokeEmployeeAdmin({
+    action: 'create',
+    ...input,
+    email,
+    fullName: input.fullName.trim(),
+  }).then((data) => {
+    if (typeof data.employeeId !== 'string') throw new Error('Employee account creation returned an invalid response.');
+    return data.employeeId;
+  }).finally(() => {
+    createInFlight.delete(email);
+  });
+
+  createInFlight.set(email, request);
+  return request;
 }
 
 export async function updateEmployee(input: UpdateEmployeeInput): Promise<void> {

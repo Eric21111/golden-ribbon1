@@ -17,12 +17,10 @@ export const queryClient = new QueryClient({
 export function invalidateCompletedSaleQueries(client: QueryClient) {
   return Promise.all([
     client.invalidateQueries({ queryKey: ['inventory'] }),
-    client.invalidateQueries({ queryKey: ['inventory-movements'] }),
     client.invalidateQueries({ queryKey: ['shift-sales'] }),
-    client.invalidateQueries({ queryKey: ['sales'] }),
     client.invalidateQueries({ queryKey: ['shifts'] }),
     client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
+    client.invalidateQueries({ queryKey: queryKeys.ownerDailyProductSummary }),
     client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
-    client.invalidateQueries({ queryKey: queryKeys.managerRecentSales }),
   ]);
 }

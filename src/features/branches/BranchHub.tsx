@@ -150,10 +150,11 @@ export function BranchHub({
 
       <BottomSheet visible={createOpen} title="Create branch" scroll onClose={() => setCreateOpen(false)}>
         <BranchForm
-          submitLabel="Create branch"
+          submitLabel="Create selling branch"
+          hideMainToggle
           loading={createMutation.isPending}
           error={createMutation.error ? getErrorMessage(createMutation.error) : undefined}
-          onSubmit={submitCreate}
+          onSubmit={(values) => submitCreate({ ...values, is_main_branch: false })}
         />
       </BottomSheet>
     </Screen>

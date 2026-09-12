@@ -3,6 +3,7 @@ import type {
   Branch,
   BranchSalesReportItem,
   ManagerDashboardMetrics,
+  OwnerDailyProductSummaryItem,
   OwnerDashboardMetrics,
   Product,
   ProductSalesReportItem,
@@ -58,14 +59,6 @@ export type SaleRequest = {
   key: string;
 };
 
-export interface SaleFilters {
-  branchId?: string;
-  cashierId?: string;
-  date?: string; // YYYY-MM-DD
-  startDate?: string; // ISO string
-  endDate?: string; // ISO string
-}
-
 export async function confirmSale(request: SaleRequest): Promise<Sale> {
   const { data, error } = await supabase.rpc('confirm_sale', {
     p_shift_id: request.shiftId,
@@ -86,46 +79,6 @@ export async function listShiftSales(shiftId: string): Promise<SaleWithRelations
     .limit(100);
   if (error) throw error;
   return data as unknown as SaleWithRelations[];
-}
-
-export async function listSales(
-  filters: SaleFilters = {},
-  page = 0,
-  pageSize = 8,
-): Promise<{ items: SaleWithRelations[]; total: number }> {
-  let query = supabase
-    .from('sales')
-    .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name)', {
-      count: 'exact',
-    })
-    .order('sold_at', { ascending: false });
-
-  if (filters.branchId) {
-    query = query.eq('branch_id', filters.branchId);
-  }
-  if (filters.cashierId) {
-    query = query.eq('cashier_id', filters.cashierId);
-  }
-
-  if (filters.startDate && filters.endDate) {
-    query = query.gte('sold_at', filters.startDate).lt('sold_at', filters.endDate);
-  } else if (filters.date) {
-    // Philippine timezone day boundary (UTC+8)
-    const dayStart = `${filters.date}T00:00:00+08:00`;
-    const nextDay = new Date(new Date(dayStart).getTime() + 24 * 60 * 60 * 1000).toISOString();
-    query = query.gte('sold_at', dayStart).lt('sold_at', nextDay);
-  }
-
-  const from = page * pageSize;
-  const to = from + pageSize - 1;
-  query = query.range(from, to);
-
-  const { data, error, count } = await query;
-  if (error) throw error;
-  return {
-    items: (data as unknown as SaleWithRelations[]) ?? [],
-    total: count ?? 0,
-  };
 }
 
 export async function getSale(id: string): Promise<SaleDetails> {
@@ -183,6 +136,12 @@ export async function getOwnerDashboardMetrics(): Promise<OwnerDashboardMetrics>
   const { data, error } = await supabase.rpc('get_owner_dashboard_metrics');
   if (error) throw error;
   return data as unknown as OwnerDashboardMetrics;
+}
+
+export async function getOwnerDailyProductSummary(): Promise<OwnerDailyProductSummaryItem[]> {
+  const { data, error } = await supabase.rpc('get_owner_daily_product_summary');
+  if (error) throw error;
+  return (data as unknown as OwnerDailyProductSummaryItem[]) ?? [];
 }
 
 export async function getManagerDashboardMetrics(): Promise<ManagerDashboardMetrics> {

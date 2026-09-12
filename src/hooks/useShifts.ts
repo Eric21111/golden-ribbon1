@@ -5,9 +5,7 @@ import {
   endCashierShift,
   getActiveShift,
   getShiftSummary,
-  listShiftSummaries,
   startCashierShift,
-  type ShiftFilters,
 } from '@/services/shiftService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
@@ -64,12 +62,5 @@ export function useShiftSummary(shiftId: string) {
     queryKey: queryKeys.shiftSummary(shiftId),
     queryFn: () => getShiftSummary(shiftId),
     enabled: Boolean(shiftId),
-  });
-}
-
-export function useShiftHistory(filters: ShiftFilters = {}, page = 0) {
-  return useQuery({
-    queryKey: queryKeys.shiftSummaries({ ...filters, page }),
-    queryFn: () => listShiftSummaries(filters, page),
   });
 }

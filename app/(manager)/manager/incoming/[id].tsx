@@ -12,6 +12,7 @@ import { FormField } from '@/components/FormField';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
+import { SellingBranchGuard } from '@/features/auth/SellingBranchGuard';
 import { TransferDetailsView } from '@/features/transfers/TransferDetailsView';
 import { useReceiveTransfer, useTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
@@ -34,6 +35,14 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 export default function ReceiveTransferScreen() {
+  return (
+    <SellingBranchGuard>
+      <ReceiveTransferBody />
+    </SellingBranchGuard>
+  );
+}
+
+function ReceiveTransferBody() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
   const query = useTransfer(id);

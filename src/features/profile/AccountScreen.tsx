@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -10,8 +11,10 @@ import { SignOutButton } from '@/components/SignOutButton';
 import { StatusBadge } from '@/components/StatusBadge';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { canChangeOwnEmail } from '@/features/auth/roles';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 import { useLayout } from '@/lib/layout';
+import { pendingEmailFromUser } from '@/services/accountService';
 
 function DetailRow({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
   return (
@@ -31,12 +34,20 @@ export function AccountScreen() {
 
   const roleLabel = profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
   const email = session.user.email ?? 'Not available';
+  const pendingEmail = pendingEmailFromUser(session.user);
   const branch = profile.branch?.name ?? 'All branches';
+  const showChangeEmail = canChangeOwnEmail(profile);
+  const changeEmailHref = profile.role === 'owner' ? '/owner/change-email' : '/manager/change-email';
 
   return (
     <Screen scroll={false} contentContainerStyle={styles.screen}>
       <ConstrainedWidth maxWidth={formMaxWidth} fill>
-        <View style={styles.layout}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <View style={styles.top}>
             <PageHeader title="Account" subtitle="Your staff account" />
 
@@ -50,6 +61,12 @@ export function AccountScreen() {
 
             <View style={styles.card}>
               <DetailRow label="Email" value={email} />
+              {pendingEmail ? (
+                <>
+                  <DetailRow label="Pending email" value={pendingEmail} />
+                  <DetailRow label="Status" value="Waiting for verification" />
+                </>
+              ) : null}
               <DetailRow label="Branch" value={branch} />
               <DetailRow label="Role" value={roleLabel} last />
             </View>
@@ -59,12 +76,19 @@ export function AccountScreen() {
               variant="secondary"
               onPress={() => setPasswordOpen(true)}
             />
+            {showChangeEmail ? (
+              <AppButton
+                label="Change email"
+                variant="secondary"
+                onPress={() => router.push(changeEmailHref as never)}
+              />
+            ) : null}
           </View>
 
           <View style={styles.footer}>
             <SignOutButton variant="danger" />
           </View>
-        </View>
+        </ScrollView>
       </ConstrainedWidth>
 
       <BottomSheet
@@ -84,7 +108,8 @@ export function AccountScreen() {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  layout: { flex: 1, minHeight: 0, justifyContent: 'space-between' },
+  scroll: { flex: 1, minHeight: 0 },
+  scrollContent: { flexGrow: 1, justifyContent: 'space-between' },
   top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.md },
   identity: {
     flexDirection: 'row',
