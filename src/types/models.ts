@@ -421,3 +421,99 @@ export type InventoryReconciliationItem = {
   return_excess_qty: number;
 };
 
+export type DataArchiveStatus = 'prepared' | 'exported' | 'verified' | 'cleaned' | 'failed';
+
+export type DataArchiveRecord = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  status: DataArchiveStatus;
+  sales_count: number;
+  sale_items_count: number;
+  shift_count: number;
+  revenue_total: number;
+  units_sold: number;
+  export_generated_at: string | null;
+  verified_at: string | null;
+  cleaned_at: string | null;
+  created_at: string;
+};
+
+export type ArchiveStatus = {
+  retention_days: number;
+  cutoff_at: string;
+  oldest_detailed_sale_at: string | null;
+  eligible_sales_count: number;
+  eligible_sale_items_count: number;
+  eligible_shift_count: number;
+  estimated_records: number;
+  last_successful_archive_at: string | null;
+  next_archive_recommended_at: string;
+  archive_due: boolean;
+  reminder_visible: boolean;
+  remind_after: string | null;
+  database_size_bytes: number | null;
+  active_archive: DataArchiveRecord | null;
+};
+
+export type ArchiveExportSale = {
+  id: string;
+  sale_number: string;
+  branch_name: string;
+  branch_id: string;
+  cashier_id: string;
+  cashier_name: string;
+  shift_id: string;
+  status: string;
+  subtotal: number;
+  total_amount: number;
+  amount_paid: number;
+  change_amount: number;
+  sold_at: string;
+};
+
+export type ArchiveExportSaleItem = {
+  id: string;
+  sale_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+};
+
+export type ArchiveExportShift = {
+  id: string;
+  cashier_id: string;
+  cashier_name: string;
+  branch_id: string;
+  branch_name: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+};
+
+export type ArchiveManifest = {
+  archive_id: string;
+  package_name: string;
+  start_date: string;
+  end_date: string;
+  generated_at: string;
+  sales_row_count: number;
+  sale_item_row_count: number;
+  shift_row_count: number;
+  revenue_total: number;
+  units_sold: number;
+};
+
+export type ArchiveExportPackage = {
+  archive: DataArchiveRecord;
+  sales: ArchiveExportSale[];
+  sale_items: ArchiveExportSaleItem[];
+  shifts: ArchiveExportShift[];
+  manifest: ArchiveManifest;
+};
+
+export const ARCHIVE_CLEANUP_CONFIRMATION = 'DELETE ARCHIVED DATA';
+

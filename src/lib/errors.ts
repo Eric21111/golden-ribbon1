@@ -196,3 +196,20 @@ export function getEmployeeErrorMessage(error: unknown): string {
   if (message.includes('fetch') || message.includes('network') || message.includes('failed to send')) return 'Network unavailable. Check your connection and try again.';
   return 'The employee operation could not be completed. Please try again.';
 }
+
+export function getArchiveErrorMessage(error: unknown): string {
+  const message = readErrorMessage(error).toLowerCase();
+  if (message.includes('verification failed')) return 'Archive verification failed. No data was deleted.';
+  if (message.includes('delete archived data')) return 'Type DELETE ARCHIVED DATA to confirm cleanup.';
+  if (message.includes('exported and verified') || message.includes('save a copy')) {
+    return 'Export and verify the archive before cleaning old records.';
+  }
+  if (message.includes('older than 90 days')) return 'There are no detailed sales older than 90 days.';
+  if (message.includes('already been cleaned')) return 'This archive has already been cleaned.';
+  if (message.includes('not found')) return 'Archive record was not found.';
+  if (message.includes('owner access') || message.includes('unauthorized') || message.includes('permission')) {
+    return 'Only an active Owner can archive or clean detailed sales.';
+  }
+  if (isNetworkError(message)) return 'Unable to connect. Check your internet connection and try again.';
+  return 'The archive operation could not be completed. No data was deleted.';
+}

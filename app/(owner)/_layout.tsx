@@ -21,6 +21,7 @@ export default function OwnerLayout() {
           <Stack.Screen name="owner/reports/inventory-reconciliation" options={{ title: 'Inventory Reconciliation' }} />
           <Stack.Screen name="owner/inventory-by-branch" options={{ title: 'Inventory Summary' }} />
           <Stack.Screen name="owner/employees/index" options={{ title: 'Employees' }} />
+          <Stack.Screen name="owner/data-archive" options={{ title: 'Data Archive' }} />
           <Stack.Screen name="owner/profile" options={{ title: 'Account' }} />
           <Stack.Screen name="owner/change-password" options={{ title: 'Change Password' }} />
           <Stack.Screen name="owner/change-email" options={{ title: 'Change Email' }} />

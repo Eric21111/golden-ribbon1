@@ -26,6 +26,9 @@ import type {
   ReturnDiscrepancyReportItem,
   InventoryReconciliationItem,
   OwnerDailyProductSummaryItem,
+  ArchiveStatus,
+  DataArchiveRecord,
+  ArchiveExportPackage,
 } from './models';
 
 import type { Sale, SaleWithRelations } from '@/services/saleService';
@@ -247,6 +250,12 @@ export type Database = {
         Args: { p_branch_id?: string | null };
         Returns: InventoryReconciliationItem[];
       };
+      get_archive_status: { Args: Record<string, never>; Returns: ArchiveStatus };
+      dismiss_archive_reminder: { Args: Record<string, never>; Returns: ArchiveStatus };
+      prepare_sales_archive: { Args: Record<string, never>; Returns: DataArchiveRecord };
+      get_archive_export: { Args: { p_archive_id: string }; Returns: ArchiveExportPackage };
+      verify_sales_archive: { Args: { p_archive_id: string }; Returns: DataArchiveRecord };
+      cleanup_archived_sales: { Args: { p_archive_id: string; p_confirmation: string }; Returns: DataArchiveRecord };
     };
 
     Enums: {

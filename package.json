@@ -47,6 +47,7 @@
     "typecheck": "tsc --noEmit",
     "test:sales": "node tests/sales.mjs",
     "test:returns": "node tests/returns.mjs",
+    "test:archive": "node tests/milestone11_3_archive.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

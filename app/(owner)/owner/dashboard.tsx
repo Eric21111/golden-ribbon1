@@ -2,12 +2,14 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AppButton } from '@/components/AppButton';
 import { DashboardCard } from '@/components/DashboardCard';
 import { ErrorState, LoadingState } from '@/components/Feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive';
 import { useOwnerDailyProductSummary, useOwnerDashboardMetrics } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
@@ -29,14 +31,18 @@ export default function OwnerDashboard() {
   const { profile } = useAuth();
   const metricsQuery = useOwnerDashboardMetrics();
   const summaryQuery = useOwnerDailyProductSummary();
+  const archiveQuery = useArchiveStatus();
+  const dismissReminder = useDismissArchiveReminder();
 
   const metrics = metricsQuery.data;
   const summary = summaryQuery.data ?? [];
-  const refreshing = metricsQuery.isRefetching || summaryQuery.isRefetching;
+  const archive = archiveQuery.data;
+  const refreshing = metricsQuery.isRefetching || summaryQuery.isRefetching || archiveQuery.isRefetching;
 
   const refresh = () => {
     void metricsQuery.refetch();
     void summaryQuery.refetch();
+    void archiveQuery.refetch();
   };
 
   return (
@@ -51,6 +57,28 @@ export default function OwnerDashboard() {
         />
       ) : (
         <View style={styles.content}>
+          {archive?.reminder_visible ? (
+            <View style={styles.reminder}>
+              <Text style={styles.reminderTitle}>Data Archive Due</Text>
+              <Text style={styles.reminderBody}>
+                You have detailed transaction data older than {archive.retention_days} days. Export and
+                verify the archive before cleaning old records.
+              </Text>
+              <View style={styles.reminderActions}>
+                <AppButton
+                  label="Export & Review"
+                  onPress={() => router.push('/owner/data-archive' as never)}
+                />
+                <AppButton
+                  label="Remind Me Later"
+                  variant="secondary"
+                  loading={dismissReminder.isPending}
+                  onPress={() => void dismissReminder.mutateAsync()}
+                />
+              </View>
+            </View>
+          ) : null}
+
           <Section title="TODAY">
             <Row>
               <DashboardCard
@@ -152,6 +180,11 @@ export default function OwnerDashboard() {
               description="Create managers and cashiers, assign branches, and manage access"
               onPress={() => router.push('/owner/employees' as never)}
             />
+            <DashboardCard
+              title="Data Archive"
+              description="Export old detailed sales, verify the copy, then confirm cleanup"
+              onPress={() => router.push('/owner/data-archive' as never)}
+            />
           </Section>
         </View>
       )}
@@ -201,4 +234,15 @@ const styles = StyleSheet.create({
   cellProduct: { flex: 1.4, color: colors.text, fontSize: 13, fontWeight: '700' },
   cellQty: { width: 64, color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'right' },
   cellMoney: { width: 84, color: colors.primary, fontSize: 13, fontWeight: '800', textAlign: 'right' },
+  reminder: {
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.accent,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  reminderTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
+  reminderBody: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  reminderActions: { gap: spacing.sm },
 });

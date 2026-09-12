@@ -53,5 +53,6 @@ export const queryKeys = {
     ] as const,
   inventoryReconciliation: (branchId = '') =>
     ['reports', 'inventory-reconciliation', { branchId }] as const,
+  archiveStatus: ['archive', 'status'] as const,
 } as const;
 
