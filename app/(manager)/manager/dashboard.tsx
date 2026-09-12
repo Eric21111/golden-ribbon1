@@ -217,7 +217,7 @@ export default function ManagerDashboard() {
                   icon="swap-vertical-outline"
                   accent="blue"
                   title="Inventory history"
-                  onPress={() => router.push('/manager/movements')}
+                  onPress={() => router.push('/manager/movements' as never)}
                 />
               </Row>
             </Section>

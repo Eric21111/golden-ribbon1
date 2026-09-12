@@ -22,6 +22,7 @@ export const queryKeys = {
   ownerDashboard: ['dashboard', 'owner'] as const,
   ownerDailyProductSummary: ['dashboard', 'owner', 'daily-product-summary'] as const,
   managerDashboard: ['dashboard', 'manager'] as const,
+  managerRecentSales: (limit = 5) => ['dashboard', 'manager', 'recent-sales', limit] as const,
   branchPerformance: (rangeType = 'today', startDate = '', endDate = '') =>
     ['reports', 'branch-performance', { rangeType, startDate, endDate }] as const,
   branchPerformanceDetails: (branchId: string, rangeType = 'today', startDate = '', endDate = '') =>

@@ -4,6 +4,7 @@ import { isReportRangeReady } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getManagerDashboardMetrics,
+  getManagerRecentSales,
   getOwnerDailyProductSummary,
   getOwnerDashboardMetrics,
   getSale,
@@ -62,5 +63,12 @@ export function useManagerDashboardMetrics() {
   return useQuery({
     queryKey: queryKeys.managerDashboard,
     queryFn: getManagerDashboardMetrics,
+  });
+}
+
+export function useManagerRecentSales(limit = 5) {
+  return useQuery({
+    queryKey: queryKeys.managerRecentSales(limit),
+    queryFn: () => getManagerRecentSales(limit),
   });
 }

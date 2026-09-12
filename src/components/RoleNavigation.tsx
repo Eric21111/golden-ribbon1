@@ -18,7 +18,6 @@ type NavigationItem = {
   selectedIcon: IoniconsIconName;
 };
 
-<<<<<<< HEAD
 function menuHref(href: string): Href {
   return href as Href;
 }
@@ -58,32 +57,6 @@ const cashierMenu: NavigationItem[] = [
   { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
   { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
-=======
-const menus: Record<UserRole, NavigationItem[]> = {
-  owner: [
-    { label: 'Home', href: '/owner/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'Inventory', href: '/owner/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
-    { label: 'Transfers', href: '/owner/transfers', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
-    { label: 'Branches', href: '/owner/branches', icon: 'storefront-outline', selectedIcon: 'storefront' },
-    { label: 'Products', href: '/owner/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-    { label: 'Employees', href: '/owner/employees', icon: 'people-outline', selectedIcon: 'people' },
-    { label: 'Profile', href: '/owner/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-  ],
-  manager: [
-    { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'Inventory', href: '/manager/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
-    { label: 'Incoming', href: '/manager/incoming', icon: 'download-outline', selectedIcon: 'download' },
-    { label: 'Returns', href: '/manager/returns', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-    { label: 'Products', href: '/manager/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-  ],
-  cashier: [
-    { label: 'Home', href: '/cashier/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-    { label: 'POS', href: '/cashier/pos', icon: 'cart-outline', selectedIcon: 'cart' },
-    { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
-    { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-  ],
-};
->>>>>>> redesign
 
 const BottomNavigationContext = createContext(false);
 
