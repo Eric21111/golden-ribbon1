@@ -25,7 +25,11 @@ export const statChipColors = {
   teal: { chip: '#CFF3E8', icon: managerColors.teal },
   lilac: { chip: '#E4D9FB', icon: managerColors.lilac },
   green: { chip: '#D7F5DE', icon: managerColors.green },
+  red: { chip: '#FBDBD8', icon: '#B91C1C' },
+  gray: { chip: '#EEF1F6', icon: managerColors.subtext },
 } as const;
+
+export type StatChipColor = keyof typeof statChipColors;
 
 /** Soft two-tone pastel gradients (richer tint → near-white wash), same hue family as statChipColors. */
 export const tileGradients = {
@@ -34,4 +38,6 @@ export const tileGradients = {
   teal: ['#C9F2E6', '#F2FDFB'] as const,
   lilac: ['#E2D3FB', '#F8F4FF'] as const,
   green: ['#CBF3DC', '#F2FDF6'] as const,
+  red: ['#F9D6D2', '#FFF5F4'] as const,
+  gray: ['#E4E7EE', '#F8F9FB'] as const,
 } as const;

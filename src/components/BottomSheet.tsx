@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,9 +21,19 @@ type BottomSheetProps = PropsWithChildren<{
   title: string;
   onClose: () => void;
   scroll?: boolean;
+  titleStyle?: StyleProp<TextStyle>;
+  closeLabelStyle?: StyleProp<TextStyle>;
 }>;
 
-export function BottomSheet({ visible, title, onClose, children, scroll = false }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  title,
+  onClose,
+  children,
+  scroll = false,
+  titleStyle,
+  closeLabelStyle,
+}: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardBottomInset();
   const bottomPad = Math.max(insets.bottom, spacing.md) + (Platform.OS === 'android' ? keyboardInset : 0);
@@ -47,9 +59,9 @@ export function BottomSheet({ visible, title, onClose, children, scroll = false 
         <View style={[styles.sheet, { paddingBottom: bottomPad, maxHeight: keyboardInset > 0 ? '88%' : '92%' }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, titleStyle]}>{title}</Text>
             <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={12} onPress={onClose}>
-              <Text style={styles.close}>Close</Text>
+              <Text style={[styles.close, closeLabelStyle]}>Close</Text>
             </Pressable>
           </View>
           {body}

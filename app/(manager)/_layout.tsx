@@ -3,11 +3,9 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { Drawer } from 'react-native-drawer-layout';
 
-import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ManagerSidebar } from '@/components/dashboard/ManagerSidebar';
-import { LoadingState } from '@/components/Feedback';
+import { LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { RoleNavigation } from '@/components/RoleNavigation';
-import { colors } from '@/constants/theme';
 import { RoleGuard } from '@/features/auth/RoleGuard';
 import { ManagerDrawerProvider, useManagerDrawer } from '@/features/navigation/ManagerDrawerContext';
 
@@ -25,53 +23,23 @@ function ManagerNavigator() {
       renderDrawerContent={() => <ManagerSidebar onClose={closeDrawer} onNavigate={closeDrawer} />}
     >
       <RoleNavigation role="manager">
-        <Stack screenOptions={{ headerTintColor: colors.primary, headerBackTitle: 'Back' }}>
-          <Stack.Screen name="manager/dashboard" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="manager/inventory"
-            options={{ title: 'Inventory', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen
-            name="manager/returns/index"
-            options={{ title: 'Stock Returns', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen name="manager/returns/create" options={{ title: 'Create Return' }} />
-          <Stack.Screen name="manager/returns/[id]" options={{ title: 'Return Details' }} />
-          <Stack.Screen
-            name="manager/incoming/index"
-            options={{ title: 'Incoming Transfers', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen name="manager/incoming/[id]" options={{ title: 'Receive Stock' }} />
-          <Stack.Screen
-            name="manager/movements"
-            options={{ title: 'Inventory History', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen
-            name="manager/products"
-            options={{ title: 'Products', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen
-            name="manager/sales/index"
-            options={{ title: 'Sales History', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen name="manager/sales/[id]" options={{ title: 'Sale Details' }} />
-          <Stack.Screen
-            name="manager/shifts/index"
-            options={{ title: 'Shift History', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen name="manager/shifts/[id]" options={{ title: 'Shift Details' }} />
-          <Stack.Screen
-            name="manager/reports/product-sales"
-            options={{ title: 'Product Sales', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen
-            name="manager/profile"
-            options={{ title: 'Account', headerLeft: () => <HamburgerButton /> }}
-          />
-          <Stack.Screen
-            name="manager/change-password"
-            options={{ title: 'Change Password', headerLeft: () => <HamburgerButton /> }}
-          />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="manager/dashboard" />
+          <Stack.Screen name="manager/inventory" />
+          <Stack.Screen name="manager/returns/index" />
+          <Stack.Screen name="manager/returns/create" />
+          <Stack.Screen name="manager/returns/[id]" />
+          <Stack.Screen name="manager/incoming/index" />
+          <Stack.Screen name="manager/incoming/[id]" />
+          <Stack.Screen name="manager/movements" />
+          <Stack.Screen name="manager/products" />
+          <Stack.Screen name="manager/sales/index" />
+          <Stack.Screen name="manager/sales/[id]" />
+          <Stack.Screen name="manager/shifts/index" />
+          <Stack.Screen name="manager/shifts/[id]" />
+          <Stack.Screen name="manager/reports/product-sales" />
+          <Stack.Screen name="manager/profile" />
+          <Stack.Screen name="manager/change-password" />
         </Stack>
       </RoleNavigation>
     </Drawer>

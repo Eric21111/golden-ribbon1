@@ -5,17 +5,20 @@ import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 
-import { AppButton } from '@/components/AppButton';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { ErrorState, LoadingState } from '@/components/Feedback';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { FormField } from '@/components/FormField';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
-import { TransferDetailsView } from '@/features/transfers/TransferDetailsView';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SummaryCard } from '@/components/dashboard/SummaryCard';
+import { transferStatusTone } from '@/components/dashboard/statusTone';
+import { managerColors } from '@/components/dashboard/theme';
 import { useReceiveTransfer, useTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { makeIdempotencyKey } from '@/lib/format';
+import { formatDate, formatTransferStatus, makeIdempotencyKey } from '@/lib/format';
 
 const schema = z.object({
   items: z
@@ -76,10 +79,18 @@ export default function ReceiveTransferScreen() {
     [query.data?.items, review],
   );
 
-  if (query.isLoading) return <LoadingState label="Loading transfer…" />;
+  if (query.isLoading) {
+    return (
+      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+        <ManagerScreenHeader title="Receive stock" showBack />
+        <LoadingState label="Loading transfer…" />
+      </Screen>
+    );
+  }
   if (query.error || !query.data) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+        <ManagerScreenHeader title="Receive stock" showBack />
         <ErrorState message="Unable to load transfer." onRetry={() => void query.refetch()} />
       </Screen>
     );
@@ -88,10 +99,72 @@ export default function ReceiveTransferScreen() {
 
   if (transfer.status !== 'pending_receipt') {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+        <ManagerScreenHeader title="Transfer receipt" subtitle="This transfer is no longer pending." showBack />
         <ConstrainedWidth style={styles.column}>
-          <PageHeader title="Transfer receipt" subtitle="This transfer is no longer pending." />
-          <TransferDetailsView transfer={transfer} />
+          <View style={styles.statusRow}>
+            <ManagerBadge label={formatTransferStatus(transfer.status)} tone={transferStatusTone(transfer.status)} />
+          </View>
+
+          <SummaryCard
+            rows={[
+              { label: 'From', value: transfer.from_branch?.name ?? 'Sending branch' },
+              { label: 'To', value: transfer.to_branch?.name ?? 'Receiving branch' },
+              { label: 'Created by', value: transfer.created_by_profile?.full_name ?? 'Staff details unavailable' },
+              { label: 'Sent by', value: transfer.sent_by_profile?.full_name ?? 'Pending' },
+              { label: 'Sent', value: formatDate(transfer.sent_at) },
+              { label: 'Received by', value: transfer.received_by_profile?.full_name ?? 'Pending' },
+              { label: 'Received', value: formatDate(transfer.received_at) },
+              ...(transfer.notes ? [{ label: 'Notes', value: transfer.notes }] : []),
+            ]}
+          />
+
+          <Text style={styles.sectionTitle}>PRODUCTS</Text>
+          {transfer.items.map((item) => {
+            const difference = item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+            return (
+              <ListRowCard
+                key={item.id}
+                icon="cube-outline"
+                iconColor="blue"
+                title={item.product?.name ?? `Unavailable product (${item.product_id})`}
+                subtitle={`Sent ${item.quantity_sent} · Received ${item.quantity_received === null ? 'Pending' : item.quantity_received}`}
+                trailing={
+                  difference !== null && difference !== 0 ? (
+                    <ManagerBadge
+                      label={difference > 0 ? `${difference} missing` : `${Math.abs(difference)} excess`}
+                      tone="warning"
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+
+          <Text style={styles.sectionTitle}>DISCREPANCIES</Text>
+          {transfer.discrepancies.length === 0 ? (
+            <Text style={styles.meta}>No discrepancies found.</Text>
+          ) : (
+            transfer.discrepancies.map((item) => (
+              <ListRowCard
+                key={item.id}
+                icon="alert-circle-outline"
+                iconColor="gold"
+                title={item.product?.name ?? `Unavailable product (${item.product_id})`}
+                subtitle={`Expected ${item.quantity_expected} · Received ${item.quantity_received}`}
+                trailing={
+                  <ManagerBadge
+                    label={
+                      item.discrepancy_type === 'missing'
+                        ? `${item.difference} missing`
+                        : `${Math.abs(item.difference)} excess`
+                    }
+                    tone="warning"
+                  />
+                }
+              />
+            ))
+          )}
         </ConstrainedWidth>
       </Screen>
     );
@@ -99,77 +172,84 @@ export default function ReceiveTransferScreen() {
 
   if (review) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+        <ManagerScreenHeader
+          title="Review receipt"
+          subtitle={`${transfer.transfer_number} · Confirm the physical counts below`}
+          showBack
+        />
         <ConstrainedWidth style={styles.column}>
-          <PageHeader
-            title="Review receipt"
-            subtitle={`${transfer.transfer_number} · Confirm the physical counts below.`}
-          />
           {reviewItems.map((item) => (
-            <View key={item.id} style={[styles.card, item.difference !== 0 && styles.warningCard]}>
-              <Text style={styles.name}>
-                {item.product?.name ?? `Unavailable product (${item.product_id})`}
-              </Text>
-              <Text style={styles.meta}>Expected: {item.quantity_sent}</Text>
-              <Text style={styles.received}>Received: {item.received}</Text>
-              <Text style={item.difference === 0 ? styles.complete : styles.warning}>
-                {item.difference === 0
-                  ? 'Complete'
-                  : item.difference > 0
-                    ? `${item.difference} missing`
-                    : `${Math.abs(item.difference)} excess`}
-              </Text>
-            </View>
+            <ListRowCard
+              key={item.id}
+              icon="cube-outline"
+              iconColor={item.difference !== 0 ? 'gold' : 'green'}
+              title={item.product?.name ?? `Unavailable product (${item.product_id})`}
+              subtitle={`Expected ${item.quantity_sent} · Received ${item.received}`}
+              trailing={
+                <ManagerBadge
+                  label={
+                    item.difference === 0
+                      ? 'Complete'
+                      : item.difference > 0
+                        ? `${item.difference} missing`
+                        : `${Math.abs(item.difference)} excess`
+                  }
+                  tone={item.difference === 0 ? 'success' : 'warning'}
+                />
+              }
+            />
           ))}
           {review.notes ? <Text style={styles.meta}>Notes: {review.notes}</Text> : null}
-          {mutation.error ? (
-            <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
-          ) : null}
-          <AppButton
-            label="Confirm receipt"
-            loading={mutation.isPending}
-            onPress={() =>
-              mutation.mutate(
-                {
-                  transferId: transfer.id,
-                  items: reviewItems.map((item) => ({
-                    stock_transfer_item_id: item.id,
-                    quantity_received: item.received,
-                  })),
-                  notes: review.notes?.trim() || null,
-                  idempotencyKey: requestKey.current,
-                },
-                {
-                  onSuccess: () => {
-                    setReview(null);
-                    Alert.alert(
-                      'Receipt confirmed',
-                      'Branch inventory was updated using the actual quantities received.',
-                    );
-                    void query.refetch();
+          {mutation.error ? <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text> : null}
+          <View style={styles.actions}>
+            <ManagerActionButton
+              label="Confirm receipt"
+              loading={mutation.isPending}
+              onPress={() =>
+                mutation.mutate(
+                  {
+                    transferId: transfer.id,
+                    items: reviewItems.map((item) => ({
+                      stock_transfer_item_id: item.id,
+                      quantity_received: item.received,
+                    })),
+                    notes: review.notes?.trim() || null,
+                    idempotencyKey: requestKey.current,
                   },
-                },
-              )
-            }
-          />
-          <AppButton
-            label="Back to counts"
-            variant="secondary"
-            disabled={mutation.isPending}
-            onPress={() => setReview(null)}
-          />
+                  {
+                    onSuccess: () => {
+                      setReview(null);
+                      Alert.alert(
+                        'Receipt confirmed',
+                        'Branch inventory was updated using the actual quantities received.',
+                      );
+                      void query.refetch();
+                    },
+                  },
+                )
+              }
+            />
+            <ManagerActionButton
+              label="Back to counts"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onPress={() => setReview(null)}
+            />
+          </View>
         </ConstrainedWidth>
       </Screen>
     );
   }
 
   return (
-    <Screen>
+    <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <ManagerScreenHeader
+        title="Receive stock"
+        subtitle={`${transfer.transfer_number} · ${transfer.from_branch?.name ?? 'Sending branch'} → ${transfer.to_branch?.name ?? 'Receiving branch'}`}
+        showBack
+      />
       <ConstrainedWidth style={styles.column}>
-        <PageHeader
-          title="Receive stock"
-          subtitle={`${transfer.transfer_number} · ${transfer.from_branch?.name ?? 'Sending branch'} → ${transfer.to_branch?.name ?? 'Receiving branch'}`}
-        />
         <Text style={styles.instructions}>
           Physically count every product. Do not assume the sent quantity was received.
         </Text>
@@ -178,12 +258,9 @@ export default function ReceiveTransferScreen() {
           if (!item) return null;
           return (
             <View key={field.id} style={styles.card}>
-              <Text style={styles.name}>
-                {item.product?.name ?? `Unavailable product (${item.product_id})`}
-              </Text>
+              <Text style={styles.name}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
               <Text style={styles.meta}>
-                {item.product?.sku ?? 'Product details unavailable'} · Expected:{' '}
-                {item.quantity_sent}
+                {item.product?.sku ?? 'Product details unavailable'} · Expected: {item.quantity_sent}
               </Text>
               <Controller
                 control={control}
@@ -195,6 +272,10 @@ export default function ReceiveTransferScreen() {
                     onChangeText={quantity.onChange}
                     keyboardType="number-pad"
                     error={fieldState.error?.message}
+                    accentColor={managerColors.royalBlue}
+                    labelStyle={styles.fieldLabel}
+                    errorStyle={styles.fieldError}
+                    style={styles.fieldInput}
                   />
                 )}
               />
@@ -210,31 +291,42 @@ export default function ReceiveTransferScreen() {
               value={field.value ?? ''}
               onChangeText={field.onChange}
               multiline
+              accentColor={managerColors.royalBlue}
+              labelStyle={styles.fieldLabel}
+              style={styles.fieldInput}
             />
           )}
         />
-        <AppButton label="Review receipt" onPress={handleSubmit(setReview)} />
+        <ManagerActionButton label="Review receipt" onPress={handleSubmit(setReview)} />
       </ConstrainedWidth>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  column: { gap: spacing.md },
+  column: { padding: 20, gap: 14 },
   card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: '#FFFFFF',
+    borderColor: managerColors.cardBorder,
     borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
+    borderRadius: 16,
+    padding: 14,
+    gap: 8,
   },
-  warningCard: { borderColor: '#FCA5A5', backgroundColor: '#FFF7F7' },
-  name: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  meta: { color: colors.muted, fontSize: 13, lineHeight: 19 },
-  received: { color: colors.primary, fontSize: 17, fontWeight: '800' },
-  complete: { color: colors.success, fontSize: 14, fontWeight: '800' },
-  warning: { color: colors.danger, fontSize: 14, fontWeight: '800' },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
-  instructions: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  instructions: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21 },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldError: { fontFamily: 'Inter_500Medium' },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  actions: { gap: 10 },
+  statusRow: { flexDirection: 'row' },
+  sectionTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+    marginTop: 8,
+  },
 });

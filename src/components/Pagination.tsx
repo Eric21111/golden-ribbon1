@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { colors, radius, spacing } from '@/constants/theme';
 import { visiblePageNumbers } from '@/lib/pagination';
@@ -19,6 +19,7 @@ type PaginationProps = {
   onPageChange: (page: number) => void;
   /** When false, renders nothing (caller already gates on item count). */
   visible?: boolean;
+  labelStyle?: StyleProp<TextStyle>;
 };
 
 export function Pagination({
@@ -26,6 +27,7 @@ export function Pagination({
   totalPages,
   onPageChange,
   visible = true,
+  labelStyle,
 }: PaginationProps) {
   if (!visible || totalPages < 1) return null;
 
@@ -47,13 +49,13 @@ export function Pagination({
           pressed && canPrev && styles.pressed,
         ]}
       >
-        <Text style={[styles.navLabel, !canPrev && styles.disabledLabel]}>Prev</Text>
+        <Text style={[styles.navLabel, labelStyle, !canPrev && styles.disabledLabel]}>Prev</Text>
       </Pressable>
 
       <View style={styles.numbers}>
         {pages.map((entry, index) =>
           entry < 0 ? (
-            <Text key={`ellipsis-${index}`} style={styles.ellipsis}>
+            <Text key={`ellipsis-${index}`} style={[styles.ellipsis, labelStyle]}>
               …
             </Text>
           ) : (
@@ -69,7 +71,7 @@ export function Pagination({
                 pressed && entry !== page && styles.pressed,
               ]}
             >
-              <Text style={[styles.pageLabel, entry === page && styles.pageLabelSelected]}>
+              <Text style={[styles.pageLabel, labelStyle, entry === page && styles.pageLabelSelected]}>
                 {entry + 1}
               </Text>
             </Pressable>
@@ -89,7 +91,7 @@ export function Pagination({
           pressed && canNext && styles.pressed,
         ]}
       >
-        <Text style={[styles.navLabel, !canNext && styles.disabledLabel]}>Next</Text>
+        <Text style={[styles.navLabel, labelStyle, !canNext && styles.disabledLabel]}>Next</Text>
       </Pressable>
     </View>
   );

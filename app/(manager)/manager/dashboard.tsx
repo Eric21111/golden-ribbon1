@@ -9,7 +9,7 @@ import { RecentSaleRow } from '@/components/dashboard/RecentSaleRow';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { ErrorState } from '@/components/Feedback';
+import { ErrorState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -94,13 +94,7 @@ export default function ManagerDashboard() {
 
       <ConstrainedWidth style={styles.column}>
         {metricsQuery.error ? (
-          <ErrorState
-            message={getErrorMessage(metricsQuery.error)}
-            onRetry={refresh}
-            titleStyle={styles.errorTitle}
-            messageStyle={styles.errorMessage}
-            retryLabelStyle={styles.errorRetryLabel}
-          />
+          <ErrorState message={getErrorMessage(metricsQuery.error)} onRetry={refresh} />
         ) : (
           <View style={styles.content}>
             <Section title="BRANCH SNAPSHOT">
@@ -305,7 +299,4 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   viewAll: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  errorTitle: { fontFamily: 'Inter_700Bold' },
-  errorMessage: { fontFamily: 'Inter_400Regular' },
-  errorRetryLabel: { fontFamily: 'Inter_700Bold' },
 });
