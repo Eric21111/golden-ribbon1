@@ -1,17 +1,7 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
-import { colors, radius, spacing } from '@/constants/theme';
+import { managerColors } from '@/components/dashboard/theme';
 import { visiblePageNumbers } from '@/lib/pagination';
-
-/** Neutral pager — avoid brand primary (terracotta). */
-const pager = {
-  text: '#57534E',
-  muted: '#A8A29E',
-  border: '#D6D3D1',
-  surface: '#FAFAF9',
-  selectedBg: '#E7E5E4',
-  selectedText: '#44403C',
-} as const;
 
 type PaginationProps = {
   page: number;
@@ -102,41 +92,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: 8,
+    paddingVertical: 8,
   },
   nav: {
     minHeight: 40,
     minWidth: 56,
     paddingHorizontal: 12,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: pager.border,
-    backgroundColor: pager.surface,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navLabel: { color: pager.text, fontSize: 14, fontWeight: '600' },
+  navLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   numbers: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   page: {
     minWidth: 36,
     minHeight: 36,
-    borderRadius: radius.sm,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: pager.border,
-    backgroundColor: colors.surface,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
   pageSelected: {
-    backgroundColor: pager.selectedBg,
-    borderColor: '#A8A29E',
+    backgroundColor: '#EAF0FB',
+    borderColor: '#EAF0FB',
   },
-  pageLabel: { color: pager.text, fontSize: 14, fontWeight: '600' },
-  pageLabelSelected: { color: pager.selectedText, fontWeight: '800' },
-  ellipsis: { color: pager.muted, fontSize: 14, paddingHorizontal: 4 },
+  pageLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  pageLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
+  ellipsis: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, paddingHorizontal: 4 },
   disabled: { opacity: 0.4 },
-  disabledLabel: { color: pager.muted },
+  disabledLabel: { color: managerColors.subtext },
   pressed: { opacity: 0.7 },
 });

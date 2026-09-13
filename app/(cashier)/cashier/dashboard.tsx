@@ -1,5 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -35,18 +36,22 @@ export default function CashierDashboard() {
   const inventory = useInventory(profile?.branch, true);
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
+  const [checkingStock, setCheckingStock] = useState(false);
 
-  const ensureStockAllowsPos = (onAllowed: () => void) => {
-    if (inventory.isLoading || inventory.isFetching) {
-      alertNotice('Please wait', 'Checking branch stock before continuing.');
+  // Always re-fetch live stock instead of trusting the cached snapshot (queryClient caches
+  // reads for 30s and never refetches on focus) — this gate must reflect what a manager
+  // just restocked or received a moment ago, not a stale "out of stock" read from before.
+  const ensureStockAllowsPos = async (onAllowed: () => void) => {
+    setCheckingStock(true);
+    const result = await inventory.refetch();
+    setCheckingStock(false);
+
+    if (result.error) {
+      alertNotice('Stock unavailable', getInventoryErrorMessage(result.error));
       return;
     }
-    if (inventory.error) {
-      alertNotice('Stock unavailable', getInventoryErrorMessage(inventory.error));
-      return;
-    }
 
-    const rows: InventoryItem[] = inventory.data ?? [];
+    const rows: InventoryItem[] = result.data ?? [];
     if (rows.length === 0 || !hasSellableStock(rows)) {
       alertNotice(
         'Cannot open POS',
@@ -72,13 +77,13 @@ export default function CashierDashboard() {
   };
 
   const startShift = () =>
-    ensureStockAllowsPos(() =>
+    void ensureStockAllowsPos(() =>
       startMutation.mutate(undefined, {
         onSuccess: () => router.replace('/cashier/pos'),
       }),
     );
 
-  const openPos = () => ensureStockAllowsPos(() => router.push('/cashier/pos'));
+  const openPos = () => void ensureStockAllowsPos(() => router.push('/cashier/pos'));
 
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
@@ -161,7 +166,7 @@ export default function CashierDashboard() {
             <ManagerActionButton
               label="Start shift"
               icon="play-outline"
-              loading={startMutation.isPending || inventory.isLoading}
+              loading={startMutation.isPending || checkingStock}
               onPress={startShift}
             />
           </View>
@@ -220,7 +225,7 @@ export default function CashierDashboard() {
               <ManagerActionButton
                 label="Open POS"
                 icon="cart-outline"
-                loading={inventory.isLoading}
+                loading={checkingStock}
                 onPress={openPos}
               />
               <ManagerActionButton

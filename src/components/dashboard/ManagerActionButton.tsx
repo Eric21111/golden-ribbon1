@@ -9,7 +9,7 @@ interface ManagerActionButtonProps {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'danger';
   icon?: IoniconsIconName;
 }
 
@@ -41,6 +41,30 @@ export function ManagerActionButton({
           <View style={styles.content}>
             {icon ? <Ionicons name={icon} size={18} color={managerGradients.hero[1]} /> : null}
             <Text style={styles.secondaryLabel}>{label}</Text>
+          </View>
+        )}
+      </Pressable>
+    );
+  }
+
+  if (variant === 'danger') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        disabled={isDisabled}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.danger,
+          pressed && styles.pressed,
+          isDisabled && styles.disabled,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color="#B91C1C" />
+        ) : (
+          <View style={styles.content}>
+            {icon ? <Ionicons name={icon} size={18} color="#B91C1C" /> : null}
+            <Text style={styles.dangerLabel}>{label}</Text>
           </View>
         )}
       </Pressable>
@@ -90,6 +114,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#EAF0FB',
   },
   secondaryLabel: { color: managerGradients.hero[1], fontFamily: 'Inter_700Bold', fontSize: 15 },
+  danger: {
+    height: 54,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+  },
+  dangerLabel: { color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 15 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

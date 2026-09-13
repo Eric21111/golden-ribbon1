@@ -32,7 +32,9 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, 
   const { profile } = useAuth();
   // Selling-branch managers have no drawer to open (see app/(manager)/_layout.tsx) — the
   // hamburger would do nothing, so it never renders for them regardless of hideMenu.
-  const hasDrawer = profile?.role === 'manager' && isMainBranchManager(profile);
+  // Owner always has a drawer (see app/(owner)/_layout.tsx) — it's the only place every
+  // existing Owner route is reachable, since the bottom tabs are trimmed to 4.
+  const hasDrawer = (profile?.role === 'manager' && isMainBranchManager(profile)) || profile?.role === 'owner';
   const showHamburger = !hideMenu && hasDrawer;
 
   if (showBack) {
@@ -55,7 +57,7 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, 
             {subtitle || badge ? (
               <View style={styles.metaRow}>
                 {subtitle ? (
-                  <Text style={[styles.subtitle, Boolean(badge) && styles.subtitleFlex]} numberOfLines={1}>
+                  <Text style={[styles.subtitle, Boolean(badge) && styles.subtitleFlex]} numberOfLines={2}>
                     {subtitle}
                   </Text>
                 ) : null}

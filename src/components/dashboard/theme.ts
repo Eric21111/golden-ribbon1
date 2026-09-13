@@ -27,6 +27,9 @@ export const statChipColors = {
   green: { chip: '#D7F5DE', icon: managerColors.green },
   red: { chip: '#FBDBD8', icon: '#B91C1C' },
   gray: { chip: '#EEF1F6', icon: managerColors.subtext },
+  pink: { chip: '#FCE0EC', icon: '#BE185D' },
+  violet: { chip: '#EDE4FC', icon: '#7C3AED' },
+  orange: { chip: '#FDE3CC', icon: '#C2410C' },
 } as const;
 
 export type StatChipColor = keyof typeof statChipColors;
@@ -40,4 +43,7 @@ export const tileGradients = {
   green: ['#CBF3DC', '#F2FDF6'] as const,
   red: ['#F9D6D2', '#FFF5F4'] as const,
   gray: ['#E4E7EE', '#F8F9FB'] as const,
+  pink: ['#FBD5E6', '#FFF4F9'] as const,
+  violet: ['#E4D6FA', '#F8F4FF'] as const,
+  orange: ['#FCD9B8', '#FFF6EE'] as const,
 } as const;

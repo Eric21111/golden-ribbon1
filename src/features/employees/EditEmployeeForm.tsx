@@ -3,10 +3,10 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
-import { colors, radius, spacing } from '@/constants/theme';
-import { ChoiceChips } from '@/features/employees/ChoiceChips';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { managerColors } from '@/components/dashboard/theme';
 import { editEmployeeSchema, type EditEmployeeValues } from '@/features/employees/employeeSchemas';
 import { BranchSelector } from '@/features/inventory/BranchSelector';
 import type { Branch, EmployeeRecord } from '@/types/models';
@@ -21,6 +21,11 @@ type EditEmployeeFormProps = {
   onResetPassword?: () => void;
   onToggleActive?: () => void;
 };
+
+const ROLE_OPTIONS = [
+  { label: 'Manager', value: 'manager' as const },
+  { label: 'Cashier', value: 'cashier' as const },
+];
 
 export function EditEmployeeForm({
   employee,
@@ -73,63 +78,68 @@ export function EditEmployeeForm({
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
-      <Controller
-        control={control}
-        name="role"
-        render={({ field }) => (
-          <ChoiceChips
-            label="Role"
-            value={field.value}
-            onChange={(value) => {
-              field.onChange(value);
-              if (value === 'cashier') {
-                const current = branches.find((branch) => branch.id === watch('branch_id'));
-                if (current?.is_main_branch) setValue('branch_id', '');
-              }
-            }}
-            choices={[
-              { label: 'Manager', value: 'manager' },
-              { label: 'Cashier', value: 'cashier' },
-            ]}
-          />
-        )}
-      />
-      <Text style={styles.label}>Assigned Branch</Text>
-      <Controller
-        control={control}
-        name="branch_id"
-        render={({ field, fieldState }) => (
-          <>
-            <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
-            {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
-          </>
-        )}
-      />
+      <View style={styles.group}>
+        <Text style={styles.label}>Role</Text>
+        <Controller
+          control={control}
+          name="role"
+          render={({ field }) => (
+            <FilterChipRow
+              options={ROLE_OPTIONS}
+              value={field.value}
+              onChange={(value) => {
+                field.onChange(value);
+                if (value === 'cashier') {
+                  const current = branches.find((branch) => branch.id === watch('branch_id'));
+                  if (current?.is_main_branch) setValue('branch_id', '');
+                }
+              }}
+            />
+          )}
+        />
+      </View>
+      <View style={styles.group}>
+        <Text style={styles.label}>Assigned Branch</Text>
+        <Controller
+          control={control}
+          name="branch_id"
+          render={({ field, fieldState }) => (
+            <>
+              <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
+              {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
+      </View>
       <Text style={styles.statusHint}>
         Status: {employee.is_active ? 'Active' : 'Inactive'}. Deactivation is blocked while the
         employee has an open shift.
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton
+      <ManagerActionButton
         label="Save employee"
         loading={Boolean(loading) && !togglingActive}
         disabled={togglingActive}
         onPress={handleSubmit(onSubmit)}
       />
       {onToggleActive ? (
-        <AppButton
+        <ManagerActionButton
           label={employee.is_active ? 'Deactivate' : 'Activate'}
-          variant={employee.is_active ? 'danger' : 'primary'}
+          variant={employee.is_active ? 'danger' : 'secondary'}
           loading={togglingActive}
           disabled={loading}
           onPress={onToggleActive}
         />
       ) : null}
       {onResetPassword ? (
-        <AppButton
+        <ManagerActionButton
           label="Reset password"
           variant="secondary"
           disabled={loading || togglingActive}
@@ -144,19 +154,23 @@ export function EditEmployeeForm({
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
+  form: { gap: 16 },
+  group: { gap: 8 },
   readOnly: {
-    backgroundColor: colors.background,
+    backgroundColor: managerColors.cardSurface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.xs,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
   },
-  readOnlyLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  readOnlyValue: { color: colors.text, fontSize: 16 },
-  label: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  statusHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
-  error: { color: colors.danger, fontSize: 13 },
-  formHint: { color: colors.danger, fontSize: 13, textAlign: 'center' },
+  readOnlyLabel: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  readOnlyValue: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15 },
+  label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  statusHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  formHint: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, textAlign: 'center' },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
 });

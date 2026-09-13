@@ -2,12 +2,16 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
-import { DashboardCard } from '@/components/DashboardCard';
-import { ErrorState, LoadingState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
+import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { NavTile } from '@/components/dashboard/NavTile';
+import { StatTile } from '@/components/dashboard/StatTile';
+import { managerColors } from '@/components/dashboard/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive';
 import { useOwnerDailyProductSummary, useOwnerDashboardMetrics } from '@/hooks/useSales';
@@ -23,7 +27,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ children }: { title?: string; children: ReactNode }) {
+function Row({ children }: { children: ReactNode }) {
   return <View style={styles.row}>{children}</View>;
 }
 
@@ -38,6 +42,7 @@ export default function OwnerDashboard() {
   const summary = summaryQuery.data ?? [];
   const archive = archiveQuery.data;
   const refreshing = metricsQuery.isRefetching || summaryQuery.isRefetching || archiveQuery.isRefetching;
+  const ownerName = profile?.full_name ?? 'Owner';
 
   const refresh = () => {
     void metricsQuery.refetch();
@@ -46,203 +51,234 @@ export default function OwnerDashboard() {
   };
 
   return (
-    <Screen refreshing={refreshing} onRefresh={refresh} constrain>
-      <PageHeader title={`Hello, ${profile?.full_name ?? 'Owner'}`} subtitle="Company-wide analytics" />
-      <Text style={styles.role}>OWNER</Text>
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      refreshing={refreshing}
+      onRefresh={refresh}
+      contentContainerStyle={styles.screenContent}
+    >
+      <View style={styles.header}>
+        <View style={styles.topRow}>
+          <HamburgerButton />
+        </View>
+        <Text style={styles.greeting} numberOfLines={1}>
+          Hi, {ownerName}
+        </Text>
+        <View style={styles.rolePill}>
+          <View style={styles.roleDot} />
+          <Text style={styles.rolePillText}>OWNER · COMPANY-WIDE</Text>
+        </View>
+      </View>
 
-      {metricsQuery.error || summaryQuery.error ? (
-        <ErrorState
-          message={getErrorMessage(metricsQuery.error ?? summaryQuery.error)}
-          onRetry={refresh}
-        />
-      ) : (
-        <View style={styles.content}>
-          {archive?.reminder_visible ? (
-            <View style={styles.reminder}>
-              <Text style={styles.reminderTitle}>Data Archive Due</Text>
-              <Text style={styles.reminderBody}>
-                You have detailed transaction data older than {archive.retention_days} days. Export and
-                verify the archive before cleaning old records.
-              </Text>
-              <View style={styles.reminderActions}>
-                <AppButton
-                  label="Export & Review"
+      <ConstrainedWidth style={styles.column}>
+        {metricsQuery.error || summaryQuery.error ? (
+          <ErrorState
+            message={getErrorMessage(metricsQuery.error ?? summaryQuery.error)}
+            onRetry={refresh}
+          />
+        ) : (
+          <View style={styles.content}>
+            {archive?.reminder_visible ? (
+              <View style={styles.reminderCard}>
+                <Text style={styles.reminderTitle}>Data Archive Due</Text>
+                <Text style={styles.reminderBody}>
+                  You have detailed transaction data older than {archive.retention_days} days. Export
+                  and verify the archive before cleaning old records.
+                </Text>
+                <View style={styles.reminderActions}>
+                  <ManagerActionButton
+                    label="Export & review"
+                    icon="archive-outline"
+                    onPress={() => router.push('/owner/data-archive' as never)}
+                  />
+                  <ManagerActionButton
+                    label="Remind me later"
+                    variant="secondary"
+                    loading={dismissReminder.isPending}
+                    onPress={() => void dismissReminder.mutateAsync()}
+                  />
+                </View>
+              </View>
+            ) : null}
+
+            <Section title="TODAY">
+              <Row>
+                <StatTile
+                  style={styles.half}
+                  emphasis
+                  icon="cash-outline"
+                  label="Today's revenue"
+                  value={metrics ? formatMoney(metrics.today_sales) : '—'}
+                  onPress={() => router.push('/owner/reports/sales-by-branch')}
+                />
+              </Row>
+              <Row>
+                <StatTile
+                  style={styles.half}
+                  icon="receipt-outline"
+                  label="Transactions"
+                  value={metrics?.today_transactions ?? '—'}
+                  onPress={() => router.push('/owner/reports/sales-by-branch')}
+                />
+                <StatTile
+                  style={styles.half}
+                  icon="cube-outline"
+                  label="Units sold"
+                  value={metrics?.today_units_sold ?? '—'}
+                  onPress={() => router.push('/owner/reports/product-sales')}
+                />
+              </Row>
+            </Section>
+
+            <Section title="TODAY'S PRODUCT PERFORMANCE">
+              {summaryQuery.isLoading && summary.length === 0 ? (
+                <LoadingState label="Loading daily product summary…" />
+              ) : summary.length === 0 ? (
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>No completed sales or declared returns today.</Text>
+                </View>
+              ) : (
+                summary.map((row) => (
+                  <ListRowCard
+                    key={row.product_id}
+                    title={row.product_name}
+                    meta={`Sold ${row.quantity_sold} · Returned ${row.quantity_returned}`}
+                    trailing={<Text style={styles.revenue}>{formatMoney(row.revenue)}</Text>}
+                  />
+                ))
+              )}
+            </Section>
+
+            <Section title="REPORTS">
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="stats-chart-outline"
+                  accent="blue"
+                  title="Sales by Branch"
+                  onPress={() => router.push('/owner/reports/sales-by-branch')}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="pricetag-outline"
+                  accent="gold"
+                  title="Product Sales"
+                  onPress={() => router.push('/owner/reports/product-sales')}
+                />
+              </Row>
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="git-branch-outline"
+                  accent="teal"
+                  title="Branch Performance"
+                  onPress={() => router.push('/owner/reports/branch-performance' as never)}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="cube-outline"
+                  accent="lilac"
+                  title="Inventory Summary"
+                  onPress={() => router.push('/owner/inventory-by-branch')}
+                />
+              </Row>
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="checkmark-done-outline"
+                  accent="green"
+                  title="Reconciliation"
+                  onPress={() => router.push('/owner/reports/inventory-reconciliation')}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="alert-circle-outline"
+                  accent="red"
+                  title="Discrepancy Analytics"
+                  onPress={() => router.push('/owner/reports/discrepancies' as never)}
+                />
+              </Row>
+            </Section>
+
+            <Section title="ADMINISTRATION">
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="people-outline"
+                  accent="blue"
+                  title="Employees"
+                  onPress={() => router.push('/owner/employees' as never)}
+                />
+                <NavTile
+                  layout="tile"
+                  icon="archive-outline"
+                  accent="gray"
+                  title="Data Archive"
                   onPress={() => router.push('/owner/data-archive' as never)}
                 />
-                <AppButton
-                  label="Remind Me Later"
-                  variant="secondary"
-                  loading={dismissReminder.isPending}
-                  onPress={() => void dismissReminder.mutateAsync()}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          <Section title="TODAY">
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Today's Revenue"
-                value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                description="Completed sales (PH)"
-                onPress={() => router.push('/owner/reports/sales-by-branch')}
-              />
-              <DashboardCard
-                style={styles.half}
-                title="Today's Transactions"
-                value={metrics?.today_transactions ?? '—'}
-                description="Completed orders (PH)"
-                onPress={() => router.push('/owner/reports/sales-by-branch')}
-              />
-            </Row>
-            <DashboardCard
-              title="Units Sold"
-              value={metrics?.today_units_sold ?? '—'}
-              description="Completed sale quantities today (PH)"
-              onPress={() => router.push('/owner/reports/product-sales')}
-            />
-          </Section>
-
-          <Section title="TODAY'S PRODUCT PERFORMANCE">
-            {summaryQuery.isLoading && summary.length === 0 ? (
-              <LoadingState label="Loading daily product summary…" />
-            ) : summary.length === 0 ? (
-              <Text style={styles.quiet}>No completed sales or declared returns today.</Text>
-            ) : (
-              <View style={styles.table}>
-                <View style={[styles.tableRow, styles.tableHeader]}>
-                  <Text style={[styles.cellProduct, styles.headerCell]}>Product</Text>
-                  <Text style={[styles.cellQty, styles.headerCell]}>Sold</Text>
-                  <Text style={[styles.cellQty, styles.headerCell]}>Returned</Text>
-                  <Text style={[styles.cellMoney, styles.headerCell]}>Revenue</Text>
-                </View>
-                {summary.map((row) => (
-                  <View key={row.product_id} style={styles.tableRow}>
-                    <Text style={styles.cellProduct}>{row.product_name}</Text>
-                    <Text style={styles.cellQty}>{row.quantity_sold}</Text>
-                    <Text style={styles.cellQty}>{row.quantity_returned}</Text>
-                    <Text style={styles.cellMoney}>{formatMoney(row.revenue)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </Section>
-
-          <Section title="REPORTS">
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Sales by Branch"
-                description="Revenue and volume by branch"
-                onPress={() => router.push('/owner/reports/sales-by-branch')}
-              />
-              <DashboardCard
-                style={styles.half}
-                title="Product Sales"
-                description="Units sold and historical revenue"
-                onPress={() => router.push('/owner/reports/product-sales')}
-              />
-            </Row>
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Branch Performance"
-                description="Sales and discrepancy comparison"
-                onPress={() => router.push('/owner/reports/branch-performance' as never)}
-              />
-              <DashboardCard
-                style={styles.half}
-                title="Inventory Summary"
-                description="Read-only balances across branches"
-                onPress={() => router.push('/owner/inventory-by-branch')}
-              />
-            </Row>
-            <Row>
-              <DashboardCard
-                style={styles.half}
-                title="Reconciliation"
-                description="Physical stock vs movement ledger"
-                onPress={() => router.push('/owner/reports/inventory-reconciliation')}
-              />
-              <DashboardCard
-                style={styles.half}
-                title="Discrepancy Analytics"
-                description="Missing and excess transfer/return qty"
-                onPress={() => router.push('/owner/reports/discrepancies' as never)}
-              />
-            </Row>
-          </Section>
-
-          <Section title="ADMINISTRATION">
-            <DashboardCard
-              title="Employees"
-              description="Create managers and cashiers, assign branches, and manage access"
-              onPress={() => router.push('/owner/employees' as never)}
-            />
-            <DashboardCard
-              title="Data Archive"
-              description="Export old detailed sales, verify the copy, then confirm cleanup"
-              onPress={() => router.push('/owner/data-archive' as never)}
-            />
-          </Section>
-        </View>
-      )}
+              </Row>
+            </Section>
+          </View>
+        )}
+      </ConstrainedWidth>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  role: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: managerColors.cardBorder,
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center' },
+  greeting: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 24 },
+  rolePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#EAF0FB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  roleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: managerColors.gold },
+  rolePillText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 0.6 },
+  column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.lg },
   section: { gap: spacing.sm },
   sectionTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
-  quiet: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    paddingVertical: spacing.sm,
-  },
-  table: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  tableRow: {
-    flexDirection: 'row',
+  quietCard: {
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
-  tableHeader: {
-    borderTopWidth: 0,
-    backgroundColor: colors.background,
-  },
-  headerCell: { color: colors.muted, fontWeight: '800', fontSize: 11 },
-  cellProduct: { flex: 1.4, color: colors.text, fontSize: 13, fontWeight: '700' },
-  cellQty: { width: 64, color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'right' },
-  cellMoney: { width: 84, color: colors.primary, fontSize: 13, fontWeight: '800', textAlign: 'right' },
-  reminder: {
-    backgroundColor: colors.warningSurface,
-    borderColor: colors.accent,
-    borderWidth: 1,
-    borderRadius: radius.md,
+  quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  revenue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  reminderCard: {
+    backgroundColor: '#FFFBEF',
+    borderColor: '#F1DFA8',
+    borderLeftWidth: 3,
+    borderLeftColor: managerColors.gold,
+    borderRadius: 16,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  reminderTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
-  reminderBody: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  reminderTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  reminderBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   reminderActions: { gap: spacing.sm },
 });

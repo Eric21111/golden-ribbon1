@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '@/constants/theme';
+import { managerColors } from '@/components/dashboard/theme';
 import type { Branch } from '@/types/models';
 
 export function BranchSelector({ branches, value, onChange, allowAll = false }: { branches: Branch[]; value: string; onChange: (id: string) => void; allowAll?: boolean }) {
@@ -20,9 +20,17 @@ export function BranchSelector({ branches, value, onChange, allowAll = false }: 
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  choice: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface },
-  selected: { borderColor: colors.primary, backgroundColor: '#FFEDD5' },
-  text: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  selectedText: { color: colors.primary, fontWeight: '800' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  choice: {
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 999,
+    backgroundColor: managerColors.cardSurface,
+  },
+  selected: { borderColor: '#EAF0FB', backgroundColor: '#EAF0FB' },
+  text: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  selectedText: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
 });

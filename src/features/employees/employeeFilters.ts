@@ -10,13 +10,13 @@ export type EmployeeRoleFilter = 'all' | EmployeeRole;
 export type EmployeeStatusFilter = 'all' | 'active' | 'inactive';
 
 export const EMPLOYEE_ROLE_CHOICES: Array<{ label: string; value: EmployeeRoleFilter }> = [
-  { label: 'All Roles', value: 'all' },
+  { label: 'All', value: 'all' },
   { label: 'Managers', value: 'manager' },
   { label: 'Cashiers', value: 'cashier' },
 ];
 
 export const EMPLOYEE_STATUS_CHOICES: Array<{ label: string; value: EmployeeStatusFilter }> = [
-  { label: 'All Status', value: 'all' },
+  { label: 'All', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Inactive', value: 'inactive' },
 ];

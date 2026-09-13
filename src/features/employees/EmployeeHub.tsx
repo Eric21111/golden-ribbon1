@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
-import { BottomSheet } from '@/components/BottomSheet';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
 import { FilterDropdown } from '@/components/FilterDropdown';
-import { PageHeader } from '@/components/PageHeader';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ManagerBottomSheet as BottomSheet } from '@/components/dashboard/ManagerBottomSheet';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
+import { managerColors } from '@/components/dashboard/theme';
 import { CreateEmployeeForm } from '@/features/employees/CreateEmployeeForm';
 import { EditEmployeeForm } from '@/features/employees/EditEmployeeForm';
 import { EmployeeListItem } from '@/features/employees/EmployeeListItem';
@@ -29,6 +30,7 @@ import {
   useUpdateEmployee,
 } from '@/hooks/useEmployees';
 import { useClientPagination } from '@/hooks/useClientPagination';
+import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getEmployeeErrorMessage } from '@/lib/errors';
 import { useLayout } from '@/lib/layout';
 import type { Branch, EmployeeRecord } from '@/types/models';
@@ -72,7 +74,7 @@ export function EmployeeHub({
   );
   const branchFilterOptions = useMemo(
     () => [
-      { label: 'All Branches', value: '' },
+      { label: 'All', value: '' },
       ...(branches ?? []).map((branch) => ({
         label: branch.is_main_branch ? `${branch.name} (Main)` : branch.name,
         value: branch.id,
@@ -96,40 +98,34 @@ export function EmployeeHub({
 
   const toggleEmployee = (employee: EmployeeRecord) => {
     const deactivating = employee.is_active;
-    Alert.alert(
+    confirmAction(
       deactivating ? 'Deactivate employee?' : 'Activate employee?',
       deactivating
         ? `${employee.full_name} will be unable to use protected app features.`
         : `${employee.full_name} will regain access for their assigned role and branch.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: deactivating ? 'Deactivate' : 'Activate',
-          style: deactivating ? 'destructive' : 'default',
-          onPress: () => {
-            setBusyId(employee.id);
-            updateMutation.mutate(
-              {
-                id: employee.id,
-                fullName: employee.full_name,
-                role: employee.role,
-                branchId: employee.branch_id,
-                isActive: !employee.is_active,
-              },
-              {
-                onSuccess: () => {
-                  setEditEmployee((current) =>
-                    current?.id === employee.id
-                      ? { ...current, is_active: !employee.is_active }
-                      : current,
-                  );
-                },
-                onSettled: () => setBusyId(''),
-              },
-            );
+      () => {
+        setBusyId(employee.id);
+        updateMutation.mutate(
+          {
+            id: employee.id,
+            fullName: employee.full_name,
+            role: employee.role,
+            branchId: employee.branch_id,
+            isActive: !employee.is_active,
           },
-        },
-      ],
+          {
+            onSuccess: () => {
+              setEditEmployee((current) =>
+                current?.id === employee.id
+                  ? { ...current, is_active: !employee.is_active }
+                  : current,
+              );
+            },
+            onSettled: () => setBusyId(''),
+          },
+        );
+      },
+      { confirm: deactivating ? 'Deactivate' : 'Activate' },
     );
   };
 
@@ -147,7 +143,7 @@ export function EmployeeHub({
       {
         onSuccess: () => {
           setCreateOpen(false);
-          Alert.alert('Employee created', 'They can sign in with the email and temporary password.');
+          alertNotice('Employee created', 'They can sign in with the email and temporary password.');
         },
       }
     );
@@ -176,7 +172,7 @@ export function EmployeeHub({
       {
         onSuccess: () => {
           setResetEmployee(null);
-          Alert.alert(
+          alertNotice(
             'Password reset',
             'Give the new temporary password to the employee through a secure channel.'
           );
@@ -186,23 +182,12 @@ export function EmployeeHub({
   };
 
   return (
-    <Screen scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <ConstrainedWidth maxWidth={hubMaxWidth} fill enabled={isTablet}>
         <View style={styles.layout}>
+          <ManagerScreenHeader title="Employees" subtitle="Managers and Cashiers" />
           <View style={styles.top}>
-            <PageHeader title="Employees" subtitle="Managers and Cashiers" />
-
-            <TextInput
-              accessibilityLabel="Search employees"
-              placeholder="Search name or email"
-              placeholderTextColor={colors.muted}
-              value={search}
-              onChangeText={setSearch}
-              autoCorrect={false}
-              autoCapitalize="none"
-              clearButtonMode="while-editing"
-              style={styles.search}
-            />
+            <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or email" />
 
             <View style={styles.filterRow}>
               <View style={styles.filterItem}>
@@ -246,7 +231,7 @@ export function EmployeeHub({
               contentContainerStyle={styles.listContent}
               style={styles.list}
               refreshControl={
-                <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={managerColors.royalBlue} />
               }
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={
@@ -282,8 +267,9 @@ export function EmployeeHub({
           ) : null}
 
           <View style={styles.footer}>
-            <AppButton
+            <ManagerActionButton
               label="Create employee"
+              icon="add-circle-outline"
               onPress={() => {
                 createMutation.reset();
                 setCreateOpen(true);
@@ -355,31 +341,20 @@ export function EmployeeHub({
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
-  top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
-  search: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: colors.text,
-    fontSize: 16,
-  },
+  top: { paddingHorizontal: 20, paddingTop: 14, gap: 12 },
+  filterRow: { flexDirection: 'row', gap: 10 },
+  filterItem: { flex: 1 },
   list: { flex: 1, minHeight: 0 },
-  listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexGrow: 1 },
-  separator: { height: spacing.sm },
-  pager: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  listContent: { paddingHorizontal: 20, paddingVertical: 12, flexGrow: 1, gap: 12 },
+  separator: { height: 0 },
+  pager: { paddingTop: 8, paddingBottom: 4 },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
 });

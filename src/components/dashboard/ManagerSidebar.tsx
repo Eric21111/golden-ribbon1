@@ -72,15 +72,58 @@ function getGroups(isMain: boolean): SidebarGroup[] {
   ];
 }
 
+function getOwnerGroups(): SidebarGroup[] {
+  return [
+    {
+      // Owner has no bottom-tab equivalent for Reports' sub-screens, Inventory Summary,
+      // or Data Archive — the sidebar is the one place every existing route is reachable.
+      title: 'MENU',
+      items: [
+        { label: 'Home', href: '/owner/dashboard', icon: 'home-outline', selectedIcon: 'home' },
+        {
+          label: 'Reports',
+          href: '/owner/reports',
+          icon: 'stats-chart-outline',
+          selectedIcon: 'stats-chart',
+          children: [
+            { label: 'Sales by branch', href: '/owner/reports/sales-by-branch', icon: 'bar-chart-outline', selectedIcon: 'bar-chart' },
+            { label: 'Product sales', href: '/owner/reports/product-sales', icon: 'pricetag-outline', selectedIcon: 'pricetag' },
+            { label: 'Branch performance', href: '/owner/reports/branch-performance', icon: 'git-branch-outline', selectedIcon: 'git-branch' },
+            { label: 'Inventory reconciliation', href: '/owner/reports/inventory-reconciliation', icon: 'checkmark-done-outline', selectedIcon: 'checkmark-done' },
+            { label: 'Transfer discrepancies', href: '/owner/reports/transfer-discrepancies', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
+            { label: 'Return discrepancies', href: '/owner/reports/return-discrepancies', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+          ],
+        },
+        { label: 'Employees', href: '/owner/employees', icon: 'people-outline', selectedIcon: 'people' },
+        { label: 'Inventory summary', href: '/owner/inventory-by-branch', icon: 'cube-outline', selectedIcon: 'cube' },
+        { label: 'Data archive', href: '/owner/data-archive', icon: 'archive-outline', selectedIcon: 'archive' },
+      ],
+    },
+    {
+      title: 'ACCOUNT',
+      items: [
+        {
+          label: 'Account',
+          href: '/owner/profile',
+          icon: 'person-circle-outline',
+          selectedIcon: 'person-circle',
+        },
+      ],
+    },
+  ];
+}
+
 interface ManagerSidebarProps {
   onClose: () => void;
   onNavigate: () => void;
+  /** Defaults to 'manager' — pass 'owner' to render the Owner route set instead. */
+  role?: 'manager' | 'owner';
 }
 
-export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
+export function ManagerSidebar({ onClose, onNavigate, role = 'manager' }: ManagerSidebarProps) {
   const { profile } = useAuth();
   const pathname = usePathname().replace(/\/$/, '');
-  const groups = getGroups(isMainBranchManager(profile));
+  const groups = role === 'owner' ? getOwnerGroups() : getGroups(isMainBranchManager(profile));
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
   const go = (href: string) => {
@@ -130,32 +173,30 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
               const expanded = hasChildren && isExpanded(item);
               return (
                 <View key={item.href}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => go(item.href)}
-                    style={({ pressed }) => [
-                      styles.item,
-                      selected && styles.itemSelected,
-                      pressed && styles.itemPressed,
-                    ]}
-                  >
+                  <View style={[styles.item, selected && styles.itemSelected]}>
                     {selected ? <View style={styles.activeBar} /> : null}
-                    <Ionicons
-                      name={selected ? item.selectedIcon : item.icon}
-                      size={20}
-                      color={selected ? managerColors.royalBlue : managerColors.subtext}
-                    />
-                    <Text style={[styles.itemLabel, selected && styles.itemLabelSelected]} numberOfLines={1}>
-                      {item.label}
-                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => go(item.href)}
+                      style={({ pressed }) => [styles.itemMain, pressed && styles.itemPressed]}
+                    >
+                      <Ionicons
+                        name={selected ? item.selectedIcon : item.icon}
+                        size={20}
+                        color={selected ? managerColors.royalBlue : managerColors.subtext}
+                      />
+                      <Text style={[styles.itemLabel, selected && styles.itemLabelSelected]} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                    </Pressable>
                     {hasChildren ? (
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
                         hitSlop={10}
                         onPress={() => toggleExpanded(item)}
-                        style={styles.expandButton}
+                        style={({ pressed }) => [styles.expandButton, pressed && styles.itemPressed]}
                       >
                         <Ionicons
                           name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -164,7 +205,7 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
                         />
                       </Pressable>
                     ) : null}
-                  </Pressable>
+                  </View>
                   {expanded
                     ? item.children!.map((child) => {
                         const childSelected = child.href === pathname;
@@ -232,12 +273,18 @@ const styles = StyleSheet.create({
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
     paddingHorizontal: 20,
-    paddingVertical: 12,
     minHeight: 48,
   },
-  expandButton: { padding: 4 },
+  itemMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    minWidth: 0,
+    paddingVertical: 12,
+  },
+  expandButton: { padding: 10, marginLeft: 4 },
   childItem: {
     flexDirection: 'row',
     alignItems: 'center',

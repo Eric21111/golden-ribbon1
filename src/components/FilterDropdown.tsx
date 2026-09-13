@@ -2,8 +2,8 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BottomSheet } from '@/components/BottomSheet';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerBottomSheet as BottomSheet } from '@/components/dashboard/ManagerBottomSheet';
+import { managerColors } from '@/components/dashboard/theme';
 
 export type FilterOption<T extends string> = {
   label: string;
@@ -39,7 +39,7 @@ export function FilterDropdown<T extends string>({
         <Text style={styles.triggerLabel} numberOfLines={1}>
           {selected?.label ?? label}
         </Text>
-        <Ionicons color={colors.muted} name="chevron-down" size={18} />
+        <Ionicons color={managerColors.subtext} name="chevron-down" size={18} />
       </Pressable>
 
       <BottomSheet visible={open} title={label} onClose={() => setOpen(false)}>
@@ -65,7 +65,7 @@ export function FilterDropdown<T extends string>({
                   {option.label}
                 </Text>
                 {isSelected ? (
-                  <Ionicons color={colors.primary} name="checkmark" size={20} />
+                  <Ionicons color={managerColors.royalBlue} name="checkmark" size={20} />
                 ) : null}
               </Pressable>
             );
@@ -82,38 +82,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: 8,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 12,
+    backgroundColor: managerColors.cardSurface,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   triggerLabel: {
     flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
-  list: { gap: spacing.xs, paddingBottom: spacing.sm },
+  list: { gap: 8, paddingBottom: 8 },
   row: {
     minHeight: 52,
-    borderRadius: radius.md,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.md,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: 8,
   },
   rowSelected: {
-    borderColor: colors.primary,
-    backgroundColor: '#FFEDD5',
+    borderColor: managerColors.royalBlue,
+    backgroundColor: '#EAF0FB',
   },
-  rowLabel: { color: colors.text, fontSize: 16, fontWeight: '600', flex: 1 },
-  rowLabelSelected: { color: colors.primary, fontWeight: '800' },
+  rowLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  rowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   pressed: { opacity: 0.75 },
 });

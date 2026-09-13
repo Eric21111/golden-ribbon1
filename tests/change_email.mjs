@@ -138,7 +138,7 @@ assert.equal(form.includes('userId'), false);
 assert.match(form, /secureTextEntry/);
 assert.match(form, /Verification has been sent to your email/);
 
-const account = readFileSync('src/features/profile/AccountScreen.tsx', 'utf8');
+const account = readFileSync('app/(owner)/owner/profile.tsx', 'utf8');
 assert.match(account, /canChangeOwnEmail/);
 assert.match(account, /Change email/);
 assert.match(account, /Waiting for verification/);

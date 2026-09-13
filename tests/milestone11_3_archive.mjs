@@ -120,7 +120,16 @@ assert.match(readFileSync('src/types/models.ts', 'utf8'), /DELETE ARCHIVED DATA/
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Export → Save Copy → Verify → Confirm Cleanup/);
 assert.match(readFileSync('supabase/migrations/20260913140000_milestone_11_3_data_archive.sql', 'utf8'), /DELETE ARCHIVED DATA/);
 assert.doesNotMatch(readFileSync('src/components/RoleNavigation.tsx', 'utf8'), /data-archive/);
-assert.doesNotMatch(readFileSync('src/components/dashboard/ManagerSidebar.tsx', 'utf8'), /data-archive|cleanup_archived_sales/);
+// ManagerSidebar.tsx renders both the Manager and Owner drawers from one file — only the
+// Manager-only route table (getGroups) must stay free of Data Archive; Owner's own table
+// (getOwnerGroups) legitimately links to it since Data Archive is Owner-exclusive.
+const sidebarSource = readFileSync('src/components/dashboard/ManagerSidebar.tsx', 'utf8');
+const managerGroupsSource = sidebarSource.slice(
+  sidebarSource.indexOf('function getGroups('),
+  sidebarSource.indexOf('function getOwnerGroups('),
+);
+assert.ok(managerGroupsSource.length > 0, 'getGroups function should be found in ManagerSidebar.tsx');
+assert.doesNotMatch(managerGroupsSource, /data-archive|cleanup_archived_sales/);
 
 await asUser(mgr1, async () => {
   await assert.rejects(db.query('select public.get_archive_status()'), /Owner access/);

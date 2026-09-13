@@ -2,9 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
-import { colors, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { managerColors } from '@/components/dashboard/theme';
 import { resetPasswordSchema, type ResetPasswordValues } from '@/features/employees/employeeSchemas';
 
 type ResetPasswordFormProps = {
@@ -47,6 +47,10 @@ export function ResetPasswordForm({
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -62,18 +66,25 @@ export function ResetPasswordForm({
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton label="Reset password" loading={loading} onPress={handleSubmit(onSubmit)} />
+      <ManagerActionButton label="Reset password" loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
-  subtitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  notice: { color: colors.muted, fontSize: 14, lineHeight: 21 },
-  error: { color: colors.danger, fontSize: 13 },
+  form: { gap: 16 },
+  subtitle: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  notice: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
 });

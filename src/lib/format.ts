@@ -103,3 +103,35 @@ export function isReportRangeReady(
   return Boolean(startDate && endDate);
 }
 
+/** Today's calendar date in Asia/Manila (UTC+8), as Y/M/D — no timezone database needed since PH has no DST. */
+function manilaTodayParts(): { y: number; m: number; d: number } {
+  const shifted = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth() + 1, d: shifted.getUTCDate() };
+}
+
+function dateString(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
+ * "This week so far" in Asia/Manila: from the most recent Monday 00:00 through the end of
+ * today (mirrors how "Today" already runs through end-of-day rather than the exact instant).
+ */
+export function getThisWeekRangeManila(): { start: string; end: string } {
+  const { y, m, d } = manilaTodayParts();
+  const today = new Date(Date.UTC(y, m - 1, d));
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+  const monday = new Date(Date.UTC(y, m - 1, d - daysSinceMonday));
+  const start = toStartOfDayManila(dateString(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate()))!;
+  const end = toNextDayStartManila(dateString(y, m, d))!;
+  return { start, end };
+}
+
+/** "This month so far" in Asia/Manila: from the 1st 00:00 through the end of today. */
+export function getThisMonthRangeManila(): { start: string; end: string } {
+  const { y, m, d } = manilaTodayParts();
+  const start = toStartOfDayManila(dateString(y, m, 1))!;
+  const end = toNextDayStartManila(dateString(y, m, d))!;
+  return { start, end };
+}
+

@@ -3,11 +3,11 @@ import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
 import { SwitchField } from '@/components/SwitchField';
-import { colors, spacing } from '@/constants/theme';
-import { ChoiceChips } from '@/features/employees/ChoiceChips';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { managerColors } from '@/components/dashboard/theme';
 import { createEmployeeSchema, type CreateEmployeeValues } from '@/features/employees/employeeSchemas';
 import { BranchSelector } from '@/features/inventory/BranchSelector';
 import type { Branch } from '@/types/models';
@@ -18,6 +18,11 @@ type CreateEmployeeFormProps = {
   loading?: boolean;
   onSubmit: (values: CreateEmployeeValues) => void;
 };
+
+const ROLE_OPTIONS = [
+  { label: 'Manager', value: 'manager' as const },
+  { label: 'Cashier', value: 'cashier' as const },
+];
 
 export function CreateEmployeeForm({ branches, error, loading, onSubmit }: CreateEmployeeFormProps) {
   const { control, handleSubmit, formState, watch, setValue } = useForm<CreateEmployeeValues>({
@@ -53,6 +58,10 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -70,6 +79,10 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -85,42 +98,47 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
             onBlur={field.onBlur}
             onChangeText={field.onChange}
             error={fieldState.error?.message}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
       <Text style={styles.hint}>Use 8–72 characters. Password is never stored in the app database.</Text>
-      <Controller
-        control={control}
-        name="role"
-        render={({ field }) => (
-          <ChoiceChips
-            label="Role"
-            value={field.value}
-            onChange={(value) => {
-              field.onChange(value);
-              if (value === 'cashier') {
-                const current = branches.find((branch) => branch.id === watch('branch_id'));
-                if (current?.is_main_branch) setValue('branch_id', '');
-              }
-            }}
-            choices={[
-              { label: 'Manager', value: 'manager' },
-              { label: 'Cashier', value: 'cashier' },
-            ]}
-          />
-        )}
-      />
-      <Text style={styles.label}>Assigned Branch</Text>
-      <Controller
-        control={control}
-        name="branch_id"
-        render={({ field, fieldState }) => (
-          <>
-            <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
-            {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
-          </>
-        )}
-      />
+      <View style={styles.group}>
+        <Text style={styles.label}>Role</Text>
+        <Controller
+          control={control}
+          name="role"
+          render={({ field }) => (
+            <FilterChipRow
+              options={ROLE_OPTIONS}
+              value={field.value}
+              onChange={(value) => {
+                field.onChange(value);
+                if (value === 'cashier') {
+                  const current = branches.find((branch) => branch.id === watch('branch_id'));
+                  if (current?.is_main_branch) setValue('branch_id', '');
+                }
+              }}
+            />
+          )}
+        />
+      </View>
+      <View style={styles.group}>
+        <Text style={styles.label}>Assigned Branch</Text>
+        <Controller
+          control={control}
+          name="branch_id"
+          render={({ field, fieldState }) => (
+            <>
+              <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
+              {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
+      </View>
       <Controller
         control={control}
         name="is_active"
@@ -130,11 +148,14 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
             description="Inactive employees cannot use protected app features."
             value={field.value}
             onValueChange={field.onChange}
+            labelStyle={styles.fieldLabel}
+            descriptionStyle={styles.switchDescription}
+            activeTrackColor={managerColors.royalBlue}
           />
         )}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton
+      <ManagerActionButton
         label="Create employee"
         loading={loading}
         onPress={handleSubmit((values) => {
@@ -151,9 +172,14 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
-  label: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  hint: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  error: { color: colors.danger, fontSize: 13 },
-  formHint: { color: colors.danger, fontSize: 13, textAlign: 'center' },
+  form: { gap: 16 },
+  group: { gap: 8 },
+  label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  formHint: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, textAlign: 'center' },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
+  switchDescription: { fontFamily: 'Inter_400Regular' },
 });

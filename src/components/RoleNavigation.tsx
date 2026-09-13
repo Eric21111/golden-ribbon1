@@ -22,12 +22,11 @@ function menuHref(href: string): Href {
   return href as Href;
 }
 
+// Kept to 4 tabs — Performance/Reconcile/Discrepancies are already reachable as
+// cards inside the Reports hub, so they don't need their own top-level tab too.
 const ownerMenu: NavigationItem[] = [
   { label: 'Home', href: menuHref('/owner/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
   { label: 'Reports', href: menuHref('/owner/reports'), icon: 'stats-chart-outline', selectedIcon: 'stats-chart' },
-  { label: 'Performance', href: menuHref('/owner/reports/branch-performance'), icon: 'git-branch-outline', selectedIcon: 'git-branch' },
-  { label: 'Reconcile', href: menuHref('/owner/reports/inventory-reconciliation'), icon: 'checkmark-done-outline', selectedIcon: 'checkmark-done' },
-  { label: 'Discrepancies', href: menuHref('/owner/reports/discrepancies'), icon: 'alert-circle-outline', selectedIcon: 'alert-circle' },
   { label: 'Employees', href: menuHref('/owner/employees'), icon: 'people-outline', selectedIcon: 'people' },
   { label: 'Account', href: menuHref('/owner/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
@@ -79,9 +78,8 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
   // keep their existing stack navigation back to the parent page.
   const visible = items.some((item) => item.href === pathname);
   const showNav = visible && keyboardInset === 0;
-  // Manager and Cashier share the premium (Inter, floating pill) tab bar treatment;
-  // Owner keeps its original system-font tab bar unchanged.
-  const isPremium = role === 'manager' || role === 'cashier';
+  // All three roles share the premium (Inter, floating pill) tab bar treatment.
+  const isPremium = role === 'manager' || role === 'cashier' || role === 'owner';
   const activeColor = isPremium ? managerColors.royalBlue : colors.primary;
   const indicatorColor = isPremium ? managerColors.gold : colors.primary;
   const labelFontFamily = isPremium ? 'Inter_600SemiBold' : undefined;
