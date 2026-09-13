@@ -83,9 +83,11 @@ export default function ManagerDashboard() {
       contentContainerStyle={styles.screenContent}
     >
       <View style={styles.header}>
-        <View style={styles.topRow}>
-          <HamburgerButton />
-        </View>
+        {isMain ? (
+          <View style={styles.topRow}>
+            <HamburgerButton />
+          </View>
+        ) : null}
         <View style={styles.identity}>
           <Text style={styles.greeting} numberOfLines={1}>
             Hi, {managerName}

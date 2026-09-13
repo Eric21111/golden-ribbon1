@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
@@ -14,9 +15,34 @@ type ChangeEmailFormProps = {
   currentEmail: string;
   onSuccess?: (result: ChangeOwnEmailResult) => void;
   onCancel?: () => void;
+  hintStyle?: StyleProp<TextStyle>;
+  currentStyle?: StyleProp<TextStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+  inputStyle?: StyleProp<TextStyle>;
+  errorStyle?: StyleProp<TextStyle>;
+  successStyle?: StyleProp<TextStyle>;
+  buttonLabelStyle?: StyleProp<TextStyle>;
+  accentColor?: string;
+  /** Lets a role-specific design system (e.g. the Manager premium buttons) replace the default AppButton. */
+  renderSubmitButton?: (args: { loading: boolean; disabled: boolean; onPress: () => void }) => ReactNode;
+  renderCancelButton?: (args: { disabled: boolean; onPress: () => void }) => ReactNode;
 };
 
-export function ChangeEmailForm({ currentEmail, onSuccess, onCancel }: ChangeEmailFormProps) {
+export function ChangeEmailForm({
+  currentEmail,
+  onSuccess,
+  onCancel,
+  hintStyle,
+  currentStyle,
+  labelStyle,
+  inputStyle,
+  errorStyle,
+  successStyle,
+  buttonLabelStyle,
+  accentColor,
+  renderSubmitButton,
+  renderCancelButton,
+}: ChangeEmailFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
   const schema = useMemo(() => changeEmailSchema(currentEmail), [currentEmail]);
@@ -57,10 +83,10 @@ export function ChangeEmailForm({ currentEmail, onSuccess, onCancel }: ChangeEma
 
   return (
     <View style={styles.form}>
-      <Text style={styles.hint}>
+      <Text style={[styles.hint, hintStyle]}>
         Updates the sign-in email for this account only. Role, branch, and historical records stay the same.
       </Text>
-      <Text style={styles.current}>Current email: {currentEmail || 'Not available'}</Text>
+      <Text style={[styles.current, currentStyle]}>Current email: {currentEmail || 'Not available'}</Text>
       <Controller
         control={control}
         name="current_password"
@@ -77,6 +103,10 @@ export function ChangeEmailForm({ currentEmail, onSuccess, onCancel }: ChangeEma
             autoComplete="current-password"
             textContentType="password"
             secureTextEntry
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
@@ -96,6 +126,10 @@ export function ChangeEmailForm({ currentEmail, onSuccess, onCancel }: ChangeEma
             keyboardType="email-address"
             autoComplete="email"
             textContentType="emailAddress"
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
@@ -115,19 +149,44 @@ export function ChangeEmailForm({ currentEmail, onSuccess, onCancel }: ChangeEma
             keyboardType="email-address"
             autoComplete="email"
             textContentType="emailAddress"
+            labelStyle={labelStyle}
+            errorStyle={errorStyle}
+            accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
-      {formState.errors.root?.message ? <Text style={styles.error}>{formState.errors.root.message}</Text> : null}
-      {success ? <Text style={styles.success}>{success}</Text> : null}
-      <AppButton
-        label="Change email"
-        loading={formState.isSubmitting}
-        disabled={formState.isSubmitting}
-        onPress={handleSubmit(submit)}
-      />
+      {formState.errors.root?.message ? (
+        <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
+      ) : null}
+      {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
+      {renderSubmitButton ? (
+        renderSubmitButton({
+          loading: formState.isSubmitting,
+          disabled: formState.isSubmitting,
+          onPress: handleSubmit(submit),
+        })
+      ) : (
+        <AppButton
+          label="Change email"
+          loading={formState.isSubmitting}
+          disabled={formState.isSubmitting}
+          onPress={handleSubmit(submit)}
+          labelStyle={buttonLabelStyle}
+        />
+      )}
       {onCancel ? (
-        <AppButton label="Cancel" variant="secondary" disabled={formState.isSubmitting} onPress={onCancel} />
+        renderCancelButton ? (
+          renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
+        ) : (
+          <AppButton
+            label="Cancel"
+            variant="secondary"
+            disabled={formState.isSubmitting}
+            onPress={onCancel}
+            labelStyle={buttonLabelStyle}
+          />
+        )
       ) : null}
     </View>
   );

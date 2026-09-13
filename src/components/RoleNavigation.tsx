@@ -32,13 +32,14 @@ const ownerMenu: NavigationItem[] = [
   { label: 'Account', href: menuHref('/owner/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
+// Kept to 5 tabs (most-used, daily operations) — Products and Branches are
+// lower-frequency admin tasks, reachable from the sidebar instead.
 const mainManagerMenu: NavigationItem[] = [
   { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
-  { label: 'Products', href: menuHref('/manager/products'), icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-  { label: 'Branches', href: menuHref('/manager/branches'), icon: 'git-branch-outline', selectedIcon: 'git-branch' },
   { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
   { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
 const sellingManagerMenu: NavigationItem[] = [
@@ -46,6 +47,7 @@ const sellingManagerMenu: NavigationItem[] = [
   { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Incoming', href: menuHref('/manager/incoming'), icon: 'download-outline', selectedIcon: 'download' },
   { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
 const cashierMenu: NavigationItem[] = [
@@ -77,12 +79,13 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
   // keep their existing stack navigation back to the parent page.
   const visible = items.some((item) => item.href === pathname);
   const showNav = visible && keyboardInset === 0;
-  const activeColor = role === 'manager' ? managerColors.royalBlue : colors.primary;
-  const indicatorColor = role === 'manager' ? managerColors.gold : colors.primary;
-  // Inter is only loaded for the manager route group's fonts — scope the font-family
-  // override to manager so owner/cashier keep their existing system-font label exactly.
-  const labelFontFamily = role === 'manager' ? 'Inter_600SemiBold' : undefined;
-  const selectedLabelFontFamily = role === 'manager' ? 'Inter_700Bold' : undefined;
+  // Manager and Cashier share the premium (Inter, floating pill) tab bar treatment;
+  // Owner keeps its original system-font tab bar unchanged.
+  const isPremium = role === 'manager' || role === 'cashier';
+  const activeColor = isPremium ? managerColors.royalBlue : colors.primary;
+  const indicatorColor = isPremium ? managerColors.gold : colors.primary;
+  const labelFontFamily = isPremium ? 'Inter_600SemiBold' : undefined;
+  const selectedLabelFontFamily = isPremium ? 'Inter_700Bold' : undefined;
 
   return (
     <BottomNavigationContext.Provider value={visible}>
@@ -91,10 +94,10 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
         {showNav ? (
           <SafeAreaView
             edges={['bottom', 'left', 'right']}
-            style={[styles.footer, role === 'manager' && styles.footerFloating]}
+            style={[styles.footer, isPremium && styles.footerFloating]}
           >
             <View
-              style={[styles.menu, role === 'manager' && styles.menuFloating]}
+              style={[styles.menu, isPremium && styles.menuFloating]}
               accessibilityLabel={`${role} navigation`}
             >
               {items.map((item) => {
@@ -114,14 +117,14 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
                       onPress={(event) => { if (selected) event.preventDefault(); }}
                       style={({ pressed }) => StyleSheet.flatten([
                         styles.item,
-                        selected && role !== 'manager' && styles.selectedItem,
+                        selected && !isPremium && styles.selectedItem,
                         pressed && styles.pressed,
                       ])}
                     >
-                      {role !== 'manager' ? (
+                      {!isPremium ? (
                         <View style={[styles.indicator, selected && { backgroundColor: indicatorColor }]} />
                       ) : null}
-                      <View style={[styles.iconChip, selected && role === 'manager' && styles.iconChipActive]}>
+                      <View style={[styles.iconChip, selected && isPremium && styles.iconChipActive]}>
                         <Ionicons
                           accessibilityElementsHidden
                           color={selected ? activeColor : colors.muted}

@@ -5,15 +5,16 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
-import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
+import { managerColors } from '@/components/dashboard/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductCard } from '@/features/pos/PosProductCard';
@@ -96,7 +97,7 @@ export default function CashierPosScreen() {
   }
   if (shiftQuery.error) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState
           message={getShiftErrorMessage(shiftQuery.error)}
           onRetry={() => void shiftQuery.refetch()}
@@ -107,7 +108,7 @@ export default function CashierPosScreen() {
   if (!shiftQuery.data) return <Redirect href="/cashier/dashboard" />;
   if (inventory.error || !profile?.branch) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState
           message={getInventoryErrorMessage(inventory.error)}
           onRetry={() => void inventory.refetch()}
@@ -129,7 +130,7 @@ export default function CashierPosScreen() {
       keyboardDismissMode="on-drag"
       ItemSeparatorComponent={posColumns === 1 ? () => <View style={styles.separator} /> : undefined}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={managerColors.royalBlue} />
       }
       ListEmptyComponent={
         <EmptyState
@@ -156,16 +157,10 @@ export default function CashierPosScreen() {
   );
 
   const searchField = (
-    <TextInput
-      accessibilityLabel="Search products by name or SKU"
-      autoCapitalize="none"
-      autoCorrect={false}
-      clearButtonMode="while-editing"
+    <SearchInput
+      value={search}
       onChangeText={setSearch}
       placeholder="Search product name or SKU"
-      placeholderTextColor={colors.muted}
-      style={styles.search}
-      value={search}
     />
   );
 
@@ -183,7 +178,7 @@ export default function CashierPosScreen() {
         Stock is deducted when you confirm the sale at checkout.
       </Text>
       {items.length > 0 ? (
-        <AppButton
+        <ManagerActionButton
           label="Clear order"
           variant="secondary"
           onPress={() =>
@@ -195,8 +190,9 @@ export default function CashierPosScreen() {
           }
         />
       ) : null}
-      <AppButton
-        label="CHECKOUT"
+      <ManagerActionButton
+        label="Checkout"
+        icon="card-outline"
         disabled={items.length === 0}
         onPress={() => router.push('/cashier/payment')}
       />
@@ -204,16 +200,17 @@ export default function CashierPosScreen() {
   );
 
   return (
-    <Screen scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
       {posSplit ? (
         <View style={styles.split}>
           <View style={styles.catalog}>
             <View style={styles.top}>
-              <PageHeader
+              <ManagerScreenHeader
                 title="Point of Sale"
-                subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
+                subtitle={shiftBranch?.name ?? profile.branch.name}
+                hideMenu
               />
-              {searchField}
+              <View style={styles.searchWrap}>{searchField}</View>
             </View>
             {productList}
           </View>
@@ -231,11 +228,12 @@ export default function CashierPosScreen() {
       ) : (
         <View style={styles.layout}>
           <View style={styles.top}>
-            <PageHeader
+            <ManagerScreenHeader
               title="Point of Sale"
-              subtitle={`${shiftBranch?.name ?? profile.branch.name} · Build the current order`}
+              subtitle={shiftBranch?.name ?? profile.branch.name}
+              hideMenu
             />
-            {searchField}
+            <View style={styles.searchWrap}>{searchField}</View>
           </View>
           {productList}
           {mobileFooter}
@@ -251,25 +249,11 @@ const styles = StyleSheet.create({
   split: { flex: 1, minHeight: 0, flexDirection: 'row' },
   catalog: { flex: 1.65, minWidth: 0, minHeight: 0 },
   orderPane: { flex: 1, minWidth: 280, maxWidth: 420, minHeight: 0 },
-  top: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-  },
-  search: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
+  top: { gap: spacing.sm },
+  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
   list: { flex: 1, minHeight: 0 },
   listContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 20,
     paddingVertical: spacing.sm,
     flexGrow: 1,
     gap: spacing.sm,
@@ -279,9 +263,9 @@ const styles = StyleSheet.create({
   separator: { height: spacing.sm },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
@@ -292,10 +276,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  totalMeta: { color: colors.muted, fontSize: 14, fontWeight: '600', flex: 1 },
-  totalAmount: { color: colors.primary, fontSize: 22, fontWeight: '900' },
+  totalMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14, flex: 1 },
+  totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 22 },
   notice: {
-    color: colors.muted,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',

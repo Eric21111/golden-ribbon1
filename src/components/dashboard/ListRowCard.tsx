@@ -11,7 +11,7 @@ interface ListRowCardProps {
   subtitle?: string;
   /** Renders subtitle as a small code-style chip instead of plain text (good for SKUs/IDs). */
   subtitleTag?: boolean;
-  meta?: string;
+  meta?: ReactNode;
   trailing?: ReactNode;
   onPress?: () => void;
 }

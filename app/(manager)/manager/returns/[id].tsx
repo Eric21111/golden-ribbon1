@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { RouteBanner } from '@/components/dashboard/RouteBanner';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { returnStatusBadgeLabel, returnStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
@@ -47,13 +48,11 @@ export default function ManagerReturnDetailsScreen() {
   const row = query.data;
   const notesByItemId = new Map(row.discrepancies?.map((disc) => [disc.stock_return_item_id, disc.notes]) ?? []);
   const summaryRows = [
-    { label: 'From branch', value: row.from_branch_name },
-    { label: 'To branch', value: row.to_branch_name },
-    { label: 'Returned by', value: row.returned_by_name },
-    { label: 'Returned at', value: formatDate(row.returned_at) },
-    ...(row.received_by_name ? [{ label: 'Received by', value: row.received_by_name }] : []),
-    ...(row.received_at ? [{ label: 'Received at', value: formatDate(row.received_at) }] : []),
-    ...(row.notes ? [{ label: 'Notes', value: row.notes }] : []),
+    { label: 'Returned by', value: row.returned_by_name, icon: 'person-outline' as const },
+    { label: 'Returned at', value: formatDate(row.returned_at), icon: 'time-outline' as const },
+    ...(row.received_by_name ? [{ label: 'Received by', value: row.received_by_name, icon: 'person-outline' as const }] : []),
+    ...(row.received_at ? [{ label: 'Received at', value: formatDate(row.received_at), icon: 'time-outline' as const }] : []),
+    ...(row.notes ? [{ label: 'Notes', value: row.notes, icon: 'document-text-outline' as const }] : []),
   ];
 
   return (
@@ -65,6 +64,11 @@ export default function ManagerReturnDetailsScreen() {
         showBack
       />
       <ConstrainedWidth style={styles.column}>
+        <RouteBanner
+          from={{ label: row.from_branch_name, isMain: false }}
+          to={{ label: row.to_branch_name, isMain: true }}
+          connectorIcon="return-up-back"
+        />
         <SummaryCard rows={summaryRows} />
 
         <Text style={styles.sectionTitle}>RETURNED PRODUCTS</Text>

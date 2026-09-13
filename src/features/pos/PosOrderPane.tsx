@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { managerColors } from '@/components/dashboard/theme';
 import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney } from '@/lib/format';
 import { cartTotalCents, toCents } from '@/lib/money';
@@ -96,7 +96,7 @@ export function PosOrderPane({
         </View>
         <Text style={styles.notice}>Stock is deducted when you confirm at checkout.</Text>
         {items.length > 0 ? (
-          <AppButton
+          <ManagerActionButton
             label="Clear order"
             variant="secondary"
             onPress={() =>
@@ -108,7 +108,7 @@ export function PosOrderPane({
             }
           />
         ) : null}
-        <AppButton label="CHECKOUT" disabled={items.length === 0} onPress={onCheckout} />
+        <ManagerActionButton label="Checkout" icon="card-outline" disabled={items.length === 0} onPress={onCheckout} />
       </View>
     </View>
   );
@@ -118,72 +118,72 @@ const styles = StyleSheet.create({
   pane: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderLeftWidth: 1,
-    borderLeftColor: colors.border,
+    borderLeftColor: managerColors.cardBorder,
   },
   title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '900',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   scroll: { flex: 1, minHeight: 0 },
-  scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm },
-  empty: { color: colors.muted, fontSize: 14, lineHeight: 20, paddingVertical: spacing.md },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
+  empty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, paddingVertical: 16 },
   line: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    gap: spacing.sm,
-    backgroundColor: colors.background,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+    backgroundColor: managerColors.cardSurface,
   },
   lineCopy: { gap: 2 },
-  name: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  calc: { color: colors.muted, fontSize: 12 },
+  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  calc: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
   lineActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
   stepper: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
+    borderColor: managerColors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperText: { color: colors.primary, fontSize: 20, fontWeight: '800', lineHeight: 22 },
-  qty: { minWidth: 24, textAlign: 'center', color: colors.text, fontSize: 16, fontWeight: '900' },
+  stepperText: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 19 },
+  qty: { minWidth: 22, textAlign: 'center', color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
   subtotal: {
     marginLeft: 'auto',
-    color: colors.text,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    fontWeight: '800',
   },
   disabled: { opacity: 0.35 },
-  pressed: { opacity: 0.65 },
+  pressed: { opacity: 0.7 },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    borderTopColor: managerColors.cardBorder,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 10,
   },
   totalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: 12,
   },
-  totalMeta: { color: colors.muted, fontSize: 14, fontWeight: '600', flex: 1 },
-  totalAmount: { color: colors.primary, fontSize: 22, fontWeight: '900' },
-  notice: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  totalMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14, flex: 1 },
+  totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 21 },
+  notice: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });

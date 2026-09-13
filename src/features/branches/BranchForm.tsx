@@ -2,10 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
 import { SwitchField } from '@/components/SwitchField';
-import { colors, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { managerColors } from '@/components/dashboard/theme';
 import { branchSchema, type BranchFormValues } from './branchSchema';
 
 interface BranchFormProps {
@@ -41,17 +41,61 @@ export function BranchForm({
   return (
     <View style={styles.form}>
       <Controller control={control} name="name" render={({ field, fieldState }) => (
-        <FormField label="Branch name" value={field.value} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} autoCapitalize="words" />
+        <FormField
+          label="Branch name"
+          value={field.value}
+          onBlur={field.onBlur}
+          onChangeText={field.onChange}
+          error={fieldState.error?.message}
+          autoCapitalize="words"
+          labelStyle={styles.fieldLabel}
+          errorStyle={styles.fieldError}
+          accentColor={managerColors.royalBlue}
+          style={styles.fieldInput}
+        />
       )} />
       <Controller control={control} name="code" render={({ field, fieldState }) => (
-        <FormField label="Branch code" value={field.value} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} autoCapitalize="characters" placeholder="e.g. BR-01" />
+        <FormField
+          label="Branch code"
+          value={field.value}
+          onBlur={field.onBlur}
+          onChangeText={field.onChange}
+          error={fieldState.error?.message}
+          autoCapitalize="characters"
+          placeholder="e.g. BR-01"
+          labelStyle={styles.fieldLabel}
+          errorStyle={styles.fieldError}
+          accentColor={managerColors.royalBlue}
+          style={styles.fieldInput}
+        />
       )} />
       <Controller control={control} name="address" render={({ field, fieldState }) => (
-        <FormField label="Address (optional)" value={field.value ?? ''} onBlur={field.onBlur} onChangeText={field.onChange} error={fieldState.error?.message} multiline numberOfLines={3} textAlignVertical="top" />
+        <FormField
+          label="Address (optional)"
+          value={field.value ?? ''}
+          onBlur={field.onBlur}
+          onChangeText={field.onChange}
+          error={fieldState.error?.message}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+          labelStyle={styles.fieldLabel}
+          errorStyle={styles.fieldError}
+          accentColor={managerColors.royalBlue}
+          style={styles.fieldInput}
+        />
       )} />
       {hideMainToggle ? null : (
         <Controller control={control} name="is_main_branch" render={({ field }) => (
-          <SwitchField label="Main Branch" description="Only one branch can be the Main Branch." value={field.value} onValueChange={field.onChange} />
+          <SwitchField
+            label="Main Branch"
+            description="Only one branch can be the Main Branch."
+            value={field.value}
+            onValueChange={field.onChange}
+            labelStyle={styles.fieldLabel}
+            descriptionStyle={styles.switchDescription}
+            activeTrackColor={managerColors.royalBlue}
+          />
         )} />
       )}
       <Controller control={control} name="is_active" render={({ field }) => (
@@ -64,15 +108,22 @@ export function BranchForm({
           }
           value={field.value}
           onValueChange={protectMainBranch ? () => undefined : field.onChange}
+          labelStyle={styles.fieldLabel}
+          descriptionStyle={styles.switchDescription}
+          activeTrackColor={managerColors.royalBlue}
         />
       )} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
+      <ManagerActionButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  form: { gap: 16 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
+  switchDescription: { fontFamily: 'Inter_400Regular' },
 });

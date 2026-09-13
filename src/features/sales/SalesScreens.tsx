@@ -1,34 +1,32 @@
-import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ErrorState, LoadingState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { SummaryCard } from '@/components/dashboard/SummaryCard';
+import { managerColors } from '@/components/dashboard/theme';
 import { useSale } from '@/hooks/useSales';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { SaleStatus } from '@/types/models';
 
-function SaleStatusBadge({ status }: { status: SaleStatus }) {
-  const isCompleted = status === 'completed';
-  return (
-    <Text
-      style={[
-        styles.badge,
-        isCompleted ? styles.completedBadge : styles.voidedBadge,
-      ]}
-    >
-      {isCompleted ? 'COMPLETED' : 'VOIDED'}
-    </Text>
-  );
+function goBack() {
+  if (router.canGoBack()) {
+    router.back();
+  } else {
+    router.replace('/cashier/sales');
+  }
 }
 
 type SaleDetailsBodyProps = {
   saleId: string;
+  /** True for the full-page drill-in route; false inside a tablet master–detail pane. */
+  showBack?: boolean;
 };
 
 /** Sale detail body reusable for full-page and tablet master–detail. */
-export function SaleDetailsBody({ saleId }: SaleDetailsBodyProps) {
+export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyProps) {
   const query = useSale(saleId);
 
   if (query.isLoading) return <LoadingState label="Loading sale details…" />;
@@ -42,71 +40,70 @@ export function SaleDetailsBody({ saleId }: SaleDetailsBodyProps) {
   }
 
   const sale = query.data;
+  const isCompleted = sale.status === 'completed';
 
   return (
-    <View style={styles.detailsBody}>
+    <View style={styles.body}>
       <View style={styles.headerRow}>
-        <View style={styles.detailsHeaderCopy}>
-          <PageHeader title={sale.sale_number} subtitle={`Sold ${formatDate(sale.sold_at)}`} />
-        </View>
-        <SaleStatusBadge status={sale.status} />
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Branch:</Text>
-          <Text style={styles.metaValue}>{sale.branch?.name ?? 'Branch'}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Cashier:</Text>
-          <Text style={styles.metaValue}>{sale.cashier?.full_name ?? 'Cashier'}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Shift Session:</Text>
-          <Text style={styles.metaValue}>
-            {sale.shift ? formatDate(sale.shift.started_at) : 'Shift session'}
+        {showBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={14}
+            onPress={goBack}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={24} color={managerColors.ink} />
+          </Pressable>
+        ) : null}
+        <View style={styles.headerCopy}>
+          <Text style={styles.title} numberOfLines={1}>
+            {sale.sale_number}
           </Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Date / Time:</Text>
-          <Text style={styles.metaValue}>{formatDate(sale.sold_at)}</Text>
-        </View>
-      </View>
-
-      <Text style={styles.sectionTitle}>Items Ordered</Text>
-      {sale.items.map((item) => (
-        <View key={item.id} style={styles.card}>
-          <View style={styles.headerRow}>
-            <Text style={styles.productName}>
-              {item.product?.name ?? `Product (${item.product_id})`}
+          <View style={styles.metaRow}>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              Sold {formatDate(sale.sold_at)}
             </Text>
-            <Text style={styles.itemSubtotal}>{formatMoney(item.subtotal)}</Text>
+            <ManagerBadge
+              label={isCompleted ? 'Completed' : 'Voided'}
+              tone={isCompleted ? 'success' : 'danger'}
+            />
           </View>
-          <Text style={styles.itemMeta}>
-            Quantity: {item.quantity} · Historical Price: {formatMoney(item.unit_price)}
-          </Text>
         </View>
+      </View>
+
+      <SummaryCard
+        rows={[
+          { label: 'Branch', value: sale.branch?.name ?? 'Branch', icon: 'storefront-outline' },
+          { label: 'Cashier', value: sale.cashier?.full_name ?? 'Cashier', icon: 'person-outline' },
+          {
+            label: 'Shift session',
+            value: sale.shift ? formatDate(sale.shift.started_at) : 'Shift session',
+            icon: 'time-outline',
+          },
+          { label: 'Date / time', value: formatDate(sale.sold_at), icon: 'calendar-outline' },
+        ]}
+      />
+
+      <Text style={styles.sectionTitle}>ITEMS ORDERED</Text>
+      {sale.items.map((item) => (
+        <ListRowCard
+          key={item.id}
+          title={item.product?.name ?? `Product (${item.product_id})`}
+          meta={`Quantity: ${item.quantity} · Historical price: ${formatMoney(item.unit_price)}`}
+          trailing={<Text style={styles.itemSubtotal}>{formatMoney(item.subtotal)}</Text>}
+        />
       ))}
 
-      <Text style={styles.sectionTitle}>Payment Summary</Text>
-      <View style={styles.card}>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Subtotal:</Text>
-          <Text style={styles.metaValue}>{formatMoney(sale.subtotal)}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.totalLabel}>Total Amount:</Text>
-          <Text style={styles.totalAmount}>{formatMoney(sale.total_amount)}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Amount Paid:</Text>
-          <Text style={styles.metaValue}>{formatMoney(sale.amount_paid)}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Change Given:</Text>
-          <Text style={styles.metaValue}>{formatMoney(sale.change_amount)}</Text>
-        </View>
-      </View>
+      <Text style={styles.sectionTitle}>PAYMENT SUMMARY</Text>
+      <SummaryCard
+        rows={[
+          { label: 'Subtotal', value: formatMoney(sale.subtotal) },
+          { label: 'Total amount', value: formatMoney(sale.total_amount), emphasis: true },
+          { label: 'Amount paid', value: formatMoney(sale.amount_paid) },
+          { label: 'Change given', value: formatMoney(sale.change_amount) },
+        ]}
+      />
     </View>
   );
 }
@@ -116,90 +113,27 @@ export function SaleDetailsScreen({ role: _role }: { role: 'cashier' }) {
   const id = typeof params.id === 'string' ? params.id : '';
 
   return (
-    <Screen constrain>
-      <SaleDetailsBody saleId={id} />
+    <Screen backgroundColor="#FFFFFF" contentContainerStyle={styles.screen}>
+      <SaleDetailsBody saleId={id} showBack />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  detailsBody: { gap: spacing.md },
-  detailsHeaderCopy: { flex: 1, minWidth: 0 },
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    fontSize: 11,
-    fontWeight: '800',
-    overflow: 'hidden',
-  },
-  completedBadge: {
-    color: '#166534',
-    backgroundColor: '#DCFCE7',
-  },
-  voidedBadge: {
-    color: '#991B1B',
-    backgroundColor: '#FEE2E2',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  metaLabel: {
-    color: colors.muted,
-    fontSize: 13,
-  },
-  metaValue: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  screen: { padding: 20, gap: 16 },
+  body: { gap: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  backButton: { alignItems: 'center', justifyContent: 'center', paddingTop: 2 },
+  pressed: { opacity: 0.6 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  title: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 20 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  subtitle: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, flexShrink: 1 },
   sectionTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: spacing.sm,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
-  productName: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-    flex: 1,
-  },
-  itemSubtotal: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  itemMeta: {
-    color: colors.muted,
-    fontSize: 13,
-  },
-  totalLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  totalAmount: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: '900',
-  },
+  itemSubtotal: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
 });

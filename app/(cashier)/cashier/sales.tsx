@@ -5,20 +5,23 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
+  Text,
   View,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 
-import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
+import { managerColors } from '@/components/dashboard/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { SaleListItem } from '@/features/pos/SaleListItem';
 import { SaleDetailsBody } from '@/features/sales/SalesScreens';
 import { useActiveShift } from '@/hooks/useShifts';
 import { getShiftErrorMessage } from '@/lib/errors';
+import { formatDate, formatMoney } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { listShiftSales } from '@/services/saleService';
 
@@ -55,7 +58,7 @@ export default function CurrentShiftSales() {
   if (shift.isLoading) return <LoadingState label="Checking active shift…" />;
   if (shift.error) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState
           message={getShiftErrorMessage(shift.error)}
           onRetry={() => void shift.refetch()}
@@ -72,21 +75,10 @@ export default function CurrentShiftSales() {
 
   const listHeader = (
     <View style={styles.top}>
-      <PageHeader
-        title="Current Shift Sales"
-        subtitle="Completed orders for your active shift."
-      />
-      <TextInput
-        accessibilityLabel="Search sales by sale number"
-        autoCapitalize="none"
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-        onChangeText={setSearch}
-        placeholder="Search sale #"
-        placeholderTextColor={colors.muted}
-        style={styles.search}
-        value={search}
-      />
+      <ManagerScreenHeader title="Current Shift Sales" hideMenu />
+      <View style={styles.searchWrap}>
+        <SearchInput value={search} onChangeText={setSearch} placeholder="Search sale #" />
+      </View>
     </View>
   );
 
@@ -98,12 +90,11 @@ export default function CurrentShiftSales() {
       contentContainerStyle={styles.listContent}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.primary}
+          tintColor={managerColors.royalBlue}
         />
       }
       ListEmptyComponent={
@@ -117,9 +108,10 @@ export default function CurrentShiftSales() {
         />
       }
       renderItem={({ item }) => (
-        <SaleListItem
-          sale={item}
-          selected={isTablet && item.id === selectedId}
+        <ListRowCard
+          title={item.sale_number}
+          meta={formatDate(item.sold_at)}
+          trailing={<Text style={styles.amount}>{formatMoney(item.total_amount)}</Text>}
           onPress={() => {
             if (isTablet) {
               setSelectedId(item.id);
@@ -133,7 +125,7 @@ export default function CurrentShiftSales() {
   );
 
   return (
-    <Screen scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
       {isTablet ? (
         <View style={styles.split}>
           <View style={[styles.master, { width: salesMasterWidth }]}>
@@ -197,42 +189,29 @@ const styles = StyleSheet.create({
     minWidth: 280,
     minHeight: 0,
     borderRightWidth: 1,
-    borderRightColor: colors.border,
+    borderRightColor: managerColors.cardBorder,
   },
   detail: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   detailScroll: { flex: 1 },
-  detailContent: { padding: spacing.md, flexGrow: 1 },
+  detailContent: { padding: 20, flexGrow: 1 },
   detailEmpty: {
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  top: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-  },
-  search: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
+  top: { gap: spacing.sm },
+  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
+  amount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
   list: { flex: 1, minHeight: 0 },
   listContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 20,
     paddingVertical: spacing.sm,
     flexGrow: 1,
+    gap: spacing.sm,
   },
-  separator: { height: spacing.sm },
 });

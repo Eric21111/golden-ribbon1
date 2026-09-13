@@ -3,10 +3,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
 import { SwitchField } from '@/components/SwitchField';
-import { colors, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { managerColors } from '@/components/dashboard/theme';
 
 import { generateSkuFromName } from './generateSku';
 import { productSchema, type ProductFormValues } from './productSchema';
@@ -58,6 +58,10 @@ export function ProductForm({
             onChangeText={field.onChange}
             error={fieldState.error?.message}
             autoCapitalize="words"
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -76,6 +80,10 @@ export function ProductForm({
             error={fieldState.error?.message}
             autoCapitalize="characters"
             placeholder={autoGenerateSku ? 'Auto from name' : 'e.g. CHK-NUG'}
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -95,6 +103,10 @@ export function ProductForm({
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -110,6 +122,10 @@ export function ProductForm({
             error={fieldState.error?.message}
             keyboardType="decimal-pad"
             placeholder="0.00"
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
           />
         )}
       />
@@ -122,17 +138,24 @@ export function ProductForm({
             description="Inactive products are retained for future historical records."
             value={field.value}
             onValueChange={field.onChange}
+            labelStyle={styles.fieldLabel}
+            descriptionStyle={styles.switchDescription}
+            activeTrackColor={managerColors.royalBlue}
           />
         )}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
+      <ManagerActionButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
-  hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: -spacing.sm },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  form: { gap: 16 },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginTop: -8 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
+  switchDescription: { fontFamily: 'Inter_400Regular' },
 });

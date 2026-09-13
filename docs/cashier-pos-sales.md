@@ -9,7 +9,7 @@ Cashier shift sales flow. End shift lives on **Home** only (not POS).
 | Current Shift Sales | `/cashier/sales` | `app/(cashier)/cashier/sales.tsx` |
 | Sale detail | `/cashier/sales/[id]` | `app/(cashier)/cashier/sales/[id].tsx` |
 
-Shared: `PosProductCard`, `PosOrderPane`, `OrderSummary`, `SaleListItem` under `src/features/pos/`. Cart: `cartStore`. Confirm sale: `checkoutStore`.
+Shared: `PosProductCard`, `PosOrderPane`, `OrderSummary` under `src/features/pos/`. Cart: `cartStore`. Confirm sale: `checkoutStore`.
 
 Layout helpers: `src/lib/layout.ts` (`useLayout`, tablet when shortest edge ≥ 600), `ConstrainedWidth`.
 

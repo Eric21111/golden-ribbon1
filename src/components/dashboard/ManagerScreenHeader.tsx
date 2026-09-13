@@ -3,6 +3,9 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
+
 import { HamburgerButton } from './HamburgerButton';
 import { managerColors } from './theme';
 
@@ -13,6 +16,8 @@ interface ManagerScreenHeaderProps {
   showBack?: boolean;
   /** Optional status badge shown inline with the subtitle — keeps it anchored to the record's identity instead of floating in the body. */
   badge?: ReactNode;
+  /** Top-level screens with no drawer to open (e.g. Cashier, which is bottom-tabs only) skip the hamburger entirely. */
+  hideMenu?: boolean;
 }
 
 function goBack() {
@@ -23,7 +28,13 @@ function goBack() {
   }
 }
 
-export function ManagerScreenHeader({ title, subtitle, showBack = false, badge }: ManagerScreenHeaderProps) {
+export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, hideMenu = false }: ManagerScreenHeaderProps) {
+  const { profile } = useAuth();
+  // Selling-branch managers have no drawer to open (see app/(manager)/_layout.tsx) — the
+  // hamburger would do nothing, so it never renders for them regardless of hideMenu.
+  const hasDrawer = profile?.role === 'manager' && isMainBranchManager(profile);
+  const showHamburger = !hideMenu && hasDrawer;
+
   if (showBack) {
     return (
       <View style={styles.header}>
@@ -59,9 +70,11 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge }
 
   return (
     <View style={styles.header}>
-      <View style={styles.topRow}>
-        <HamburgerButton />
-      </View>
+      {showHamburger ? (
+        <View style={styles.topRow}>
+          <HamburgerButton />
+        </View>
+      ) : null}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
           {title}

@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { RouteBanner } from '@/components/dashboard/RouteBanner';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
@@ -48,16 +49,19 @@ export default function ManagerTransferDetailsScreen() {
         showBack
       />
       <ConstrainedWidth style={styles.column}>
+        <RouteBanner
+          from={{ label: transfer.from_branch?.name ?? 'Sending branch', isMain: true }}
+          to={{ label: transfer.to_branch?.name ?? 'Receiving branch', isMain: false }}
+          connectorIcon="paper-plane"
+        />
         <SummaryCard
           rows={[
-            { label: 'From', value: transfer.from_branch?.name ?? 'Sending branch' },
-            { label: 'To', value: transfer.to_branch?.name ?? 'Receiving branch' },
-            { label: 'Created by', value: transfer.created_by_profile?.full_name ?? 'Staff details unavailable' },
-            { label: 'Sent by', value: transfer.sent_by_profile?.full_name ?? 'Pending' },
-            { label: 'Sent', value: formatDate(transfer.sent_at) },
-            { label: 'Received by', value: transfer.received_by_profile?.full_name ?? 'Pending' },
-            { label: 'Received', value: formatDate(transfer.received_at) },
-            ...(transfer.notes ? [{ label: 'Notes', value: transfer.notes }] : []),
+            { label: 'Created by', value: transfer.created_by_profile?.full_name ?? 'Staff details unavailable', icon: 'person-outline' },
+            { label: 'Sent by', value: transfer.sent_by_profile?.full_name ?? 'Pending', icon: 'paper-plane-outline' },
+            { label: 'Sent', value: formatDate(transfer.sent_at), icon: 'time-outline' },
+            { label: 'Received by', value: transfer.received_by_profile?.full_name ?? 'Pending', icon: 'person-outline' },
+            { label: 'Received', value: formatDate(transfer.received_at), icon: 'time-outline' },
+            ...(transfer.notes ? [{ label: 'Notes', value: transfer.notes, icon: 'document-text-outline' as const }] : []),
           ]}
         />
 

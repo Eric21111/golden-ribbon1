@@ -1,16 +1,18 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
-import { AppButton } from '@/components/AppButton';
-import { ErrorState, LoadingState } from '@/components/Feedback';
 import { FormField } from '@/components/FormField';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { managerColors } from '@/components/dashboard/theme';
 import { useBranches } from '@/hooks/useBranches';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { confirmAction } from '@/lib/confirmAction';
@@ -54,12 +56,19 @@ export function InventorySetupScreen() {
     }
   }, [inventory.data, reset]);
 
+  const pendingCount = useMemo(
+    () => (inventory.data ?? []).filter((item) => item.updated_at === null).length,
+    [inventory.data],
+  );
+  const totalCount = inventory.data?.length ?? 0;
+  const allInitialized = totalCount > 0 && pendingCount === 0;
+
   if (branches.isLoading || inventory.isLoading) {
     return <LoadingState label="Preparing inventory setup…" />;
   }
   if (!mainBranch || branches.error || inventory.error) {
     return (
-      <Screen constrain>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState message="Unable to load the active Main Branch inventory." />
       </Screen>
     );
@@ -83,38 +92,64 @@ export function InventorySetupScreen() {
   };
 
   return (
-    <Screen scroll={false} constrain contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <View style={styles.layout}>
+        <ManagerScreenHeader title="Opening stock" showBack />
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <PageHeader
-            title="Opening stock"
-            subtitle="Initialize products once for the Main Branch."
-          />
+          {totalCount > 0 ? (
+            <Text style={styles.progress}>
+              {allInitialized
+                ? 'All products initialized'
+                : `${pendingCount} of ${totalCount} product${totalCount === 1 ? '' : 's'} still need an opening quantity`}
+            </Text>
+          ) : null}
+
           {fields.map((field, index) => {
             const item = inventory.data?.[index];
             if (!item) return null;
             const initialized = item.updated_at !== null;
+
+            if (initialized) {
+              return (
+                <ListRowCard
+                  key={field.id}
+                  icon="checkmark-circle"
+                  iconColor="green"
+                  title={item.product.name}
+                  meta={item.product.sku}
+                  trailing={<Text style={styles.qtyHighlight}>{item.quantity_on_hand} units</Text>}
+                />
+              );
+            }
+
             return (
               <View key={field.id} style={styles.card}>
-                <Text style={styles.name}>{item.product.name}</Text>
-                <Text style={styles.meta}>Current quantity: {item.quantity_on_hand}</Text>
+                <View style={styles.cardTop}>
+                  <Text style={styles.name}>{item.product.name}</Text>
+                  <Text style={styles.meta}>Current quantity: {item.quantity_on_hand}</Text>
+                </View>
                 <Controller
                   control={control}
                   name={`items.${index}.quantity`}
                   render={({ field: quantity, fieldState }) => (
-                    <FormField
-                      label={initialized ? 'Already initialized' : 'Opening quantity'}
-                      editable={!initialized}
-                      value={initialized ? String(item.quantity_on_hand) : quantity.value}
-                      onChangeText={quantity.onChange}
-                      keyboardType="number-pad"
-                      error={fieldState.error?.message}
-                    />
+                    <>
+                      <Text style={styles.inputLabel}>Opening quantity</Text>
+                      <TextInput
+                        accessibilityLabel={`Opening quantity for ${item.product.name}`}
+                        value={quantity.value}
+                        onChangeText={quantity.onChange}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor={managerColors.subtext}
+                        style={[styles.input, fieldState.error && styles.inputError]}
+                      />
+                      {fieldState.error ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
+                    </>
                   )}
                 />
               </View>
@@ -126,28 +161,45 @@ export function InventorySetupScreen() {
           {mutation.error ? (
             <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
           ) : null}
+
+          {allInitialized ? (
+            <View style={styles.doneCard}>
+              <Ionicons name="checkmark-circle" size={28} color={managerColors.green} />
+              <Text style={styles.doneTitle}>Nothing left to set up</Text>
+              <Text style={styles.doneMessage}>
+                Every product already has an opening quantity for the Main Branch.
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
 
-        <View style={styles.footer}>
-          <Controller
-            control={control}
-            name="notes"
-            render={({ field, fieldState }) => (
-              <FormField
-                label="Notes (optional)"
-                value={field.value ?? ''}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                multiline
-              />
-            )}
-          />
-          <AppButton
-            label="Confirm opening stock"
-            loading={mutation.isPending}
-            onPress={handleSubmit(submit)}
-          />
-        </View>
+        {allInitialized ? null : (
+          <View style={styles.footer}>
+            <Controller
+              control={control}
+              name="notes"
+              render={({ field, fieldState }) => (
+                <FormField
+                  label="Notes (optional)"
+                  value={field.value ?? ''}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  multiline
+                  labelStyle={styles.fieldLabel}
+                  errorStyle={styles.fieldError}
+                  accentColor={managerColors.royalBlue}
+                  style={styles.fieldInput}
+                />
+              )}
+            />
+            <ManagerActionButton
+              label="Confirm opening stock"
+              icon="checkmark-circle-outline"
+              loading={mutation.isPending}
+              onPress={handleSubmit(submit)}
+            />
+          </View>
+        )}
       </View>
     </Screen>
   );
@@ -158,28 +210,74 @@ const styles = StyleSheet.create({
   layout: { flex: 1, minHeight: 0 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: {
-    padding: spacing.md,
-    gap: spacing.md,
-    paddingBottom: spacing.lg,
+    padding: 20,
+    gap: 12,
+    paddingBottom: 20,
   },
+  progress: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+    marginBottom: -2,
+  },
+  qtyHighlight: { color: managerColors.green, fontFamily: 'Inter_700Bold', fontSize: 14 },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
-  name: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  meta: { color: colors.muted, fontSize: 13 },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  cardTop: { gap: 2 },
+  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
+  inputLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  input: {
+    height: 46,
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 10,
+    backgroundColor: managerColors.cardSurface,
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    paddingHorizontal: 14,
+  },
+  inputError: { borderColor: '#B91C1C' },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 19 },
+  doneCard: {
+    alignItems: 'center',
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 6,
+    marginTop: 4,
+  },
+  doneTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  doneMessage: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 12,
   },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
+  fieldError: { fontFamily: 'Inter_500Medium' },
 });

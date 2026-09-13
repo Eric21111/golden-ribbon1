@@ -33,5 +33,5 @@ export function FilterChipRow<T extends string>({ options, value, onChange }: Fi
 }
 
 const styles = StyleSheet.create({
-  content: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  content: { flexDirection: 'row', gap: 10, paddingRight: 16 },
 });

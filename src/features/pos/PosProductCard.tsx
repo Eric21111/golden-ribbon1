@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
@@ -22,6 +23,7 @@ export function PosProductCard({
 }: PosProductCardProps) {
   const outOfStock = item.quantity_on_hand === 0;
   const atLimit = quantity >= item.quantity_on_hand;
+  const atMin = quantity <= 0;
 
   return (
     <View style={[styles.card, compact && styles.cardCompact]}>
@@ -36,41 +38,45 @@ export function PosProductCard({
           {formatMoney(item.product.selling_price)}
         </Text>
       </View>
-      <Text style={outOfStock ? styles.outOfStock : styles.stock}>
-        {outOfStock ? 'OUT OF STOCK' : `Available: ${item.quantity_on_hand}`}
-      </Text>
+      {outOfStock ? (
+        <ManagerBadge label="Out of stock" tone="danger" />
+      ) : (
+        <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
+      )}
       <View style={styles.controls}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Remove one ${item.product.name}`}
-          disabled={quantity === 0}
-          onPress={onDecrease}
-          style={({ pressed }) => [
-            styles.controlButton,
-            compact && styles.controlButtonCompact,
-            quantity === 0 && styles.disabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.controlText}>−</Text>
-        </Pressable>
-        <Text accessibilityLabel={`${quantity} selected`} style={styles.quantity}>
-          {quantity}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Add one ${item.product.name}`}
-          disabled={outOfStock || atLimit}
-          onPress={onIncrease}
-          style={({ pressed }) => [
-            styles.controlButton,
-            compact && styles.controlButtonCompact,
-            (outOfStock || atLimit) && styles.disabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.controlText}>+</Text>
-        </Pressable>
+        <View style={styles.stepperPill}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Remove one ${item.product.name}`}
+            hitSlop={6}
+            disabled={atMin}
+            onPress={onDecrease}
+            style={({ pressed }) => [
+              styles.stepperButton,
+              compact && styles.stepperButtonCompact,
+              pressed && !atMin && styles.stepperButtonPressed,
+            ]}
+          >
+            <Text style={[styles.stepperSymbol, atMin && styles.stepperSymbolDisabled]}>−</Text>
+          </Pressable>
+          <Text accessibilityLabel={`${quantity} selected`} style={styles.quantity}>
+            {quantity}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Add one ${item.product.name}`}
+            hitSlop={6}
+            disabled={outOfStock || atLimit}
+            onPress={onIncrease}
+            style={({ pressed }) => [
+              styles.stepperButton,
+              compact && styles.stepperButtonCompact,
+              pressed && !(outOfStock || atLimit) && styles.stepperButtonPressed,
+            ]}
+          >
+            <Text style={[styles.stepperSymbol, (outOfStock || atLimit) && styles.stepperSymbolDisabled]}>+</Text>
+          </Pressable>
+        </View>
       </View>
       {atLimit && !outOfStock ? (
         <Text style={styles.limit}>Maximum available quantity selected.</Text>
@@ -81,55 +87,55 @@ export function PosProductCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    padding: 14,
+    gap: 8,
     flex: 1,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
-  cardCompact: { padding: spacing.sm, gap: spacing.xs },
+  cardCompact: { padding: 10, gap: 6 },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: 10,
   },
   copy: { flex: 1, minWidth: 0 },
-  name: { color: colors.text, fontSize: 17, fontWeight: '800' },
-  nameCompact: { fontSize: 15 },
-  sku: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  price: { color: colors.primary, fontSize: 17, fontWeight: '900' },
-  priceCompact: { fontSize: 15 },
-  stock: { color: colors.success, fontSize: 13, fontWeight: '700' },
-  outOfStock: { color: colors.danger, fontSize: 13, fontWeight: '900' },
-  controls: {
+  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  nameCompact: { fontSize: 14 },
+  sku: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
+  price: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  priceCompact: { fontSize: 14 },
+  stock: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5 },
+  controls: { flexDirection: 'row', justifyContent: 'flex-end' },
+  stepperPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
+    height: 40,
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 10,
+    backgroundColor: managerColors.cardSurface,
+    overflow: 'hidden',
   },
-  controlButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButtonCompact: { width: 40, height: 40 },
-  controlText: { color: colors.primary, fontSize: 25, fontWeight: '800', lineHeight: 28 },
+  stepperButton: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
+  stepperButtonCompact: { width: 32 },
+  stepperButtonPressed: { backgroundColor: '#E4E9F2' },
+  stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 20 },
+  stepperSymbolDisabled: { color: managerColors.cardBorder },
   quantity: {
-    minWidth: 28,
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '900',
+    minWidth: 32,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
     textAlign: 'center',
   },
-  disabled: { opacity: 0.35 },
-  pressed: { opacity: 0.65 },
-  limit: { color: colors.muted, fontSize: 12, textAlign: 'right' },
+  limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'right' },
 });

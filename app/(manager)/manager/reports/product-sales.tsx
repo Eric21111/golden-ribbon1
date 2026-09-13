@@ -45,7 +45,7 @@ export default function ManagerProductSalesScreen() {
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Product Sales" subtitle={`${profile?.branch?.name ?? 'Branch'} product sales`} />
+      <ManagerScreenHeader title="Product Sales" subtitle={profile?.branch?.name ?? 'Branch'} />
 
       <ConstrainedWidth style={styles.column}>
         <FilterChipRow options={RANGE_OPTIONS} value={rangeType} onChange={setRangeType} />

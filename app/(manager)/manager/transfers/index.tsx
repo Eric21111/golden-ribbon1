@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -103,8 +103,16 @@ export default function TransferHistoryScreen() {
       <ConstrainedWidth style={styles.column}>
         <View style={styles.filters}>
           <SearchInput value={search} onChangeText={setSearch} placeholder="Search transfer # or branch" />
-          <FilterChipRow options={isMain ? OWNER_STATUS_CHOICES : MANAGER_STATUS_CHOICES} value={status} onChange={setStatus} />
-          {isMain ? <FilterChipRow options={destinationOptions} value={branchId} onChange={setBranchId} /> : null}
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterLabel}>Status</Text>
+            <FilterChipRow options={isMain ? OWNER_STATUS_CHOICES : MANAGER_STATUS_CHOICES} value={status} onChange={setStatus} />
+          </View>
+          {isMain ? (
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Destination branch</Text>
+              <FilterChipRow options={destinationOptions} value={branchId} onChange={setBranchId} />
+            </View>
+          ) : null}
         </View>
 
         {query.error ? (
@@ -153,7 +161,14 @@ export default function TransferHistoryScreen() {
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
-  filters: { gap: 12, marginBottom: 14 },
+  filters: { gap: 14, marginBottom: 14 },
+  filterGroup: { gap: 6 },
+  filterLabel: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    letterSpacing: 0.4,
+  },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
   footer: {

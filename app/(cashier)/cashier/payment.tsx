@@ -9,13 +9,14 @@ import {
 } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { AppButton } from '@/components/AppButton';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { ErrorState, LoadingState } from '@/components/Feedback';
 import { FormField } from '@/components/FormField';
-import { PageHeader } from '@/components/PageHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { managerColors } from '@/components/dashboard/theme';
+import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { OrderSummary } from '@/features/pos/OrderSummary';
 import { useActiveShift } from '@/hooks/useShifts';
@@ -135,7 +136,7 @@ export default function PaymentScreen() {
   if (shift.isLoading) return <LoadingState />;
   if (shift.error) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState message="Unable to verify your shift." onRetry={() => void shift.refetch()} />
       </Screen>
     );
@@ -148,16 +149,16 @@ export default function PaymentScreen() {
   const canConfirm = pricesReady && !priceError;
 
   return (
-    <Screen scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
       <ConstrainedWidth maxWidth={paymentMaxWidth} fill>
         <View style={styles.layout}>
+          <ManagerScreenHeader title="Checkout" showBack />
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           >
-            <PageHeader title="Checkout" subtitle="Review the order and collect payment." />
             {!pricesReady && !priceError && !checkout.sale ? (
               <LoadingState label="Refreshing current prices…" />
             ) : null}
@@ -179,6 +180,9 @@ export default function PaymentScreen() {
               value={checkout.request?.amountPaid ?? paid}
               editable={!checkout.request && !checkout.pending && pricesReady}
               onChangeText={setPaid}
+              labelStyle={styles.fieldLabel}
+              style={styles.fieldInput}
+              accentColor={managerColors.royalBlue}
             />
             <Text style={styles.hint}>
               Final prices and available stock are checked when you confirm. Displayed prices are
@@ -192,13 +196,14 @@ export default function PaymentScreen() {
           </ScrollView>
 
           <View style={styles.footer}>
-            <AppButton
-              label={checkout.request ? 'RETRY CONFIRMATION' : 'CONFIRM SALE'}
+            <ManagerActionButton
+              label={checkout.request ? 'Retry confirmation' : 'Confirm sale'}
+              icon="checkmark-circle-outline"
               loading={checkout.pending}
               disabled={!canConfirm}
               onPress={submit}
             />
-            <AppButton
+            <ManagerActionButton
               label="Back to order"
               variant="secondary"
               disabled={checkout.pending || Boolean(checkout.request)}
@@ -212,12 +217,12 @@ export default function PaymentScreen() {
         <View style={styles.overlay}>
           <View style={styles.card}>
             <Text style={styles.title}>SALE SUCCESSFUL</Text>
-            <Text>Sale: {checkout.sale?.sale_number}</Text>
-            <Text>Total: {formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
-            <Text>Money Given: {formatMoney(checkout.sale?.amount_paid ?? 0)}</Text>
-            <Text style={styles.title}>CHANGE</Text>
+            <Text style={styles.cardLine}>Sale: {checkout.sale?.sale_number}</Text>
+            <Text style={styles.cardLine}>Total: {formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
+            <Text style={styles.cardLine}>Money Given: {formatMoney(checkout.sale?.amount_paid ?? 0)}</Text>
+            <Text style={styles.changeLabel}>CHANGE</Text>
             <Text style={styles.change}>{formatMoney(checkout.sale?.change_amount ?? 0)}</Text>
-            <AppButton label="DONE" onPress={done} />
+            <ManagerActionButton label="Done" onPress={done} />
           </View>
         </View>
       </Modal>
@@ -230,44 +235,55 @@ const styles = StyleSheet.create({
   layout: { flex: 1, minHeight: 0 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: {
-    padding: spacing.md,
+    padding: 20,
     gap: spacing.md,
     flexGrow: 1,
   },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
-  hint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
   notice: {
     color: '#92400E',
-    backgroundColor: colors.warningSurface,
-    borderRadius: radius.sm,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
     padding: spacing.sm,
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
     lineHeight: 20,
   },
+  fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
+  fieldInput: { fontFamily: 'Inter_400Regular' },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(10, 18, 36, 0.6)',
     justifyContent: 'center',
     padding: spacing.lg,
   },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: spacing.lg,
-    gap: spacing.md,
+    gap: 10,
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
   },
-  title: { fontSize: 20, fontWeight: '800', color: colors.primary },
-  change: { fontSize: 44, fontWeight: '900', color: colors.success },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 18, color: managerColors.royalBlue, letterSpacing: 0.4 },
+  cardLine: { fontFamily: 'Inter_500Medium', fontSize: 15, color: managerColors.ink },
+  changeLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: managerColors.subtext,
+    letterSpacing: 0.8,
+    marginTop: 6,
+  },
+  change: { fontFamily: 'Inter_700Bold', fontSize: 40, color: managerColors.royalBlue },
 });

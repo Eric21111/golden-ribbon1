@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '@/constants/theme';
+import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
 import { cartTotalCents, toCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
@@ -30,15 +30,35 @@ export function OrderSummary({ items }: { items: CartItem[] }) {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: spacing.md },
-  title: { color: colors.text, fontSize: 19, fontWeight: '900' },
-  empty: { color: colors.muted, fontSize: 14 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
+  },
+  title: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  empty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: managerColors.cardBorder,
+  },
   copy: { flex: 1 },
-  name: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  calculation: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  subtotal: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.xs },
-  totalLabel: { color: colors.text, fontSize: 16, fontWeight: '900', letterSpacing: 0.8 },
-  total: { color: colors.primary, fontSize: 23, fontWeight: '900' },
+  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  calculation: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
+  subtotal: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 },
+  totalLabel: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15, letterSpacing: 0.6 },
+  total: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 22 },
 });

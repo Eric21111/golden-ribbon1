@@ -56,7 +56,7 @@ export default function ManagerAccountScreen() {
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Account" subtitle="Your staff account" />
+      <ManagerScreenHeader title="Account" />
 
       <ConstrainedWidth style={styles.column}>
         <View style={styles.identity}>
