@@ -14,11 +14,11 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
-import { transferStatusTone } from '@/components/dashboard/statusTone';
+import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
 import { useReceiveTransfer, useTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, formatTransferStatus, makeIdempotencyKey } from '@/lib/format';
+import { formatDate, makeIdempotencyKey } from '@/lib/format';
 
 const schema = z.object({
   items: z
@@ -81,7 +81,7 @@ export default function ReceiveTransferScreen() {
 
   if (query.isLoading) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title="Receive stock" showBack />
         <LoadingState label="Loading transfer…" />
       </Screen>
@@ -89,23 +89,25 @@ export default function ReceiveTransferScreen() {
   }
   if (query.error || !query.data) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title="Receive stock" showBack />
         <ErrorState message="Unable to load transfer." onRetry={() => void query.refetch()} />
       </Screen>
     );
   }
   const transfer = query.data;
+  const notesByItemId = new Map(transfer.discrepancies.map((disc) => [disc.stock_transfer_item_id, disc.notes]));
 
   if (transfer.status !== 'pending_receipt') {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
-        <ManagerScreenHeader title="Transfer receipt" subtitle="This transfer is no longer pending." showBack />
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader
+          title={transfer.transfer_number}
+          subtitle={`${transfer.from_branch?.name ?? 'Sending branch'} → ${transfer.to_branch?.name ?? 'Receiving branch'}`}
+          badge={<ManagerBadge label={transferStatusBadgeLabel(transfer.status)} tone={transferStatusTone(transfer.status)} />}
+          showBack
+        />
         <ConstrainedWidth style={styles.column}>
-          <View style={styles.statusRow}>
-            <ManagerBadge label={formatTransferStatus(transfer.status)} tone={transferStatusTone(transfer.status)} />
-          </View>
-
           <SummaryCard
             rows={[
               { label: 'From', value: transfer.from_branch?.name ?? 'Sending branch' },
@@ -122,49 +124,30 @@ export default function ReceiveTransferScreen() {
           <Text style={styles.sectionTitle}>PRODUCTS</Text>
           {transfer.items.map((item) => {
             const difference = item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+            const note = notesByItemId.get(item.id);
             return (
               <ListRowCard
                 key={item.id}
-                icon="cube-outline"
-                iconColor="blue"
                 title={item.product?.name ?? `Unavailable product (${item.product_id})`}
                 subtitle={`Sent ${item.quantity_sent} · Received ${item.quantity_received === null ? 'Pending' : item.quantity_received}`}
+                meta={note ? `Note: ${note}` : undefined}
                 trailing={
-                  difference !== null && difference !== 0 ? (
+                  difference === null ? undefined : (
                     <ManagerBadge
-                      label={difference > 0 ? `${difference} missing` : `${Math.abs(difference)} excess`}
-                      tone="warning"
+                      label={
+                        difference === 0
+                          ? 'Complete'
+                          : difference > 0
+                            ? `${difference} missing`
+                            : `${Math.abs(difference)} excess`
+                      }
+                      tone={difference === 0 ? 'success' : 'warning'}
                     />
-                  ) : undefined
+                  )
                 }
               />
             );
           })}
-
-          <Text style={styles.sectionTitle}>DISCREPANCIES</Text>
-          {transfer.discrepancies.length === 0 ? (
-            <Text style={styles.meta}>No discrepancies found.</Text>
-          ) : (
-            transfer.discrepancies.map((item) => (
-              <ListRowCard
-                key={item.id}
-                icon="alert-circle-outline"
-                iconColor="gold"
-                title={item.product?.name ?? `Unavailable product (${item.product_id})`}
-                subtitle={`Expected ${item.quantity_expected} · Received ${item.quantity_received}`}
-                trailing={
-                  <ManagerBadge
-                    label={
-                      item.discrepancy_type === 'missing'
-                        ? `${item.difference} missing`
-                        : `${Math.abs(item.difference)} excess`
-                    }
-                    tone="warning"
-                  />
-                }
-              />
-            ))
-          )}
         </ConstrainedWidth>
       </Screen>
     );
@@ -172,7 +155,7 @@ export default function ReceiveTransferScreen() {
 
   if (review) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader
           title="Review receipt"
           subtitle={`${transfer.transfer_number} · Confirm the physical counts below`}
@@ -182,8 +165,6 @@ export default function ReceiveTransferScreen() {
           {reviewItems.map((item) => (
             <ListRowCard
               key={item.id}
-              icon="cube-outline"
-              iconColor={item.difference !== 0 ? 'gold' : 'green'}
               title={item.product?.name ?? `Unavailable product (${item.product_id})`}
               subtitle={`Expected ${item.quantity_sent} · Received ${item.received}`}
               trailing={
@@ -243,7 +224,7 @@ export default function ReceiveTransferScreen() {
   }
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader
         title="Receive stock"
         subtitle={`${transfer.transfer_number} · ${transfer.from_branch?.name ?? 'Sending branch'} → ${transfer.to_branch?.name ?? 'Receiving branch'}`}
@@ -304,7 +285,8 @@ export default function ReceiveTransferScreen() {
 }
 
 const styles = StyleSheet.create({
-  column: { padding: 20, gap: 14 },
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  column: { padding: 20, gap: 12 },
   card: {
     backgroundColor: '#FFFFFF',
     borderColor: managerColors.cardBorder,
@@ -321,7 +303,6 @@ const styles = StyleSheet.create({
   fieldError: { fontFamily: 'Inter_500Medium' },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   actions: { gap: 10 },
-  statusRow: { flexDirection: 'row' },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',

@@ -39,16 +39,13 @@ const mainManagerMenu: NavigationItem[] = [
   { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
   { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
 const sellingManagerMenu: NavigationItem[] = [
   { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
   { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Incoming', href: menuHref('/manager/incoming'), icon: 'download-outline', selectedIcon: 'download' },
-  { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
   { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
 const cashierMenu: NavigationItem[] = [
@@ -92,8 +89,14 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
       <View style={styles.layout}>
         <View style={styles.content}>{children}</View>
         {showNav ? (
-          <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.footer}>
-            <View style={styles.menu} accessibilityLabel={`${role} navigation`}>
+          <SafeAreaView
+            edges={['bottom', 'left', 'right']}
+            style={[styles.footer, role === 'manager' && styles.footerFloating]}
+          >
+            <View
+              style={[styles.menu, role === 'manager' && styles.menuFloating]}
+              accessibilityLabel={`${role} navigation`}
+            >
               {items.map((item) => {
                 const selected = item.href === pathname;
                 return (
@@ -111,19 +114,21 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
                       onPress={(event) => { if (selected) event.preventDefault(); }}
                       style={({ pressed }) => StyleSheet.flatten([
                         styles.item,
-                        selected && styles.selectedItem,
+                        selected && role !== 'manager' && styles.selectedItem,
                         pressed && styles.pressed,
                       ])}
                     >
-                      <View
-                        style={[styles.indicator, selected && { backgroundColor: indicatorColor }]}
-                      />
-                      <Ionicons
-                        accessibilityElementsHidden
-                        color={selected ? activeColor : colors.muted}
-                        name={selected ? item.selectedIcon : item.icon}
-                        size={22}
-                      />
+                      {role !== 'manager' ? (
+                        <View style={[styles.indicator, selected && { backgroundColor: indicatorColor }]} />
+                      ) : null}
+                      <View style={[styles.iconChip, selected && role === 'manager' && styles.iconChipActive]}>
+                        <Ionicons
+                          accessibilityElementsHidden
+                          color={selected ? activeColor : colors.muted}
+                          name={selected ? item.selectedIcon : item.icon}
+                          size={22}
+                        />
+                      </View>
                       <Text
                         numberOfLines={1}
                         style={[
@@ -152,6 +157,12 @@ const styles = StyleSheet.create({
   layout: { flex: 1, backgroundColor: colors.background },
   content: { flex: 1, minHeight: 0 },
   footer: { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  footerFloating: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
   menu: {
     flexDirection: 'row',
     width: '100%',
@@ -161,6 +172,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     justifyContent: 'space-around',
     alignItems: 'center',
+  },
+  menuFloating: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 10,
   },
   linkItem: {
     flex: 1,
@@ -182,6 +204,14 @@ const styles = StyleSheet.create({
   selectedItem: { backgroundColor: colors.background },
   pressed: { opacity: 0.65 },
   indicator: { width: 20, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
+  iconChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  iconChipActive: { backgroundColor: '#EAF0FB' },
   label: { color: colors.muted, fontSize: 10, fontWeight: '600', textAlign: 'center', width: '100%' },
   selectedLabel: { fontWeight: '800' },
 });

@@ -47,18 +47,13 @@ export function ListRowCard({
               </Text>
             </View>
           ) : (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
           )
         ) : null}
-        {meta ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {meta}
-          </Text>
-        ) : null}
+        {meta ? <Text style={styles.meta}>{meta}</Text> : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      {onPress ? <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} style={styles.chevron} /> : null}
     </View>
   );
 
@@ -117,4 +112,5 @@ const styles = StyleSheet.create({
   },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
   trailing: { alignItems: 'flex-end', gap: 6 },
+  chevron: { marginLeft: -2 },
 });

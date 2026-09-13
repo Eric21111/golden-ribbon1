@@ -19,19 +19,28 @@ function ManagerNavigator() {
       onClose={closeDrawer}
       drawerPosition="left"
       drawerType="front"
-      drawerStyle={{ width: 300, backgroundColor: '#FFFFFF' }}
+      drawerStyle={{
+        width: 300,
+        backgroundColor: '#FFFFFF',
+        borderTopRightRadius: 24,
+        borderBottomRightRadius: 24,
+        overflow: 'hidden',
+      }}
       renderDrawerContent={() => <ManagerSidebar onClose={closeDrawer} onNavigate={closeDrawer} />}
     >
       <RoleNavigation role="manager">
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="manager/dashboard" />
-          <Stack.Screen name="manager/inventory" />
+          <Stack.Screen name="manager/inventory/index" />
+          <Stack.Screen name="manager/inventory/setup" />
           <Stack.Screen name="manager/returns/index" />
           <Stack.Screen name="manager/returns/create" />
           <Stack.Screen name="manager/returns/[id]" />
           <Stack.Screen name="manager/incoming/index" />
           <Stack.Screen name="manager/incoming/[id]" />
-          <Stack.Screen name="manager/movements" />
+          <Stack.Screen name="manager/transfers/index" />
+          <Stack.Screen name="manager/transfers/create" />
+          <Stack.Screen name="manager/transfers/[id]" />
           <Stack.Screen name="manager/products" />
           <Stack.Screen name="manager/sales/index" />
           <Stack.Screen name="manager/sales/[id]" />

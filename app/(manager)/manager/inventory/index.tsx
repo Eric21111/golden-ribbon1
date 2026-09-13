@@ -1,27 +1,102 @@
 import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
-import { PageHeader } from '@/components/PageHeader';
+import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
+import { ManagerBottomSheet as BottomSheet } from '@/components/dashboard/ManagerBottomSheet';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
+import { SummaryCard } from '@/components/dashboard/SummaryCard';
+import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
-import { InventoryHub } from '@/features/inventory/InventoryHub';
+import {
+  filterEmptyMessage,
+  getStockStatus,
+  matchesStockFilter,
+  type StockFilter,
+} from '@/features/inventory/inventoryStatus';
 import { useBranches } from '@/hooks/useBranches';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
+import { formatDate, formatMoney } from '@/lib/format';
+import type { InventoryItem } from '@/types/models';
+
+const badgeToneForStatus: Record<ReturnType<typeof getStockStatus>, ManagerBadgeTone> = {
+  in_stock: 'success',
+  low: 'warning',
+  out: 'danger',
+  not_set: 'neutral',
+};
+
+/** One pill communicates both quantity and urgency, instead of two stacked signals. */
+function stockPillLabel(status: ReturnType<typeof getStockStatus>, quantity: number): string {
+  switch (status) {
+    case 'in_stock':
+      return `${quantity} in stock`;
+    case 'low':
+      return `${quantity} left`;
+    case 'out':
+      return 'Out of stock';
+    case 'not_set':
+      return 'Not set';
+  }
+}
 
 export default function ManagerInventoryScreen() {
   const { profile } = useAuth();
   const isMain = isMainBranchManager(profile);
   const branches = useBranches();
-  const mainBranch = branches.data?.find((branch) => branch.is_main_branch);
+  const mainBranch = branches.data?.find((b) => b.is_main_branch);
   const branch = isMain ? mainBranch : profile?.branch;
   const query = useInventory(branch, !isMain);
 
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<StockFilter>('all');
+  const [selected, setSelected] = useState<InventoryItem | null>(null);
+
+  const filtered = useMemo(() => {
+    const items = query.data ?? [];
+    const term = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (!matchesStockFilter(item, filter)) return false;
+      if (!term) return true;
+      return `${item.product.name} ${item.product.sku}`.toLowerCase().includes(term);
+    });
+  }, [query.data, filter, search]);
+
+  const filterOptions = useMemo(() => {
+    const base: Array<{ label: string; value: StockFilter }> = [
+      { label: 'All', value: 'all' },
+      { label: 'In stock', value: 'in_stock' },
+      { label: 'Low', value: 'low' },
+      { label: 'Out', value: 'out' },
+    ];
+    if (isMain) base.push({ label: 'Not set', value: 'not_set' });
+    return base;
+  }, [isMain]);
+
+  const empty =
+    filter === 'all' && !search.trim()
+      ? {
+          title: isMain ? 'No inventory found' : 'No inventory initialized',
+          message: isMain ? 'Create active products, then initialize opening stock.' : 'Received products will appear here.',
+        }
+      : filterEmptyMessage(filter, Boolean(search.trim()));
+
+  const title = isMain ? 'Main Inventory' : 'Inventory';
+  const subtitle = isMain ? 'Main Branch' : (branch?.name ?? 'Assigned branch unavailable');
+
   if (isMain && branches.isLoading && !branches.data) {
     return (
-      <Screen>
-        <PageHeader title="Main Inventory" subtitle="Main Branch" />
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader title={title} subtitle="Main Branch" />
         <LoadingState label="Loading inventory…" />
       </Screen>
     );
@@ -29,8 +104,8 @@ export default function ManagerInventoryScreen() {
 
   if (isMain && branches.error) {
     return (
-      <Screen>
-        <PageHeader title="Main Inventory" subtitle="Main Branch" />
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader title={title} subtitle="Main Branch" />
         <ErrorState message={getErrorMessage(branches.error)} onRetry={() => void branches.refetch()} />
       </Screen>
     );
@@ -38,8 +113,8 @@ export default function ManagerInventoryScreen() {
 
   if (!branch) {
     return (
-      <Screen>
-        <PageHeader title={isMain ? 'Main Inventory' : 'Inventory'} subtitle="Assigned branch unavailable" />
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader title={title} subtitle="Assigned branch unavailable" />
         <EmptyState
           title={isMain ? 'No Main Branch' : 'No assigned branch'}
           message={
@@ -52,64 +127,157 @@ export default function ManagerInventoryScreen() {
     );
   }
 
-  if (isMain) {
-    return (
-      <InventoryHub
-        title="Main Inventory"
-        subtitle="Main Branch"
-        items={query.data}
-        isLoading={query.isLoading}
-        error={query.error ? getErrorMessage(query.error) : null}
-        onRetry={() => void query.refetch()}
-        onRefresh={() => {
-          void branches.refetch();
-          void query.refetch();
-        }}
-        isRefreshing={query.isRefetching || branches.isRefetching}
-        defaultEmptyTitle="No inventory found"
-        defaultEmptyMessage="Create active products, then initialize opening stock."
-        primaryAction={{
-          label: 'Send stock',
-          onPress: () => router.push('/manager/transfers/create' as never),
-        }}
-        sheetPrimaryAction={{
-          label: 'Send stock',
-          onPress: () => router.push('/manager/transfers/create' as never),
-        }}
-        includeNotSetFilter
-        enableMasterDetail={false}
-        overflowActions={[
-          { label: 'Set up opening stock', onPress: () => router.push('/manager/inventory/setup' as never) },
-        ]}
-      />
-    );
-  }
+  const refresh = () => {
+    if (isMain) void branches.refetch();
+    void query.refetch();
+  };
+  const refreshing = query.isRefetching || (isMain && branches.isRefetching);
 
   return (
-    <InventoryHub
-      title="Inventory"
-      subtitle={branch.name}
-      items={query.data}
-      isLoading={query.isLoading}
-      error={query.error ? getErrorMessage(query.error) : null}
-      onRetry={() => void query.refetch()}
-      onRefresh={() => void query.refetch()}
-      isRefreshing={query.isRefetching}
-      loadingLabel="Loading branch inventory…"
-      defaultEmptyTitle="No inventory initialized"
-      defaultEmptyMessage="Received products will appear here."
-      primaryAction={{
-        label: 'Return unsold stock',
-        onPress: () => router.push('/manager/returns/create'),
-      }}
-      sheetPrimaryAction={{
-        label: 'Return unsold stock',
-        onPress: () => router.push('/manager/returns/create'),
-      }}
-      overflowActions={[
-        { label: 'Return history', onPress: () => router.push('/manager/returns') },
-        { label: 'Transfer history', onPress: () => router.push('/manager/transfers' as never) },
-      ]}
-    />
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+      <ManagerScreenHeader title={title} subtitle={subtitle} />
+
+      <ConstrainedWidth style={styles.column}>
+        <View style={styles.filters}>
+          <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+          <FilterChipRow options={filterOptions} value={filter} onChange={setFilter} />
+        </View>
+
+        {query.error ? (
+          <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
+        ) : query.isLoading && !query.data ? (
+          <LoadingState label="Loading inventory…" />
+        ) : (
+          <>
+            <Text style={styles.resultsCount}>
+              {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
+            </Text>
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => item.product.id}
+              contentContainerStyle={styles.listContent}
+              refreshControl={<RefreshControl refreshing={Boolean(refreshing)} onRefresh={refresh} tintColor={managerColors.royalBlue} />}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
+              renderItem={({ item }) => {
+                const status = getStockStatus(item);
+                return (
+                  <ListRowCard
+                    title={item.product.name}
+                    subtitle={item.product.sku}
+                    subtitleTag
+                    trailing={
+                      <ManagerBadge label={stockPillLabel(status, item.quantity_on_hand)} tone={badgeToneForStatus[status]} size="md" />
+                    }
+                    onPress={() => setSelected(item)}
+                  />
+                );
+              }}
+            />
+          </>
+        )}
+
+        <View style={styles.footer}>
+          {isMain ? (
+            <>
+              <ManagerActionButton
+                label="Send stock"
+                icon="paper-plane-outline"
+                onPress={() => router.push('/manager/transfers/create' as never)}
+              />
+              <ManagerActionButton
+                label="Set up opening stock"
+                variant="secondary"
+                onPress={() => router.push('/manager/inventory/setup' as never)}
+              />
+            </>
+          ) : (
+            <ManagerActionButton
+              label="Return unsold stock"
+              icon="return-up-back-outline"
+              onPress={() => router.push('/manager/returns/create')}
+            />
+          )}
+        </View>
+      </ConstrainedWidth>
+
+      <BottomSheet visible={selected != null} title="Stock details" onClose={() => setSelected(null)}>
+        {selected ? (
+          <View style={styles.detail}>
+            <ListRowCard
+              title={selected.product.name}
+              subtitle={selected.product.sku}
+              subtitleTag
+              trailing={
+                <ManagerBadge
+                  label={stockPillLabel(getStockStatus(selected), selected.quantity_on_hand)}
+                  tone={badgeToneForStatus[getStockStatus(selected)]}
+                  size="md"
+                />
+              }
+            />
+            <SummaryCard
+              rows={[
+                { label: 'On hand', value: `${selected.quantity_on_hand} units`, emphasis: true },
+                { label: 'Selling price', value: formatMoney(selected.product.selling_price) },
+                {
+                  label: 'Last updated',
+                  value: selected.updated_at ? formatDate(selected.updated_at) : 'Not initialized',
+                },
+              ]}
+            />
+            {isMain ? (
+              <ManagerActionButton
+                label="Send stock"
+                icon="paper-plane-outline"
+                onPress={() => {
+                  setSelected(null);
+                  router.push('/manager/transfers/create' as never);
+                }}
+              />
+            ) : (
+              <ManagerActionButton
+                label="Return unsold stock"
+                icon="return-up-back-outline"
+                onPress={() => {
+                  setSelected(null);
+                  router.push('/manager/returns/create');
+                }}
+              />
+            )}
+          </View>
+        ) : null}
+      </BottomSheet>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+  filters: { gap: 12, marginBottom: 14 },
+  resultsCount: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  listContent: { paddingBottom: 12, flexGrow: 1 },
+  separator: { height: 12 },
+  footer: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    gap: 10,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  detail: { gap: 14, paddingBottom: 8 },
+});

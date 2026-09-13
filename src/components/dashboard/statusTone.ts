@@ -31,6 +31,38 @@ export function returnStatusTone(status: ReturnStatus): ManagerBadgeTone {
   }
 }
 
+/** Short label for badge pills — "Received With Discrepancy" wraps and crowds the row. */
+export function transferStatusBadgeLabel(status: TransferStatus): string {
+  switch (status) {
+    case 'pending_receipt':
+      return 'Pending';
+    case 'received':
+      return 'Received';
+    case 'received_with_discrepancy':
+      return 'Discrepancy';
+    case 'draft':
+      return 'Draft';
+    case 'cancelled':
+      return 'Cancelled';
+  }
+}
+
+/** Short label for badge pills — "Received With Discrepancy" wraps and crowds the row. */
+export function returnStatusBadgeLabel(status: ReturnStatus): string {
+  switch (status) {
+    case 'in_transit':
+      return 'In transit';
+    case 'received':
+      return 'Received';
+    case 'received_with_discrepancy':
+      return 'Discrepancy';
+    case 'draft':
+      return 'Draft';
+    case 'cancelled':
+      return 'Cancelled';
+  }
+}
+
 export function saleStatusTone(status: 'completed' | 'voided'): ManagerBadgeTone {
   return status === 'completed' ? 'success' : 'danger';
 }

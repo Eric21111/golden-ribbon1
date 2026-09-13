@@ -96,7 +96,7 @@ export default function CreateReturnScreen() {
 
   if (saved?.id) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title="Return confirmed" subtitle="Stock is now In Transit to Main Branch." showBack />
         <ConstrainedWidth style={styles.column}>
           <Text style={styles.body}>Branch stock was deducted once. Main Branch stock was not increased.</Text>
@@ -114,7 +114,7 @@ export default function CreateReturnScreen() {
   }
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader
         title={review || saved ? 'Review return' : 'Create return'}
         subtitle={`${profile?.branch?.name ?? 'Assigned branch'} → Main Branch`}
@@ -128,8 +128,6 @@ export default function CreateReturnScreen() {
             {selected.map((item) => (
               <ListRowCard
                 key={item.product_id}
-                icon="cube-outline"
-                iconColor="lilac"
                 title={
                   query.data?.find((row) => row.product_id === item.product_id)?.product_name ?? item.product_id
                 }
@@ -211,7 +209,8 @@ export default function CreateReturnScreen() {
 }
 
 const styles = StyleSheet.create({
-  column: { padding: 20, gap: 14 },
+  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
+  column: { padding: 20, gap: 12 },
   body: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   card: {
     backgroundColor: '#FFFFFF',

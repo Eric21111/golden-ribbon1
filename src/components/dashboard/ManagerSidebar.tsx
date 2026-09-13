@@ -1,13 +1,16 @@
 import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, usePathname } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { SignOutButton } from '@/components/SignOutButton';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 
+import { ManagerSignOutButton } from './ManagerSignOutButton';
 import { managerColors, managerGradients } from './theme';
+
+const logoSource = require('../../../assets/Golden_Ribbon_Logo-removebg-preview.png');
 
 type SidebarItem = {
   label: string;
@@ -21,54 +24,40 @@ type SidebarGroup = {
   items: SidebarItem[];
 };
 
-const groups: SidebarGroup[] = [
-  {
-    title: 'MENU',
-    items: [
-      { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
-      { label: 'Inventory', href: '/manager/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
-      { label: 'Incoming', href: '/manager/incoming', icon: 'download-outline', selectedIcon: 'download' },
-      { label: 'Returns', href: '/manager/returns', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-      { label: 'Products', href: '/manager/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
-    ],
-  },
-  {
-    title: 'REPORTS',
-    items: [
-      {
-        label: 'Branch Product Sales',
-        href: '/manager/reports/product-sales',
-        icon: 'bar-chart-outline',
-        selectedIcon: 'bar-chart',
-      },
-      { label: 'Sales History', href: '/manager/sales', icon: 'time-outline', selectedIcon: 'time' },
-      { label: 'Shift History', href: '/manager/shifts', icon: 'people-outline', selectedIcon: 'people' },
-      {
-        label: 'Inventory History',
-        href: '/manager/movements',
-        icon: 'swap-vertical-outline',
-        selectedIcon: 'swap-vertical',
-      },
-    ],
-  },
-  {
-    title: 'ACCOUNT',
-    items: [
-      {
-        label: 'Account',
-        href: '/manager/profile',
-        icon: 'person-circle-outline',
-        selectedIcon: 'person-circle',
-      },
-      {
-        label: 'Change Password',
-        href: '/manager/change-password',
-        icon: 'key-outline',
-        selectedIcon: 'key',
-      },
-    ],
-  },
-];
+function getGroups(isMain: boolean): SidebarGroup[] {
+  return [
+    {
+      title: 'MENU',
+      items: [
+        { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
+        { label: 'Inventory', href: '/manager/inventory', icon: 'cube-outline', selectedIcon: 'cube' },
+        { label: 'Incoming', href: '/manager/incoming', icon: 'download-outline', selectedIcon: 'download' },
+        { label: 'Returns', href: '/manager/returns', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+        // Product catalog management is limited to the Main Branch Manager.
+        ...(isMain
+          ? [{ label: 'Products', href: '/manager/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' } as SidebarItem]
+          : []),
+      ],
+    },
+    {
+      title: 'ACCOUNT',
+      items: [
+        {
+          label: 'Account',
+          href: '/manager/profile',
+          icon: 'person-circle-outline',
+          selectedIcon: 'person-circle',
+        },
+        {
+          label: 'Change Password',
+          href: '/manager/change-password',
+          icon: 'key-outline',
+          selectedIcon: 'key',
+        },
+      ],
+    },
+  ];
+}
 
 interface ManagerSidebarProps {
   onClose: () => void;
@@ -78,9 +67,7 @@ interface ManagerSidebarProps {
 export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
   const { profile } = useAuth();
   const pathname = usePathname().replace(/\/$/, '');
-
-  const managerName = profile?.full_name ?? 'Manager';
-  const branchName = profile?.branch?.name ?? 'Unassigned';
+  const groups = getGroups(isMainBranchManager(profile));
 
   const go = (href: string) => {
     router.push(href as never);
@@ -95,7 +82,13 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <SafeAreaView edges={['top']}>
+        <SafeAreaView edges={['top']} style={styles.headerRow}>
+          <View style={styles.identity}>
+            <Image source={logoSource} resizeMode="contain" style={styles.brandLogo} />
+            <Text style={styles.brandName} numberOfLines={1}>
+              Golden Ribbons
+            </Text>
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close menu"
@@ -103,19 +96,8 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
             onPress={onClose}
             style={styles.closeButton}
           >
-            <Ionicons name="close" size={22} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
-          <View style={styles.identity}>
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={22} color="#FFFFFF" />
-            </View>
-            <Text style={styles.name} numberOfLines={1}>
-              {managerName}
-            </Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              Branch Manager · {branchName}
-            </Text>
-          </View>
         </SafeAreaView>
       </LinearGradient>
 
@@ -154,7 +136,7 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
       </ScrollView>
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <SignOutButton variant="danger" labelStyle={styles.logoutLabel} />
+        <ManagerSignOutButton />
       </SafeAreaView>
     </View>
   );
@@ -162,22 +144,12 @@ export function ManagerSidebar({ onClose, onNavigate }: ManagerSidebarProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { paddingHorizontal: 20, paddingBottom: 20 },
-  closeButton: { alignSelf: 'flex-end', padding: 4, marginTop: 8 },
-  identity: { alignItems: 'flex-start', gap: 4, marginTop: 4 },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  name: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 18 },
-  subtitle: { color: 'rgba(255, 255, 255, 0.75)', fontFamily: 'Inter_400Regular', fontSize: 13 },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, borderTopRightRadius: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  closeButton: { padding: 4 },
+  identity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
+  brandLogo: { width: 36, height: 36 },
+  brandName: { flexShrink: 1, color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 17 },
   list: { flex: 1 },
   listContent: { paddingVertical: 12 },
   group: { marginBottom: 18 },
@@ -215,6 +187,6 @@ const styles = StyleSheet.create({
     borderTopColor: managerColors.cardBorder,
     paddingHorizontal: 20,
     paddingTop: 12,
+    paddingBottom: 16,
   },
-  logoutLabel: { fontFamily: 'Inter_700Bold' },
 });

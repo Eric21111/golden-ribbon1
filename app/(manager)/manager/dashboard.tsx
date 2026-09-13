@@ -1,21 +1,21 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { NavTile } from '@/components/dashboard/NavTile';
-import { RecentSaleRow } from '@/components/dashboard/RecentSaleRow';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { ErrorState } from '@/components/dashboard/ManagerFeedback';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useManagerDashboardMetrics, useManagerRecentSales } from '@/hooks/useSales';
+import { isMainBranchManager } from '@/features/auth/roles';
+import { useManagerDashboardMetrics } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -32,12 +32,11 @@ function Row({ children }: { children: ReactNode }) {
 
 export default function ManagerDashboard() {
   const { profile } = useAuth();
+  const isMain = isMainBranchManager(profile);
   const metricsQuery = useManagerDashboardMetrics();
-  const recentSalesQuery = useManagerRecentSales(5);
 
   const metrics = metricsQuery.data;
-  const recentSales = recentSalesQuery.data ?? [];
-  const refreshing = metricsQuery.isRefetching || recentSalesQuery.isRefetching;
+  const refreshing = metricsQuery.isRefetching;
 
   const attentionItems = [
     {
@@ -54,9 +53,23 @@ export default function ManagerDashboard() {
     },
   ].filter((item) => typeof item.value === 'number' && item.value > 0);
 
+  // Every tile here must point at a route this manager can actually reach —
+  // main-branch and selling-branch managers have different accessible screens.
+  const quickAccessItems = isMain
+    ? [
+        { title: 'Products', icon: 'fast-food-outline' as const, accent: 'gold' as const, href: '/manager/products' },
+        { title: 'Branches', icon: 'git-branch-outline' as const, accent: 'teal' as const, href: '/manager/branches' },
+        { title: 'Transfers', icon: 'swap-horizontal-outline' as const, accent: 'blue' as const, href: '/manager/transfers' },
+        { title: 'Stock returns', icon: 'return-up-back-outline' as const, accent: 'lilac' as const, href: '/manager/returns' },
+      ]
+    : [
+        { title: 'Inventory', icon: 'cube-outline' as const, accent: 'blue' as const, href: '/manager/inventory' },
+        { title: 'Incoming transfers', icon: 'download-outline' as const, accent: 'teal' as const, href: '/manager/incoming' },
+        { title: 'Stock returns', icon: 'return-up-back-outline' as const, accent: 'lilac' as const, href: '/manager/returns' },
+      ];
+
   const refresh = () => {
     void metricsQuery.refetch();
-    void recentSalesQuery.refetch();
   };
 
   const managerName = profile?.full_name ?? 'Manager';
@@ -95,6 +108,8 @@ export default function ManagerDashboard() {
       <ConstrainedWidth style={styles.column}>
         {metricsQuery.error ? (
           <ErrorState message={getErrorMessage(metricsQuery.error)} onRetry={refresh} />
+        ) : metricsQuery.isLoading && !metrics ? (
+          <LoadingState label="Loading dashboard…" />
         ) : (
           <View style={styles.content}>
             <Section title="BRANCH SNAPSHOT">
@@ -105,82 +120,28 @@ export default function ManagerDashboard() {
                   icon="cash-outline"
                   label="Today's Sales"
                   value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                  onPress={() => router.push('/manager/sales' as never)}
                 />
-                <StatTile
-                  style={styles.half}
-                  icon="receipt-outline"
-                  label="Orders Today"
-                  value={metrics?.today_transactions ?? '—'}
-                  onPress={() => router.push('/manager/sales' as never)}
-                />
-              </Row>
-              <Row>
                 <StatTile
                   style={styles.half}
                   icon="cube-outline"
                   label="Products in stock"
                   value={metrics?.current_inventory_count ?? '—'}
-                  onPress={() => router.push('/manager/inventory')}
                 />
+              </Row>
+              <Row>
                 <StatTile
                   style={styles.half}
                   icon="download-outline"
                   label="Pending incoming"
                   value={metrics?.pending_incoming_transfers_count ?? '—'}
-                  onPress={() => router.push('/manager/incoming')}
+                />
+                <StatTile
+                  style={styles.half}
+                  icon="return-up-back-outline"
+                  label="Returns in transit"
+                  value={metrics?.returns_in_transit_count ?? '—'}
                 />
               </Row>
-            </Section>
-
-            <Section title="SALES">
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="bar-chart-outline"
-                  accent="blue"
-                  title="Branch Product Sales"
-                  onPress={() => router.push('/manager/reports/product-sales' as never)}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="time-outline"
-                  accent="gold"
-                  title="Sales History"
-                  onPress={() => router.push('/manager/sales' as never)}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="people-outline"
-                  accent="teal"
-                  title="Shift History"
-                  onPress={() => router.push('/manager/shifts' as never)}
-                />
-              </Row>
-
-              {recentSales.length > 0 ? (
-                <>
-                  <View style={styles.recentHeader}>
-                    <Text style={styles.recentTitle}>Recent Sales</Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      hitSlop={8}
-                      onPress={() => router.push('/manager/sales' as never)}
-                    >
-                      <Text style={styles.viewAll}>View all</Text>
-                    </Pressable>
-                  </View>
-                  {recentSales.map((sale) => (
-                    <RecentSaleRow
-                      key={sale.id}
-                      saleNumber={sale.sale_number}
-                      amount={formatMoney(sale.total_amount)}
-                      cashierName={sale.cashier_name ?? 'Cashier'}
-                      date={formatDate(sale.sold_at)}
-                    />
-                  ))}
-                </>
-              ) : null}
             </Section>
 
             <Section title="NEEDS ATTENTION">
@@ -203,23 +164,48 @@ export default function ManagerDashboard() {
               )}
             </Section>
 
-            <Section title="INVENTORY">
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="return-up-back-outline"
-                  accent="lilac"
-                  title="Stock returns"
-                  onPress={() => router.push('/manager/returns')}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="swap-vertical-outline"
-                  accent="blue"
-                  title="Inventory history"
-                  onPress={() => router.push('/manager/movements' as never)}
-                />
-              </Row>
+            <Section title="QUICK ACCESS">
+              {isMain ? (
+                <>
+                  <Row>
+                    {quickAccessItems.slice(0, 2).map((item) => (
+                      <NavTile
+                        key={item.title}
+                        layout="tile"
+                        icon={item.icon}
+                        accent={item.accent}
+                        title={item.title}
+                        onPress={() => router.push(item.href as never)}
+                      />
+                    ))}
+                  </Row>
+                  <Row>
+                    {quickAccessItems.slice(2, 4).map((item) => (
+                      <NavTile
+                        key={item.title}
+                        layout="tile"
+                        icon={item.icon}
+                        accent={item.accent}
+                        title={item.title}
+                        onPress={() => router.push(item.href as never)}
+                      />
+                    ))}
+                  </Row>
+                </>
+              ) : (
+                <Row>
+                  {quickAccessItems.map((item) => (
+                    <NavTile
+                      key={item.title}
+                      layout="tile"
+                      icon={item.icon}
+                      accent={item.accent}
+                      title={item.title}
+                      onPress={() => router.push(item.href as never)}
+                    />
+                  ))}
+                </Row>
+              )}
             </Section>
           </View>
         )}
@@ -284,19 +270,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
-  recentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-    marginBottom: 2,
-  },
-  recentTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  viewAll: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });

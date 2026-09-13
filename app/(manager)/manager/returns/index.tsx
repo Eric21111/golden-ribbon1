@@ -11,14 +11,14 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
-import { returnStatusTone } from '@/components/dashboard/statusTone';
+import { returnStatusBadgeLabel, returnStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import type { StockReturnSummary } from '@/features/returns/ReturnListItem';
 import { MANAGER_RETURN_STATUS_CHOICES, returnFilterEmptyMessage, type ReturnStatusFilter } from '@/features/returns/returnFilters';
 import { useReturns } from '@/hooks/useReturns';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatReturnStatus } from '@/lib/format';
+import { formatDateShort } from '@/lib/format';
 
 export default function ManagerReturnsScreen() {
   const { profile } = useAuth();
@@ -43,7 +43,7 @@ export default function ManagerReturnsScreen() {
 
   if (!profile?.branch_id) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title="Returns" subtitle="Assigned branch unavailable" />
         <EmptyState title="No assigned branch" message="Ask an owner to assign you to a branch." />
       </Screen>
@@ -82,12 +82,12 @@ export default function ManagerReturnsScreen() {
               const productCount = item.items[0]?.count ?? 0;
               return (
                 <ListRowCard
-                  icon="return-up-back-outline"
-                  iconColor="lilac"
                   title={item.return_number}
                   subtitle={`${item.from_branch_name} → ${item.to_branch_name}`}
-                  meta={`${productCount} ${productCount === 1 ? 'item' : 'items'} · ${formatDate(item.returned_at)}`}
-                  trailing={<ManagerBadge label={formatReturnStatus(item.status)} tone={returnStatusTone(item.status)} />}
+                  meta={`${productCount} ${productCount === 1 ? 'item' : 'items'} · ${formatDateShort(item.returned_at)}`}
+                  trailing={
+                    <ManagerBadge label={returnStatusBadgeLabel(item.status)} tone={returnStatusTone(item.status)} size="md" />
+                  }
                   onPress={() => router.push({ pathname: '/manager/returns/[id]', params: { id: item.id } })}
                 />
               );
@@ -97,7 +97,11 @@ export default function ManagerReturnsScreen() {
 
         {!isMainBranch ? (
           <View style={styles.footer}>
-            <ManagerActionButton label="Create return" onPress={() => router.push('/manager/returns/create')} />
+            <ManagerActionButton
+              label="Create return"
+              icon="add-circle-outline"
+              onPress={() => router.push('/manager/returns/create')}
+            />
           </View>
         ) : null}
       </ConstrainedWidth>

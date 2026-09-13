@@ -10,8 +10,8 @@ export const OWNER_RETURN_STATUS_CHOICES: Array<{ label: string; value: ReturnSt
 ];
 
 export const MANAGER_RETURN_STATUS_CHOICES: Array<{ label: string; value: ReturnStatusFilter }> = [
-  { label: 'In transit', value: 'in_transit' },
   { label: 'All', value: '' },
+  { label: 'In transit', value: 'in_transit' },
   { label: 'Received', value: 'received' },
   { label: 'Discrepancy', value: 'received_with_discrepancy' },
 ];

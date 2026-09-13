@@ -3,9 +3,25 @@ import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
 
+/** First letter of first and last name, e.g. "Alshaik Reyes" → "AR". Falls back to the first 1-2 letters for a single-word name. */
+export function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase();
+}
+
 export function formatDate(value: string | null): string {
   if (!value) return 'Pending';
   return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+/** Compact date + time for tight list-row meta text — drops the year to avoid wrapping next to a badge. */
+export function formatDateShort(value: string | null): string {
+  if (!value) return 'Pending';
+  return new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(
+    new Date(value),
+  );
 }
 
 export function formatTransferStatus(status: TransferStatus): string {

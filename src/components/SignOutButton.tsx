@@ -1,12 +1,8 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors } from '@/constants/theme';
-import { useAuth } from '@/features/auth/AuthProvider';
-import { confirmAction } from '@/lib/confirmAction';
-import { getErrorMessage } from '@/lib/errors';
+import { useSignOut } from '@/features/auth/useSignOut';
 
 type SignOutButtonProps = {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -14,28 +10,7 @@ type SignOutButtonProps = {
 };
 
 export function SignOutButton({ variant = 'secondary', labelStyle }: SignOutButtonProps) {
-  const { signOut } = useAuth();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [error, setError] = useState('');
-
-  const performSignOut = async () => {
-    setError('');
-    setIsSigningOut(true);
-    try {
-      await signOut();
-      router.replace('/');
-    } catch (signOutError) {
-      setError(getErrorMessage(signOutError));
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
-
-  const confirmSignOut = () => {
-    confirmAction('Log out?', 'You will need to sign in again to use the app.', () => {
-      void performSignOut();
-    });
-  };
+  const { confirmSignOut, isSigningOut, error } = useSignOut();
 
   return (
     <>

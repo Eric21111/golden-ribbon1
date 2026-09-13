@@ -11,12 +11,12 @@ import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
-import { transferStatusTone } from '@/components/dashboard/statusTone';
+import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashboard/statusTone';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { MANAGER_STATUS_CHOICES, transferFilterEmptyMessage, type TransferStatusFilter } from '@/features/transfers/transferFilters';
 import { useTransfers } from '@/hooks/useTransfers';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatTransferStatus } from '@/lib/format';
+import { formatDateShort } from '@/lib/format';
 
 export default function IncomingTransfersScreen() {
   const { profile } = useAuth();
@@ -43,7 +43,7 @@ export default function IncomingTransfersScreen() {
 
   if (!profile?.branch_id || !profile.branch) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']}>
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title="Incoming" subtitle="Assigned branch unavailable" />
         <EmptyState title="No assigned branch" message="Ask an owner to assign you to a branch." />
       </Screen>
@@ -82,12 +82,12 @@ export default function IncomingTransfersScreen() {
               const productCount = item.items.length;
               return (
                 <ListRowCard
-                  icon="download-outline"
-                  iconColor="blue"
                   title={item.transfer_number}
                   subtitle={`${item.from_branch?.name ?? 'Sending branch'} → ${item.to_branch?.name ?? 'Receiving branch'}`}
-                  meta={`${productCount} ${productCount === 1 ? 'item' : 'items'} · ${formatDate(item.sent_at ?? item.created_at)}`}
-                  trailing={<ManagerBadge label={formatTransferStatus(item.status)} tone={transferStatusTone(item.status)} />}
+                  meta={`${productCount} ${productCount === 1 ? 'item' : 'items'} · ${formatDateShort(item.sent_at ?? item.created_at)}`}
+                  trailing={
+                    <ManagerBadge label={transferStatusBadgeLabel(item.status)} tone={transferStatusTone(item.status)} size="md" />
+                  }
                   onPress={() => router.push({ pathname: '/manager/incoming/[id]', params: { id: item.id } })}
                 />
               );
@@ -104,5 +104,5 @@ const styles = StyleSheet.create({
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
   listContent: { paddingBottom: 16, flexGrow: 1 },
-  separator: { height: 10 },
+  separator: { height: 12 },
 });

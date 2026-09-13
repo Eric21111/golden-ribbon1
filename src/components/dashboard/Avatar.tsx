@@ -1,6 +1,7 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
+
+import { getInitials } from '@/lib/format';
 
 import { managerGradients } from './theme';
 
@@ -27,7 +28,7 @@ export function Avatar({ name, size = 44, onPress }: AvatarProps) {
         end={{ x: 1, y: 1 }}
         style={[styles.circle, dimensionStyle]}
       >
-        <Ionicons name="person" size={size * 0.52} color="#FFFFFF" />
+        <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{getInitials(name)}</Text>
       </LinearGradient>
     </Pressable>
   );
@@ -40,5 +41,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.4)',
   },
+  initials: { color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
   pressed: { opacity: 0.8 },
 });
