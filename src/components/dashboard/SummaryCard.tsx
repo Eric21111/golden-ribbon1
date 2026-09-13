@@ -1,3 +1,4 @@
+import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from './theme';
@@ -6,6 +7,7 @@ interface SummaryCardRow {
   label: string;
   value: string;
   emphasis?: boolean;
+  icon?: IoniconsIconName;
 }
 
 interface SummaryCardProps {
@@ -22,9 +24,12 @@ export function SummaryCard({ title, rows }: SummaryCardProps) {
           key={row.label}
           style={[styles.row, index < rows.length - 1 && styles.rowDivider]}
         >
-          <Text style={styles.label} numberOfLines={1}>
-            {row.label}
-          </Text>
+          <View style={styles.labelRow}>
+            {row.icon ? <Ionicons name={row.icon} size={16} color={managerColors.subtext} /> : null}
+            <Text style={styles.label} numberOfLines={1}>
+              {row.label}
+            </Text>
+          </View>
           <Text style={[styles.value, row.emphasis && styles.valueEmphasis]} numberOfLines={1}>
             {row.value}
           </Text>
@@ -55,8 +60,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
+    gap: 12,
   },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   label: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
   value: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   valueEmphasis: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 17 },

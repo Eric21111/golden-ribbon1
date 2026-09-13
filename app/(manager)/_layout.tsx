@@ -49,6 +49,7 @@ function ManagerNavigator() {
           <Stack.Screen name="manager/reports/product-sales" />
           <Stack.Screen name="manager/profile" />
           <Stack.Screen name="manager/change-password" />
+          <Stack.Screen name="manager/change-email" />
         </Stack>
       </RoleNavigation>
     </Drawer>

@@ -15,6 +15,14 @@ interface ManagerScreenHeaderProps {
   badge?: ReactNode;
 }
 
+function goBack() {
+  if (router.canGoBack()) {
+    router.back();
+  } else {
+    router.replace('/manager/dashboard');
+  }
+}
+
 export function ManagerScreenHeader({ title, subtitle, showBack = false, badge }: ManagerScreenHeaderProps) {
   if (showBack) {
     return (
@@ -24,7 +32,7 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge }
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={14}
-            onPress={() => router.back()}
+            onPress={goBack}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
           >
             <Ionicons name="chevron-back" size={24} color={managerColors.ink} />

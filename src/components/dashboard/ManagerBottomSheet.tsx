@@ -3,6 +3,8 @@ import { StyleSheet } from 'react-native';
 
 import { BottomSheet as BaseBottomSheet } from '@/components/BottomSheet';
 
+import { managerColors } from './theme';
+
 export function ManagerBottomSheet(props: ComponentProps<typeof BaseBottomSheet>) {
   return (
     <BaseBottomSheet
@@ -14,6 +16,6 @@ export function ManagerBottomSheet(props: ComponentProps<typeof BaseBottomSheet>
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: 'Inter_700Bold' },
-  close: { fontFamily: 'Inter_600SemiBold' },
+  title: { fontFamily: 'Inter_700Bold', color: managerColors.ink },
+  close: { fontFamily: 'Inter_600SemiBold', color: managerColors.royalBlue },
 });

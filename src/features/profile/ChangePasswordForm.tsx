@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
@@ -15,10 +16,14 @@ type ChangePasswordFormProps = {
   onCancel?: () => void;
   hintStyle?: StyleProp<TextStyle>;
   labelStyle?: StyleProp<TextStyle>;
+  inputStyle?: StyleProp<TextStyle>;
   errorStyle?: StyleProp<TextStyle>;
   successStyle?: StyleProp<TextStyle>;
   buttonLabelStyle?: StyleProp<TextStyle>;
   accentColor?: string;
+  /** Lets a role-specific design system (e.g. the Manager premium buttons) replace the default AppButton. */
+  renderSubmitButton?: (args: { loading: boolean; disabled: boolean; onPress: () => void }) => ReactNode;
+  renderCancelButton?: (args: { disabled: boolean; onPress: () => void }) => ReactNode;
 };
 
 export function ChangePasswordForm({
@@ -26,10 +31,13 @@ export function ChangePasswordForm({
   onCancel,
   hintStyle,
   labelStyle,
+  inputStyle,
   errorStyle,
   successStyle,
   buttonLabelStyle,
   accentColor,
+  renderSubmitButton,
+  renderCancelButton,
 }: ChangePasswordFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
@@ -88,6 +96,7 @@ export function ChangePasswordForm({
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
@@ -110,6 +119,7 @@ export function ChangePasswordForm({
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
@@ -132,6 +142,7 @@ export function ChangePasswordForm({
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}
+            style={inputStyle}
           />
         )}
       />
@@ -139,21 +150,33 @@ export function ChangePasswordForm({
         <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
       ) : null}
       {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
-      <AppButton
-        label="Change password"
-        loading={formState.isSubmitting}
-        disabled={formState.isSubmitting}
-        onPress={handleSubmit(submit)}
-        labelStyle={buttonLabelStyle}
-      />
-      {onCancel ? (
+      {renderSubmitButton ? (
+        renderSubmitButton({
+          loading: formState.isSubmitting,
+          disabled: formState.isSubmitting,
+          onPress: handleSubmit(submit),
+        })
+      ) : (
         <AppButton
-          label="Cancel"
-          variant="secondary"
+          label="Change password"
+          loading={formState.isSubmitting}
           disabled={formState.isSubmitting}
-          onPress={onCancel}
+          onPress={handleSubmit(submit)}
           labelStyle={buttonLabelStyle}
         />
+      )}
+      {onCancel ? (
+        renderCancelButton ? (
+          renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
+        ) : (
+          <AppButton
+            label="Cancel"
+            variant="secondary"
+            disabled={formState.isSubmitting}
+            onPress={onCancel}
+            labelStyle={buttonLabelStyle}
+          />
+        )
       ) : null}
     </View>
   );

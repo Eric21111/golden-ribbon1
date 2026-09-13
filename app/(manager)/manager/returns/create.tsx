@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -27,7 +27,21 @@ export default function CreateReturnScreen() {
     queryFn: listReturnStock,
   });
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+
+  function setQuantity(productId: string, value: string) {
+    setQuantities((current) => ({ ...current, [productId]: value }));
+  }
+
+  function stepQuantity(productId: string, delta: number, max: number) {
+    setQuantities((current) => {
+      const parsed = Number.parseInt(current[productId] ?? '0', 10);
+      const base = Number.isFinite(parsed) ? parsed : 0;
+      const next = Math.min(max, Math.max(0, base + delta));
+      return { ...current, [productId]: String(next) };
+    });
+  }
   const [review, setReview] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -164,28 +178,87 @@ export default function CreateReturnScreen() {
             {query.data?.length === 0 ? (
               <EmptyState title="No stock to return" message="Only products with remaining stock appear here." />
             ) : null}
-            {query.data?.map((row) => (
-              <View key={row.product_id} style={styles.card}>
-                <Text style={styles.name}>
-                  {row.product_name}
-                  {!row.is_active ? ' (Inactive)' : ''}
-                </Text>
-                <Text style={styles.meta}>
-                  {row.product_sku} · Available: {row.quantity_on_hand}
-                </Text>
-                <FormField
-                  label={`Return quantity — ${row.product_name}`}
-                  keyboardType="number-pad"
-                  value={quantities[row.product_id] ?? ''}
-                  placeholder="0"
-                  maxLength={6}
-                  onChangeText={(value) => setQuantities((current) => ({ ...current, [row.product_id]: value }))}
-                  accentColor={managerColors.royalBlue}
-                  labelStyle={styles.fieldLabel}
-                  style={styles.fieldInput}
-                />
-              </View>
-            ))}
+            {query.data?.map((row) => {
+              const currentQty = Number.parseInt(quantities[row.product_id] ?? '0', 10) || 0;
+              const isFocused = focusedId === row.product_id;
+              const atMin = currentQty <= 0;
+              const atMax = currentQty >= row.quantity_on_hand;
+              return (
+                <View key={row.product_id} style={styles.card}>
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.name} numberOfLines={2}>
+                        {row.product_name}
+                      </Text>
+                      <Text style={styles.sku}>
+                        {row.product_sku}
+                        {!row.is_active ? ' · Inactive' : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.availablePill}>
+                      <Text style={styles.availableText} numberOfLines={1}>
+                        <Text style={styles.availableValue}>{row.quantity_on_hand}</Text>
+                        <Text style={styles.availableLabel}> available</Text>
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.qtyRow}>
+                    <Text style={styles.qtyCaption}>Qty</Text>
+                    <View style={styles.qtyControls}>
+                      <View style={[styles.stepperPill, isFocused && styles.stepperPillFocused]}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Decrease quantity for ${row.product_name}`}
+                          hitSlop={6}
+                          disabled={atMin}
+                          onPress={() => stepQuantity(row.product_id, -1, row.quantity_on_hand)}
+                          style={({ pressed }) => [styles.stepperButton, pressed && !atMin && styles.stepperButtonPressed]}
+                        >
+                          <Text style={[styles.stepperSymbol, atMin && styles.stepperSymbolDisabled]}>−</Text>
+                        </Pressable>
+                        <TextInput
+                          accessibilityLabel={`Return quantity for ${row.product_name}`}
+                          keyboardType="number-pad"
+                          value={quantities[row.product_id] ?? ''}
+                          placeholder="0"
+                          placeholderTextColor={managerColors.subtext}
+                          maxLength={6}
+                          selectTextOnFocus
+                          underlineColorAndroid="transparent"
+                          onFocus={() => setFocusedId(row.product_id)}
+                          onBlur={() => setFocusedId((current) => (current === row.product_id ? null : current))}
+                          onChangeText={(value) => setQuantity(row.product_id, value)}
+                          style={styles.stepperInput}
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Increase quantity for ${row.product_name}`}
+                          hitSlop={6}
+                          disabled={atMax}
+                          onPress={() => stepQuantity(row.product_id, 1, row.quantity_on_hand)}
+                          style={({ pressed }) => [styles.stepperButton, pressed && !atMax && styles.stepperButtonPressed]}
+                        >
+                          <Text style={[styles.stepperSymbol, atMax && styles.stepperSymbolDisabled]}>+</Text>
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Return all ${row.quantity_on_hand} available`}
+                        disabled={atMax}
+                        onPress={() => setQuantity(row.product_id, String(row.quantity_on_hand))}
+                        style={({ pressed }) => [
+                          styles.maxButton,
+                          atMax && styles.maxButtonDisabled,
+                          pressed && !atMax && styles.maxButtonPressed,
+                        ]}
+                      >
+                        <Text style={[styles.maxButtonText, atMax && styles.maxButtonTextDisabled]}>Max</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
             <FormField
               label="Notes (optional)"
               value={notes}
@@ -218,10 +291,82 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    gap: 8,
+    gap: 12,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  cardInfo: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  sku: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
+  availablePill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  availableText: { fontSize: 13 },
+  availableValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  availableLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  qtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingTop: 12,
+    gap: 12,
+  },
+  qtyCaption: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepperPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 10,
+    backgroundColor: managerColors.cardSurface,
+    overflow: 'hidden',
+  },
+  stepperPillFocused: {
+    borderColor: managerColors.royalBlue,
+    backgroundColor: '#FFFFFF',
+  },
+  stepperButton: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
+  stepperButtonPressed: { backgroundColor: '#E4E9F2' },
+  stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 20 },
+  stepperSymbolDisabled: { color: managerColors.cardBorder },
+  stepperInput: {
+    width: 40,
+    height: 40,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: 'transparent',
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    textAlign: 'center',
+    paddingVertical: 0,
+  },
+  maxButton: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#EAF0FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  maxButtonPressed: { opacity: 0.7 },
+  maxButtonDisabled: { backgroundColor: managerColors.cardSurface },
+  maxButtonText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  maxButtonTextDisabled: { color: managerColors.cardBorder },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   actions: { gap: 10 },

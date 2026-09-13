@@ -193,8 +193,8 @@ export default function ManagerInventoryScreen() {
             </>
           ) : (
             <ManagerActionButton
-              label="Return unsold stock"
-              icon="return-up-back-outline"
+              label="Create return"
+              icon="add-circle-outline"
               onPress={() => router.push('/manager/returns/create')}
             />
           )}
