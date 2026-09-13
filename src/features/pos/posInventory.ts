@@ -1,4 +1,32 @@
-import type { InventoryItem } from '@/types/models';
+import type { InventoryItem, ProfileWithBranch, Shift } from '@/types/models';
+
+/** Shift branch wins. Profile branch is only a fallback before a shift exists. */
+export function authoritativePosBranchId(
+  shift: Pick<Shift, 'branch_id'> | null | undefined,
+  profile: Pick<ProfileWithBranch, 'branch_id' | 'branch'> | null | undefined,
+): string | null {
+  if (shift?.branch_id) return shift.branch_id;
+  return profile?.branch_id ?? profile?.branch?.id ?? null;
+}
+
+/**
+ * Old POS gate merged every active product with RLS-hidden balances as qty 0.
+ * That looks like "all out of stock" even when the branch has inventory.
+ * POS may open when any active product actually has quantity_on_hand > 0.
+ */
+export function mergeCatalogWithBalances(
+  products: Array<InventoryItem['product']>,
+  balances: Array<{ product_id: string; quantity_on_hand: number }>,
+  branch: InventoryItem['branch'],
+): InventoryItem[] {
+  const qty = new Map(balances.map((row) => [row.product_id, row.quantity_on_hand]));
+  return products.map((product) => ({
+    branch,
+    product,
+    quantity_on_hand: qty.get(product.id) ?? 0,
+    updated_at: null,
+  }));
+}
 
 export function isOutOfStock(item: InventoryItem): boolean {
   return item.quantity_on_hand <= 0;

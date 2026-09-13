@@ -28,6 +28,7 @@ export function useStartShift(cashierId: string) {
         client.invalidateQueries({ queryKey: queryKeys.profile(cashierId) }),
         client.invalidateQueries({ queryKey: queryKeys.activeShift(cashierId) }),
         client.invalidateQueries({ queryKey: ['inventory'] }),
+        client.invalidateQueries({ queryKey: ['inventory', 'cashier-pos'] }),
         client.invalidateQueries({ queryKey: ['shifts'] }),
       ]);
     },

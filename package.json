@@ -48,6 +48,7 @@
     "test:sales": "node tests/sales.mjs",
     "test:returns": "node tests/returns.mjs",
     "test:archive": "node tests/milestone11_3_archive.mjs",
+    "test:pos": "node tests/pos_and_sku.mjs && node tests/cashier_pos_stock.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

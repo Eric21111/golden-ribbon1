@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryObserverResult } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 import { queryKeys } from '@/lib/queryKeys';
@@ -16,7 +16,7 @@ interface AuthContextValue {
   profileError: Error | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  retryProfile: () => Promise<unknown>;
+  retryProfile: () => Promise<QueryObserverResult<ProfileWithBranch, Error>>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

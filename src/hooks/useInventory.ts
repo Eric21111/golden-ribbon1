@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
-import { initializeMainInventory, listInventory } from '@/services/inventoryService';
+import { initializeMainInventory, listCashierPosInventory, listInventory } from '@/services/inventoryService';
 import type { Branch } from '@/types/models';
 
 export function useInventory(branch: Branch | null | undefined, activeOnly = false) {
@@ -9,6 +9,15 @@ export function useInventory(branch: Branch | null | undefined, activeOnly = fal
     queryKey: queryKeys.inventory(branch?.id ?? '', activeOnly),
     queryFn: () => listInventory(branch as Branch, activeOnly),
     enabled: Boolean(branch),
+  });
+}
+
+export function useCashierPosInventory(branchId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cashierPosInventory(branchId ?? ''),
+    queryFn: listCashierPosInventory,
+    enabled: Boolean(branchId),
+    staleTime: 0,
   });
 }
 

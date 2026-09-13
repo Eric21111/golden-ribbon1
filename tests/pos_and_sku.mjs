@@ -49,6 +49,25 @@ function item(name, sku, qty) {
   return { product: { name, sku }, quantity_on_hand: qty };
 }
 
+function authoritativePosBranchId(shift, profile) {
+  if (shift?.branch_id) return shift.branch_id;
+  return profile?.branch_id ?? profile?.branch?.id ?? null;
+}
+
+function mergeCatalogWithBalances(products, balances, branch) {
+  const qty = new Map(balances.map((row) => [row.product_id, row.quantity_on_hand]));
+  return products.map((product) => ({
+    branch,
+    product,
+    quantity_on_hand: qty.get(product.id) ?? 0,
+    updated_at: null,
+  }));
+}
+
+function hasSellableStock(items) {
+  return items.some((row) => row.quantity_on_hand > 0);
+}
+
 assert.equal(skuFromName('Beef Meal'), 'BEEF-MEAL');
 assert.equal(skuFromName('  chicken butter!! '), 'CHICKEN-BUTTER');
 assert.equal(uniqueSku('Beef Meal', ['BEEF-MEAL']), 'BEEF-MEAL-2');
@@ -69,5 +88,27 @@ assert.deepEqual(
   filterPosInventory(rows, 'out').map((row) => row.product.sku),
   ['OUT-A', 'OUT-C'],
 );
+
+assert.equal(
+  authoritativePosBranchId({ branch_id: 'shift-branch' }, { branch_id: 'stale-profile', branch: { id: 'stale-nested' } }),
+  'shift-branch',
+);
+assert.equal(authoritativePosBranchId(null, { branch_id: 'assigned', branch: { id: 'nested' } }), 'assigned');
+assert.equal(authoritativePosBranchId(null, { branch_id: null, branch: { id: 'nested' } }), 'nested');
+assert.equal(authoritativePosBranchId(null, null), null);
+
+const branch = { id: 'branch-1', name: 'Branch 1' };
+const catalog = [
+  { id: 'p1', name: 'Nuggets', sku: 'NUG', description: null, selling_price: 80, is_active: true, created_at: '', updated_at: '' },
+  { id: 'p2', name: 'Rice', sku: 'RICE', description: null, selling_price: 40, is_active: true, created_at: '', updated_at: '' },
+];
+const hiddenByRls = [];
+const buggyGate = mergeCatalogWithBalances(catalog, hiddenByRls, branch);
+assert.equal(hasSellableStock(buggyGate), false, 'RLS-empty balances were treated as all out of stock');
+
+const liveBalances = [{ product_id: 'p1', quantity_on_hand: 18 }];
+const liveGate = mergeCatalogWithBalances(catalog, liveBalances, branch);
+assert.equal(hasSellableStock(liveGate), true, 'POS opens when any active product has quantity_on_hand > 0');
+assert.equal(hasSellableStock(mergeCatalogWithBalances(catalog, [{ product_id: 'p1', quantity_on_hand: 0 }], branch)), false);
 
 console.log('pos-and-sku checks passed');

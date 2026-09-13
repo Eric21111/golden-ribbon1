@@ -19,7 +19,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductCard } from '@/features/pos/PosProductCard';
 import { filterPosInventory } from '@/features/pos/posInventory';
-import { useInventory } from '@/hooks/useInventory';
+import { useCashierPosInventory } from '@/hooks/useInventory';
 import { useActiveShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
@@ -35,13 +35,9 @@ export default function CashierPosScreen() {
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
   const shiftQuery = useActiveShift(cashierId);
-  const shiftBranch = useMemo(() => {
-    if (!shiftQuery.data) return null;
-    if (profile?.branch?.id === shiftQuery.data.branch_id) return profile.branch;
-    if (!profile?.branch) return null;
-    return { ...profile.branch, id: shiftQuery.data.branch_id };
-  }, [profile?.branch, shiftQuery.data]);
-  const inventory = useInventory(shiftBranch, true);
+  const posBranchId = shiftQuery.data?.branch_id ?? null;
+  const inventory = useCashierPosInventory(posBranchId);
+  const shiftBranchName = inventory.data?.[0]?.branch.name ?? profile?.branch?.name;
   const items = useCartStore((state) => state.items);
   const beginShift = useCartStore((state) => state.beginShift);
   const addProduct = useCartStore((state) => state.addProduct);
@@ -106,7 +102,7 @@ export default function CashierPosScreen() {
     );
   }
   if (!shiftQuery.data) return <Redirect href="/cashier/dashboard" />;
-  if (inventory.error || !profile?.branch) {
+  if (inventory.error) {
     return (
       <Screen backgroundColor="#FFFFFF">
         <ErrorState
@@ -207,7 +203,7 @@ export default function CashierPosScreen() {
             <View style={styles.top}>
               <ManagerScreenHeader
                 title="Point of Sale"
-                subtitle={shiftBranch?.name ?? profile.branch.name}
+                subtitle={shiftBranchName ?? 'Assigned branch'}
                 hideMenu
               />
               <View style={styles.searchWrap}>{searchField}</View>
@@ -230,7 +226,7 @@ export default function CashierPosScreen() {
           <View style={styles.top}>
             <ManagerScreenHeader
               title="Point of Sale"
-              subtitle={shiftBranch?.name ?? profile.branch.name}
+              subtitle={shiftBranchName ?? 'Assigned branch'}
               hideMenu
             />
             <View style={styles.searchWrap}>{searchField}</View>

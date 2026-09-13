@@ -186,6 +186,19 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       list_return_inventory: { Args: Record<string, never>; Returns: ReturnStock[] };
+      list_cashier_pos_inventory: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          branch_id: string;
+          branch_name: string;
+          product_id: string;
+          product_name: string;
+          product_sku: string;
+          selling_price: number;
+          quantity_on_hand: number;
+          updated_at: string | null;
+        }>;
+      };
       create_stock_return: { Args: ReturnRequest; Returns: string };
       confirm_sale: { Args: { p_shift_id: string; p_items: { product_id: string; quantity: number }[]; p_amount_paid: string; p_idempotency_key: string }; Returns: Sale };
       current_user_branch_id: { Args: Record<string, never>; Returns: string | null };

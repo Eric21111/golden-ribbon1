@@ -12,68 +12,83 @@ import { StatTile } from '@/components/dashboard/StatTile';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
+  authoritativePosBranchId,
   formatOutOfStockWarning,
   hasSellableStock,
   outOfStockProductNames,
 } from '@/features/pos/posInventory';
-import { useInventory } from '@/hooks/useInventory';
+import { useCashierPosInventory } from '@/hooks/useInventory';
 import { useActiveShift, useEndShift, useShiftSummary, useStartShift } from '@/hooks/useShifts';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
+import { queryKeys } from '@/lib/queryKeys';
+import { listCashierPosInventory } from '@/services/inventoryService';
 import { useCartStore } from '@/stores/cartStore';
 import type { InventoryItem } from '@/types/models';
 
 export default function CashierDashboard() {
-  const { profile } = useAuth();
+  const { profile, retryProfile } = useAuth();
+  const queryClient = useQueryClient();
   const cashierId = profile?.id ?? '';
   const shiftQuery = useActiveShift(cashierId);
   const summaryQuery = useShiftSummary(shiftQuery.data?.id ?? '');
   const startMutation = useStartShift(cashierId);
   const endMutation = useEndShift(cashierId);
-  const inventory = useInventory(profile?.branch, true);
+  const posBranchId = authoritativePosBranchId(shiftQuery.data, profile);
+  const inventory = useCashierPosInventory(posBranchId);
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const [checkingStock, setCheckingStock] = useState(false);
 
-  // Always re-fetch live stock instead of trusting the cached snapshot (queryClient caches
-  // reads for 30s and never refetches on focus) — this gate must reflect what a manager
-  // just restocked or received a moment ago, not a stale "out of stock" read from before.
   const ensureStockAllowsPos = async (onAllowed: () => void) => {
     setCheckingStock(true);
-    const result = await inventory.refetch();
-    setCheckingStock(false);
+    try {
+      const [shiftResult, profileResult] = await Promise.all([shiftQuery.refetch(), retryProfile()]);
+      const branchId = authoritativePosBranchId(shiftResult.data, profileResult.data ?? profile);
+      if (!branchId) {
+        alertNotice('Cannot open POS', 'No branch is assigned to this cashier.');
+        return;
+      }
 
-    if (result.error) {
-      alertNotice('Stock unavailable', getInventoryErrorMessage(result.error));
-      return;
-    }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cashierPosInventory(branchId) });
+      const rows: InventoryItem[] = await queryClient.fetchQuery({
+        queryKey: queryKeys.cashierPosInventory(branchId),
+        queryFn: listCashierPosInventory,
+        staleTime: 0,
+      });
 
-    const rows: InventoryItem[] = result.data ?? [];
-    if (rows.length === 0 || !hasSellableStock(rows)) {
-      alertNotice(
-        'Cannot open POS',
-        rows.length === 0
-          ? 'This branch has no active products. Ask a manager to add stock first.'
-          : 'All products are out of stock. Restock this branch before starting or opening POS.',
+      if (rows.length === 0 || !hasSellableStock(rows)) {
+        alertNotice(
+          'Cannot open POS',
+          rows.length === 0
+            ? 'This branch has no active products. Ask a manager to add stock first.'
+            : 'All products are out of stock. Restock this branch before starting or opening POS.',
+        );
+        return;
+      }
+
+      const oosNames = outOfStockProductNames(rows);
+      if (oosNames.length === 0) {
+        onAllowed();
+        return;
+      }
+
+      confirmAction(
+        'Some products are out of stock',
+        `You can continue, but these products have no stock:\n\n${formatOutOfStockWarning(oosNames)}`,
+        onAllowed,
+        { confirm: 'Continue' },
       );
-      return;
+    } catch (error) {
+      alertNotice('Stock unavailable', getInventoryErrorMessage(error));
+    } finally {
+      setCheckingStock(false);
     }
-
-    const oosNames = outOfStockProductNames(rows);
-    if (oosNames.length === 0) {
-      onAllowed();
-      return;
-    }
-
-    confirmAction(
-      'Some products are out of stock',
-      `You can continue, but these products have no stock:\n\n${formatOutOfStockWarning(oosNames)}`,
-      onAllowed,
-      { confirm: 'Continue' },
-    );
   };
 
   const startShift = () =>
@@ -180,7 +195,11 @@ export default function CashierDashboard() {
               <SummaryCard
                 rows={[
                   { label: 'Cashier', value: cashierName, icon: 'person-outline' },
-                  { label: 'Branch', value: profile?.branch?.name ?? 'Unassigned', icon: 'storefront-outline' },
+                  {
+                    label: 'Branch',
+                    value: inventory.data?.[0]?.branch.name ?? profile?.branch?.name ?? 'Unassigned',
+                    icon: 'storefront-outline',
+                  },
                   { label: 'Started', value: formatDate(shiftQuery.data.started_at), icon: 'time-outline' },
                 ]}
               />

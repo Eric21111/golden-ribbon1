@@ -6,6 +6,7 @@ export const queryKeys = {
     ['products', { search, activeOnly }] as const,
   product: (id: string) => ['products', id] as const,
   inventory: (branchId: string, activeOnly = false) => ['inventory', branchId, { activeOnly }] as const,
+  cashierPosInventory: (branchId: string) => ['inventory', 'cashier-pos', branchId] as const,
   transfers: (branchId = '', status = '') => ['transfers', { branchId, status }] as const,
   transfer: (id: string) => ['transfers', id] as const,
   activeShift: (cashierId: string) => ['shifts', 'active', cashierId] as const,
