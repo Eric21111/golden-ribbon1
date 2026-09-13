@@ -1,7 +1,9 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -147,6 +149,7 @@ export default function PaymentScreen() {
   }
 
   const canConfirm = pricesReady && !priceError;
+  const paidEditable = !checkout.request && !checkout.pending && pricesReady;
 
   return (
     <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
@@ -178,12 +181,26 @@ export default function PaymentScreen() {
               label="Money Given"
               keyboardType="decimal-pad"
               value={checkout.request?.amountPaid ?? paid}
-              editable={!checkout.request && !checkout.pending && pricesReady}
+              editable={paidEditable}
               onChangeText={setPaid}
               labelStyle={styles.fieldLabel}
               style={styles.fieldInput}
               accentColor={managerColors.royalBlue}
             />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Fill exact amount ${formatMoney(total / 100)}`}
+              disabled={!paidEditable}
+              onPress={() => setPaid(centsDecimal(total))}
+              style={({ pressed }) => [
+                styles.exactButton,
+                pressed && styles.pressed,
+                !paidEditable && styles.exactButtonDisabled,
+              ]}
+            >
+              <Ionicons name="flash-outline" size={14} color={managerColors.royalBlue} />
+              <Text style={styles.exactButtonLabel}>Exact amount · {formatMoney(total / 100)}</Text>
+            </Pressable>
             <Text style={styles.hint}>
               Final prices and available stock are checked when you confirm. Displayed prices are
               refreshed from the server before payment.
@@ -261,6 +278,20 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
+  exactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#EAF0FB',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: -8,
+  },
+  exactButtonDisabled: { opacity: 0.5 },
+  exactButtonLabel: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  pressed: { opacity: 0.7 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(10, 18, 36, 0.6)',

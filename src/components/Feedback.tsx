@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, type ColorValue, type StyleProp, type TextStyle } from 'react-native';
 
 import { colors, spacing } from '@/constants/theme';
 import { AppButton } from './AppButton';
@@ -6,12 +6,13 @@ import { AppButton } from './AppButton';
 interface LoadingStateProps {
   label?: string;
   labelStyle?: StyleProp<TextStyle>;
+  color?: ColorValue;
 }
 
-export function LoadingState({ label = 'Loading…', labelStyle }: LoadingStateProps) {
+export function LoadingState({ label = 'Loading…', labelStyle, color = colors.primary }: LoadingStateProps) {
   return (
     <View style={styles.center}>
-      <ActivityIndicator color={colors.primary} size="large" />
+      <ActivityIndicator color={color} size="large" />
       <Text style={[styles.muted, labelStyle]}>{label}</Text>
     </View>
   );

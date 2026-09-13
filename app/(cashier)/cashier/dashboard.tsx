@@ -1,15 +1,15 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
-import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
-import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,6 +30,10 @@ import { queryKeys } from '@/lib/queryKeys';
 import { listCashierPosInventory } from '@/services/inventoryService';
 import { useCartStore } from '@/stores/cartStore';
 import type { InventoryItem } from '@/types/models';
+
+function Row({ children }: { children: ReactNode }) {
+  return <View style={styles.row}>{children}</View>;
+}
 
 export default function CashierDashboard() {
   const { profile, retryProfile } = useAuth();
@@ -187,31 +191,7 @@ export default function CashierDashboard() {
           </View>
         ) : (
           <View style={styles.content}>
-            <View style={styles.shiftCard}>
-              <View style={styles.statusRow}>
-                <Text style={styles.shiftTitle}>Active Shift</Text>
-                <ManagerBadge label="OPEN" tone="success" />
-              </View>
-              <SummaryCard
-                rows={[
-                  { label: 'Cashier', value: cashierName, icon: 'person-outline' },
-                  {
-                    label: 'Branch',
-                    value: inventory.data?.[0]?.branch.name ?? profile?.branch?.name ?? 'Unassigned',
-                    icon: 'storefront-outline',
-                  },
-                  { label: 'Started', value: formatDate(shiftQuery.data.started_at), icon: 'time-outline' },
-                ]}
-              />
-            </View>
-
             <View style={styles.row}>
-              <StatTile
-                style={styles.half}
-                icon="receipt-outline"
-                label="Orders"
-                value={summaryQuery.isLoading && orders === undefined ? '—' : String(orders ?? 0)}
-              />
               <StatTile
                 style={styles.half}
                 emphasis
@@ -222,6 +202,33 @@ export default function CashierDashboard() {
                     ? '—'
                     : formatMoney(salesTotal ?? 0)
                 }
+              />
+              <StatTile
+                style={styles.half}
+                icon="receipt-outline"
+                label="Orders"
+                value={summaryQuery.isLoading && orders === undefined ? '—' : String(orders ?? 0)}
+              />
+            </View>
+
+            <View style={styles.shiftCard}>
+              <View style={styles.titleRow}>
+                <View style={styles.liveDot} />
+                <Text style={styles.shiftTitle}>Active Shift</Text>
+              </View>
+              <View style={styles.startedRow}>
+                <Ionicons name="time-outline" size={14} color={managerColors.subtext} />
+                <Text style={styles.startedText}>Started {formatDate(shiftQuery.data.started_at)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.endShiftSection}>
+              <ManagerActionButton
+                label="End shift"
+                icon="stop-circle-outline"
+                variant="secondary"
+                loading={endMutation.isPending}
+                onPress={requestEndShift}
               />
             </View>
             {summaryQuery.error ? (
@@ -240,27 +247,24 @@ export default function CashierDashboard() {
               <Text style={styles.error}>{getShiftErrorMessage(endMutation.error)}</Text>
             ) : null}
 
-            <View style={styles.actions}>
-              <ManagerActionButton
-                label="Open POS"
+            <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+            <Row>
+              <NavTile
+                layout="tile"
                 icon="cart-outline"
-                loading={checkingStock}
-                onPress={openPos}
+                accent="blue"
+                title="Open POS"
+                onPress={checkingStock ? () => {} : openPos}
+                style={checkingStock && styles.tileBusy}
               />
-              <ManagerActionButton
-                label="Current shift sales"
+              <NavTile
+                layout="tile"
                 icon="receipt-outline"
-                variant="secondary"
+                accent="teal"
+                title="Current shift sales"
                 onPress={() => router.push('/cashier/sales')}
               />
-              <ManagerActionButton
-                label="End shift"
-                icon="stop-circle-outline"
-                variant="secondary"
-                loading={endMutation.isPending}
-                onPress={requestEndShift}
-              />
-            </View>
+            </Row>
           </View>
         )}
       </ConstrainedWidth>
@@ -306,6 +310,12 @@ const styles = StyleSheet.create({
   branchPillText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.md },
+  sectionTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+  },
   noticeCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -334,8 +344,11 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: managerColors.green },
   shiftTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  startedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  startedText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
   warningCard: {
@@ -345,5 +358,11 @@ const styles = StyleSheet.create({
   },
   warningText: { color: '#92400E', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 19 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
-  actions: { gap: spacing.sm },
+  tileBusy: { opacity: 0.6 },
+  endShiftSection: {
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingTop: spacing.md,
+    marginTop: 4,
+  },
 });

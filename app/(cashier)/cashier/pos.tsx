@@ -170,9 +170,12 @@ export default function CashierPosScreen() {
         </Text>
         <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
       </View>
-      <Text style={styles.notice}>
-        Stock is deducted when you confirm the sale at checkout.
-      </Text>
+      <ManagerActionButton
+        label="Checkout"
+        icon="card-outline"
+        disabled={items.length === 0}
+        onPress={() => router.push('/cashier/payment')}
+      />
       {items.length > 0 ? (
         <ManagerActionButton
           label="Clear order"
@@ -186,12 +189,6 @@ export default function CashierPosScreen() {
           }
         />
       ) : null}
-      <ManagerActionButton
-        label="Checkout"
-        icon="card-outline"
-        disabled={items.length === 0}
-        onPress={() => router.push('/cashier/payment')}
-      />
     </View>
   );
 
@@ -274,11 +271,4 @@ const styles = StyleSheet.create({
   },
   totalMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14, flex: 1 },
   totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 22 },
-  notice: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
 });

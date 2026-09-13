@@ -7,8 +7,16 @@ import {
   LoadingState as BaseLoadingState,
 } from '@/components/Feedback';
 
+import { managerColors } from './theme';
+
 export function LoadingState(props: ComponentProps<typeof BaseLoadingState>) {
-  return <BaseLoadingState {...props} labelStyle={[styles.label, props.labelStyle]} />;
+  return (
+    <BaseLoadingState
+      color={managerColors.royalBlue}
+      {...props}
+      labelStyle={[styles.label, props.labelStyle]}
+    />
+  );
 }
 
 export function EmptyState(props: ComponentProps<typeof BaseEmptyState>) {

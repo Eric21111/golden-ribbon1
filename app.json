@@ -29,7 +29,16 @@
       "expo-router",
       "expo-sqlite",
       "expo-font",
-      "@react-native-vector-icons/ionicons"
+      "@react-native-vector-icons/ionicons",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/Golden_Ribbon_Logo-removebg-preview.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A1224"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
