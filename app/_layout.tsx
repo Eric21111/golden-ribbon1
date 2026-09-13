@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GlobalAlertModal } from '@/components/GlobalAlertModal';
 import { colors } from '@/constants/theme';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { queryClient } from '@/lib/queryClient';
@@ -22,6 +23,7 @@ export default function RootLayout() {
               <Stack.Screen name="(manager)" options={{ headerShown: false }} />
               <Stack.Screen name="(cashier)" options={{ headerShown: false }} />
             </Stack>
+            <GlobalAlertModal />
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

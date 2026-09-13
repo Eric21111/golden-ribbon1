@@ -1,4 +1,4 @@
-import { Alert, Platform } from 'react-native';
+import { useAlertStore } from '@/stores/alertStore';
 
 export function confirmAction(
   title: string,
@@ -6,23 +6,17 @@ export function confirmAction(
   action: () => void,
   labels: { cancel?: string; confirm?: string } = {},
 ) {
-  const cancelLabel = labels.cancel ?? 'Cancel';
-  const confirmLabel = labels.confirm ?? 'Confirm';
-  if (Platform.OS === 'web') {
-    if (globalThis.confirm(`${title}\n\n${message}`)) action();
-    return;
-  }
-  Alert.alert(title, message, [
-    { text: cancelLabel, style: 'cancel' },
-    { text: confirmLabel, style: 'destructive', onPress: action },
-  ]);
+  useAlertStore.getState().show({
+    kind: 'confirm',
+    title,
+    message,
+    cancelLabel: labels.cancel ?? 'Cancel',
+    confirmLabel: labels.confirm ?? 'Confirm',
+    onConfirm: action,
+  });
 }
 
-/** Single-button informational alert — `Alert.alert` is a no-op on web, so fall back to `window.alert`. */
+/** Single-button informational alert. */
 export function alertNotice(title: string, message: string) {
-  if (Platform.OS === 'web') {
-    globalThis.alert(`${title}\n\n${message}`);
-    return;
-  }
-  Alert.alert(title, message);
+  useAlertStore.getState().show({ kind: 'notice', title, message });
 }
