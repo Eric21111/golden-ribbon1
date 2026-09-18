@@ -115,7 +115,7 @@ export function ProductForm({
         name="selling_price"
         render={({ field, fieldState }) => (
           <FormField
-            label="Selling price (PHP)"
+            label="Default/base price (PHP)"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}

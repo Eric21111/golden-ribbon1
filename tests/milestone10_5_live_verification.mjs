@@ -429,6 +429,15 @@ const saleConcProduct = await createProduct('M105 Sale Concurrency Chicken', sku
 const xferConcProduct = await createProduct('M105 Transfer Concurrency Chicken', sku('XFERCONC'), 50);
 const reportProduct = e2eProduct;
 
+await expectOk('Configure Branch 1 catalog', 'Full E2E', () => rpc(sessions.mainMgr, 'configure_branch_products', {
+  p_branch_id: branch1.id,
+  p_items: [
+    { product_id: e2eProduct.id, selling_price: 80, is_active: true },
+    { product_id: saleConcProduct.id, selling_price: 50, is_active: true },
+    { product_id: xferConcProduct.id, selling_price: 50, is_active: true },
+  ],
+}));
+
 await expectDenied('Owner cannot initialize inventory', 'RPC Security', () => rpc(sessions.owner, 'initialize_main_branch_inventory', {
   p_items: [{ product_id: e2eProduct.id, quantity: 1 }],
   p_notes: 'owner-denied-init',

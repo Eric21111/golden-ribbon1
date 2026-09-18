@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
@@ -101,7 +102,7 @@ export default function ManagerProductListScreen() {
                   title={item.name}
                   meta={
                     <>
-                      {item.sku} · <Text style={styles.price}>{formatMoney(item.selling_price)}</Text>
+                      {item.sku} · Base <Text style={styles.price}>{formatMoney(item.selling_price)}</Text>
                     </>
                   }
                   trailing={
@@ -125,6 +126,12 @@ export default function ManagerProductListScreen() {
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
+            />
+            <ManagerActionButton
+              label="Manage branch catalogs"
+              icon="pricetags-outline"
+              variant="secondary"
+              onPress={() => router.push('/manager/catalog' as never)}
             />
           </View>
         </ConstrainedWidth>

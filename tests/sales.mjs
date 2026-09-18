@@ -35,6 +35,7 @@ await db.exec(`insert into auth.users values ('${user}','cashier@example.test'),
 insert into public.branches(id,name,code) values ('${branch}','Branch 1','BR-01');
 insert into public.profiles(id,full_name,role,branch_id) values ('${user}','Cashier One','cashier','${branch}'),('${other}','Cashier Two','cashier','${branch}');
 insert into public.products(id,name,sku,selling_price) values ('${product}','Chicken Nuggets','CHICKEN',80.10);
+insert into public.branch_products(branch_id,product_id,selling_price) values ('${branch}','${product}',80.10);
 insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values ('${branch}','${product}',5);
 set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);
 const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
@@ -58,7 +59,8 @@ await assert.rejects(confirm('duplicate-protection-1',1), /different order/);
 await assert.rejects(confirm('overselling-attempt-1',4,'500'), /Insufficient stock/);
 await assert.rejects(db.exec(`update public.branch_inventory set quantity_on_hand=100`), /permission denied/);
 await assert.rejects(db.exec(`delete from public.sales`), /permission denied/);
-await db.exec(`reset role; update public.products set selling_price=90.00;
+await db.exec(`reset role; update public.products set selling_price=999.00;
+update public.branch_products set selling_price=90.00 where branch_id='${branch}' and product_id='${product}';
 set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);
 const livePriced = (await confirm('live-price-after-owner-change', 1, '90.00')).rows[0];
 assert.equal(Number(livePriced.total_amount), 90);

@@ -15,6 +15,7 @@ import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { RouteBanner } from '@/components/dashboard/RouteBanner';
 import { managerColors } from '@/components/dashboard/theme';
+import { useBranchProducts } from '@/hooks/useBranchProducts';
 import { useBranches } from '@/hooks/useBranches';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
@@ -54,6 +55,11 @@ export function CreateTransferScreen() {
   });
   const { fields } = useFieldArray({ control, name: 'items' });
   const selectedBranchId = watch('destinationBranchId');
+  const destinationCatalog = useBranchProducts(selectedBranchId, true);
+  const enabledProductIds = useMemo(
+    () => new Set((destinationCatalog.data ?? []).map((entry) => entry.product_id)),
+    [destinationCatalog.data],
+  );
 
   useEffect(() => {
     if (inventory.data && !formInitialized.current) {
@@ -71,10 +77,20 @@ export function CreateTransferScreen() {
       review?.items.flatMap((item) => {
         const quantity = Number(item.quantity);
         const inventoryItem = inventory.data?.find((candidate) => candidate.product.id === item.product_id);
-        return quantity > 0 && inventoryItem ? [{ ...inventoryItem, quantity }] : [];
+        return quantity > 0 && inventoryItem && enabledProductIds.has(item.product_id)
+          ? [{ ...inventoryItem, quantity }]
+          : [];
       }) ?? [],
-    [inventory.data, review],
+    [enabledProductIds, inventory.data, review],
   );
+
+  const selectDestination = (nextBranchId: string) => {
+    if (nextBranchId === selectedBranchId) return;
+    setValue('destinationBranchId', nextBranchId, { shouldValidate: true });
+    fields.forEach((_field, index) => {
+      setValue(`items.${index}.quantity`, '', { shouldValidate: false });
+    });
+  };
 
   if (branches.isLoading || inventory.isLoading) {
     return <LoadingState label="Preparing stock transfer…" />;
@@ -139,7 +155,10 @@ export function CreateTransferScreen() {
               label="Confirm and send"
               icon="checkmark-circle-outline"
               loading={mutation.isPending}
-              disabled={selectedItems.some((item) => item.quantity > item.quantity_on_hand)}
+              disabled={
+                selectedItems.length === 0 ||
+                selectedItems.some((item) => item.quantity > item.quantity_on_hand)
+              }
               onPress={() =>
                 mutation.mutate(
                   {
@@ -189,7 +208,7 @@ export function CreateTransferScreen() {
                   key={branch.id}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  onPress={() => setValue('destinationBranchId', branch.id, { shouldValidate: true })}
+                  onPress={() => selectDestination(branch.id)}
                   style={({ pressed }) => [
                     styles.branchOption,
                     selected && styles.branchOptionSelected,
@@ -218,9 +237,26 @@ export function CreateTransferScreen() {
           {formState.errors.destinationBranchId?.message ? (
             <Text style={styles.error}>{formState.errors.destinationBranchId.message}</Text>
           ) : null}
+          {selectedBranchId && destinationCatalog.isLoading ? (
+            <LoadingState label="Loading destination catalog…" />
+          ) : null}
+          {destinationCatalog.error ? (
+            <ErrorState
+              message="Unable to load the destination branch catalog."
+              onRetry={() => void destinationCatalog.refetch()}
+            />
+          ) : null}
+          {selectedBranchId &&
+          !destinationCatalog.isLoading &&
+          !destinationCatalog.error &&
+          enabledProductIds.size === 0 ? (
+            <Text style={styles.body}>
+              This branch has no enabled products. Configure its branch catalog before sending stock.
+            </Text>
+          ) : null}
           {fields.map((field, index) => {
             const item = inventory.data?.[index];
-            if (!item) return null;
+            if (!item || !selectedBranchId || !enabledProductIds.has(item.product.id)) return null;
             return (
               <Controller
                 key={field.id}
@@ -340,7 +376,16 @@ export function CreateTransferScreen() {
               />
             )}
           />
-          <ManagerActionButton label="Review transfer" onPress={handleSubmit(setReview)} />
+          <ManagerActionButton
+            label="Review transfer"
+            disabled={
+              !selectedBranchId ||
+              destinationCatalog.isLoading ||
+              Boolean(destinationCatalog.error) ||
+              enabledProductIds.size === 0
+            }
+            onPress={handleSubmit(setReview)}
+          />
         </View>
       </View>
     </Screen>

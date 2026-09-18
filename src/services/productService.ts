@@ -30,11 +30,19 @@ export async function getProduct(id: string): Promise<Product> {
   return data;
 }
 
-export async function getProductSellingPrices(ids: string[]): Promise<Record<string, number>> {
+export async function getCashierProductSellingPrices(ids: string[]): Promise<Record<string, number>> {
   if (!ids.length) return {};
-  const { data, error } = await supabase.from('products').select('id, selling_price').in('id', ids);
+  const uniqueIds = [...new Set(ids)];
+  const { data, error } = await supabase.rpc('get_cashier_product_prices', {
+    p_product_ids: uniqueIds,
+  });
   if (error) throw error;
-  return Object.fromEntries((data ?? []).map((row) => [row.id, Number(row.selling_price)]));
+  if ((data ?? []).length !== uniqueIds.length) {
+    throw new Error('A product is no longer available in this branch catalog.');
+  }
+  return Object.fromEntries(
+    (data ?? []).map((row) => [row.product_id, Number(row.selling_price)]),
+  );
 }
 
 export async function createProduct(input: ProductInput): Promise<Product> {

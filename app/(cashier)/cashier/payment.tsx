@@ -27,7 +27,7 @@ import { formatMoney, makeIdempotencyKey } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { cartTotalCents, centsDecimal, toCents } from '@/lib/money';
 import { invalidateCompletedSaleQueries } from '@/lib/queryClient';
-import { getProductSellingPrices } from '@/services/productService';
+import { getCashierProductSellingPrices } from '@/services/productService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 
@@ -54,7 +54,7 @@ export default function PaymentScreen() {
     void (async () => {
       try {
         const ids = useCartStore.getState().items.map((item) => item.product_id);
-        const prices = await getProductSellingPrices(ids);
+        const prices = await getCashierProductSellingPrices(ids);
         if (cancelled) return;
         const result = useCartStore.getState().applyLivePrices(prices);
         if (result.changed) {

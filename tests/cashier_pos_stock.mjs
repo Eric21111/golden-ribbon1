@@ -41,6 +41,9 @@ await db.exec(`
   insert into public.products(id,name,sku,selling_price,is_active) values
     ('${nuggets}','Chicken Nuggets','NUG',80,true),
     ('${inactive}','Old Item','OLD',10,false);
+  insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+    ('${branch}','${nuggets}',80,true),
+    ('${branch}','${inactive}',10,true);
   insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values
     ('${branch}','${nuggets}',18),
     ('${branch}','${inactive}',40);

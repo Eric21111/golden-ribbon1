@@ -54,6 +54,9 @@ await db.exec(`
   insert into public.products(id,name,sku,selling_price,is_active) values
     ('${chicken}','Chicken Butter','CB',80,true),
     ('${extra}','Spare Ribs','SR',50,true);
+  insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+    ('${branch1}','${chicken}',80,true),
+    ('${branch2}','${chicken}',80,true);
 `);
 
 const asUser = async (userId, fn) => {
@@ -308,6 +311,7 @@ await db.exec(`
   insert into public.sale_items(sale_id,product_id,quantity,unit_price,subtotal)
   values ('${id(41)}','${chicken}',1,80,80);
   update public.products set selling_price=999 where id='${chicken}';
+  update public.branch_products set selling_price=999 where product_id='${chicken}';
 `);
 
 await asUser(owner, async () => {

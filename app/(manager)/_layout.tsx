@@ -28,6 +28,7 @@ function ManagerStack() {
         <Stack.Screen name="manager/transfers/[id]" />
         <Stack.Screen name="manager/products/index" />
         <Stack.Screen name="manager/products/[id]" />
+        <Stack.Screen name="manager/catalog" />
         <Stack.Screen name="manager/branches/index" />
         <Stack.Screen name="manager/branches/[id]" />
         <Stack.Screen name="manager/sales/index" />

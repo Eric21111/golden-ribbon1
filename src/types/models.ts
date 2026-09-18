@@ -110,11 +110,21 @@ export type BranchInventory = {
   updated_at: string;
 };
 
+export type BranchProduct = {
+  branch_id: string;
+  product_id: string;
+  selling_price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type InventoryItem = {
   branch: Branch;
   product: Product;
   quantity_on_hand: number;
   updated_at: string | null;
+  branch_product?: BranchProduct | null;
 };
 
 export type InventoryMovement = {

@@ -37,6 +37,7 @@ function getGroups(isMain: boolean): SidebarGroup[] {
         ? [
             { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
             { label: 'Products', href: '/manager/products', icon: 'fast-food-outline', selectedIcon: 'fast-food' },
+            { label: 'Branch Catalogs', href: '/manager/catalog', icon: 'pricetags-outline', selectedIcon: 'pricetags' },
             { label: 'Branches', href: '/manager/branches', icon: 'git-branch-outline', selectedIcon: 'git-branch' },
             {
               label: 'Inventory',

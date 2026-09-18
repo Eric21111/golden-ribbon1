@@ -164,7 +164,11 @@ export default function ManagerInventoryScreen() {
                 return (
                   <ListRowCard
                     title={item.product.name}
-                    subtitle={item.product.sku}
+                    subtitle={`${item.product.sku}${
+                      !isMain && !item.branch_product?.is_active
+                        ? ' · Not carried (return only)'
+                        : ''
+                    }`}
                     subtitleTag
                     trailing={
                       <ManagerBadge label={stockPillLabel(status, item.quantity_on_hand)} tone={badgeToneForStatus[status]} size="md" />
@@ -206,7 +210,11 @@ export default function ManagerInventoryScreen() {
           <View style={styles.detail}>
             <ListRowCard
               title={selected.product.name}
-              subtitle={selected.product.sku}
+              subtitle={`${selected.product.sku}${
+                !isMain && !selected.branch_product?.is_active
+                  ? ' · Not carried (return only)'
+                  : ''
+              }`}
               subtitleTag
               trailing={
                 <ManagerBadge
@@ -219,7 +227,12 @@ export default function ManagerInventoryScreen() {
             <SummaryCard
               rows={[
                 { label: 'On hand', value: `${selected.quantity_on_hand} units`, emphasis: true },
-                { label: 'Selling price', value: formatMoney(selected.product.selling_price) },
+                {
+                  label: isMain ? 'Base price' : 'Branch price',
+                  value: selected.branch_product
+                    ? formatMoney(selected.branch_product.selling_price)
+                    : 'Not assigned',
+                },
                 {
                   label: 'Last updated',
                   value: selected.updated_at ? formatDate(selected.updated_at) : 'Not initialized',

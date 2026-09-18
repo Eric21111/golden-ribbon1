@@ -1,6 +1,7 @@
 import type {
   Branch,
   BranchInventory,
+  BranchProduct,
   DiscrepancyType,
   EmployeeRecord,
   EmployeeRole,
@@ -50,6 +51,10 @@ type ProfileInsert = Omit<Profile, 'created_at' | 'updated_at'> & {
 };
 type BranchInventoryInsert = Omit<BranchInventory, 'id' | 'created_at' | 'updated_at'> & {
   id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+type BranchProductInsert = Omit<BranchProduct, 'created_at' | 'updated_at'> & {
   created_at?: string;
   updated_at?: string;
 };
@@ -140,6 +145,15 @@ export type Database = {
           { foreignKeyName: 'branch_inventory_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
         ];
       };
+      branch_products: {
+        Row: BranchProduct;
+        Insert: BranchProductInsert;
+        Update: Partial<BranchProductInsert>;
+        Relationships: [
+          { foreignKeyName: 'branch_products_branch_id_fkey'; columns: ['branch_id']; isOneToOne: false; referencedRelation: 'branches'; referencedColumns: ['id'] },
+          { foreignKeyName: 'branch_products_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
       inventory_movements: {
         Row: InventoryMovement;
         Insert: InventoryMovementInsert;
@@ -186,6 +200,17 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       list_return_inventory: { Args: Record<string, never>; Returns: ReturnStock[] };
+      configure_branch_products: {
+        Args: {
+          p_branch_id: string;
+          p_items: Array<{ product_id: string; selling_price: number; is_active: boolean }>;
+        };
+        Returns: undefined;
+      };
+      get_cashier_product_prices: {
+        Args: { p_product_ids: string[] };
+        Returns: Array<{ product_id: string; selling_price: number }>;
+      };
       list_cashier_pos_inventory: {
         Args: Record<string, never>;
         Returns: Array<{

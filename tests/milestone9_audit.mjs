@@ -37,6 +37,8 @@ await db.exec(`
     ('${cashier}','Cashier','cashier','${branch}');
   insert into public.products(id,name,sku,selling_price,is_active) values
     ('${product}','Chicken Butter','CB',80,true);
+  insert into public.branch_products(branch_id,product_id,selling_price,is_active)
+    values ('${branch}','${product}',80,true);
   insert into public.branch_inventory(branch_id,product_id,quantity_on_hand)
     values ('${branch}','${product}',5);
 `);
@@ -60,6 +62,9 @@ assert.equal((await db.query(`
 await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${mainMgr}',false);`);
 await db.query(`select public.initialize_main_branch_inventory('[{"product_id":"${product}","quantity":100}]'::jsonb, 'opening')`);
 await db.exec(`update public.products set selling_price = 85 where id = '${product}'`);
+await db.query(
+  `select public.configure_branch_products('${branch}','[{"product_id":"${product}","selling_price":85,"is_active":true}]'::jsonb)`,
+);
 const transferId = (await db.query(
   `select public.send_stock_transfer('${branch}','[{"product_id":"${product}","quantity_sent":10}]'::jsonb,null,'audit-gone-send-key001') id`,
 )).rows[0].id;

@@ -15,6 +15,8 @@ await db.exec(`insert into auth.users values ('${manager}','m@test'),('${other}'
 insert into public.branches(id,name,code,is_main_branch) values ('${main}','Main','MAIN',true),('${branch}','Branch 1','B1',false),('${otherBranch}','Branch 2','B2',false);
 insert into public.profiles(id,full_name,role,branch_id) values ('${manager}','Manager','manager','${branch}'),('${other}','Other','manager','${otherBranch}'),('${owner}','Owner','owner',null),('${cashier}','Cashier','cashier','${branch}');
 insert into public.products(id,name,sku,selling_price,is_active) values ('${p1}','Chicken','CH',80,true),('${p2}','Inactive beef','BF',100,false);
+insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+  ('${branch}','${p1}',80,true),('${branch}','${p2}',100,true);
 insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values ('${branch}','${p1}',30),('${branch}','${p2}',18),('${main}','${p1}',100),('${otherBranch}','${p1}',7);
 set role authenticated; select set_config('request.jwt.claim.sub','${manager}',false);`);
 const items = [{product_id:p1,quantity_returned:20},{product_id:p2,quantity_returned:18}];
