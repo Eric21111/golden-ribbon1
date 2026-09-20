@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { Drawer } from 'react-native-drawer-layout';
 
+import { Screen } from '@/components/Screen';
 import { ManagerSidebar } from '@/components/dashboard/ManagerSidebar';
 import { LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { RoleNavigation } from '@/components/RoleNavigation';
@@ -14,7 +15,7 @@ import { ManagerDrawerProvider, useManagerDrawer } from '@/features/navigation/M
 function ManagerStack() {
   return (
     <RoleNavigation role="manager">
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="manager/dashboard" />
         <Stack.Screen name="manager/inventory/index" />
         <Stack.Screen name="manager/inventory/setup" />
@@ -34,7 +35,6 @@ function ManagerStack() {
         <Stack.Screen name="manager/reports/product-sales" />
         <Stack.Screen name="manager/profile" />
         <Stack.Screen name="manager/change-password" />
-        <Stack.Screen name="manager/change-email" />
       </Stack>
     </RoleNavigation>
   );
@@ -79,7 +79,13 @@ export default function ManagerLayout() {
     Inter_700Bold,
   });
 
-  if (!fontsLoaded) return <LoadingState label="Loading…" />;
+  if (!fontsLoaded) {
+    return (
+      <Screen backgroundColor="#FFFFFF">
+        <LoadingState label="Loading…" />
+      </Screen>
+    );
+  }
 
   return (
     <RoleGuard role="manager">

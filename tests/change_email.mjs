@@ -142,16 +142,20 @@ const account = readFileSync('app/(owner)/owner/profile.tsx', 'utf8');
 assert.match(account, /canChangeOwnEmail/);
 assert.match(account, /Change email/);
 assert.match(account, /Waiting for verification/);
+// Change email is a popup (ChangeEmailForm in a BottomSheet), gated by canChangeOwnEmail,
+// not a separate routed screen — the standalone route + EmailChangeGuard were removed.
+assert.match(account, /ChangeEmailForm/);
+assert.match(account, /emailOpen/);
 
-const ownerRoute = readFileSync('app/(owner)/owner/change-email.tsx', 'utf8');
-const managerRoute = readFileSync('app/(manager)/manager/change-email.tsx', 'utf8');
-assert.match(ownerRoute, /EmailChangeGuard/);
-assert.match(managerRoute, /EmailChangeGuard/);
+const managerAccount = readFileSync('app/(manager)/manager/profile.tsx', 'utf8');
+assert.match(managerAccount, /canChangeOwnEmail/);
+assert.match(managerAccount, /ChangeEmailForm/);
+assert.match(managerAccount, /emailOpen/);
+
+assert.equal(existsSync('app/(owner)/owner/change-email.tsx'), false);
+assert.equal(existsSync('app/(manager)/manager/change-email.tsx'), false);
 assert.equal(existsSync('app/(cashier)/cashier/change-email.tsx'), false);
-
-const guard = readFileSync('src/features/auth/EmailChangeGuard.tsx', 'utf8');
-assert.match(guard, /canChangeOwnEmail/);
-assert.match(guard, /Selling Branch Managers cannot change their own email/);
+assert.equal(existsSync('src/features/auth/EmailChangeGuard.tsx'), false);
 
 const migration = readFileSync('supabase/migrations/20260912120000_milestone_11_1_change_own_email.sql', 'utf8');
 assert.match(migration, /is_owner\(\) or public\.is_main_branch_manager\(\)/);

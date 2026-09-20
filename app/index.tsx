@@ -15,7 +15,7 @@ export default function Index() {
   if (!session) return <Redirect href="/(auth)/login" />;
   if (profileError || !profile) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState
           message={profileError ? getErrorMessage(profileError) : 'No staff profile is assigned to this account.'}
           onRetry={() => void retryProfile()}

@@ -154,7 +154,7 @@ export default function PaymentScreen() {
   const paidEditable = !checkout.request && !checkout.pending && pricesReady;
 
   return (
-    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <ConstrainedWidth maxWidth={paymentMaxWidth} fill>
         <View style={styles.layout}>
           <ManagerScreenHeader title="Checkout" showBack />

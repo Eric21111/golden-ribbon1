@@ -114,7 +114,7 @@ export function BottomSheet({
   return (
     <Modal
       transparent
-      animationType="slide"
+      animationType="fade"
       visible={visible}
       onRequestClose={onClose}
       statusBarTranslucent
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(28, 25, 23, 0.45)',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   sheet: {
     backgroundColor: colors.surface,

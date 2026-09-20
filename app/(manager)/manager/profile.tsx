@@ -1,5 +1,4 @@
 import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -15,6 +14,7 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { canChangeOwnEmail } from '@/features/auth/roles';
+import { ChangeEmailForm } from '@/features/profile/ChangeEmailForm';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 
 function ActionRow({
@@ -46,6 +46,7 @@ function ActionRow({
 export default function ManagerAccountScreen() {
   const { profile, session } = useAuth();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   if (!profile || !session) return null;
 
@@ -55,7 +56,7 @@ export default function ManagerAccountScreen() {
   const canChangeEmail = canChangeOwnEmail(profile);
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader title="Account" />
 
       <ConstrainedWidth style={styles.column}>
@@ -94,7 +95,7 @@ export default function ManagerAccountScreen() {
               <ActionRow
                 icon="mail-outline"
                 label="Change email"
-                onPress={() => router.push('/manager/change-email' as never)}
+                onPress={() => setEmailOpen(true)}
                 showDivider={false}
               />
             ) : null}
@@ -124,13 +125,33 @@ export default function ManagerAccountScreen() {
           )}
         />
       </BottomSheet>
+
+      <BottomSheet visible={emailOpen} title="Change email" scroll onClose={() => setEmailOpen(false)}>
+        <ChangeEmailForm
+          currentEmail={email}
+          onCancel={() => setEmailOpen(false)}
+          hintStyle={styles.formHint}
+          currentStyle={styles.formLabel}
+          labelStyle={styles.formLabel}
+          inputStyle={styles.formInput}
+          errorStyle={styles.formError}
+          successStyle={styles.formSuccess}
+          accentColor={managerColors.royalBlue}
+          renderSubmitButton={({ loading, disabled, onPress }) => (
+            <ManagerActionButton label="Change email" loading={loading} disabled={disabled} onPress={onPress} />
+          )}
+          renderCancelButton={({ disabled, onPress }) => (
+            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          )}
+        />
+      </BottomSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24, gap: 20 },
+  column: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 20 },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -186,7 +207,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  footer: { marginTop: 'auto', paddingTop: 8 },
+  footer: { borderTopWidth: 1, borderTopColor: managerColors.cardBorder, paddingTop: 20 },
   formHint: { fontFamily: 'Inter_400Regular' },
   formLabel: { fontFamily: 'Inter_600SemiBold' },
   formInput: { fontFamily: 'Inter_400Regular' },

@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { Drawer } from 'react-native-drawer-layout';
 
+import { Screen } from '@/components/Screen';
 import { RoleNavigation } from '@/components/RoleNavigation';
 import { ManagerSidebar } from '@/components/dashboard/ManagerSidebar';
 import { LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -12,7 +13,7 @@ import { ManagerDrawerProvider, useManagerDrawer } from '@/features/navigation/M
 function OwnerStack() {
   return (
     <RoleNavigation role="owner">
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="owner/dashboard" />
         <Stack.Screen name="owner/reports/index" />
         <Stack.Screen name="owner/reports/sales-by-branch" />
@@ -28,7 +29,6 @@ function OwnerStack() {
         <Stack.Screen name="owner/data-archive" />
         <Stack.Screen name="owner/profile" />
         <Stack.Screen name="owner/change-password" />
-        <Stack.Screen name="owner/change-email" />
       </Stack>
     </RoleNavigation>
   );
@@ -66,7 +66,13 @@ export default function OwnerLayout() {
     Inter_700Bold,
   });
 
-  if (!fontsLoaded) return <LoadingState label="Loading…" />;
+  if (!fontsLoaded) {
+    return (
+      <Screen backgroundColor="#FFFFFF">
+        <LoadingState label="Loading…" />
+      </Screen>
+    );
+  }
 
   return (
     <RoleGuard role="owner">

@@ -16,6 +16,7 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { canChangeOwnEmail } from '@/features/auth/roles';
+import { ChangeEmailForm } from '@/features/profile/ChangeEmailForm';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 import { pendingEmailFromUser } from '@/services/accountService';
 
@@ -48,6 +49,7 @@ function ActionRow({
 export default function OwnerAccountScreen() {
   const { profile, session } = useAuth();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   if (!profile || !session) return null;
 
@@ -103,7 +105,7 @@ export default function OwnerAccountScreen() {
               <ActionRow
                 icon="mail-outline"
                 label="Change email"
-                onPress={() => router.push('/owner/change-email' as never)}
+                onPress={() => setEmailOpen(true)}
                 showDivider={false}
               />
             ) : null}
@@ -138,6 +140,26 @@ export default function OwnerAccountScreen() {
           accentColor={managerColors.royalBlue}
           renderSubmitButton={({ loading, disabled, onPress }) => (
             <ManagerActionButton label="Change password" loading={loading} disabled={disabled} onPress={onPress} />
+          )}
+          renderCancelButton={({ disabled, onPress }) => (
+            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          )}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={emailOpen} title="Change email" scroll onClose={() => setEmailOpen(false)}>
+        <ChangeEmailForm
+          currentEmail={email}
+          onCancel={() => setEmailOpen(false)}
+          hintStyle={styles.formHint}
+          currentStyle={styles.formLabel}
+          labelStyle={styles.formLabel}
+          inputStyle={styles.formInput}
+          errorStyle={styles.formError}
+          successStyle={styles.formSuccess}
+          accentColor={managerColors.royalBlue}
+          renderSubmitButton={({ loading, disabled, onPress }) => (
+            <ManagerActionButton label="Change email" loading={loading} disabled={disabled} onPress={onPress} />
           )}
           renderCancelButton={({ disabled, onPress }) => (
             <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
