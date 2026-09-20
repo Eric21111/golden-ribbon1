@@ -45,6 +45,7 @@ export function ChangeEmailForm({
 }: ChangeEmailFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const schema = useMemo(() => changeEmailSchema(currentEmail), [currentEmail]);
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangeEmailValues>({
     resolver: zodResolver(schema),
@@ -102,7 +103,10 @@ export function ChangeEmailForm({
             autoCorrect={false}
             autoComplete="current-password"
             textContentType="password"
-            secureTextEntry
+            secureTextEntry={!showPassword}
+            rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowPassword((prev) => !prev)}
+            rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}

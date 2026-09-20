@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -25,6 +25,7 @@ const ROLE_OPTIONS = [
 ];
 
 export function CreateEmployeeForm({ branches, error, loading, onSubmit }: CreateEmployeeFormProps) {
+  const [showPassword, setShowPassword] = useState(false);
   const { control, handleSubmit, formState, watch, setValue } = useForm<CreateEmployeeValues>({
     resolver: zodResolver(createEmployeeSchema),
     defaultValues: {
@@ -93,7 +94,14 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
           <FormField
             label="Temporary Password"
             placeholder="8–72 characters"
-            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            secureTextEntry={!showPassword}
+            rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowPassword((prev) => !prev)}
+            rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}

@@ -31,10 +31,6 @@ function ManagerStack() {
         <Stack.Screen name="manager/catalog" />
         <Stack.Screen name="manager/branches/index" />
         <Stack.Screen name="manager/branches/[id]" />
-        <Stack.Screen name="manager/sales/index" />
-        <Stack.Screen name="manager/sales/[id]" />
-        <Stack.Screen name="manager/shifts/index" />
-        <Stack.Screen name="manager/shifts/[id]" />
         <Stack.Screen name="manager/reports/product-sales" />
         <Stack.Screen name="manager/profile" />
         <Stack.Screen name="manager/change-password" />

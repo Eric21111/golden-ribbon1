@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -22,6 +23,8 @@ export function ResetPasswordForm({
   loading,
   onSubmit,
 }: ResetPasswordFormProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { control, handleSubmit } = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: '', confirm_password: '' },
@@ -42,7 +45,14 @@ export function ResetPasswordForm({
           <FormField
             label="New Temporary Password"
             placeholder="Enter new temporary password"
-            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            secureTextEntry={!showPassword}
+            rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowPassword((prev) => !prev)}
+            rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -61,7 +71,14 @@ export function ResetPasswordForm({
           <FormField
             label="Confirm Temporary Password"
             placeholder="Re-enter temporary password"
-            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            secureTextEntry={!showConfirm}
+            rightIcon={showConfirm ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowConfirm((prev) => !prev)}
+            rightIconAccessibilityLabel={showConfirm ? 'Hide password' : 'Show password'}
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}

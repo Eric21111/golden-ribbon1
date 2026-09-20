@@ -41,6 +41,9 @@ export function ChangePasswordForm({
 }: ChangePasswordFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangePasswordValues>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { current_password: '', new_password: '', confirm_password: '' },
@@ -92,7 +95,10 @@ export function ChangePasswordForm({
             autoCorrect={false}
             autoComplete="current-password"
             textContentType="password"
-            secureTextEntry
+            secureTextEntry={!showCurrent}
+            rightIcon={showCurrent ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowCurrent((prev) => !prev)}
+            rightIconAccessibilityLabel={showCurrent ? 'Hide current password' : 'Show current password'}
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}
@@ -115,7 +121,10 @@ export function ChangePasswordForm({
             autoCorrect={false}
             autoComplete="new-password"
             textContentType="newPassword"
-            secureTextEntry
+            secureTextEntry={!showNew}
+            rightIcon={showNew ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowNew((prev) => !prev)}
+            rightIconAccessibilityLabel={showNew ? 'Hide new password' : 'Show new password'}
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}
@@ -138,7 +147,10 @@ export function ChangePasswordForm({
             autoCorrect={false}
             autoComplete="new-password"
             textContentType="newPassword"
-            secureTextEntry
+            secureTextEntry={!showConfirm}
+            rightIcon={showConfirm ? 'eye-outline' : 'eye-off-outline'}
+            onRightIconPress={() => setShowConfirm((prev) => !prev)}
+            rightIconAccessibilityLabel={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
             labelStyle={labelStyle}
             errorStyle={errorStyle}
             accentColor={accentColor}

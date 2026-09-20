@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
@@ -13,6 +14,7 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { returnStatusBadgeLabel, returnStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { isMainBranchManager } from '@/features/auth/roles';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { getReturn } from '@/services/returnService';
@@ -46,6 +48,7 @@ export default function ManagerReturnDetailsScreen() {
   }
 
   const row = query.data;
+  const canReceive = row.status === 'in_transit' && isMainBranchManager(profile);
   const notesByItemId = new Map(row.discrepancies?.map((disc) => [disc.stock_return_item_id, disc.notes]) ?? []);
   const summaryRows = [
     { label: 'Returned by', value: row.returned_by_name, icon: 'person-outline' as const },
@@ -70,6 +73,16 @@ export default function ManagerReturnDetailsScreen() {
           connectorIcon="return-up-back"
         />
         <SummaryCard rows={summaryRows} />
+
+        {canReceive ? (
+          <ManagerActionButton
+            label="Count & receive return"
+            icon="clipboard-outline"
+            onPress={() =>
+              router.push({ pathname: '/manager/returns/receive/[id]', params: { id: row.id } })
+            }
+          />
+        ) : null}
 
         <Text style={styles.sectionTitle}>RETURNED PRODUCTS</Text>
         {row.items.map((item) => {

@@ -1,13 +1,18 @@
 import type { PropsWithChildren } from 'react';
+import { useEffect, useRef } from 'react';
 import {
-  KeyboardAvoidingView,
+  Dimensions,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type StyleProp,
   type TextStyle,
 } from 'react-native';
@@ -25,6 +30,17 @@ type BottomSheetProps = PropsWithChildren<{
   closeLabelStyle?: StyleProp<TextStyle>;
 }>;
 
+/**
+ * Modal bottom sheet for password / employee forms.
+ *
+ * Android RN Modal is a separate Dialog (full screen). Pair with
+ * `softwareKeyboardLayoutMode: "pan"` when possible. Lift once:
+ * - marginBottom = keyboard height
+ * - maxHeight = space above the keyboard (uses screen height on Android so
+ *   Activity "resize" cannot crush the sheet)
+ *
+ * No KeyboardAvoidingView — that double-offsets with the manual lift.
+ */
 export function BottomSheet({
   visible,
   title,
@@ -36,15 +52,58 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardBottomInset();
-  const bottomPad = Math.max(insets.bottom, spacing.md) + (Platform.OS === 'android' ? keyboardInset : 0);
+  const { height: windowHeight } = useWindowDimensions();
+  const screenHeight = Dimensions.get('screen').height;
+  // Modal Dialog is screen-sized on Android; window can shrink under "resize".
+  const layoutHeight = Platform.OS === 'android' ? screenHeight : windowHeight;
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+
+  const topGap = Math.max(insets.top, 16);
+  const keyboardLift = keyboardInset > 0 ? keyboardInset : 0;
+  const sheetMaxHeight = Math.max(240, layoutHeight - topGap - keyboardLift - 8);
+
+  useEffect(() => {
+    if (!visible) scrollOffsetRef.current = 0;
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !scroll || keyboardLift <= 0) return;
+
+    const timer = setTimeout(() => {
+      const input = TextInput.State.currentlyFocusedInput?.();
+      if (!input || !scrollRef.current) return;
+
+      input.measureInWindow((_x, y, _width, height) => {
+        const keyboardTop = layoutHeight - keyboardLift - insets.bottom - 12;
+        const overflow = y + height - keyboardTop;
+        if (overflow <= 0) return;
+
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, scrollOffsetRef.current + overflow),
+          animated: true,
+        });
+      });
+    }, Platform.OS === 'ios' ? 40 : 120);
+
+    return () => clearTimeout(timer);
+  }, [insets.bottom, keyboardLift, layoutHeight, scroll, visible]);
+
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+  };
 
   const body = scroll ? (
     <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      nestedScrollEnabled
       showsVerticalScrollIndicator={false}
-      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-      contentContainerStyle={[styles.scrollContent, keyboardInset > 0 ? styles.scrollContentKeyboard : null]}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      contentContainerStyle={styles.scrollContent}
     >
       {children}
     </ScrollView>
@@ -53,10 +112,30 @@ export function BottomSheet({
   );
 
   return (
-    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
-        <Pressable accessibilityLabel="Dismiss" accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
-        <View style={[styles.sheet, { paddingBottom: bottomPad, maxHeight: keyboardInset > 0 ? '88%' : '92%' }]}>
+    <Modal
+      transparent
+      animationType="slide"
+      visible={visible}
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.root}>
+        <Pressable
+          accessibilityLabel="Dismiss"
+          accessibilityRole="button"
+          onPress={onClose}
+          style={styles.backdrop}
+        />
+        <View
+          style={[
+            styles.sheet,
+            {
+              maxHeight: sheetMaxHeight,
+              marginBottom: keyboardLift,
+              paddingBottom: Math.max(insets.bottom, spacing.md),
+            },
+          ]}
+        >
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={[styles.title, titleStyle]}>{title}</Text>
@@ -66,14 +145,20 @@ export function BottomSheet({
           </View>
           {body}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(28, 25, 23, 0.4)' },
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(28, 25, 23, 0.45)',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
@@ -81,7 +166,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     gap: spacing.md,
-    maxHeight: '92%',
+    overflow: 'hidden',
+    zIndex: 1,
+    elevation: 8,
   },
   handle: {
     alignSelf: 'center',
@@ -91,9 +178,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginBottom: spacing.xs,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
   title: { color: colors.text, fontSize: 18, fontWeight: '800', flexShrink: 1 },
   close: { color: colors.primary, fontSize: 15, fontWeight: '700' },
-  scrollContent: { gap: spacing.md, paddingBottom: spacing.sm },
-  scrollContentKeyboard: { paddingBottom: spacing.lg },
+  scroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  scrollContent: { gap: spacing.md, paddingBottom: spacing.lg },
 });

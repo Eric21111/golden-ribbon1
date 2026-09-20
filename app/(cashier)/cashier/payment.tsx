@@ -31,6 +31,8 @@ import { getCashierProductSellingPrices } from '@/services/productService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 
+const QUICK_CASH_AMOUNTS = [50, 100, 200, 500, 1000] as const;
+
 export default function PaymentScreen() {
   const { profile } = useAuth();
   const { paymentMaxWidth } = useLayout();
@@ -187,20 +189,53 @@ export default function PaymentScreen() {
               style={styles.fieldInput}
               accentColor={managerColors.royalBlue}
             />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Fill exact amount ${formatMoney(total / 100)}`}
-              disabled={!paidEditable}
-              onPress={() => setPaid(centsDecimal(total))}
-              style={({ pressed }) => [
-                styles.exactButton,
-                pressed && styles.pressed,
-                !paidEditable && styles.exactButtonDisabled,
-              ]}
-            >
-              <Ionicons name="flash-outline" size={14} color={managerColors.royalBlue} />
-              <Text style={styles.exactButtonLabel}>Exact amount · {formatMoney(total / 100)}</Text>
-            </Pressable>
+            <View style={styles.quickCashBlock}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Fill exact amount ${formatMoney(total / 100)}`}
+                disabled={!paidEditable}
+                onPress={() => setPaid(centsDecimal(total))}
+                style={({ pressed }) => [
+                  styles.exactButton,
+                  pressed && styles.pressed,
+                  !paidEditable && styles.quickCashDisabled,
+                ]}
+              >
+                <Ionicons name="flash-outline" size={14} color={managerColors.royalBlue} />
+                <Text style={styles.exactButtonLabel}>Exact amount · {formatMoney(total / 100)}</Text>
+              </Pressable>
+              <Text style={styles.quickCashLabel}>Quick cash</Text>
+              <View style={styles.quickCashRow}>
+                {QUICK_CASH_AMOUNTS.map((amount) => {
+                  const amountValue = centsDecimal(amount * 100);
+                  const selected = (checkout.request?.amountPaid ?? paid) === amountValue;
+                  return (
+                    <Pressable
+                      key={amount}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Fill money given ${amountValue}`}
+                      disabled={!paidEditable}
+                      onPress={() => setPaid(amountValue)}
+                      style={({ pressed }) => [
+                        styles.quickCashButton,
+                        selected && styles.quickCashButtonSelected,
+                        pressed && styles.pressed,
+                        !paidEditable && styles.quickCashDisabled,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.quickCashButtonLabel,
+                          selected && styles.quickCashButtonLabelSelected,
+                        ]}
+                      >
+                        {amount}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <Text style={styles.hint}>
               Final prices and available stock are checked when you confirm. Displayed prices are
               refreshed from the server before payment.
@@ -278,6 +313,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
+  quickCashBlock: { gap: 10, marginTop: -4 },
   exactButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,10 +323,43 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginTop: -8,
   },
-  exactButtonDisabled: { opacity: 0.5 },
   exactButtonLabel: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  quickCashLabel: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.4,
+  },
+  quickCashRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickCashButton: {
+    minWidth: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  quickCashButtonSelected: {
+    backgroundColor: '#EAF0FB',
+    borderColor: managerColors.royalBlue,
+  },
+  quickCashButtonLabel: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+  },
+  quickCashButtonLabelSelected: {
+    color: managerColors.royalBlue,
+  },
+  quickCashDisabled: { opacity: 0.5 },
   pressed: { opacity: 0.7 },
   overlay: {
     flex: 1,

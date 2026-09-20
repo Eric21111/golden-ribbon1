@@ -77,7 +77,7 @@ export function Screen({
   return (
     <SafeAreaView edges={safeEdges} style={[styles.safeArea, { backgroundColor }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
