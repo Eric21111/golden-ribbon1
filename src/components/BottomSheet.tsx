@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Modal,
@@ -58,10 +58,20 @@ export function BottomSheet({
   const layoutHeight = Platform.OS === 'android' ? screenHeight : windowHeight;
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffsetRef = useRef(0);
+  const [rootHeight, setRootHeight] = useState(0);
 
   const topGap = Math.max(insets.top, 16);
   const keyboardLift = keyboardInset > 0 ? keyboardInset : 0;
-  const sheetMaxHeight = Math.max(240, layoutHeight - topGap - keyboardLift - 8);
+  // Some Android devices resize the Modal's own window when the keyboard opens even with
+  // softwareKeyboardLayoutMode "pan" (Dialog windows don't always follow the Activity's
+  // soft-input mode). When that happens `rootHeight` (measured live) is already short by
+  // the keyboard height, so also subtracting `keyboardLift` below would double-lift the
+  // sheet clean off the top of the screen. Only apply the manual lift when the root hasn't
+  // already shrunk on its own.
+  const availableHeight = rootHeight > 0 ? rootHeight : layoutHeight;
+  const windowAlreadyResized = keyboardLift > 0 && availableHeight < layoutHeight - keyboardLift / 2;
+  const keyboardLiftApplied = windowAlreadyResized ? 0 : keyboardLift;
+  const sheetMaxHeight = Math.max(240, availableHeight - topGap - keyboardLiftApplied - 8);
 
   useEffect(() => {
     if (!visible) scrollOffsetRef.current = 0;
@@ -75,7 +85,7 @@ export function BottomSheet({
       if (!input || !scrollRef.current) return;
 
       input.measureInWindow((_x, y, _width, height) => {
-        const keyboardTop = layoutHeight - keyboardLift - insets.bottom - 12;
+        const keyboardTop = availableHeight - keyboardLiftApplied - insets.bottom - 12;
         const overflow = y + height - keyboardTop;
         if (overflow <= 0) return;
 
@@ -87,7 +97,7 @@ export function BottomSheet({
     }, Platform.OS === 'ios' ? 40 : 120);
 
     return () => clearTimeout(timer);
-  }, [insets.bottom, keyboardLift, layoutHeight, scroll, visible]);
+  }, [availableHeight, insets.bottom, keyboardLift, keyboardLiftApplied, scroll, visible]);
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
@@ -119,7 +129,7 @@ export function BottomSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={styles.root}>
+      <View style={styles.root} onLayout={(event) => setRootHeight(event.nativeEvent.layout.height)}>
         <Pressable
           accessibilityLabel="Dismiss"
           accessibilityRole="button"
@@ -131,7 +141,7 @@ export function BottomSheet({
             styles.sheet,
             {
               maxHeight: sheetMaxHeight,
-              marginBottom: keyboardLift,
+              marginBottom: keyboardLiftApplied,
               paddingBottom: Math.max(insets.bottom, spacing.md),
             },
           ]}
