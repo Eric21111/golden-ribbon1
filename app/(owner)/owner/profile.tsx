@@ -17,6 +17,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { canChangeOwnEmail } from '@/features/auth/roles';
 import { ChangeEmailForm } from '@/features/profile/ChangeEmailForm';
+import { ChangeNameForm } from '@/features/profile/ChangeNameForm';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 import { pendingEmailFromUser } from '@/services/accountService';
 
@@ -48,6 +49,7 @@ function ActionRow({
 
 export default function OwnerAccountScreen() {
   const { profile, session } = useAuth();
+  const [nameOpen, setNameOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
 
@@ -96,6 +98,12 @@ export default function OwnerAccountScreen() {
           <Text style={styles.sectionTitle}>ACCOUNT SETTINGS</Text>
           <View style={styles.actionsCard}>
             <ActionRow
+              icon="person-outline"
+              label="Edit name"
+              onPress={() => setNameOpen(true)}
+              showDivider
+            />
+            <ActionRow
               icon="key-outline"
               label="Change password"
               onPress={() => setPasswordOpen(true)}
@@ -127,6 +135,26 @@ export default function OwnerAccountScreen() {
           <ManagerSignOutButton />
         </View>
       </ConstrainedWidth>
+
+      <BottomSheet visible={nameOpen} title="Edit name" scroll onClose={() => setNameOpen(false)}>
+        <ChangeNameForm
+          currentName={profile.full_name}
+          onCancel={() => setNameOpen(false)}
+          onSuccess={() => setNameOpen(false)}
+          hintStyle={styles.formHint}
+          labelStyle={styles.formLabel}
+          inputStyle={styles.formInput}
+          errorStyle={styles.formError}
+          successStyle={styles.formSuccess}
+          accentColor={managerColors.royalBlue}
+          renderSubmitButton={({ loading, disabled, onPress }) => (
+            <ManagerActionButton label="Save name" loading={loading} disabled={disabled} onPress={onPress} />
+          )}
+          renderCancelButton={({ disabled, onPress }) => (
+            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          )}
+        />
+      </BottomSheet>
 
       <BottomSheet visible={passwordOpen} title="Change password" scroll onClose={() => setPasswordOpen(false)}>
         <ChangePasswordForm

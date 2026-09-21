@@ -13,10 +13,12 @@ import { ManagerSignOutButton } from '@/components/dashboard/ManagerSignOutButto
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { ChangeNameForm } from '@/features/profile/ChangeNameForm';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 
 export default function CashierAccountScreen() {
   const { profile, session } = useAuth();
+  const [nameOpen, setNameOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
   if (!profile || !session) return null;
@@ -57,6 +59,17 @@ export default function CashierAccountScreen() {
           <View style={styles.actionsCard}>
             <Pressable
               accessibilityRole="button"
+              onPress={() => setNameOpen(true)}
+              style={({ pressed }) => [styles.actionRow, styles.actionRowDivider, pressed && styles.actionRowPressed]}
+            >
+              <View style={styles.actionIconChip}>
+                <Ionicons name="person-outline" size={18} color={managerColors.royalBlue} />
+              </View>
+              <Text style={styles.actionLabel}>Edit name</Text>
+              <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
               onPress={() => setPasswordOpen(true)}
               style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}
             >
@@ -73,6 +86,26 @@ export default function CashierAccountScreen() {
           <ManagerSignOutButton />
         </View>
       </ConstrainedWidth>
+
+      <BottomSheet visible={nameOpen} title="Edit name" scroll onClose={() => setNameOpen(false)}>
+        <ChangeNameForm
+          currentName={profile.full_name}
+          onCancel={() => setNameOpen(false)}
+          onSuccess={() => setNameOpen(false)}
+          hintStyle={styles.formHint}
+          labelStyle={styles.formLabel}
+          inputStyle={styles.formInput}
+          errorStyle={styles.formError}
+          successStyle={styles.formSuccess}
+          accentColor={managerColors.royalBlue}
+          renderSubmitButton={({ loading, disabled, onPress }) => (
+            <ManagerActionButton label="Save name" loading={loading} disabled={disabled} onPress={onPress} />
+          )}
+          renderCancelButton={({ disabled, onPress }) => (
+            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          )}
+        />
+      </BottomSheet>
 
       <BottomSheet visible={passwordOpen} title="Change password" scroll onClose={() => setPasswordOpen(false)}>
         <ChangePasswordForm
@@ -143,6 +176,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  actionRowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
   actionRowPressed: { backgroundColor: managerColors.cardSurface },
   actionIconChip: {
     width: 34,

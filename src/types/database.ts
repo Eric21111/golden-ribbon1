@@ -232,6 +232,7 @@ export type Database = {
       is_main_branch_manager: { Args: Record<string, never>; Returns: boolean };
       can_change_own_email: { Args: Record<string, never>; Returns: boolean };
       assert_can_change_own_email: { Args: Record<string, never>; Returns: undefined };
+      update_own_name: { Args: { p_full_name: string }; Returns: Profile };
       start_cashier_shift: { Args: Record<string, never>; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       get_shift_summary: { Args: { p_shift_id: string }; Returns: ShiftSummary };

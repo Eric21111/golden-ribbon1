@@ -15,6 +15,17 @@ export function pendingEmailFromUser(user: User | null | undefined): string | nu
 }
 
 /**
+ * Renames the currently authenticated account only. The server derives the
+ * target from the caller's session — no id is ever sent — so one account
+ * can never rename another. Role, branch, and active status are untouched.
+ */
+export async function changeOwnName(fullName: string): Promise<string> {
+  const { data, error } = await supabase.rpc('update_own_name', { p_full_name: fullName.trim() });
+  if (error) throw error;
+  return data.full_name;
+}
+
+/**
  * Changes the password of the currently authenticated Auth user only.
  * Does not accept a target user id. Passwords never leave Supabase Auth.
  */

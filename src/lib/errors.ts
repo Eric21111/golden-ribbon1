@@ -138,6 +138,30 @@ export function getChangeEmailErrorMessage(error: unknown): string {
   return 'The email could not be changed. Please try again.';
 }
 
+export function getChangeNameErrorMessage(error: unknown): string {
+  const message = readErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes('session has expired') ||
+    message.includes('auth session missing') ||
+    message.includes('jwt expired') ||
+    message.includes('not authenticated') ||
+    message.includes('authentication is required')
+  ) {
+    return 'Your session has expired. Sign in again.';
+  }
+  if (message.includes('between 2 and 120') || message.includes('full name')) {
+    return 'Enter a name with 2 to 120 characters.';
+  }
+  if (message.includes('account profile was not found')) {
+    return 'Your account profile was not found.';
+  }
+  if (isNetworkError(message)) {
+    return 'Unable to connect. Check your internet connection and try again.';
+  }
+  return 'Your name could not be updated. Please try again.';
+}
+
 export function getInventoryErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 
