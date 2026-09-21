@@ -5,6 +5,7 @@ import type {
   BranchProductVariant,
   BranchReceivingMode,
   DiscrepancyType,
+  ProductVariant,
   EmployeeRecord,
   EmployeeRole,
   InventoryMovement,
@@ -164,6 +165,14 @@ export type Database = {
           { foreignKeyName: 'branch_product_variants_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
         ];
       };
+      product_variants: {
+        Row: ProductVariant;
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'product_variants_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
       inventory_movements: {
         Row: InventoryMovement;
         Insert: InventoryMovementInsert;
@@ -233,6 +242,13 @@ export type Database = {
         };
         Returns: undefined;
       };
+      configure_product_variants: {
+        Args: {
+          p_product_id: string;
+          p_variants: Array<{ name: string; default_price: number; is_active: boolean }>;
+        };
+        Returns: undefined;
+      };
       list_cashier_pos_inventory: {
         Args: Record<string, never>;
         Returns: Array<{
@@ -290,7 +306,7 @@ export type Database = {
       send_stock_transfer: {
         Args: {
           p_to_branch_id: string;
-          p_items: Array<{ product_id: string; quantity_sent: number; destination_price?: number | null }>;
+          p_items: Array<{ product_id: string; quantity_sent: number }>;
           p_notes: string | null;
           p_idempotency_key: string;
         };

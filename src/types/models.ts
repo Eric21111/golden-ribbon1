@@ -124,6 +124,17 @@ export type BranchProduct = {
   updated_at: string;
 };
 
+export type ProductVariant = {
+  id: string;
+  product_id: string;
+  name: string;
+  default_price: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BranchProductVariant = {
   id: string;
   branch_id: string;
@@ -249,7 +260,7 @@ export type CashierPendingTransfer = {
 
 export type SendTransferInput = {
   destinationBranchId: string;
-  items: Array<{ product_id: string; quantity_sent: number; destination_price?: number | null }>;
+  items: Array<{ product_id: string; quantity_sent: number }>;
   notes: string | null;
   idempotencyKey: string;
 };

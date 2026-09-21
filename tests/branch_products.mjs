@@ -321,50 +321,13 @@ await asUser(cashier2, async () => {
 });
 
 await asUser(mainManager, async () => {
-  // Transfer-driven branch catalog: sending a never-carried product without a
-  // destination price is rejected instead of silently defaulting a price.
-  await assert.rejects(
-    db.query(
-      `select public.send_stock_transfer(
-        '${branch2}',
-        '[{"product_id":"${burger}","quantity_sent":1}]'::jsonb,
-        null,
-        'branch2-burger-noprice01'
-      )`,
-    ),
-    /destination price/i,
-  );
-  assert.equal(
-    Number(
-      (
-        await db.query(
-          `select quantity_on_hand from public.branch_inventory
-           where branch_id='${main}' and product_id='${burger}'`,
-        )
-      ).rows[0].quantity_on_hand,
-    ),
-    20,
-    'rejected transfer does not deduct Main Branch stock',
-  );
-  assert.equal(
-    Number(
-      (
-        await db.query(
-          'select count(*) n from public.branch_products where branch_id=$1 and product_id=$2',
-          [branch2, burger],
-        )
-      ).rows[0].n,
-    ),
-    0,
-    'rejected transfer does not create a branch catalog row',
-  );
-
-  // A destination price provisions the branch catalog without it needing to
-  // be configured beforehand, and never copies another branch's price.
+  // Transfer-driven branch catalog: sending a never-carried product no
+  // longer requires a price — it auto-creates the branch catalog entry at
+  // the product's base selling_price, no price input at all.
   await db.query(
     `select public.send_stock_transfer(
       '${branch2}',
-      '[{"product_id":"${burger}","quantity_sent":3,"destination_price":65}]'::jsonb,
+      '[{"product_id":"${burger}","quantity_sent":3}]'::jsonb,
       null,
       'branch2-burger-newprice01'
     )`,
@@ -377,8 +340,8 @@ await asUser(mainManager, async () => {
   ).rows[0];
   assert.equal(
     Number(createdCatalog.selling_price),
-    65,
-    'destination price is used, not copied from another branch (branch1 sells burger at 70)',
+    70,
+    'new branch product defaults to the product base selling_price (no price input required)',
   );
   assert.equal(createdCatalog.is_active, true);
   assert.equal(

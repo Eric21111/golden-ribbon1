@@ -20,7 +20,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { makeIdempotencyKey } from '@/lib/format';
+import { formatMoney, makeIdempotencyKey } from '@/lib/format';
 
 const schema = z
   .object({
@@ -29,7 +29,6 @@ const schema = z
       z.object({
         product_id: z.string(),
         quantity: z.string().regex(/^\d*$/, 'Enter a whole number.'),
-        destinationPrice: z.string().optional(),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -43,7 +42,6 @@ type Values = z.infer<typeof schema>;
 export function CreateTransferScreen() {
   const [review, setReview] = useState<Values | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [priceError, setPriceError] = useState('');
   const requestKey = useRef(makeIdempotencyKey('send'));
   const formInitialized = useRef(false);
   const branches = useBranches();
@@ -58,7 +56,8 @@ export function CreateTransferScreen() {
   const { fields } = useFieldArray({ control, name: 'items' });
   const selectedBranchId = watch('destinationBranchId');
   // Full catalog (active + inactive) so a product missing here can be
-  // recognized as "new to this branch" and prompted for a destination price.
+  // recognized as "new to this branch" for a read-only price preview —
+  // sending it auto-assigns the product's base selling_price, no input needed.
   const destinationCatalog = useBranchProducts(selectedBranchId, false);
   const catalogByProductId = useMemo(
     () => new Map((destinationCatalog.data ?? []).map((entry) => [entry.product_id, entry])),
@@ -69,7 +68,7 @@ export function CreateTransferScreen() {
     if (inventory.data && !formInitialized.current) {
       reset({
         destinationBranchId: '',
-        items: inventory.data.map((item) => ({ product_id: item.product.id, quantity: '', destinationPrice: '' })),
+        items: inventory.data.map((item) => ({ product_id: item.product.id, quantity: '' })),
         notes: '',
       });
       formInitialized.current = true;
@@ -83,7 +82,7 @@ export function CreateTransferScreen() {
         const inventoryItem = inventory.data?.find((candidate) => candidate.product.id === item.product_id);
         if (quantity <= 0 || !inventoryItem) return [];
         const isNew = !catalogByProductId.has(item.product_id);
-        return [{ ...inventoryItem, quantity, isNew, destinationPrice: item.destinationPrice ?? '' }];
+        return [{ ...inventoryItem, quantity, isNew }];
       }) ?? [],
     [catalogByProductId, inventory.data, review],
   );
@@ -93,24 +92,10 @@ export function CreateTransferScreen() {
     setValue('destinationBranchId', nextBranchId, { shouldValidate: true });
     fields.forEach((_field, index) => {
       setValue(`items.${index}.quantity`, '', { shouldValidate: false });
-      setValue(`items.${index}.destinationPrice`, '', { shouldValidate: false });
     });
   };
 
-  const onReview = handleSubmit((values) => {
-    const missingPrice = values.items.some((item) => {
-      if (Number(item.quantity) <= 0) return false;
-      if (catalogByProductId.has(item.product_id)) return false;
-      const price = Number(item.destinationPrice);
-      return !item.destinationPrice || Number.isNaN(price) || price < 0;
-    });
-    if (missingPrice) {
-      setPriceError('Enter a destination price for each new product before sending.');
-      return;
-    }
-    setPriceError('');
-    setReview(values);
-  });
+  const onReview = handleSubmit((values) => setReview(values));
 
   if (branches.isLoading || inventory.isLoading) {
     return <LoadingState label="Preparing stock transfer…" />;
@@ -163,7 +148,7 @@ export function CreateTransferScreen() {
                   </View>
                   {item.isNew ? (
                     <Text style={styles.body}>
-                      New to this branch · Destination price: {item.destinationPrice}
+                      New to this branch — initial selling price: {formatMoney(item.product.selling_price)}
                     </Text>
                   ) : null}
                 </View>
@@ -191,7 +176,6 @@ export function CreateTransferScreen() {
                     items: selectedItems.map((item) => ({
                       product_id: item.product.id,
                       quantity_sent: item.quantity,
-                      destination_price: item.isNew ? Number(item.destinationPrice) : undefined,
                     })),
                     notes: review.notes?.trim() || null,
                     idempotencyKey: requestKey.current,
@@ -278,7 +262,7 @@ export function CreateTransferScreen() {
           catalogByProductId.size === 0 ? (
             <Text style={styles.body}>
               This branch has no products yet. Sending a product here creates its branch catalog
-              entry — set a destination price for each product below.
+              entry at that product's base selling price — reprice it later in the branch catalog.
             </Text>
           ) : null}
           {fields.map((field, index) => {
@@ -323,21 +307,9 @@ export function CreateTransferScreen() {
                         </View>
                       </View>
                       {isNew && currentQty > 0 ? (
-                        <Controller
-                          control={control}
-                          name={`items.${index}.destinationPrice`}
-                          render={({ field: price }) => (
-                            <FormField
-                              label={`Destination price for ${item.product.name}`}
-                              keyboardType="decimal-pad"
-                              value={price.value ?? ''}
-                              onChangeText={price.onChange}
-                              labelStyle={styles.fieldLabel}
-                              style={styles.fieldInput}
-                              accentColor={managerColors.royalBlue}
-                            />
-                          )}
-                        />
+                        <Text style={styles.body}>
+                          New to this branch — initial selling price: {formatMoney(item.product.selling_price)}
+                        </Text>
                       ) : null}
                       <View style={styles.qtyRow}>
                         <Text style={styles.qtyCaption}>Qty</Text>
@@ -408,7 +380,6 @@ export function CreateTransferScreen() {
           {formState.errors.items?.root?.message ? (
             <Text style={styles.error}>{formState.errors.items.root.message}</Text>
           ) : null}
-          {priceError ? <Text style={styles.error}>{priceError}</Text> : null}
         </ScrollView>
 
         <View style={styles.footer}>

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { cartLineKey } from '@/lib/money';
 import type { Database } from '@/types/database';
-import type { Product, ProductInput } from '@/types/models';
+import type { Product, ProductInput, ProductVariant } from '@/types/models';
 
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
 
@@ -69,4 +69,25 @@ export async function updateProduct(id: string, input: ProductInput): Promise<Pr
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function listProductVariants(productId: string): Promise<ProductVariant[]> {
+  const { data, error } = await supabase
+    .from('product_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...row, default_price: Number(row.default_price) }));
+}
+
+export async function configureProductVariants(
+  productId: string,
+  variants: Array<{ name: string; default_price: number; is_active: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.rpc('configure_product_variants', {
+    p_product_id: productId,
+    p_variants: variants,
+  });
+  if (error) throw error;
 }

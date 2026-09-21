@@ -357,7 +357,8 @@ assert.equal(
 
 // ----------------------------------------------------------------------------
 // B1. Transfer auto-creates the destination catalog entry: Beef Tapa was
-// never assigned to Branch 2 before. A destination price is required.
+// never assigned to Branch 2 before. No price input is required — it
+// defaults to the product's base selling_price (95).
 // ----------------------------------------------------------------------------
 
 await asUser(mainManager, async () => {
@@ -367,21 +368,15 @@ await asUser(mainManager, async () => {
     'no pre-existing branch catalog row for the new product',
   );
 
-  await assert.rejects(
-    sendTransfer(branch2, [{ product_id: newProduct, quantity_sent: 18 }], 'm122-newprod-noprice01'),
-    /destination price/i,
-    'introducing a new product without a destination price is rejected',
-  );
-
   shifts.newProductTransferId = (
-    await sendTransfer(branch2, [{ product_id: newProduct, quantity_sent: 18, destination_price: 99 }], 'm122-newprod-price01')
+    await sendTransfer(branch2, [{ product_id: newProduct, quantity_sent: 18 }], 'm122-newprod-price01')
   ).rows[0].id;
 
   const catalogRow = (
     await db.query('select selling_price,is_active from public.branch_products where branch_id=$1 and product_id=$2', [branch2, newProduct])
   ).rows[0];
   assert.equal(catalogRow.is_active, true, 'transfer auto-creates and activates the destination catalog entry');
-  assert.equal(Number(catalogRow.selling_price), 99, 'destination price is the one provided at send time');
+  assert.equal(Number(catalogRow.selling_price), 95, 'new branch product defaults to the product base selling_price');
 
   // Stock is not yet sellable: receipt has not happened.
   const preReceiptStock = (
@@ -401,7 +396,8 @@ await asUser(manager2, async () => {
 });
 
 // ----------------------------------------------------------------------------
-// B2. Received stock becomes available in Branch 2 POS at Branch 2's price.
+// B2. Received stock becomes available in Branch 2 POS at the auto-assigned
+// base price (95), editable later via configure_branch_products.
 // ----------------------------------------------------------------------------
 
 await asUser(cashier2, async () => {
@@ -409,15 +405,25 @@ await asUser(cashier2, async () => {
   const tapaRow = pos.find((row) => row.product_id === newProduct);
   assert.ok(tapaRow, 'newly transferred-and-received product appears in destination POS');
   assert.equal(Number(tapaRow.quantity_on_hand), 18);
-  assert.equal(Number(tapaRow.selling_price), 99, 'POS uses the destination branch price');
+  assert.equal(Number(tapaRow.selling_price), 95, 'POS uses the auto-assigned base price');
 
   const sale = (
     await db.query(
       'select (public.confirm_sale($1,$2::jsonb,$3,$4)).*',
-      [shifts.branch2, JSON.stringify([{ product_id: newProduct, quantity: 1 }]), '99.00', 'm122-newprod-sale01'],
+      [shifts.branch2, JSON.stringify([{ product_id: newProduct, quantity: 1 }]), '95.00', 'm122-newprod-sale01'],
     )
   ).rows[0];
-  assert.equal(Number(sale.total_amount), 99);
+  assert.equal(Number(sale.total_amount), 95);
+});
+
+await asUser(mainManager, async () => {
+  // The Main Branch Manager can edit the auto-assigned price afterward via
+  // the existing branch catalog/pricing flow.
+  await configureProducts(branch2, [{ product_id: newProduct, selling_price: 105, is_active: true }]);
+  const repriced = (
+    await db.query('select selling_price from public.branch_products where branch_id=$1 and product_id=$2', [branch2, newProduct])
+  ).rows[0];
+  assert.equal(Number(repriced.selling_price), 105, 'branch price can be edited later in the catalog/pricing screen');
 });
 
 // ----------------------------------------------------------------------------
@@ -427,7 +433,7 @@ await asUser(cashier2, async () => {
 
 await asUser(manager1, async () => {
   await assert.rejects(
-    sendTransfer(branch1, [{ product_id: newProduct, quantity_sent: 1, destination_price: 1 }], 'm122-selling-cannot-send01'),
+    sendTransfer(branch1, [{ product_id: newProduct, quantity_sent: 1 }], 'm122-selling-cannot-send01'),
     /Main Branch Manager/,
   );
   await assert.rejects(
