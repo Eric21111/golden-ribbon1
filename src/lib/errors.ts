@@ -14,6 +14,7 @@ export function getErrorMessage(error: unknown): string {
   if (message.includes('branches_one_main_branch')) return 'Only one branch can be marked as the Main Branch.';
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
   if (message.includes('products_sku_unique_ci')) return 'That SKU is already in use.';
+  if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
   if (message.includes('unauthorized') || message.includes('permission denied') || message.includes('owner access')) return 'You are not authorized to perform this action.';
   if (message.includes('inactive account') || message.includes('profile is inactive')) return 'This account is inactive. Contact the owner.';
   if (isNetworkError(message)) return 'Unable to connect. Check your internet connection and try again.';

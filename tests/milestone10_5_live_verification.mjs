@@ -1,8 +1,26 @@
 /**
  * Milestone 10.5 — Live production-readiness verification.
- * Temporary harness against the linked development Supabase project.
- * Not imported by the mobile app.
+ * Writes real auth users, products, sales, transfers, and shifts against
+ * whichever Supabase project is linked (there is no separate staging
+ * project for this app — the linked project IS production). Not imported
+ * by the mobile app.
+ *
+ * SAFETY GUARD: refuses to run unless RUN_LIVE_PROD_TESTS is set to the
+ * exact confirmation phrase below. This is intentionally not a simple
+ * boolean so it can't be flipped on by accident (e.g. a stray `=true` left
+ * in a shared .env, or being swept up by a blanket `for f in tests/*.mjs`
+ * regression run). Run explicitly and deliberately only:
+ *
+ *   RUN_LIVE_PROD_TESTS=I-UNDERSTAND-THIS-WRITES-TO-PRODUCTION node tests/milestone10_5_live_verification.mjs
  */
+const CONFIRM_PHRASE = 'I-UNDERSTAND-THIS-WRITES-TO-PRODUCTION';
+if (process.env.RUN_LIVE_PROD_TESTS !== CONFIRM_PHRASE) {
+  console.error('Refusing to run: this test writes real data to the linked production Supabase project.');
+  console.error(`Set RUN_LIVE_PROD_TESTS=${CONFIRM_PHRASE} to run it deliberately.`);
+  console.error('Do not include this file in blanket "run every test" sweeps.');
+  process.exit(1);
+}
+
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
