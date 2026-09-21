@@ -104,7 +104,10 @@ export function TransferDiscrepanciesReportScreen() {
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
         {discrepancies.length === 0 && !query.isLoading && query.isFetched ? (
-          <EmptyState title="No transfer discrepancies" message="All transfer receipts matched the quantities sent." />
+          <EmptyState
+            title="No transfer discrepancies"
+            message="Notes appear after a counted receive with a short/over count. Cashier-confirmed shipments do not create discrepancy notes. Run send → receive operations first."
+          />
         ) : null}
 
         {pagination.pageItems.map((item) => {

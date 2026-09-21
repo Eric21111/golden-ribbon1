@@ -6,8 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { managerColors } from '@/components/dashboard/theme';
 import { colors } from '@/constants/theme';
-import { useAuth } from '@/features/auth/AuthProvider';
-import { isMainBranchManager } from '@/features/auth/roles';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 import type { UserRole } from '@/types/models';
 
@@ -41,18 +39,11 @@ const mainManagerMenu: NavigationItem[] = [
   { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
-const sellingManagerMenu: NavigationItem[] = [
-  { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
-  { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
-  { label: 'Incoming', href: menuHref('/manager/incoming'), icon: 'download-outline', selectedIcon: 'download' },
-  { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
-  { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
-];
-
 const cashierMenu: NavigationItem[] = [
   { label: 'Home', href: '/cashier/dashboard', icon: 'home-outline', selectedIcon: 'home' },
   { label: 'POS', href: '/cashier/pos', icon: 'cart-outline', selectedIcon: 'cart' },
   { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
+  { label: 'Incoming', href: menuHref('/cashier/incoming'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
@@ -63,16 +54,9 @@ export function useBottomNavigationVisible() {
 }
 
 export function RoleNavigation({ role, children }: PropsWithChildren<{ role: UserRole }>) {
-  const { profile } = useAuth();
   const pathname = usePathname().replace(/\/$/, '');
   const items =
-    role === 'owner'
-      ? ownerMenu
-      : role === 'manager'
-        ? isMainBranchManager(profile)
-          ? mainManagerMenu
-          : sellingManagerMenu
-        : cashierMenu;
+    role === 'owner' ? ownerMenu : role === 'manager' ? mainManagerMenu : cashierMenu;
   const keyboardInset = useKeyboardBottomInset();
   // Only primary pages have a menu. Forms, details, and inventory drill-downs
   // keep their existing stack navigation back to the parent page.

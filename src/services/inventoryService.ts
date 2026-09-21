@@ -76,7 +76,7 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       address: null,
       is_main_branch: false,
       is_active: true,
-      receiving_mode: 'counted',
+      receiving_mode: 'cashier_confirm',
       created_at: '',
       updated_at: '',
     };

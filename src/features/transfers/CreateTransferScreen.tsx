@@ -89,6 +89,7 @@ export function CreateTransferScreen() {
 
   const selectDestination = (nextBranchId: string) => {
     if (nextBranchId === selectedBranchId) return;
+    requestKey.current = makeIdempotencyKey('send');
     setValue('destinationBranchId', nextBranchId, { shouldValidate: true });
     fields.forEach((_field, index) => {
       setValue(`items.${index}.quantity`, '', { shouldValidate: false });
@@ -181,8 +182,13 @@ export function CreateTransferScreen() {
                     idempotencyKey: requestKey.current,
                   },
                   {
-                    onSuccess: (id) =>
-                      router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never),
+                    onSuccess: (id) => {
+                      requestKey.current = makeIdempotencyKey('send');
+                      router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never);
+                    },
+                    onError: () => {
+                      requestKey.current = makeIdempotencyKey('send');
+                    },
                   },
                 )
               }
@@ -191,7 +197,10 @@ export function CreateTransferScreen() {
               label="Back to edit"
               variant="secondary"
               disabled={mutation.isPending}
-              onPress={() => setReview(null)}
+              onPress={() => {
+                requestKey.current = makeIdempotencyKey('send');
+                setReview(null);
+              }}
             />
           </View>
         </View>

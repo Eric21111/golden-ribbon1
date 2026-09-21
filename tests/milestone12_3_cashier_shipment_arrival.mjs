@@ -76,17 +76,20 @@ const asUser = async (userId, fn) => {
   }
 };
 
-// -- 1. Default receiving_mode is 'counted' for all existing/new branches. --
+// -- 1. Default receiving_mode is cashier_confirm for selling branches. --
 const modes = (
   await db.query('select id, receiving_mode from public.branches where id in ($1,$2,$3)', [
     branch1, branch2, branch3,
   ])
 ).rows;
-assert.ok(modes.every((row) => row.receiving_mode === 'counted'), 'branches default to counted receiving mode');
+assert.ok(modes.every((row) => row.receiving_mode === 'cashier_confirm'), 'selling branches default to cashier_confirm');
 
+// Setting counted mode is rejected.
 await asUser(mainManager, async () => {
-  await db.query('select public.set_branch_receiving_mode($1,$2)', [branch2, 'cashier_confirm']);
-  await db.query('select public.set_branch_receiving_mode($1,$2)', [branch3, 'cashier_confirm']);
+  await assert.rejects(
+    db.query('select public.set_branch_receiving_mode($1,$2)', [branch1, 'counted']),
+    /cashier confirmation/,
+  );
 });
 
 // Only the Main Branch Manager may set receiving mode.
@@ -104,7 +107,7 @@ await asUser(mainManager, async () => {
 });
 
 // ----------------------------------------------------------------------------
-// Test 1: counted mode still works — Manager receiving/counting is unchanged.
+// Test 1: manager counted receive is retired — cashier must confirm.
 // ----------------------------------------------------------------------------
 
 let counted;
@@ -124,28 +127,27 @@ assert.equal(
 
 await asUser(manager1, async () => {
   const items = (await db.query('select id,quantity_sent from public.stock_transfer_items where stock_transfer_id=$1', [counted])).rows;
-  const status = (
-    await db.query('select public.receive_stock_transfer($1,$2::jsonb,null,$3) status', [
+  await assert.rejects(
+    db.query('select public.receive_stock_transfer($1,$2::jsonb,null,$3) status', [
       counted,
       JSON.stringify(items.map((row) => ({ stock_transfer_item_id: row.id, quantity_received: 38 }))),
       'm123-counted-recv-key001',
-    ])
+    ]),
+    /cashier confirmation/,
+  );
+});
+
+await asUser(cashier1, async () => {
+  const status = (
+    await db.query('select public.confirm_shipment_arrival($1,$2) status', [counted, 'm123-branch1-arrival-key01'])
   ).rows[0].status;
-  assert.equal(status, 'received_with_discrepancy', 'Manager counted receiving still supports partial/discrepant receipt');
+  assert.equal(status, 'received');
 });
 assert.equal(
   Number((await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2', [branch1, product])).rows[0].quantity_on_hand),
-  38,
-  'counted mode credits exactly the manager-entered quantity',
+  40,
+  'cashier confirmation credits the full sent quantity',
 );
-
-// cashier_confirm-only RPC must reject a counted-mode branch's cashier.
-await asUser(cashier1, async () => {
-  await assert.rejects(
-    db.query('select public.list_cashier_pending_transfers()'),
-    /does not use cashier shipment confirmation/,
-  );
-});
 
 // ----------------------------------------------------------------------------
 // Test 2: cashier_confirm adds stock once.

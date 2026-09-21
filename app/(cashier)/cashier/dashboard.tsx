@@ -71,7 +71,7 @@ export default function CashierDashboard() {
           'Cannot open POS',
           rows.length === 0
             ? 'This branch has no active products. Ask a manager to add stock first.'
-            : 'All products are out of stock. Restock this branch before starting or opening POS.',
+            : 'All products are out of stock. Confirm incoming shipments or ask Main to restock before opening POS.',
         );
         return;
       }
@@ -96,13 +96,41 @@ export default function CashierDashboard() {
   };
 
   const startShift = () =>
-    void ensureStockAllowsPos(() =>
-      startMutation.mutate(undefined, {
-        onSuccess: () => router.replace('/cashier/pos'),
-      }),
-    );
+    startMutation.mutate(undefined, {
+      onSuccess: () => router.replace('/cashier/pos'),
+    });
 
   const openPos = () => void ensureStockAllowsPos(() => router.push('/cashier/pos'));
+
+  const incomingTile =
+    profile?.branch?.receiving_mode === 'cashier_confirm' ? (
+      <Row>
+        <NavTile
+          layout="tile"
+          icon="cube-outline"
+          accent="gold"
+          title="Incoming shipments"
+          onPress={() => router.push('/cashier/incoming' as never)}
+        />
+        <NavTile
+          layout="tile"
+          icon="return-up-back-outline"
+          accent="teal"
+          title="Create return"
+          onPress={() => router.push('/cashier/returns/create' as never)}
+        />
+      </Row>
+    ) : (
+      <Row>
+        <NavTile
+          layout="tile"
+          icon="return-up-back-outline"
+          accent="teal"
+          title="Create return"
+          onPress={() => router.push('/cashier/returns/create' as never)}
+        />
+      </Row>
+    );
 
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
@@ -178,16 +206,20 @@ export default function CashierDashboard() {
         ) : !shiftQuery.data ? (
           <View style={styles.noticeCard}>
             <Text style={styles.noticeTitle}>No Active Shift</Text>
-            <Text style={styles.noticeText}>Start a shift before opening the POS.</Text>
+            <Text style={styles.noticeText}>
+              Start a shift to sell. You can confirm incoming shipments and create returns anytime.
+            </Text>
             {startMutation.error ? (
               <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
             ) : null}
             <ManagerActionButton
               label="Start shift"
               icon="play-outline"
-              loading={startMutation.isPending || checkingStock}
+              loading={startMutation.isPending}
               onPress={startShift}
             />
+            <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
+            {incomingTile}
           </View>
         ) : (
           <View style={styles.content}>
@@ -265,17 +297,7 @@ export default function CashierDashboard() {
                 onPress={() => router.push('/cashier/sales')}
               />
             </Row>
-            {profile?.branch?.receiving_mode === 'cashier_confirm' ? (
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="cube-outline"
-                  accent="gold"
-                  title="Incoming shipments"
-                  onPress={() => router.push('/cashier/incoming' as never)}
-                />
-              </Row>
-            ) : null}
+            {incomingTile}
           </View>
         )}
       </ConstrainedWidth>

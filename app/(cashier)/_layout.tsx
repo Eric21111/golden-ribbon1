@@ -22,6 +22,7 @@ function CashierNavigator() {
           <Stack.Screen name="cashier/sales" />
           <Stack.Screen name="cashier/sales/[id]" />
           <Stack.Screen name="cashier/incoming" />
+          <Stack.Screen name="cashier/returns/create" />
           <Stack.Screen name="cashier/profile" />
           <Stack.Screen name="cashier/change-password" />
         </Stack>

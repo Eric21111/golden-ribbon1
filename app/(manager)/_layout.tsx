@@ -4,13 +4,25 @@ import { Stack } from 'expo-router';
 import { Drawer } from 'react-native-drawer-layout';
 
 import { Screen } from '@/components/Screen';
+import { SignOutButton } from '@/components/SignOutButton';
 import { ManagerSidebar } from '@/components/dashboard/ManagerSidebar';
-import { LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { RoleNavigation } from '@/components/RoleNavigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { RoleGuard } from '@/features/auth/RoleGuard';
-import { isMainBranchManager } from '@/features/auth/roles';
+import { isMainBranchManager, isSellingBranchManager } from '@/features/auth/roles';
 import { ManagerDrawerProvider, useManagerDrawer } from '@/features/navigation/ManagerDrawerContext';
+
+function SellingManagerLocked() {
+  return (
+    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={{ flexGrow: 1, padding: 0, gap: 0 }}>
+      <ManagerScreenHeader title="Manager access updated" />
+      <ErrorState message="Selling-branch manager accounts are no longer used. Ask the Owner to reassign this account as a Cashier or to the Main Branch Manager." />
+      <SignOutButton />
+    </Screen>
+  );
+}
 
 function ManagerStack() {
   return (
@@ -44,8 +56,10 @@ function ManagerNavigator() {
   const { profile } = useAuth();
   const { open, openDrawer, closeDrawer } = useManagerDrawer();
 
-  // Selling-branch managers have nothing in the sidebar that isn't already on their
-  // bottom tab bar — the drawer would be pure redundant chrome, so skip it entirely.
+  if (isSellingBranchManager(profile)) {
+    return <SellingManagerLocked />;
+  }
+
   if (!isMainBranchManager(profile)) {
     return <ManagerStack />;
   }

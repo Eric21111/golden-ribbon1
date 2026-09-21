@@ -43,7 +43,9 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
   }, [loading]);
   const selectedRole = watch('role');
   const assignableBranches =
-    selectedRole === 'cashier' ? branches.filter((branch) => !branch.is_main_branch) : branches;
+    selectedRole === 'cashier'
+      ? branches.filter((branch) => !branch.is_main_branch)
+      : branches.filter((branch) => branch.is_main_branch);
 
   return (
     <View style={styles.form}>
@@ -125,10 +127,9 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit }: Creat
               value={field.value}
               onChange={(value) => {
                 field.onChange(value);
-                if (value === 'cashier') {
-                  const current = branches.find((branch) => branch.id === watch('branch_id'));
-                  if (current?.is_main_branch) setValue('branch_id', '');
-                }
+                const current = branches.find((branch) => branch.id === watch('branch_id'));
+                if (value === 'cashier' && current?.is_main_branch) setValue('branch_id', '');
+                if (value === 'manager' && current && !current.is_main_branch) setValue('branch_id', '');
               }}
             />
           )}

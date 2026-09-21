@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -25,10 +25,22 @@ interface ProductFormProps {
   autoGenerateSku?: boolean;
   /** Only the create flow currently exposes default-variant editing. */
   allowVariants?: boolean;
+  /** Create flow hides this — products activate when opening stock is set. */
+  showActiveToggle?: boolean;
+  /** Optional selling-branch price editor (create/edit). */
+  branchOptions?: Array<{ id: string; name: string }>;
+  resolveBranchPrice?: (branchId: string) => string | undefined;
+  onBranchChange?: (branchId: string) => void;
+  onConfirmBranchPrice?: (payload: { branchId: string; selling_price: number }) => void;
+  branchPriceLoading?: boolean;
+  branchPriceError?: string;
   error?: string;
   loading?: boolean;
   submitLabel: string;
-  onSubmit: (values: ProductFormValues) => void;
+  onSubmit: (
+    values: ProductFormValues,
+    branchPriceDraft?: { branchId: string; selling_price: number },
+  ) => void;
 }
 
 export function ProductForm({
@@ -36,12 +48,21 @@ export function ProductForm({
   existingSkus = [],
   autoGenerateSku = false,
   allowVariants = false,
+  showActiveToggle = true,
+  branchOptions = [],
+  resolveBranchPrice,
+  onBranchChange,
+  onConfirmBranchPrice,
+  branchPriceLoading,
+  branchPriceError,
   error,
   loading,
   submitLabel,
   onSubmit,
 }: ProductFormProps) {
   const skuEditedRef = useRef(Boolean(defaultValues?.sku?.trim()));
+  const [branchId, setBranchId] = useState(branchOptions[0]?.id ?? '');
+  const [branchPrice, setBranchPrice] = useState('');
   const { control, handleSubmit, setValue, watch, formState } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: defaultValues ?? {
@@ -49,12 +70,13 @@ export function ProductForm({
       sku: '',
       description: '',
       selling_price: '',
-      is_active: true,
+      is_active: showActiveToggle ? true : false,
       pricingType: 'single',
       variants: [],
     },
   });
   const nameValue = watch('name');
+  const basePrice = watch('selling_price');
   const pricingType = watch('pricingType');
   const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
     control,
@@ -66,6 +88,12 @@ export function ProductForm({
     const nextSku = nameValue.trim() ? generateSkuFromName(nameValue, existingSkus) : '';
     setValue('sku', nextSku, { shouldValidate: Boolean(nextSku), shouldDirty: true });
   }, [autoGenerateSku, existingSkus, nameValue, setValue]);
+
+  useEffect(() => {
+    if (!branchId) return;
+    const resolved = resolveBranchPrice?.(branchId);
+    setBranchPrice(resolved?.trim() ? resolved : basePrice || '');
+  }, [basePrice, branchId, resolveBranchPrice]);
 
   const variantsErrorMessage = formState.errors.variants?.message;
 
@@ -238,23 +266,78 @@ export function ProductForm({
           ) : null}
         </View>
       ) : null}
-      <Controller
-        control={control}
-        name="is_active"
-        render={({ field }) => (
-          <SwitchField
-            label="Active"
-            description="Inactive products are retained for future historical records."
-            value={field.value}
-            onValueChange={field.onChange}
-            labelStyle={styles.fieldLabel}
-            descriptionStyle={styles.switchDescription}
-            activeTrackColor={managerColors.royalBlue}
+      {showActiveToggle ? (
+        <Controller
+          control={control}
+          name="is_active"
+          render={({ field }) => (
+            <SwitchField
+              label="Active"
+              description="Inactive products are retained for historical records. New products activate when opening stock is set."
+              value={field.value}
+              onValueChange={field.onChange}
+              labelStyle={styles.fieldLabel}
+              descriptionStyle={styles.switchDescription}
+              activeTrackColor={managerColors.royalBlue}
+            />
+          )}
+        />
+      ) : (
+        <Text style={styles.hint}>
+          New products stay inactive until a Main Manager sets an opening-stock quantity.
+        </Text>
+      )}
+      {branchOptions.length > 0 ? (
+        <View style={styles.variantsBlock}>
+          <Text style={[styles.label, styles.fieldLabel]}>Branch price</Text>
+          <Text style={styles.hint}>
+            Select a selling branch to view or update its price. Confirm separately from saving the product.
+          </Text>
+          <FilterChipRow
+            options={branchOptions.map((branch) => ({ label: branch.name, value: branch.id }))}
+            value={branchId}
+            onChange={(next) => {
+              setBranchId(next);
+              onBranchChange?.(next);
+            }}
           />
+          <FormField
+            label="Branch selling price (PHP)"
+            value={branchPrice}
+            onChangeText={setBranchPrice}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            labelStyle={styles.fieldLabel}
+            errorStyle={styles.fieldError}
+            accentColor={managerColors.royalBlue}
+            style={styles.fieldInput}
+          />
+          {branchPriceError ? <Text style={styles.error}>{branchPriceError}</Text> : null}
+          <ManagerActionButton
+            label="Confirm branch price"
+            variant="secondary"
+            loading={branchPriceLoading}
+            disabled={!branchId || !onConfirmBranchPrice}
+            onPress={() => {
+              if (!branchId || !onConfirmBranchPrice) return;
+              onConfirmBranchPrice({ branchId, selling_price: Number(branchPrice) });
+            }}
+          />
+        </View>
+      ) : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ManagerActionButton
+        label={submitLabel}
+        loading={loading}
+        onPress={handleSubmit((values) =>
+          onSubmit(
+            showActiveToggle ? values : { ...values, is_active: false },
+            branchId && Number.isFinite(Number(branchPrice))
+              ? { branchId, selling_price: Number(branchPrice) }
+              : undefined,
+          ),
         )}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ManagerActionButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
   );
 }

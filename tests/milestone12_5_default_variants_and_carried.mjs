@@ -207,20 +207,9 @@ assert.equal(preservedVariant.is_active, true);
 // Test 6: POS uses the copied variants once stock is received.
 // ----------------------------------------------------------------------------
 
-await asUser(manager1, async () => {
-  // manager1 is Branch 1's manager; receive on Branch 2's behalf requires a
-  // Branch 2 manager, so create one and receive there instead.
-});
-const manager2 = id(5);
-await db.exec(`
-  insert into auth.users values ('${manager2}','manager-2@test');
-  insert into public.profiles(id,full_name,role,branch_id) values ('${manager2}','Manager 2','manager','${branch2}');
-`);
-await asUser(manager2, async () => {
-  const items = (await db.query('select id,quantity_sent from public.stock_transfer_items where stock_transfer_id=$1', [transferId])).rows;
-  await db.query('select public.receive_stock_transfer($1,$2::jsonb,null,$3)', [
+await asUser(cashier2, async () => {
+  await db.query('select public.confirm_shipment_arrival($1,$2)', [
     transferId,
-    JSON.stringify(items.map((row) => ({ stock_transfer_item_id: row.id, quantity_received: row.quantity_sent }))),
     'm125-receive-key000001',
   ]);
 });

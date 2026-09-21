@@ -18,7 +18,7 @@ insert into public.products(id,name,sku,selling_price,is_active) values ('${p1}'
 insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
   ('${branch}','${p1}',80,true),('${branch}','${p2}',100,true);
 insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values ('${branch}','${p1}',30),('${branch}','${p2}',18),('${main}','${p1}',100),('${otherBranch}','${p1}',7);
-set role authenticated; select set_config('request.jwt.claim.sub','${manager}',false);`);
+set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
 const items = [{product_id:p1,quantity_returned:20},{product_id:p2,quantity_returned:18}];
 const send = (key, data=items, notes=null) => db.query('select public.create_stock_return($1::jsonb,$2,$3) id',[JSON.stringify(data),notes,key]);
 assert.equal((await db.query('select * from public.list_return_inventory()')).rows.length,2);
@@ -29,12 +29,12 @@ await assert.rejects(send('insufficient-stock-return',[{product_id:p1,quantity_r
 await db.exec(`reset role;
 create function public.fail_return_movement() returns trigger language plpgsql as $$ begin raise exception 'injected failure'; end $$;
 create trigger fail_return before insert on public.inventory_movements for each row execute function public.fail_return_movement();
-set role authenticated;`);
+set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
 await assert.rejects(send('rollback-return-check'), /injected failure/);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,0);
 assert.equal((await db.query('select * from public.stock_return_items')).rows.length,0);
 assert.equal(Number((await db.query('select quantity_on_hand from public.list_return_inventory() where product_id=$1',[p1])).rows[0].quantity_on_hand),30);
-await db.exec('reset role; drop trigger fail_return on public.inventory_movements; set role authenticated;');
+await db.exec(`reset role; drop trigger fail_return on public.inventory_movements; set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
 const id = (await send('duplicate-return-check')).rows[0].id;
 assert.equal((await send('duplicate-return-check')).rows[0].id,id);
 await assert.rejects(send('duplicate-return-check',items,'different notes'), /different return/);
@@ -53,16 +53,18 @@ for (const sql of ["update public.stock_returns set status='received'",'update p
 await db.exec(`select set_config('request.jwt.claim.sub','${other}',false);`);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,0);
 assert.equal((await db.query('select * from public.stock_return_items')).rows.length,0);
-await assert.rejects(send('other-branch-stock-return',[{product_id:p2,quantity_returned:1}]), /Insufficient stock/);
+await assert.rejects(send('other-branch-stock-return',[{product_id:p2,quantity_returned:1}]), /Insufficient stock|Cashier or Manager|Managers may only|Returns from selling/);
+await db.exec(`select set_config('request.jwt.claim.sub','${manager}',false);`);
+await assert.rejects(send('manager-denied-return'), /cashiers|Manager/);
 await db.exec(`select set_config('request.jwt.claim.sub','${cashier}',false);`);
-await assert.rejects(send('cashier-denied-return'), /Manager/);
 const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
 await assert.rejects(db.query('select public.confirm_sale($1,$2::jsonb,1000,$3)',[shift,JSON.stringify([{product_id:p1,quantity:11}]),'sale-after-return-check']), /Insufficient stock/);
+await db.query('select public.end_cashier_shift($1)', [shift]);
 await db.exec(`select set_config('request.jwt.claim.sub','${owner}',false);`);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,1);
 assert.equal((await db.query('select * from public.stock_return_items')).rows.length,2);
-await db.exec(`reset role; update public.profiles set is_active=false where id='${manager}'; set role authenticated; select set_config('request.jwt.claim.sub','${manager}',false);`);
-await assert.rejects(send('inactive-manager-return'), /Manager/);
+await db.exec(`reset role; update public.profiles set is_active=false where id='${cashier}'; set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
+await assert.rejects(send('inactive-cashier-return'), /Cashier or Manager|active/);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,0);
 await db.exec('reset role');
 const header = (await db.query('select * from public.stock_returns')).rows[0];

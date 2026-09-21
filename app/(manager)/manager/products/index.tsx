@@ -22,7 +22,10 @@ import {
   type ProductFilter,
 } from '@/features/products/productFilters';
 import type { ProductFormValues } from '@/features/products/productSchema';
+import { useBranches } from '@/hooks/useBranches';
+import { useBranchProducts, useConfigureBranchProducts } from '@/hooks/useBranchProducts';
 import { useConfigureProductVariants, useCreateProduct, useProducts, useUpdateProduct } from '@/hooks/useProducts';
+import { alertNotice } from '@/lib/confirmAction';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import type { Product } from '@/types/models';
@@ -33,10 +36,18 @@ export default function ManagerProductListScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createKey, setCreateKey] = useState(0);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editBranchId, setEditBranchId] = useState('');
+  const branches = useBranches();
+  const sellingBranches = useMemo(
+    () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
+    [branches.data],
+  );
   const query = useProducts(search);
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct(editProduct?.id ?? '');
   const configureVariantsMutation = useConfigureProductVariants();
+  const editCatalog = useBranchProducts(editBranchId, false);
+  const configureBranchMutation = useConfigureBranchProducts(editBranchId);
 
   const filtered = useMemo(
     () => (query.data ?? []).filter((product) => matchesProductFilter(product.is_active, filter)),
@@ -44,38 +55,67 @@ export default function ManagerProductListScreen() {
   );
 
   const existingSkus = useMemo(() => (query.data ?? []).map((product) => product.sku), [query.data]);
+  const branchOptions = useMemo(
+    () => sellingBranches.map((branch) => ({ id: branch.id, name: branch.name })),
+    [sellingBranches],
+  );
 
   const empty =
     filter === 'all' && !search.trim()
       ? productFilterEmptyMessage('all', false, true)
       : productFilterEmptyMessage(filter, Boolean(search.trim()), true);
 
-  const submitCreate = (values: ProductFormValues) => {
+  async function configureBranchProductsFor(
+    branchId: string,
+    items: Array<{ product_id: string; selling_price: number; is_active: boolean }>,
+  ) {
+    const { configureBranchProducts } = await import('@/services/branchProductService');
+    await configureBranchProducts(branchId, items);
+  }
+
+  const submitCreate = (
+    values: ProductFormValues,
+    branchPriceDraft?: { branchId: string; selling_price: number },
+  ) => {
     createMutation.mutate(
       {
         name: values.name.trim(),
         sku: values.sku.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
         selling_price: Number(values.selling_price),
-        is_active: values.is_active,
+        is_active: false,
       },
       {
-        onSuccess: (product) => {
-          if (values.pricingType !== 'variants') {
+        onSuccess: async (product) => {
+          try {
+            if (branchPriceDraft && Number.isFinite(branchPriceDraft.selling_price)) {
+              await configureBranchProductsFor(branchPriceDraft.branchId, [
+                {
+                  product_id: product.id,
+                  selling_price: branchPriceDraft.selling_price,
+                  is_active: true,
+                },
+              ]);
+            }
+            if (values.pricingType === 'variants') {
+              configureVariantsMutation.mutate(
+                {
+                  productId: product.id,
+                  variants: values.variants.map((variant) => ({
+                    name: variant.name.trim(),
+                    default_price: Number(variant.default_price),
+                    is_active: variant.is_active,
+                  })),
+                },
+                { onSuccess: () => setCreateOpen(false) },
+              );
+              return;
+            }
             setCreateOpen(false);
-            return;
+          } catch (error) {
+            alertNotice('Product created', getErrorMessage(error));
+            setCreateOpen(false);
           }
-          configureVariantsMutation.mutate(
-            {
-              productId: product.id,
-              variants: values.variants.map((variant) => ({
-                name: variant.name.trim(),
-                default_price: Number(variant.default_price),
-                is_active: variant.is_active,
-              })),
-            },
-            { onSuccess: () => setCreateOpen(false) },
-          );
         },
       },
     );
@@ -92,6 +132,27 @@ export default function ManagerProductListScreen() {
       },
       { onSuccess: () => setEditProduct(null) },
     );
+  };
+
+  const confirmEditBranchPrice = (draft: { branchId: string; selling_price: number }) => {
+    if (!editProduct || !Number.isFinite(draft.selling_price) || draft.selling_price < 0) {
+      alertNotice('Invalid price', 'Enter a valid branch selling price.');
+      return;
+    }
+    setEditBranchId(draft.branchId);
+    const existing = editCatalog.data?.find((row) => row.product_id === editProduct.id);
+    void configureBranchProductsFor(draft.branchId, [
+      {
+        product_id: editProduct.id,
+        selling_price: draft.selling_price,
+        is_active: existing?.is_active ?? true,
+      },
+    ])
+      .then(() => {
+        alertNotice('Branch price saved', 'The selected branch price was updated.');
+        void editCatalog.refetch();
+      })
+      .catch((error) => alertNotice('Unable to save branch price', getErrorMessage(error)));
   };
 
   return (
@@ -130,7 +191,10 @@ export default function ManagerProductListScreen() {
                       tone={item.is_active ? 'success' : 'neutral'}
                     />
                   }
-                  onPress={() => setEditProduct(item)}
+                  onPress={() => {
+                    setEditBranchId(sellingBranches[0]?.id ?? '');
+                    setEditProduct(item);
+                  }}
                 />
               )}
             />
@@ -148,7 +212,7 @@ export default function ManagerProductListScreen() {
               }}
             />
             <ManagerActionButton
-              label="Manage branch catalogs"
+              label="View branch catalogs"
               icon="pricetags-outline"
               variant="secondary"
               onPress={() => router.push('/manager/catalog' as never)}
@@ -161,7 +225,10 @@ export default function ManagerProductListScreen() {
             key={createKey}
             autoGenerateSku
             allowVariants
+            showActiveToggle={false}
             existingSkus={existingSkus}
+            branchOptions={branchOptions}
+            resolveBranchPrice={() => undefined}
             submitLabel="Create product"
             loading={createMutation.isPending || configureVariantsMutation.isPending}
             error={
@@ -184,6 +251,19 @@ export default function ManagerProductListScreen() {
           {editProduct ? (
             <ProductForm
               key={editProduct.id}
+              showActiveToggle
+              branchOptions={branchOptions}
+              onBranchChange={setEditBranchId}
+              resolveBranchPrice={(branchId) => {
+                if (branchId !== editBranchId) return editProduct.selling_price.toFixed(2);
+                const entry = editCatalog.data?.find((row) => row.product_id === editProduct.id);
+                return (entry?.selling_price ?? editProduct.selling_price).toFixed(2);
+              }}
+              onConfirmBranchPrice={confirmEditBranchPrice}
+              branchPriceLoading={configureBranchMutation.isPending}
+              branchPriceError={
+                configureBranchMutation.error ? getErrorMessage(configureBranchMutation.error) : undefined
+              }
               defaultValues={{
                 name: editProduct.name,
                 sku: editProduct.sku,

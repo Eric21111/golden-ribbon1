@@ -1,7 +1,7 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { useBranches } from '@/hooks/useBranches';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
@@ -36,9 +37,11 @@ type Values = z.infer<typeof schema>;
 
 export function InventorySetupScreen() {
   const formInitialized = useRef(false);
+  const [search, setSearch] = useState('');
   const branches = useBranches();
   const mainBranch = branches.data?.find((branch) => branch.is_main_branch);
-  const inventory = useInventory(mainBranch, true);
+  // Include inactive products so newly created (inactive) items can receive opening stock.
+  const inventory = useInventory(mainBranch, false);
   const mutation = useInitializeMainInventory();
   const { control, handleSubmit, reset, formState } = useForm<Values>({
     resolver: zodResolver(schema),
@@ -48,13 +51,41 @@ export function InventorySetupScreen() {
 
   useEffect(() => {
     if (inventory.data && !formInitialized.current) {
+      const sorted = [...inventory.data].sort((a, b) => {
+        const aPending = a.updated_at === null ? 0 : 1;
+        const bPending = b.updated_at === null ? 0 : 1;
+        if (aPending !== bPending) return aPending - bPending;
+        return a.product.name.localeCompare(b.product.name);
+      });
       reset({
-        items: inventory.data.map((item) => ({ product_id: item.product.id, quantity: '' })),
+        items: sorted.map((item) => ({ product_id: item.product.id, quantity: '' })),
         notes: '',
       });
       formInitialized.current = true;
     }
   }, [inventory.data, reset]);
+
+  const itemsById = useMemo(() => {
+    const map = new Map((inventory.data ?? []).map((item) => [item.product.id, item]));
+    return map;
+  }, [inventory.data]);
+
+  const displayIndexes = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return fields
+      .map((field, index) => ({ field, index, item: itemsById.get(field.product_id) }))
+      .filter((row) => {
+        if (!row.item) return false;
+        if (!term) return true;
+        return `${row.item.product.name} ${row.item.product.sku}`.toLowerCase().includes(term);
+      })
+      .sort((a, b) => {
+        const aPending = a.item?.updated_at === null ? 0 : 1;
+        const bPending = b.item?.updated_at === null ? 0 : 1;
+        if (aPending !== bPending) return aPending - bPending;
+        return (a.item?.product.name ?? '').localeCompare(b.item?.product.name ?? '');
+      });
+  }, [fields, itemsById, search]);
 
   const pendingCount = useMemo(
     () => (inventory.data ?? []).filter((item) => item.updated_at === null).length,
@@ -82,7 +113,7 @@ export function InventorySetupScreen() {
     );
     confirmAction(
       'Confirm opening stock',
-      'This creates permanent inventory movement records and cannot be edited later.',
+      'This creates permanent inventory movement records, activates selected products, and cannot be edited later.',
       () =>
         mutation.mutate(
           { items: selected, notes: values.notes?.trim() || null },
@@ -95,6 +126,9 @@ export function InventorySetupScreen() {
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <View style={styles.layout}>
         <ManagerScreenHeader title="Opening stock" showBack />
+        <View style={styles.searchWrap}>
+          <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+        </View>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -109,8 +143,7 @@ export function InventorySetupScreen() {
             </Text>
           ) : null}
 
-          {fields.map((field, index) => {
-            const item = inventory.data?.[index];
+          {displayIndexes.map(({ field, index, item }) => {
             if (!item) return null;
             const initialized = item.updated_at !== null;
 
@@ -131,6 +164,7 @@ export function InventorySetupScreen() {
               <View key={field.id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <Text style={styles.name}>{item.product.name}</Text>
+                  <Text style={styles.meta}>SKU: {item.product.sku}</Text>
                   <Text style={styles.meta}>Current quantity: {item.quantity_on_hand}</Text>
                 </View>
                 <Controller
@@ -208,6 +242,7 @@ export function InventorySetupScreen() {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
+  searchWrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: {
     padding: 20,
@@ -217,65 +252,50 @@ const styles = StyleSheet.create({
   progress: {
     color: managerColors.subtext,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12.5,
-    marginBottom: -2,
+    fontSize: 13,
   },
-  qtyHighlight: { color: managerColors.green, fontFamily: 'Inter_700Bold', fontSize: 14 },
   card: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
     padding: 14,
     gap: 10,
-    shadowColor: '#0A1224',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
+    backgroundColor: managerColors.cardSurface,
   },
-  cardTop: { gap: 2 },
-  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
+  cardTop: { gap: 4 },
+  name: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13 },
   inputLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   input: {
-    height: 46,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: managerColors.cardBorder,
-    borderRadius: 10,
-    backgroundColor: managerColors.cardSurface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: managerColors.ink,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    paddingHorizontal: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
   },
   inputError: { borderColor: '#B91C1C' },
-  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 19 },
+  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  qtyHighlight: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
   doneCard: {
     alignItems: 'center',
-    backgroundColor: managerColors.cardSurface,
-    borderRadius: 16,
+    gap: 8,
     paddingVertical: 28,
-    paddingHorizontal: 20,
-    gap: 6,
-    marginTop: 4,
   },
   doneTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   doneMessage: {
     color: managerColors.subtext,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    lineHeight: 19,
     textAlign: 'center',
   },
   footer: {
+    padding: 20,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-    gap: 12,
   },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },

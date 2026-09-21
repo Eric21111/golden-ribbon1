@@ -100,6 +100,22 @@ export default function ReceiveTransferScreen() {
   const transfer = query.data;
   const notesByItemId = new Map(transfer.discrepancies.map((disc) => [disc.stock_transfer_item_id, disc.notes]));
 
+  if (transfer.to_branch?.receiving_mode === 'cashier_confirm' && transfer.status === 'pending_receipt') {
+    return (
+      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader
+          title={transfer.transfer_number}
+          subtitle={`${transfer.from_branch?.name ?? 'Sending branch'} → ${transfer.to_branch?.name ?? 'Receiving branch'}`}
+          badge={<ManagerBadge label={transferStatusBadgeLabel(transfer.status)} tone={transferStatusTone(transfer.status)} />}
+          showBack
+        />
+        <ConstrainedWidth style={styles.column}>
+          <ErrorState message="This branch uses cashier confirmation. Ask the assigned cashier to open Incoming and confirm shipment arrival." />
+        </ConstrainedWidth>
+      </Screen>
+    );
+  }
+
   if (transfer.status !== 'pending_receipt') {
     return (
       <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>

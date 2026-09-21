@@ -158,9 +158,12 @@ Deno.serve(async (request) => {
         .eq('is_active', true)
         .maybeSingle();
       if (branchError) throw branchError;
-      if (!branch) return response(400, { message: role === 'cashier' ? 'Select an active selling branch.' : 'Select an active branch.' });
+      if (!branch) return response(400, { message: role === 'cashier' ? 'Select an active selling branch.' : 'Select the Main Branch.' });
       if (role === 'cashier' && branch.is_main_branch) {
         return response(400, { message: 'Select an active selling branch.' });
+      }
+      if (role === 'manager' && !branch.is_main_branch) {
+        return response(400, { message: 'Managers may only be assigned to the Main Branch.' });
       }
 
       const existingUser = await findAuthUserByEmail(adminClient, email);

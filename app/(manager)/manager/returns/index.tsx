@@ -7,7 +7,6 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
-import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
@@ -22,7 +21,6 @@ import { formatDateShort } from '@/lib/format';
 
 export default function ManagerReturnsScreen() {
   const { profile } = useAuth();
-  const isMainBranch = Boolean(profile?.branch?.is_main_branch);
   const [status, setStatus] = useState<ReturnStatusFilter>('in_transit');
   const [search, setSearch] = useState('');
   const query = useReturns(profile?.branch_id ?? '', status);
@@ -38,7 +36,7 @@ export default function ManagerReturnsScreen() {
 
   const empty =
     status === '' && !search.trim()
-      ? { title: 'No returns yet', message: 'Create a return to send unsold stock to Main Branch.' }
+      ? { title: 'No returns yet', message: 'Cashiers create returns from selling branches. Main receives them here.' }
       : returnFilterEmptyMessage(status, Boolean(search.trim()));
 
   if (!profile?.branch_id) {
@@ -94,16 +92,6 @@ export default function ManagerReturnsScreen() {
             }}
           />
         )}
-
-        {!isMainBranch ? (
-          <View style={styles.footer}>
-            <ManagerActionButton
-              label="Create return"
-              icon="add-circle-outline"
-              onPress={() => router.push('/manager/returns/create')}
-            />
-          </View>
-        ) : null}
       </ConstrainedWidth>
     </Screen>
   );
@@ -115,5 +103,4 @@ const styles = StyleSheet.create({
   filters: { gap: 12, marginBottom: 14 },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 10 },
-  footer: { paddingTop: 12, paddingBottom: 16 },
 });

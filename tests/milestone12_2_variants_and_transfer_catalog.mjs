@@ -98,19 +98,9 @@ const sendTransfer = (toBranchId, items, key) =>
     key,
   ]);
 
-const receiveTransfer = async (transferId, receivedByLine, key) => {
-  const stItems = (
-    await db.query('select id,product_id,quantity_sent from public.stock_transfer_items where stock_transfer_id=$1', [transferId])
-  ).rows;
-  const payload = stItems.map((row) => ({
-    stock_transfer_item_id: row.id,
-    quantity_received: receivedByLine[row.product_id] ?? row.quantity_sent,
-  }));
-  return db.query('select public.receive_stock_transfer($1,$2::jsonb,null,$3) status', [
-    transferId,
-    JSON.stringify(payload),
-    key,
-  ]);
+const receiveTransfer = async (transferId, _receivedByLine, key) => {
+  // Selling branches use cashier confirmation only.
+  return db.query('select public.confirm_shipment_arrival($1,$2) status', [transferId, key]);
 };
 
 // ----------------------------------------------------------------------------
@@ -148,7 +138,7 @@ await asUser(mainManager, async () => {
   ).rows[0].id;
 });
 
-await asUser(manager1, async () => {
+await asUser(cashier1, async () => {
   await receiveTransfer(
     shifts.setupTransferId,
     { [caldereta]: 100, [singlePriceProduct]: 50 },
@@ -290,7 +280,7 @@ await asUser(mainManager, async () => {
   ).rows[0].id;
 });
 
-await asUser(manager2, async () => {
+await asUser(cashier2, async () => {
   await receiveTransfer(shifts.branch2CalderetaTransferId, { [caldereta]: 20 }, 'm122-b2-cald-recv01');
 });
 
@@ -385,7 +375,7 @@ await asUser(mainManager, async () => {
   assert.equal(preReceiptStock.length, 0, 'destination has no receivable inventory row until actual receipt');
 });
 
-await asUser(manager2, async () => {
+await asUser(cashier2, async () => {
   await receiveTransfer(shifts.newProductTransferId, { [newProduct]: 18 }, 'm122-newprod-recv01');
 
   const postReceiptStock = Number(
