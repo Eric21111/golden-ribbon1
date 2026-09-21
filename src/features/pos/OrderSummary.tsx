@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
-import { cartTotalCents, toCents } from '@/lib/money';
+import { cartLineKey, cartTotalCents, toCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
 
 export function OrderSummary({ items }: { items: CartItem[] }) {
@@ -13,9 +13,11 @@ export function OrderSummary({ items }: { items: CartItem[] }) {
       <Text style={styles.title}>Order Summary</Text>
       {items.length === 0 ? <Text style={styles.empty}>No products selected.</Text> : null}
       {items.map((item) => (
-        <View key={item.product_id} style={styles.itemRow}>
+        <View key={cartLineKey(item.product_id, item.variant_id)} style={styles.itemRow}>
           <View style={styles.copy}>
-            <Text style={styles.name}>{item.product_name}</Text>
+            <Text style={styles.name}>
+              {item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name}
+            </Text>
             <Text style={styles.calculation}>{item.quantity} × {formatMoney(item.unit_price)}</Text>
           </View>
           <Text style={styles.subtotal}>{formatMoney(toCents(item.unit_price) * item.quantity / 100)}</Text>

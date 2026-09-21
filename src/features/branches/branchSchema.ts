@@ -11,6 +11,7 @@ export const branchSchema = z.object({
   address: z.string().trim().max(300).optional(),
   is_main_branch: z.boolean(),
   is_active: z.boolean(),
+  receiving_mode: z.enum(['counted', 'cashier_confirm']),
 });
 
 export type BranchFormValues = z.infer<typeof branchSchema>;

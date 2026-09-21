@@ -53,7 +53,10 @@ export default function BranchCatalogScreen() {
           return [
             product.id,
             {
-              is_active: entry?.is_active ?? false,
+              // A product never carried by this branch before defaults to
+              // ON (available in this branch); an existing saved row keeps
+              // whatever state the Main Branch Manager last set.
+              is_active: entry?.is_active ?? true,
               selling_price: (entry?.selling_price ?? product.selling_price).toFixed(2),
             },
           ];
@@ -187,7 +190,7 @@ export default function BranchCatalogScreen() {
                       </View>
                     </View>
                     <SwitchField
-                      label={item.is_active ? 'Carried at this branch' : 'Not carried'}
+                      label="Available in this branch"
                       description={
                         item.is_active
                           ? 'Visible in this branch POS when globally active.'

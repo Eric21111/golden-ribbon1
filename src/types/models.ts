@@ -1,4 +1,5 @@
 export type UserRole = 'owner' | 'manager' | 'cashier';
+export type BranchReceivingMode = 'counted' | 'cashier_confirm';
 export type InventoryMovementType = 'opening_stock' | 'transfer_out' | 'transfer_in' | 'adjustment' | 'sale' | 'return_out' | 'return_in';
 export type TransferStatus = 'draft' | 'pending_receipt' | 'received' | 'received_with_discrepancy' | 'cancelled';
 export type DiscrepancyType = 'missing' | 'excess';
@@ -13,6 +14,8 @@ export type Branch = {
   address: string | null;
   is_main_branch: boolean;
   is_active: boolean;
+  /** How this selling branch receives stock transfers. Unused by the Main Branch. */
+  receiving_mode: BranchReceivingMode;
   created_at: string;
   updated_at: string;
 };
@@ -44,7 +47,9 @@ export type Shift = {
 
 export type CartItem = {
   product_id: string;
+  variant_id: string | null;
   product_name: string;
+  variant_name: string | null;
   sku: string;
   quantity: number;
   unit_price: number;
@@ -93,7 +98,7 @@ export type Product = {
 
 export type BranchInput = Pick<
   Branch,
-  'name' | 'code' | 'address' | 'is_main_branch' | 'is_active'
+  'name' | 'code' | 'address' | 'is_main_branch' | 'is_active' | 'receiving_mode'
 >;
 
 export type ProductInput = Pick<
@@ -119,12 +124,43 @@ export type BranchProduct = {
   updated_at: string;
 };
 
+export type ProductVariant = {
+  id: string;
+  product_id: string;
+  name: string;
+  default_price: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BranchProductVariant = {
+  id: string;
+  branch_id: string;
+  product_id: string;
+  name: string;
+  selling_price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Lightweight shape returned by list_cashier_pos_inventory's variants column. */
+export type PosVariant = {
+  id: string;
+  name: string;
+  selling_price: number;
+};
+
 export type InventoryItem = {
   branch: Branch;
   product: Product;
   quantity_on_hand: number;
   updated_at: string | null;
   branch_product?: BranchProduct | null;
+  /** Active branch price variants for this product. Empty when single-priced. */
+  variants?: PosVariant[];
 };
 
 export type InventoryMovement = {
@@ -203,6 +239,23 @@ export type StockTransferDetails = StockTransfer & {
   received_by_profile: Pick<Profile, 'id' | 'full_name'> | null;
   items: Array<StockTransferItem & { product: Product | null }>;
   discrepancies: Array<TransferDiscrepancy & { product: Product | null }>;
+};
+
+export type CashierPendingTransferItem = {
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  quantity_sent: number;
+};
+
+export type CashierPendingTransfer = {
+  id: string;
+  transfer_number: string;
+  from_branch_id: string;
+  from_branch_name: string;
+  sent_at: string | null;
+  notes: string | null;
+  items: CashierPendingTransferItem[];
 };
 
 export type SendTransferInput = {

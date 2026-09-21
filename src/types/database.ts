@@ -2,7 +2,10 @@ import type {
   Branch,
   BranchInventory,
   BranchProduct,
+  BranchProductVariant,
+  BranchReceivingMode,
   DiscrepancyType,
+  ProductVariant,
   EmployeeRecord,
   EmployeeRole,
   InventoryMovement,
@@ -154,6 +157,22 @@ export type Database = {
           { foreignKeyName: 'branch_products_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
         ];
       };
+      branch_product_variants: {
+        Row: BranchProductVariant;
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'branch_product_variants_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
+      product_variants: {
+        Row: ProductVariant;
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'product_variants_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
       inventory_movements: {
         Row: InventoryMovement;
         Insert: InventoryMovementInsert;
@@ -211,6 +230,25 @@ export type Database = {
         Args: { p_product_ids: string[] };
         Returns: Array<{ product_id: string; selling_price: number }>;
       };
+      get_cashier_line_prices: {
+        Args: { p_lines: Array<{ product_id: string; variant_id?: string | null }> };
+        Returns: Array<{ product_id: string; variant_id: string | null; selling_price: number; variant_name: string | null }>;
+      };
+      configure_branch_product_variants: {
+        Args: {
+          p_branch_id: string;
+          p_product_id: string;
+          p_variants: Array<{ name: string; selling_price: number; is_active: boolean }>;
+        };
+        Returns: undefined;
+      };
+      configure_product_variants: {
+        Args: {
+          p_product_id: string;
+          p_variants: Array<{ name: string; default_price: number; is_active: boolean }>;
+        };
+        Returns: undefined;
+      };
       list_cashier_pos_inventory: {
         Args: Record<string, never>;
         Returns: Array<{
@@ -222,10 +260,19 @@ export type Database = {
           selling_price: number;
           quantity_on_hand: number;
           updated_at: string | null;
+          variants: Array<{ id: string; name: string; selling_price: number }>;
         }>;
       };
       create_stock_return: { Args: ReturnRequest; Returns: string };
-      confirm_sale: { Args: { p_shift_id: string; p_items: { product_id: string; quantity: number }[]; p_amount_paid: string; p_idempotency_key: string }; Returns: Sale };
+      confirm_sale: {
+        Args: {
+          p_shift_id: string;
+          p_items: { product_id: string; variant_id?: string | null; quantity: number }[];
+          p_amount_paid: string;
+          p_idempotency_key: string;
+        };
+        Returns: Sale;
+      };
       current_user_branch_id: { Args: Record<string, never>; Returns: string | null };
       current_user_role: { Args: Record<string, never>; Returns: UserRole | null };
       is_owner: { Args: Record<string, never>; Returns: boolean };
@@ -258,11 +305,36 @@ export type Database = {
         Returns: undefined;
       };
       send_stock_transfer: {
-        Args: { p_to_branch_id: string; p_items: Array<{ product_id: string; quantity_sent: number }>; p_notes: string | null; p_idempotency_key: string };
+        Args: {
+          p_to_branch_id: string;
+          p_items: Array<{ product_id: string; quantity_sent: number }>;
+          p_notes: string | null;
+          p_idempotency_key: string;
+        };
         Returns: string;
       };
       receive_stock_transfer: {
         Args: { p_transfer_id: string; p_items: Array<{ stock_transfer_item_id: string; quantity_received: number }>; p_notes: string | null; p_idempotency_key: string };
+        Returns: TransferStatus;
+      };
+      set_branch_receiving_mode: {
+        Args: { p_branch_id: string; p_receiving_mode: BranchReceivingMode };
+        Returns: undefined;
+      };
+      list_cashier_pending_transfers: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          id: string;
+          transfer_number: string;
+          from_branch_id: string;
+          from_branch_name: string;
+          sent_at: string | null;
+          notes: string | null;
+          items: Array<{ product_id: string; product_name: string; product_sku: string; quantity_sent: number }>;
+        }>;
+      };
+      confirm_shipment_arrival: {
+        Args: { p_transfer_id: string; p_idempotency_key: string };
         Returns: TransferStatus;
       };
       receive_stock_return: {

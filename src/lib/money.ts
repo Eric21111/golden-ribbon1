@@ -18,19 +18,25 @@ export function cartTotalCents(items: { quantity: number; unit_price: number }[]
 
 export type PricedCartItem = {
   product_id: string;
+  variant_id: string | null;
   quantity: number;
   unit_price: number;
   subtotal: number;
 };
 
-/** Reprices cart lines from live product selling prices. Does not trust stale client unit prices. */
+/** Cart lines are keyed by product + variant, since a product can appear once per variant. */
+export function cartLineKey(productId: string, variantId: string | null): string {
+  return `${productId}:${variantId ?? ''}`;
+}
+
+/** Reprices cart lines from live branch/variant selling prices. Does not trust stale client unit prices. */
 export function applyLiveCartPrices<T extends PricedCartItem>(
   items: T[],
   prices: Record<string, number>
 ): { items: T[]; changed: boolean } {
   let changed = false;
   const next = items.map((item) => {
-    const live = prices[item.product_id];
+    const live = prices[cartLineKey(item.product_id, item.variant_id)];
     if (live === undefined || toCents(live) === toCents(item.unit_price)) return item;
     changed = true;
     return {

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
+import { cartLineKey } from '@/lib/money';
 import type { Database } from '@/types/database';
-import type { Product, ProductInput } from '@/types/models';
+import type { Product, ProductInput, ProductVariant } from '@/types/models';
 
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
 
@@ -30,18 +31,20 @@ export async function getProduct(id: string): Promise<Product> {
   return data;
 }
 
-export async function getCashierProductSellingPrices(ids: string[]): Promise<Record<string, number>> {
-  if (!ids.length) return {};
-  const uniqueIds = [...new Set(ids)];
-  const { data, error } = await supabase.rpc('get_cashier_product_prices', {
-    p_product_ids: uniqueIds,
+/** Refreshes checkout prices for cart lines (product + optional variant). Keyed by cartLineKey. */
+export async function getCashierLineSellingPrices(
+  lines: Array<{ product_id: string; variant_id: string | null }>,
+): Promise<Record<string, number>> {
+  if (!lines.length) return {};
+  const { data, error } = await supabase.rpc('get_cashier_line_prices', {
+    p_lines: lines.map(({ product_id, variant_id }) => ({ product_id, variant_id })),
   });
   if (error) throw error;
-  if ((data ?? []).length !== uniqueIds.length) {
-    throw new Error('A product is no longer available in this branch catalog.');
+  if ((data ?? []).length !== lines.length) {
+    throw new Error('A product or variant is no longer available in this branch catalog.');
   }
   return Object.fromEntries(
-    (data ?? []).map((row) => [row.product_id, Number(row.selling_price)]),
+    (data ?? []).map((row) => [cartLineKey(row.product_id, row.variant_id), Number(row.selling_price)]),
   );
 }
 
@@ -66,4 +69,25 @@ export async function updateProduct(id: string, input: ProductInput): Promise<Pr
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function listProductVariants(productId: string): Promise<ProductVariant[]> {
+  const { data, error } = await supabase
+    .from('product_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...row, default_price: Number(row.default_price) }));
+}
+
+export async function configureProductVariants(
+  productId: string,
+  variants: Array<{ name: string; default_price: number; is_active: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.rpc('configure_product_variants', {
+    p_product_id: productId,
+    p_variants: variants,
+  });
+  if (error) throw error;
 }

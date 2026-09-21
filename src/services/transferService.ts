@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type {
+  CashierPendingTransfer,
   ReceiveTransferInput,
   SendTransferInput,
   StockTransferDetails,
@@ -52,6 +53,27 @@ export async function receiveTransfer(input: ReceiveTransferInput): Promise<Tran
     p_items: input.items,
     p_notes: input.notes,
     p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listCashierPendingTransfers(): Promise<CashierPendingTransfer[]> {
+  const { data, error } = await supabase.rpc('list_cashier_pending_transfers');
+  if (error) throw error;
+  return ((data ?? []) as CashierPendingTransfer[]).map((row) => ({
+    ...row,
+    items: (row.items ?? []).map((item) => ({ ...item, quantity_sent: Number(item.quantity_sent) })),
+  }));
+}
+
+export async function confirmShipmentArrival(
+  transferId: string,
+  idempotencyKey: string,
+): Promise<TransferStatus> {
+  const { data, error } = await supabase.rpc('confirm_shipment_arrival', {
+    p_transfer_id: transferId,
+    p_idempotency_key: idempotencyKey,
   });
   if (error) throw error;
   return data;

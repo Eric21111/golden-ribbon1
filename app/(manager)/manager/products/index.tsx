@@ -22,7 +22,7 @@ import {
   type ProductFilter,
 } from '@/features/products/productFilters';
 import type { ProductFormValues } from '@/features/products/productSchema';
-import { useCreateProduct, useProducts, useUpdateProduct } from '@/hooks/useProducts';
+import { useConfigureProductVariants, useCreateProduct, useProducts, useUpdateProduct } from '@/hooks/useProducts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import type { Product } from '@/types/models';
@@ -36,6 +36,7 @@ export default function ManagerProductListScreen() {
   const query = useProducts(search);
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct(editProduct?.id ?? '');
+  const configureVariantsMutation = useConfigureProductVariants();
 
   const filtered = useMemo(
     () => (query.data ?? []).filter((product) => matchesProductFilter(product.is_active, filter)),
@@ -58,7 +59,25 @@ export default function ManagerProductListScreen() {
         selling_price: Number(values.selling_price),
         is_active: values.is_active,
       },
-      { onSuccess: () => setCreateOpen(false) },
+      {
+        onSuccess: (product) => {
+          if (values.pricingType !== 'variants') {
+            setCreateOpen(false);
+            return;
+          }
+          configureVariantsMutation.mutate(
+            {
+              productId: product.id,
+              variants: values.variants.map((variant) => ({
+                name: variant.name.trim(),
+                default_price: Number(variant.default_price),
+                is_active: variant.is_active,
+              })),
+            },
+            { onSuccess: () => setCreateOpen(false) },
+          );
+        },
+      },
     );
   };
 
@@ -123,6 +142,7 @@ export default function ManagerProductListScreen() {
               icon="add-circle-outline"
               onPress={() => {
                 createMutation.reset();
+                configureVariantsMutation.reset();
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
@@ -140,10 +160,17 @@ export default function ManagerProductListScreen() {
           <ProductForm
             key={createKey}
             autoGenerateSku
+            allowVariants
             existingSkus={existingSkus}
             submitLabel="Create product"
-            loading={createMutation.isPending}
-            error={createMutation.error ? getErrorMessage(createMutation.error) : undefined}
+            loading={createMutation.isPending || configureVariantsMutation.isPending}
+            error={
+              createMutation.error
+                ? getErrorMessage(createMutation.error)
+                : configureVariantsMutation.error
+                  ? getErrorMessage(configureVariantsMutation.error)
+                  : undefined
+            }
             onSubmit={submitCreate}
           />
         </BottomSheet>
@@ -163,6 +190,8 @@ export default function ManagerProductListScreen() {
                 description: editProduct.description ?? '',
                 selling_price: editProduct.selling_price.toFixed(2),
                 is_active: editProduct.is_active,
+                pricingType: 'single',
+                variants: [],
               }}
               submitLabel="Save changes"
               loading={updateMutation.isPending}

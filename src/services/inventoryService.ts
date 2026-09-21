@@ -17,6 +17,7 @@ type CashierPosInventoryRow = {
   selling_price: number;
   quantity_on_hand: number;
   updated_at: string | null;
+  variants: Array<{ id: string; name: string; selling_price: number }> | null;
 };
 
 export async function listInventory(branch: Branch, activeOnly = false): Promise<InventoryItem[]> {
@@ -75,6 +76,7 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       address: null,
       is_main_branch: false,
       is_active: true,
+      receiving_mode: 'counted',
       created_at: '',
       updated_at: '',
     };
@@ -101,6 +103,10 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
         created_at: '',
         updated_at: row.updated_at ?? '',
       },
+      variants: (row.variants ?? []).map((variant) => ({
+        ...variant,
+        selling_price: Number(variant.selling_price),
+      })),
     };
   });
 }

@@ -265,6 +265,17 @@ export default function CashierDashboard() {
                 onPress={() => router.push('/cashier/sales')}
               />
             </Row>
+            {profile?.branch?.receiving_mode === 'cashier_confirm' ? (
+              <Row>
+                <NavTile
+                  layout="tile"
+                  icon="cube-outline"
+                  accent="gold"
+                  title="Incoming shipments"
+                  onPress={() => router.push('/cashier/incoming' as never)}
+                />
+              </Row>
+            ) : null}
           </View>
         )}
       </ConstrainedWidth>

@@ -53,10 +53,14 @@ export default function CashierPosScreen() {
     [inventory.data, search],
   );
 
-  const quantities = useMemo(
-    () => new Map(items.map((item) => [item.product_id, item.quantity])),
-    [items],
-  );
+  const quantitiesByProduct = useMemo(() => {
+    const map = new Map<string, Map<string | null, number>>();
+    for (const item of items) {
+      if (!map.has(item.product_id)) map.set(item.product_id, new Map());
+      map.get(item.product_id)!.set(item.variant_id, item.quantity);
+    }
+    return map;
+  }, [items]);
 
   const inventoryById = useMemo(() => {
     const map = new Map<string, InventoryItem>();
@@ -83,9 +87,11 @@ export default function CashierPosScreen() {
     void Promise.all([inventory.refetch(), shiftQuery.refetch()]);
   };
 
-  const increaseFromCart = (productId: string) => {
+  const increaseFromCart = (productId: string, variantId: string | null) => {
     const row = inventoryById.get(productId);
-    if (row) addProduct(row);
+    if (!row) return;
+    const variant = variantId ? row.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
+    addProduct(row, variant);
   };
 
   if (shiftQuery.isLoading || inventory.isLoading) {
@@ -143,9 +149,12 @@ export default function CashierPosScreen() {
           <PosProductCard
             item={item}
             compact={posColumns > 1}
-            quantity={quantities.get(item.product.id) ?? 0}
-            onIncrease={() => addProduct(item)}
-            onDecrease={() => decreaseProduct(item.product.id)}
+            quantityByVariant={quantitiesByProduct.get(item.product.id) ?? new Map()}
+            onIncrease={(variantId) => {
+              const variant = variantId ? item.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
+              addProduct(item, variant);
+            }}
+            onDecrease={(variantId) => decreaseProduct(item.product.id, variantId)}
           />
         </View>
       )}

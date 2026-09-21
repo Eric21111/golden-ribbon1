@@ -4,15 +4,15 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { managerColors } from '@/components/dashboard/theme';
 import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney } from '@/lib/format';
-import { cartTotalCents, toCents } from '@/lib/money';
+import { cartLineKey, cartTotalCents, toCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
 
 type PosOrderPaneProps = {
   items: CartItem[];
-  /** Available stock per product; limits + on tablet cart. */
+  /** Available stock per product; limits + on tablet cart. Shared across a product's variant lines. */
   stockByProductId: Map<string, number>;
-  onIncrease: (productId: string) => void;
-  onDecrease: (productId: string) => void;
+  onIncrease: (productId: string, variantId: string | null) => void;
+  onDecrease: (productId: string, variantId: string | null) => void;
   onClear: () => void;
   onCheckout: () => void;
 };
@@ -27,6 +27,10 @@ export function PosOrderPane({
 }: PosOrderPaneProps) {
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalCents = cartTotalCents(items);
+  const totalByProduct = new Map<string, number>();
+  for (const item of items) {
+    totalByProduct.set(item.product_id, (totalByProduct.get(item.product_id) ?? 0) + item.quantity);
+  }
 
   return (
     <View style={styles.pane}>
@@ -41,12 +45,13 @@ export function PosOrderPane({
         ) : (
           items.map((item) => {
             const stock = stockByProductId.get(item.product_id) ?? 0;
-            const atLimit = item.quantity >= stock;
+            const atLimit = (totalByProduct.get(item.product_id) ?? 0) >= stock;
+            const label = item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name;
             return (
-              <View key={item.product_id} style={styles.line}>
+              <View key={cartLineKey(item.product_id, item.variant_id)} style={styles.line}>
                 <View style={styles.lineCopy}>
                   <Text style={styles.name} numberOfLines={2}>
-                    {item.product_name}
+                    {label}
                   </Text>
                   <Text style={styles.calc}>
                     {item.quantity} × {formatMoney(item.unit_price)}
@@ -55,8 +60,8 @@ export function PosOrderPane({
                 <View style={styles.lineActions}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove one ${item.product_name}`}
-                    onPress={() => onDecrease(item.product_id)}
+                    accessibilityLabel={`Remove one ${label}`}
+                    onPress={() => onDecrease(item.product_id, item.variant_id)}
                     style={({ pressed }) => [styles.stepper, pressed && styles.pressed]}
                   >
                     <Text style={styles.stepperText}>−</Text>
@@ -64,9 +69,9 @@ export function PosOrderPane({
                   <Text style={styles.qty}>{item.quantity}</Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Add one ${item.product_name}`}
+                    accessibilityLabel={`Add one ${label}`}
                     disabled={atLimit}
-                    onPress={() => onIncrease(item.product_id)}
+                    onPress={() => onIncrease(item.product_id, item.variant_id)}
                     style={({ pressed }) => [
                       styles.stepper,
                       atLimit && styles.disabled,

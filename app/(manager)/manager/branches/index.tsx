@@ -143,6 +143,7 @@ export default function BranchListScreen() {
                 address: editBranch.address ?? '',
                 is_main_branch: editBranch.is_main_branch,
                 is_active: editBranch.is_active,
+                receiving_mode: editBranch.receiving_mode,
               }}
               hideMainToggle
               protectMainBranch={editBranch.is_main_branch}

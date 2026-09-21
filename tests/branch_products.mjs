@@ -321,17 +321,29 @@ await asUser(cashier2, async () => {
 });
 
 await asUser(mainManager, async () => {
-  await assert.rejects(
-    db.query(
-      `select public.send_stock_transfer(
-        '${branch2}',
-        '[{"product_id":"${burger}","quantity_sent":1}]'::jsonb,
-        null,
-        'branch2-burger-transfer01'
-      )`,
-    ),
-    /does not carry/,
+  // Transfer-driven branch catalog: sending a never-carried product no
+  // longer requires a price — it auto-creates the branch catalog entry at
+  // the product's base selling_price, no price input at all.
+  await db.query(
+    `select public.send_stock_transfer(
+      '${branch2}',
+      '[{"product_id":"${burger}","quantity_sent":3}]'::jsonb,
+      null,
+      'branch2-burger-newprice01'
+    )`,
   );
+  const createdCatalog = (
+    await db.query(
+      'select selling_price,is_active from public.branch_products where branch_id=$1 and product_id=$2',
+      [branch2, burger],
+    )
+  ).rows[0];
+  assert.equal(
+    Number(createdCatalog.selling_price),
+    70,
+    'new branch product defaults to the product base selling_price (no price input required)',
+  );
+  assert.equal(createdCatalog.is_active, true);
   assert.equal(
     Number(
       (
@@ -341,9 +353,31 @@ await asUser(mainManager, async () => {
         )
       ).rows[0].quantity_on_hand,
     ),
-    20,
-    'rejected transfer does not deduct Main Branch stock',
+    17,
+    'accepted transfer deducts Main Branch stock',
   );
+
+  // Deactivating the catalog entry and sending again reactivates it and
+  // preserves its existing price when no new price is given.
+  await configure(branch2, [
+    { product_id: burger, selling_price: 65, is_active: false },
+  ]);
+  await db.query(
+    `select public.send_stock_transfer(
+      '${branch2}',
+      '[{"product_id":"${burger}","quantity_sent":2}]'::jsonb,
+      null,
+      'branch2-burger-reactivate01'
+    )`,
+  );
+  const reactivatedCatalog = (
+    await db.query(
+      'select selling_price,is_active from public.branch_products where branch_id=$1 and product_id=$2',
+      [branch2, burger],
+    )
+  ).rows[0];
+  assert.equal(reactivatedCatalog.is_active, true, 'transfer reactivates an inactive catalog entry');
+  assert.equal(Number(reactivatedCatalog.selling_price), 65, 'reactivation preserves the existing price');
 
   await configure(branch1, [
     { product_id: chicken, selling_price: 90, is_active: true },
