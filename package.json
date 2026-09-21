@@ -51,6 +51,8 @@
     "test:archive": "node tests/milestone11_3_archive.mjs",
     "test:pos": "node tests/pos_and_sku.mjs && node tests/cashier_pos_stock.mjs",
     "test:branch-products": "node tests/branch_products.mjs",
+    "test:variants": "node tests/milestone12_2_variants_and_transfer_catalog.mjs",
+    "test:shipment-arrival": "node tests/milestone12_3_cashier_shipment_arrival.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

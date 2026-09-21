@@ -31,6 +31,8 @@ export type SaleItem = {
   id: string;
   sale_id: string;
   product_id: string;
+  variant_id: string | null;
+  variant_name: string | null;
   quantity: number;
   unit_price: number;
   subtotal: number;
@@ -54,7 +56,7 @@ export type SaleDetails = Sale & {
 
 export type SaleRequest = {
   shiftId: string;
-  items: { product_id: string; quantity: number }[];
+  items: { product_id: string; variant_id: string | null; quantity: number }[];
   amountPaid: string;
   key: string;
 };

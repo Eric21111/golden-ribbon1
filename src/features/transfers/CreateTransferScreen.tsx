@@ -29,6 +29,7 @@ const schema = z
       z.object({
         product_id: z.string(),
         quantity: z.string().regex(/^\d*$/, 'Enter a whole number.'),
+        destinationPrice: z.string().optional(),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -42,6 +43,7 @@ type Values = z.infer<typeof schema>;
 export function CreateTransferScreen() {
   const [review, setReview] = useState<Values | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [priceError, setPriceError] = useState('');
   const requestKey = useRef(makeIdempotencyKey('send'));
   const formInitialized = useRef(false);
   const branches = useBranches();
@@ -55,9 +57,11 @@ export function CreateTransferScreen() {
   });
   const { fields } = useFieldArray({ control, name: 'items' });
   const selectedBranchId = watch('destinationBranchId');
-  const destinationCatalog = useBranchProducts(selectedBranchId, true);
-  const enabledProductIds = useMemo(
-    () => new Set((destinationCatalog.data ?? []).map((entry) => entry.product_id)),
+  // Full catalog (active + inactive) so a product missing here can be
+  // recognized as "new to this branch" and prompted for a destination price.
+  const destinationCatalog = useBranchProducts(selectedBranchId, false);
+  const catalogByProductId = useMemo(
+    () => new Map((destinationCatalog.data ?? []).map((entry) => [entry.product_id, entry])),
     [destinationCatalog.data],
   );
 
@@ -65,7 +69,7 @@ export function CreateTransferScreen() {
     if (inventory.data && !formInitialized.current) {
       reset({
         destinationBranchId: '',
-        items: inventory.data.map((item) => ({ product_id: item.product.id, quantity: '' })),
+        items: inventory.data.map((item) => ({ product_id: item.product.id, quantity: '', destinationPrice: '' })),
         notes: '',
       });
       formInitialized.current = true;
@@ -77,11 +81,11 @@ export function CreateTransferScreen() {
       review?.items.flatMap((item) => {
         const quantity = Number(item.quantity);
         const inventoryItem = inventory.data?.find((candidate) => candidate.product.id === item.product_id);
-        return quantity > 0 && inventoryItem && enabledProductIds.has(item.product_id)
-          ? [{ ...inventoryItem, quantity }]
-          : [];
+        if (quantity <= 0 || !inventoryItem) return [];
+        const isNew = !catalogByProductId.has(item.product_id);
+        return [{ ...inventoryItem, quantity, isNew, destinationPrice: item.destinationPrice ?? '' }];
       }) ?? [],
-    [enabledProductIds, inventory.data, review],
+    [catalogByProductId, inventory.data, review],
   );
 
   const selectDestination = (nextBranchId: string) => {
@@ -89,8 +93,24 @@ export function CreateTransferScreen() {
     setValue('destinationBranchId', nextBranchId, { shouldValidate: true });
     fields.forEach((_field, index) => {
       setValue(`items.${index}.quantity`, '', { shouldValidate: false });
+      setValue(`items.${index}.destinationPrice`, '', { shouldValidate: false });
     });
   };
+
+  const onReview = handleSubmit((values) => {
+    const missingPrice = values.items.some((item) => {
+      if (Number(item.quantity) <= 0) return false;
+      if (catalogByProductId.has(item.product_id)) return false;
+      const price = Number(item.destinationPrice);
+      return !item.destinationPrice || Number.isNaN(price) || price < 0;
+    });
+    if (missingPrice) {
+      setPriceError('Enter a destination price for each new product before sending.');
+      return;
+    }
+    setPriceError('');
+    setReview(values);
+  });
 
   if (branches.isLoading || inventory.isLoading) {
     return <LoadingState label="Preparing stock transfer…" />;
@@ -141,6 +161,11 @@ export function CreateTransferScreen() {
                     <Text style={styles.available}>Available: {item.quantity_on_hand}</Text>
                     {insufficient ? <ManagerBadge label="Insufficient stock" tone="danger" /> : null}
                   </View>
+                  {item.isNew ? (
+                    <Text style={styles.body}>
+                      New to this branch · Destination price: {item.destinationPrice}
+                    </Text>
+                  ) : null}
                 </View>
               );
             })}
@@ -166,6 +191,7 @@ export function CreateTransferScreen() {
                     items: selectedItems.map((item) => ({
                       product_id: item.product.id,
                       quantity_sent: item.quantity,
+                      destination_price: item.isNew ? Number(item.destinationPrice) : undefined,
                     })),
                     notes: review.notes?.trim() || null,
                     idempotencyKey: requestKey.current,
@@ -249,14 +275,18 @@ export function CreateTransferScreen() {
           {selectedBranchId &&
           !destinationCatalog.isLoading &&
           !destinationCatalog.error &&
-          enabledProductIds.size === 0 ? (
+          catalogByProductId.size === 0 ? (
             <Text style={styles.body}>
-              This branch has no enabled products. Configure its branch catalog before sending stock.
+              This branch has no products yet. Sending a product here creates its branch catalog
+              entry — set a destination price for each product below.
             </Text>
           ) : null}
           {fields.map((field, index) => {
             const item = inventory.data?.[index];
-            if (!item || !selectedBranchId || !enabledProductIds.has(item.product.id)) return null;
+            if (!item || !selectedBranchId) return null;
+            const catalogEntry = catalogByProductId.get(item.product.id);
+            const isNew = !catalogEntry;
+            const isInactive = Boolean(catalogEntry && !catalogEntry.is_active);
             return (
               <Controller
                 key={field.id}
@@ -279,6 +309,11 @@ export function CreateTransferScreen() {
                             {item.product.name}
                           </Text>
                           <Text style={styles.sku}>{item.product.sku}</Text>
+                          {isNew ? (
+                            <ManagerBadge label="New to this branch" tone="info" />
+                          ) : isInactive ? (
+                            <ManagerBadge label="Inactive — will reactivate" tone="warning" />
+                          ) : null}
                         </View>
                         <View style={styles.availablePill}>
                           <Text style={styles.availableText} numberOfLines={1}>
@@ -287,6 +322,23 @@ export function CreateTransferScreen() {
                           </Text>
                         </View>
                       </View>
+                      {isNew && currentQty > 0 ? (
+                        <Controller
+                          control={control}
+                          name={`items.${index}.destinationPrice`}
+                          render={({ field: price }) => (
+                            <FormField
+                              label={`Destination price for ${item.product.name}`}
+                              keyboardType="decimal-pad"
+                              value={price.value ?? ''}
+                              onChangeText={price.onChange}
+                              labelStyle={styles.fieldLabel}
+                              style={styles.fieldInput}
+                              accentColor={managerColors.royalBlue}
+                            />
+                          )}
+                        />
+                      ) : null}
                       <View style={styles.qtyRow}>
                         <Text style={styles.qtyCaption}>Qty</Text>
                         <View style={styles.qtyControls}>
@@ -356,6 +408,7 @@ export function CreateTransferScreen() {
           {formState.errors.items?.root?.message ? (
             <Text style={styles.error}>{formState.errors.items.root.message}</Text>
           ) : null}
+          {priceError ? <Text style={styles.error}>{priceError}</Text> : null}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -381,10 +434,9 @@ export function CreateTransferScreen() {
             disabled={
               !selectedBranchId ||
               destinationCatalog.isLoading ||
-              Boolean(destinationCatalog.error) ||
-              enabledProductIds.size === 0
+              Boolean(destinationCatalog.error)
             }
-            onPress={handleSubmit(setReview)}
+            onPress={onReview}
           />
         </View>
       </View>

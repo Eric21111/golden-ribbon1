@@ -27,7 +27,7 @@ import { formatMoney, makeIdempotencyKey } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { cartTotalCents, centsDecimal, toCents } from '@/lib/money';
 import { invalidateCompletedSaleQueries } from '@/lib/queryClient';
-import { getCashierProductSellingPrices } from '@/services/productService';
+import { getCashierLineSellingPrices } from '@/services/productService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 
@@ -55,8 +55,11 @@ export default function PaymentScreen() {
     setPriceError('');
     void (async () => {
       try {
-        const ids = useCartStore.getState().items.map((item) => item.product_id);
-        const prices = await getCashierProductSellingPrices(ids);
+        const lines = useCartStore.getState().items.map((item) => ({
+          product_id: item.product_id,
+          variant_id: item.variant_id,
+        }));
+        const prices = await getCashierLineSellingPrices(lines);
         if (cancelled) return;
         const result = useCartStore.getState().applyLivePrices(prices);
         if (result.changed) {
@@ -99,7 +102,7 @@ export default function PaymentScreen() {
         shiftId: shift.data.id,
         amountPaid: centsDecimal(cents),
         key: makeIdempotencyKey('sale'),
-        items: items.map(({ product_id, quantity }) => ({ product_id, quantity })),
+        items: items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })),
       });
     } catch (error) {
       setValidation(error instanceof Error ? error.message : 'Enter a valid payment.');

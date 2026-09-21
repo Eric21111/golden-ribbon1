@@ -5,8 +5,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { FormField } from '@/components/FormField';
 import { SwitchField } from '@/components/SwitchField';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
 import { branchSchema, type BranchFormValues } from './branchSchema';
+
+const RECEIVING_MODE_OPTIONS = [
+  { label: 'Manager counts', value: 'counted' as const },
+  { label: 'Cashier confirms', value: 'cashier_confirm' as const },
+];
 
 interface BranchFormProps {
   defaultValues?: BranchFormValues;
@@ -27,7 +33,7 @@ export function BranchForm({
   protectMainBranch = false,
   onSubmit,
 }: BranchFormProps) {
-  const { control, handleSubmit } = useForm<BranchFormValues>({
+  const { control, handleSubmit, watch } = useForm<BranchFormValues>({
     resolver: zodResolver(branchSchema),
     defaultValues: defaultValues ?? {
       name: '',
@@ -35,8 +41,10 @@ export function BranchForm({
       address: '',
       is_main_branch: false,
       is_active: true,
+      receiving_mode: 'counted',
     },
   });
+  const isMainBranch = watch('is_main_branch');
 
   return (
     <View style={styles.form}>
@@ -113,6 +121,18 @@ export function BranchForm({
           activeTrackColor={managerColors.royalBlue}
         />
       )} />
+      {isMainBranch ? null : (
+        <Controller control={control} name="receiving_mode" render={({ field }) => (
+          <View style={styles.receivingModeBlock}>
+            <Text style={[styles.label, styles.fieldLabel]}>Receiving mode</Text>
+            <Text style={styles.receivingModeDescription}>
+              Counted: a Manager enters received quantities. Cashier confirms: the assigned
+              cashier taps &quot;Shipment Arrived&quot; for the full sent quantity, no counting.
+            </Text>
+            <FilterChipRow options={RECEIVING_MODE_OPTIONS} value={field.value} onChange={field.onChange} />
+          </View>
+        )} />
+      )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ManagerActionButton label={submitLabel} loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
@@ -122,8 +142,16 @@ export function BranchForm({
 const styles = StyleSheet.create({
   form: { gap: 16 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  label: { fontSize: 16, fontWeight: '600' },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
   switchDescription: { fontFamily: 'Inter_400Regular' },
+  receivingModeBlock: { gap: 8 },
+  receivingModeDescription: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });

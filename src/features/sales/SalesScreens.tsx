@@ -89,7 +89,11 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
       {sale.items.map((item) => (
         <ListRowCard
           key={item.id}
-          title={item.product?.name ?? `Product (${item.product_id})`}
+          title={
+            item.variant_name
+              ? `${item.product?.name ?? `Product (${item.product_id})`} (${item.variant_name})`
+              : item.product?.name ?? `Product (${item.product_id})`
+          }
           meta={`Quantity: ${item.quantity} · Historical price: ${formatMoney(item.unit_price)}`}
           trailing={<Text style={styles.itemSubtotal}>{formatMoney(item.subtotal)}</Text>}
         />

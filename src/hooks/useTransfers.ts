@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
-import { getTransfer, listTransfers, receiveTransfer, sendTransfer } from '@/services/transferService';
+import {
+  confirmShipmentArrival,
+  getTransfer,
+  listCashierPendingTransfers,
+  listTransfers,
+  receiveTransfer,
+  sendTransfer,
+} from '@/services/transferService';
 import type { ReceiveTransferInput, SendTransferInput, TransferStatus } from '@/types/models';
 
 export function useTransfers(branchId = '', status: TransferStatus | '' = '') {
@@ -38,5 +45,27 @@ export function useReceiveTransfer() {
   return useMutation({
     mutationFn: (input: ReceiveTransferInput) => receiveTransfer(input),
     onSuccess: (_status, input) => invalidateInventoryFlow(client, input.transferId),
+  });
+}
+
+export function useCashierPendingTransfers() {
+  return useQuery({
+    queryKey: ['cashier-pending-transfers'],
+    queryFn: listCashierPendingTransfers,
+  });
+}
+
+export function useConfirmShipmentArrival() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ transferId, idempotencyKey }: { transferId: string; idempotencyKey: string }) =>
+      confirmShipmentArrival(transferId, idempotencyKey),
+    onSuccess: async (_status, { transferId }) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['cashier-pending-transfers'] }),
+        client.invalidateQueries({ queryKey: ['inventory'] }),
+        client.invalidateQueries({ queryKey: queryKeys.transfer(transferId) }),
+      ]);
+    },
   });
 }
