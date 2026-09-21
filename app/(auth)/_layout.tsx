@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Redirect, Stack } from 'expo-router';
 
 import { LoadingState } from '@/components/Feedback';
+import { Screen } from '@/components/Screen';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { roleHome } from '@/features/auth/roleRoutes';
 
@@ -14,8 +15,14 @@ export default function AuthLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
-  if (isLoading || !fontsLoaded) return <LoadingState label="Checking session…" />;
+  if (isLoading || !fontsLoaded) {
+    return (
+      <Screen backgroundColor="#FFFFFF">
+        <LoadingState label="Checking session…" />
+      </Screen>
+    );
+  }
   if (session && profile) return <Redirect href={roleHome[profile.role]} />;
   if (session) return <Redirect href="/" />;
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }} />;
 }

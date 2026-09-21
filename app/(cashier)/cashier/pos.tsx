@@ -193,7 +193,7 @@ export default function CashierPosScreen() {
   );
 
   return (
-    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       {posSplit ? (
         <View style={styles.split}>
           <View style={styles.catalog}>

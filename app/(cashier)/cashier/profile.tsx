@@ -26,7 +26,7 @@ export default function CashierAccountScreen() {
   const branch = profile.branch?.name ?? 'All branches';
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader title="Account" hideMenu />
 
       <ConstrainedWidth style={styles.column}>
@@ -98,7 +98,7 @@ export default function CashierAccountScreen() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24, gap: 20 },
+  column: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 20 },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  footer: { marginTop: 'auto', paddingTop: 8 },
+  footer: { borderTopWidth: 1, borderTopColor: managerColors.cardBorder, paddingTop: 20 },
   formHint: { fontFamily: 'Inter_400Regular' },
   formLabel: { fontFamily: 'Inter_600SemiBold' },
   formInput: { fontFamily: 'Inter_400Regular' },

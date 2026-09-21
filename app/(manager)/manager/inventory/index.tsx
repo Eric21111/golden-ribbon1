@@ -183,18 +183,22 @@ export default function ManagerInventoryScreen() {
 
         <View style={styles.footer}>
           {isMain ? (
-            <>
-              <ManagerActionButton
-                label="Send stock"
-                icon="paper-plane-outline"
-                onPress={() => router.push('/manager/transfers/create' as never)}
-              />
-              <ManagerActionButton
-                label="Set up opening stock"
-                variant="secondary"
-                onPress={() => router.push('/manager/inventory/setup' as never)}
-              />
-            </>
+            <View style={styles.footerRow}>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Send stock"
+                  icon="paper-plane-outline"
+                  onPress={() => router.push('/manager/transfers/create' as never)}
+                />
+              </View>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Opening stock"
+                  variant="secondary"
+                  onPress={() => router.push('/manager/inventory/setup' as never)}
+                />
+              </View>
+            </View>
           ) : (
             <ManagerActionButton
               label="Create return"
@@ -292,5 +296,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
+  footerRow: { flexDirection: 'row', gap: 10 },
+  footerButton: { flex: 1 },
   detail: { gap: 14, paddingBottom: 8 },
 });

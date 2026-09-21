@@ -12,11 +12,17 @@ import type { UserRole } from '@/types/models';
 export function RoleGuard({ children, role }: PropsWithChildren<{ role: UserRole }>) {
   const { session, profile, isLoading, profileError, retryProfile } = useAuth();
 
-  if (isLoading) return <LoadingState label="Checking account access…" />;
+  if (isLoading) {
+    return (
+      <Screen backgroundColor="#FFFFFF">
+        <LoadingState label="Checking account access…" />
+      </Screen>
+    );
+  }
   if (!session) return <Redirect href="/(auth)/login" />;
   if (profileError || !profile) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState
           message={profileError ? getErrorMessage(profileError) : 'No profile is assigned to this account. Ask an administrator to create one.'}
           onRetry={() => void retryProfile()}
@@ -27,7 +33,7 @@ export function RoleGuard({ children, role }: PropsWithChildren<{ role: UserRole
   }
   if (!profile.is_active) {
     return (
-      <Screen>
+      <Screen backgroundColor="#FFFFFF">
         <ErrorState message="This account is inactive. Contact the owner for access." />
         <SignOutButton />
       </Screen>

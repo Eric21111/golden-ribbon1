@@ -9,7 +9,7 @@ import { spacing } from '@/constants/theme';
 
 export default function OwnerReportsHub() {
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader title="Reports" subtitle="Company-wide read-only performance" />
       <ConstrainedWidth style={styles.column}>
         <View style={styles.list}>
@@ -63,6 +63,6 @@ export default function OwnerReportsHub() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20 },
+  column: { padding: 20, paddingBottom: 40 },
   list: { gap: spacing.sm },
 });

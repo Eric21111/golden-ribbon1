@@ -71,6 +71,9 @@ export default function BranchCatalogScreen() {
     );
   }, [products.data, search]);
 
+  const totalProducts = products.data?.length ?? 0;
+  const notCarriedCount = (products.data ?? []).filter((product) => !draft[product.id]?.is_active).length;
+
   const selectBranch = (nextBranchId: string) => {
     mutation.reset();
     setBranchId(nextBranchId);
@@ -113,15 +116,16 @@ export default function BranchCatalogScreen() {
         scroll={false}
         contentContainerStyle={styles.screen}
       >
-        <ManagerScreenHeader
-          title="Branch Catalogs"
-          subtitle="Choose which products each selling branch carries and set its price."
-          showBack
-        />
+        <ManagerScreenHeader title="Branch Catalogs" showBack />
 
         <ConstrainedWidth style={styles.column}>
           {sellingBranches.length > 0 ? (
             <View style={styles.filters}>
+              <SearchInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search product name or SKU"
+              />
               <FilterChipRow
                 options={sellingBranches.map((branch) => ({
                   label: branch.name,
@@ -130,12 +134,13 @@ export default function BranchCatalogScreen() {
                 value={branchId}
                 onChange={selectBranch}
               />
-              <SearchInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search product name or SKU"
-              />
             </View>
+          ) : null}
+
+          {sellingBranches.length > 0 && !loading && !loadError ? (
+            <Text style={styles.summary}>
+              {totalProducts} {totalProducts === 1 ? 'product' : 'products'} · {notCarriedCount} not carried
+            </Text>
           ) : null}
 
           {loadError ? (
@@ -250,6 +255,12 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
+  summary: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    marginBottom: 10,
+  },
   list: { paddingBottom: 16, flexGrow: 1 },
   separator: { height: 12 },
   card: {

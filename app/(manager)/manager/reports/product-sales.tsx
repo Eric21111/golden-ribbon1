@@ -44,7 +44,7 @@ export default function ManagerProductSalesScreen() {
   const totalProductRevenue = products.reduce((acc, p) => acc + Number(p.total_revenue), 0);
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader title="Product Sales" subtitle={profile?.branch?.name ?? 'Branch'} />
 
       <ConstrainedWidth style={styles.column}>

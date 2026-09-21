@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { FilterDropdown } from '@/components/FilterDropdown';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
@@ -103,16 +103,21 @@ export default function TransferHistoryScreen() {
       <ConstrainedWidth style={styles.column}>
         <View style={styles.filters}>
           <SearchInput value={search} onChangeText={setSearch} placeholder="Search transfer # or branch" />
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Status</Text>
-            <FilterChipRow options={isMain ? OWNER_STATUS_CHOICES : MANAGER_STATUS_CHOICES} value={status} onChange={setStatus} />
-          </View>
-          {isMain ? (
-            <View style={styles.filterGroup}>
-              <Text style={styles.filterLabel}>Destination branch</Text>
-              <FilterChipRow options={destinationOptions} value={branchId} onChange={setBranchId} />
+          <View style={styles.filterRow}>
+            <View style={isMain ? styles.filterItem : styles.filterItemFull}>
+              <FilterDropdown
+                label="Status"
+                options={isMain ? OWNER_STATUS_CHOICES : MANAGER_STATUS_CHOICES}
+                value={status}
+                onChange={setStatus}
+              />
             </View>
-          ) : null}
+            {isMain ? (
+              <View style={styles.filterItem}>
+                <FilterDropdown label="Destination branch" options={destinationOptions} value={branchId} onChange={setBranchId} />
+              </View>
+            ) : null}
+          </View>
         </View>
 
         {query.error ? (
@@ -162,13 +167,9 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 14, marginBottom: 14 },
-  filterGroup: { gap: 6 },
-  filterLabel: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
-    letterSpacing: 0.4,
-  },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
+  filterItemFull: { flex: 1 },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
   footer: {

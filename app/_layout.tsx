@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GlobalAlertModal } from '@/components/GlobalAlertModal';
-import { colors } from '@/constants/theme';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { queryClient } from '@/lib/queryClient';
 
@@ -16,7 +15,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <StatusBar style="dark" />
-            <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background }, headerTintColor: colors.primary }}>
+            <Stack screenOptions={{ contentStyle: { backgroundColor: '#FFFFFF' }, animation: 'default' }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(owner)" options={{ headerShown: false }} />

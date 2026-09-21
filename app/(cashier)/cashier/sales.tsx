@@ -125,7 +125,7 @@ export default function CurrentShiftSales() {
   );
 
   return (
-    <Screen backgroundColor="#FFFFFF" scroll={false} contentContainerStyle={styles.screen}>
+    <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       {isTablet ? (
         <View style={styles.split}>
           <View style={[styles.master, { width: salesMasterWidth }]}>

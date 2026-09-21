@@ -208,9 +208,9 @@ const styles = StyleSheet.create({
   iconChip: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
   },
   iconChipActive: { backgroundColor: '#EAF0FB' },
   label: { color: colors.muted, fontSize: 10, fontWeight: '600', textAlign: 'center', width: '100%' },

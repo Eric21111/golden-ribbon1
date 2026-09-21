@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Redirect, Stack, usePathname } from 'expo-router';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 import { RoleNavigation } from '@/components/RoleNavigation';
+import { Screen } from '@/components/Screen';
 
 import { LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { RoleGuard } from '@/features/auth/RoleGuard';
@@ -14,7 +15,7 @@ function CashierNavigator() {
   return (
     <RoleGuard role="cashier">
       <RoleNavigation role="cashier">
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
           <Stack.Screen name="cashier/dashboard" />
           <Stack.Screen name="cashier/pos" />
           <Stack.Screen name="cashier/payment" />
@@ -36,7 +37,13 @@ export default function CashierLayout() {
     Inter_700Bold,
   });
 
-  if (!fontsLoaded) return <LoadingState label="Loading…" />;
+  if (!fontsLoaded) {
+    return (
+      <Screen backgroundColor="#FFFFFF">
+        <LoadingState label="Loading…" />
+      </Screen>
+    );
+  }
 
   return <CashierNavigator />;
 }
