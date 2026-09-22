@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useCashierPendingTransfers, useConfirmShipmentArrival } from '@/hooks/useTransfers';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
@@ -14,7 +15,8 @@ import { formatDate, makeIdempotencyKey } from '@/lib/format';
 import type { CashierPendingTransfer } from '@/types/models';
 
 export default function CashierIncomingShipments() {
-  const pending = useCashierPendingTransfers();
+  const { session } = useAuth();
+  const pending = useCashierPendingTransfers(session?.user.id ?? '');
   const mutation = useConfirmShipmentArrival();
   const keysRef = useRef<Map<string, string>>(new Map());
 
@@ -30,11 +32,19 @@ export default function CashierIncomingShipments() {
     confirmAction(
       'Shipment arrived?',
       `Confirm all ${transfer.items.length} product${transfer.items.length === 1 ? '' : 's'} from ${transfer.from_branch_name} arrived as sent. Stock will be added immediately.`,
-      () =>
+      () => {
+        mutation.reset();
         mutation.mutate(
           { transferId: transfer.id, idempotencyKey: keyFor(transfer.id) },
-          { onSuccess: () => keysRef.current.delete(transfer.id) },
-        ),
+          {
+            onSuccess: () => keysRef.current.delete(transfer.id),
+            onError: () => {
+              // Allow a clean retry with a fresh idempotency key after a failed attempt.
+              keysRef.current.delete(transfer.id);
+            },
+          },
+        );
+      },
     );
   };
 

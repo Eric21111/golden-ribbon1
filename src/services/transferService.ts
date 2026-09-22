@@ -71,6 +71,12 @@ export async function confirmShipmentArrival(
   transferId: string,
   idempotencyKey: string,
 ): Promise<TransferStatus> {
+  // Incoming can stay open past access-token TTL; refresh before the write so
+  // PostgREST does not reject the RPC with an unmapped JWT error.
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) throw refreshError;
+  if (!refreshed.session) throw new Error('Unauthorized: sign in required.');
+
   const { data, error } = await supabase.rpc('confirm_shipment_arrival', {
     p_transfer_id: transferId,
     p_idempotency_key: idempotencyKey,

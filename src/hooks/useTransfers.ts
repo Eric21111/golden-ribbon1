@@ -48,10 +48,11 @@ export function useReceiveTransfer() {
   });
 }
 
-export function useCashierPendingTransfers() {
+export function useCashierPendingTransfers(userId = '') {
   return useQuery({
-    queryKey: ['cashier-pending-transfers'],
+    queryKey: ['cashier-pending-transfers', userId],
     queryFn: listCashierPendingTransfers,
+    enabled: Boolean(userId),
   });
 }
 

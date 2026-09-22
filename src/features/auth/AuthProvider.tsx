@@ -65,6 +65,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void queryClient.invalidateQueries({ queryKey: ['inventory'] });
     void queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
     void queryClient.invalidateQueries({ queryKey: ['transfers'] });
+    void queryClient.invalidateQueries({ queryKey: ['cashier-pending-transfers'] });
     void queryClient.invalidateQueries({ queryKey: ['stock-returns'] });
     void queryClient.invalidateQueries({ queryKey: ['return-inventory'] });
     void queryClient.invalidateQueries({ queryKey: ['shifts'] });
