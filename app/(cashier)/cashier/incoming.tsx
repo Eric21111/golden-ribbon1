@@ -29,18 +29,19 @@ export default function CashierIncomingShipments() {
   };
 
   const confirmArrival = (transfer: CashierPendingTransfer) => {
+    const transferId = String(transfer.id ?? '').trim();
+    const idempotencyKey = keyFor(transferId);
     confirmAction(
       'Shipment arrived?',
       `Confirm all ${transfer.items.length} product${transfer.items.length === 1 ? '' : 's'} from ${transfer.from_branch_name} arrived as sent. Stock will be added immediately.`,
       () => {
         mutation.reset();
         mutation.mutate(
-          { transferId: transfer.id, idempotencyKey: keyFor(transfer.id) },
+          { transferId, idempotencyKey },
           {
-            onSuccess: () => keysRef.current.delete(transfer.id),
+            onSuccess: () => keysRef.current.delete(transferId),
             onError: () => {
-              // Allow a clean retry with a fresh idempotency key after a failed attempt.
-              keysRef.current.delete(transfer.id);
+              keysRef.current.delete(transferId);
             },
           },
         );

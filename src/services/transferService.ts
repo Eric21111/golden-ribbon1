@@ -71,16 +71,66 @@ export async function confirmShipmentArrival(
   transferId: string,
   idempotencyKey: string,
 ): Promise<TransferStatus> {
-  // Incoming can stay open past access-token TTL; refresh before the write so
-  // PostgREST does not reject the RPC with an unmapped JWT error.
-  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-  if (refreshError) throw refreshError;
-  if (!refreshed.session) throw new Error('Unauthorized: sign in required.');
+  const id = String(transferId ?? '').trim();
+  const key = String(idempotencyKey ?? '').trim();
+  if (!id) throw new Error('Unable to load transfer.');
+  if (key.length < 16 || key.length > 100) throw new Error('Invalid request key.');
 
-  const { data, error } = await supabase.rpc('confirm_shipment_arrival', {
-    p_transfer_id: transferId,
-    p_idempotency_key: idempotencyKey,
+  try {
+    await supabase.auth.refreshSession();
+  } catch {
+    // keep existing session
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('Unauthorized: sign in required.');
+
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !anonKey) throw new Error('Supabase is not configured.');
+
+  // Raw fetch so the exact PostgREST 400 body is visible in the console.
+  const response = await fetch(`${url}/rest/v1/rpc/confirm_shipment_arrival`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({
+      p_transfer_id: id,
+      p_idempotency_key: key,
+    }),
   });
-  if (error) throw error;
-  return data;
+
+  const rawText = await response.text();
+  if (!response.ok) {
+    let parsed: { message?: string; details?: string; hint?: string; code?: string } = {};
+    try {
+      parsed = JSON.parse(rawText) as typeof parsed;
+    } catch {
+      parsed = { message: rawText };
+    }
+    console.error('[confirm_shipment_arrival]', {
+      status: response.status,
+      transferId: id,
+      keyLength: key.length,
+      body: rawText,
+    });
+    throw Object.assign(new Error(parsed.message || `Confirm failed (${response.status})`), {
+      details: parsed.details,
+      hint: parsed.hint,
+      code: parsed.code,
+    });
+  }
+
+  const trimmed = rawText.trim();
+  if (!trimmed) return 'received';
+  try {
+    return JSON.parse(trimmed) as TransferStatus;
+  } catch {
+    return trimmed.replace(/^"|"$/g, '') as TransferStatus;
+  }
 }

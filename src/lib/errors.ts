@@ -1,12 +1,13 @@
 function readErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error) {
     const parts: string[] = [];
     if ('message' in error && error.message) parts.push(String(error.message));
     if ('details' in error && error.details) parts.push(String(error.details));
     if ('hint' in error && error.hint) parts.push(String(error.hint));
-    if (parts.length) return parts.join(' ');
+    if ('code' in error && error.code) parts.push(`code=${String(error.code)}`);
+    if (parts.length) return parts.join(' | ');
   }
+  if (error instanceof Error) return error.message;
   return '';
 }
 
@@ -172,11 +173,14 @@ export function getChangeNameErrorMessage(error: unknown): string {
 export function getInventoryErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 
+  if (message.includes('at least one item') || message.includes('requires an actual received')) {
+    return 'This shipment could not be finalized. Pull to refresh and try again.';
+  }
   if (message.includes('insufficient stock')) return 'There is not enough stock to complete this operation.';
   if (message.includes('already been received') || message.includes('not pending receipt')) {
     return 'This transfer has already been received.';
   }
-  if (message.includes('duplicate key') || message.includes('transfer_once')) {
+  if (message.includes('duplicate key') || message.includes('transfer_once') || message.includes('code=23505')) {
     return 'This transfer has already been received.';
   }
   if (message.includes('another branch')) return 'You cannot receive a transfer assigned to another branch.';
@@ -191,15 +195,36 @@ export function getInventoryErrorMessage(error: unknown): string {
   }
   if (message.includes('invalid request key')) return 'The request expired. Tap Shipment Arrived again.';
   if (message.includes('unable to load transfer')) return 'That shipment could not be loaded. Pull to refresh and try again.';
-  if (message.includes('jwt') || message.includes('session') || message.includes('not authenticated')) {
+  if (
+    message.includes('invalid input syntax') ||
+    message.includes('uuid') ||
+    message.includes('22p02')
+  ) {
+    return 'That shipment could not be loaded. Pull to refresh and try again.';
+  }
+  if (
+    message.includes('jwt') ||
+    message.includes('session') ||
+    message.includes('not authenticated') ||
+    message.includes('sign in required')
+  ) {
     return 'Your session expired. Sign out, sign back in, then confirm the shipment.';
   }
-  if (message.includes('schema cache') || message.includes('could not find the function')) {
+  if (
+    message.includes('schema cache') ||
+    message.includes('could not find the function') ||
+    message.includes('pgrst202') ||
+    message.includes('pgrst203')
+  ) {
     return 'The app is out of date with the server. Update the app or try again shortly.';
   }
   if (message.includes('positive') || message.includes('zero or greater')) return 'Enter a valid quantity.';
-  if (message.includes('unauthorized') || message.includes('permission')) return 'You are not authorized to perform this action.';
-  if (message.includes('fetch') || message.includes('network')) return 'Network unavailable. Check your connection and try again.';
+  if (message.includes('unauthorized') || message.includes('permission') || message.includes('42501')) {
+    return 'You are not authorized to perform this action.';
+  }
+  if (message.includes('fetch') || message.includes('network')) {
+    return 'Network unavailable. Check your connection and try again.';
+  }
   return 'The inventory operation could not be completed. No stock was changed.';
 }
 
