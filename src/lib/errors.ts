@@ -186,7 +186,12 @@ export function getInventoryErrorMessage(error: unknown): string {
   if (message.includes('another branch')) return 'You cannot receive a transfer assigned to another branch.';
   if (message.includes('destination branch')) return 'The destination branch is inactive or invalid.';
   if (message.includes('product is missing or inactive')) return 'A selected product is inactive or unavailable.';
-  if (message.includes('opening stock has already')) return 'Opening stock was already initialized for a selected product.';
+  if (message.includes('opening stock has already')) {
+    return 'This product already has stock that is missing an opening record. Ask an owner to review inventory history.';
+  }
+  if (message.includes('opening quantities must be')) {
+    return 'Enter a whole quantity between 1 and 999999.';
+  }
   if (message.includes('describe what is wrong')) {
     return 'Describe what is wrong with the shipment before confirming the issue.';
   }

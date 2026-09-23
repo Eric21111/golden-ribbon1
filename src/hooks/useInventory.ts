@@ -28,6 +28,8 @@ export function useInitializeMainInventory() {
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['inventory'] }),
+        client.invalidateQueries({ queryKey: ['inventory-movements'] }),
+        client.invalidateQueries({ queryKey: ['products'] }),
       ]);
     },
   });

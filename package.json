@@ -57,6 +57,7 @@
     "test:transfer-default-price": "node tests/milestone12_4_transfer_default_price.mjs",
     "test:default-variants": "node tests/milestone12_5_default_variants_and_carried.mjs",
     "test:no-duplicate-product": "node tests/milestone12_6_branch_price_no_duplicate_product.mjs",
+    "test:opening-stock": "node tests/repeat_opening_stock.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

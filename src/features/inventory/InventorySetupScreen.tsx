@@ -1,14 +1,12 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
@@ -35,35 +33,48 @@ const schema = z
   });
 type Values = z.infer<typeof schema>;
 
+function sortSetupItems<T extends { updated_at: string | null; product: { name: string } }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const aPending = a.updated_at === null ? 0 : 1;
+    const bPending = b.updated_at === null ? 0 : 1;
+    if (aPending !== bPending) return aPending - bPending;
+    return a.product.name.localeCompare(b.product.name);
+  });
+}
+
 export function InventorySetupScreen() {
-  const formInitialized = useRef(false);
+  const productIdsRef = useRef('');
   const [search, setSearch] = useState('');
   const branches = useBranches();
   const mainBranch = branches.data?.find((branch) => branch.is_main_branch);
   // Include inactive products so newly created (inactive) items can receive opening stock.
   const inventory = useInventory(mainBranch, false);
   const mutation = useInitializeMainInventory();
-  const { control, handleSubmit, reset, formState } = useForm<Values>({
+  const { control, handleSubmit, reset, getValues, formState } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { items: [], notes: '' },
   });
   const { fields } = useFieldArray({ control, name: 'items' });
 
+  const refetchBranches = branches.refetch;
+  const refetchInventory = inventory.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchBranches();
+      void refetchInventory();
+    }, [refetchBranches, refetchInventory]),
+  );
+
   useEffect(() => {
-    if (inventory.data && !formInitialized.current) {
-      const sorted = [...inventory.data].sort((a, b) => {
-        const aPending = a.updated_at === null ? 0 : 1;
-        const bPending = b.updated_at === null ? 0 : 1;
-        if (aPending !== bPending) return aPending - bPending;
-        return a.product.name.localeCompare(b.product.name);
-      });
-      reset({
-        items: sorted.map((item) => ({ product_id: item.product.id, quantity: '' })),
-        notes: '',
-      });
-      formInitialized.current = true;
-    }
-  }, [inventory.data, reset]);
+    if (!inventory.data) return;
+    const nextIds = inventory.data.map((item) => item.product.id).sort().join('|');
+    if (nextIds === productIdsRef.current) return;
+    productIdsRef.current = nextIds;
+    reset({
+      items: sortSetupItems(inventory.data).map((item) => ({ product_id: item.product.id, quantity: '' })),
+      notes: getValues('notes') ?? '',
+    });
+  }, [getValues, inventory.data, reset]);
 
   const itemsById = useMemo(() => {
     const map = new Map((inventory.data ?? []).map((item) => [item.product.id, item]));
@@ -113,11 +124,18 @@ export function InventorySetupScreen() {
     );
     confirmAction(
       'Confirm opening stock',
-      'This creates permanent inventory movement records, activates selected products, and cannot be edited later.',
+      'This adds the entered quantities to Main Branch inventory, activates new products, and cannot be edited later. You can open this screen again to add more units.',
       () =>
         mutation.mutate(
           { items: selected, notes: values.notes?.trim() || null },
-          { onSuccess: () => router.back() },
+          {
+            onSuccess: () => {
+              reset({
+                items: getValues('items').map((item) => ({ ...item, quantity: '' })),
+                notes: '',
+              });
+            },
+          },
         ),
     );
   };
@@ -138,8 +156,8 @@ export function InventorySetupScreen() {
           {totalCount > 0 ? (
             <Text style={styles.progress}>
               {allInitialized
-                ? 'All products initialized'
-                : `${pendingCount} of ${totalCount} product${totalCount === 1 ? '' : 's'} still need an opening quantity`}
+                ? 'All products already have stock. Enter a quantity to add more units.'
+                : `${pendingCount} of ${totalCount} product${totalCount === 1 ? '' : 's'} still need an opening quantity. You can also add more units to products that already have stock.`}
             </Text>
           ) : null}
 
@@ -147,39 +165,33 @@ export function InventorySetupScreen() {
             if (!item) return null;
             const initialized = item.updated_at !== null;
 
-            if (initialized) {
-              return (
-                <ListRowCard
-                  key={field.id}
-                  icon="checkmark-circle"
-                  iconColor="green"
-                  title={item.product.name}
-                  meta={item.product.sku}
-                  trailing={<Text style={styles.qtyHighlight}>{item.quantity_on_hand} units</Text>}
-                />
-              );
-            }
-
             return (
               <View key={field.id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <Text style={styles.name}>{item.product.name}</Text>
                   <Text style={styles.meta}>SKU: {item.product.sku}</Text>
-                  <Text style={styles.meta}>Current quantity: {item.quantity_on_hand}</Text>
+                  <Text style={styles.meta}>
+                    {initialized
+                      ? `Current quantity: ${item.quantity_on_hand}`
+                      : 'Not set'}
+                  </Text>
                 </View>
                 <Controller
                   control={control}
                   name={`items.${index}.quantity`}
                   render={({ field: quantity, fieldState }) => (
                     <>
-                      <Text style={styles.inputLabel}>Opening quantity</Text>
+                      <Text style={styles.inputLabel}>
+                        {initialized ? 'Add quantity' : 'Opening quantity'}
+                      </Text>
                       <TextInput
-                        accessibilityLabel={`Opening quantity for ${item.product.name}`}
+                        accessibilityLabel={`${initialized ? 'Add quantity' : 'Opening quantity'} for ${item.product.name}`}
                         value={quantity.value}
                         onChangeText={quantity.onChange}
                         keyboardType="number-pad"
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
+                        maxLength={6}
                         style={[styles.input, fieldState.error && styles.inputError]}
                       />
                       {fieldState.error ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
@@ -196,18 +208,9 @@ export function InventorySetupScreen() {
             <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
           ) : null}
 
-          {allInitialized ? (
-            <View style={styles.doneCard}>
-              <Ionicons name="checkmark-circle" size={28} color={managerColors.green} />
-              <Text style={styles.doneTitle}>Nothing left to set up</Text>
-              <Text style={styles.doneMessage}>
-                Every product already has an opening quantity for the Main Branch.
-              </Text>
-            </View>
-          ) : null}
         </ScrollView>
 
-        {allInitialized ? null : (
+        {totalCount > 0 ? (
           <View style={styles.footer}>
             <Controller
               control={control}
@@ -233,7 +236,7 @@ export function InventorySetupScreen() {
               onPress={handleSubmit(submit)}
             />
           </View>
-        )}
+        ) : null}
       </View>
     </Screen>
   );
@@ -278,19 +281,6 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: '#B91C1C' },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
-  qtyHighlight: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
-  doneCard: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 28,
-  },
-  doneTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  doneMessage: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    textAlign: 'center',
-  },
   footer: {
     padding: 20,
     gap: 12,
