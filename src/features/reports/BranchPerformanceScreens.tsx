@@ -29,7 +29,7 @@ function discrepancySummary(missing: number, excess: number): { label: string; t
 }
 
 export function BranchPerformanceReportScreen() {
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
+  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
@@ -57,6 +57,10 @@ export function BranchPerformanceReportScreen() {
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
+        <Text style={styles.hint}>
+          Return discrepancies appear after Main counts a leftover return. They are not created at the cashier. All Time
+          is the default so earlier receives are not hidden.
+        </Text>
 
         <Text style={styles.sectionTitle}>COMPANY TOTALS</Text>
         <StatTile layout="wide" emphasis icon="cash-outline" label="Total sales" value={formatMoney(totalCompanySales)} />
@@ -85,6 +89,7 @@ export function BranchPerformanceReportScreen() {
                 rank={index + 1}
                 item={branch}
                 share={totalCompanySales > 0 ? (Number(branch.total_sales) / totalCompanySales) * 100 : 0}
+                showOlderReturnHint={rangeType !== 'all_time'}
               />
             ))}
           </View>
@@ -94,7 +99,17 @@ export function BranchPerformanceReportScreen() {
   );
 }
 
-function BranchPerformanceCard({ rank, item, share }: { rank: number; item: BranchPerformanceItem; share: number }) {
+function BranchPerformanceCard({
+  rank,
+  item,
+  share,
+  showOlderReturnHint,
+}: {
+  rank: number;
+  item: BranchPerformanceItem;
+  share: number;
+  showOlderReturnHint: boolean;
+}) {
   const transferSummary = discrepancySummary(item.transfer_missing_qty, item.transfer_excess_qty);
   const returnSummary = discrepancySummary(item.return_missing_qty, item.return_excess_qty);
   const accent = accentForRank(rank);
@@ -152,13 +167,18 @@ function BranchPerformanceCard({ rank, item, share }: { rank: number; item: Bran
         <Text style={styles.branchBadgeLabel}>Return discrepancies</Text>
         <ManagerBadge label={returnSummary.label} tone={returnSummary.tone} />
       </View>
+      {showOlderReturnHint && returnSummary.label === 'None' ? (
+        <Text style={styles.olderHint}>
+          None in this range. Open the branch or switch to All Time to see older Main receive differences.
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
 
 export function BranchPerformanceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
+  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
@@ -179,6 +199,10 @@ export function BranchPerformanceDetailScreen() {
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
+        <Text style={styles.hint}>
+          Return rows appear after Main counts the leftover return. A cashier leftover confirm does not create a
+          discrepancy by itself.
+        </Text>
 
         {query.isLoading ? <LoadingState label="Loading branch details…" /> : null}
         {query.error ? (
@@ -331,6 +355,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   mutedText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, fontStyle: 'italic' },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
+  olderHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
   highlight: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
   dateText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   statsRow: { flexDirection: 'row', gap: 10 },

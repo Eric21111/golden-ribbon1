@@ -1,3 +1,4 @@
+import { getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import type {
   Branch,
@@ -102,6 +103,32 @@ export async function getSale(id: string): Promise<SaleDetails> {
     ...(saleData as unknown as SaleWithRelations),
     items: (itemsData as unknown as SaleItem[]) ?? [],
   };
+}
+
+export async function listBranchSalesLog(
+  branchId: string,
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string,
+): Promise<SaleWithRelations[]> {
+  let query = supabase
+    .from('sales')
+    .select('*, cashier:profiles!sales_cashier_id_fkey(id, full_name)')
+    .eq('branch_id', branchId)
+    .eq('status', 'completed')
+    .order('sold_at', { ascending: false })
+    .limit(100);
+
+  if (rangeType === 'today') {
+    const { start, end } = getTodayRangeManila();
+    query = query.gte('sold_at', start).lt('sold_at', end);
+  } else if (rangeType === 'custom' && startDate && endDate) {
+    query = query.gte('sold_at', startDate).lt('sold_at', endDate);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data as unknown as SaleWithRelations[];
 }
 
 export async function reportSalesByBranch(

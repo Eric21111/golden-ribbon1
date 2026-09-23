@@ -51,6 +51,10 @@ export function useEndShift(cashierId: string) {
       await Promise.all([
         client.invalidateQueries({ queryKey: queryKeys.activeShift(cashierId) }),
         client.invalidateQueries({ queryKey: ['shifts'] }),
+        client.invalidateQueries({ queryKey: ['inventory'] }),
+        client.invalidateQueries({ queryKey: ['inventory', 'cashier-pos'] }),
+        client.invalidateQueries({ queryKey: ['return-inventory'] }),
+        client.invalidateQueries({ queryKey: ['stock-returns'] }),
         client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
         client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
       ]);

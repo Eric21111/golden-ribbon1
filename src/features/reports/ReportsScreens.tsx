@@ -1,11 +1,12 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { StatTile } from '@/components/dashboard/StatTile';
@@ -13,46 +14,80 @@ import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { accentForRank } from '@/features/reports/reportAccents';
 import { useBranches } from '@/hooks/useBranches';
-import { useProductSales, useSalesByBranch } from '@/hooks/useSales';
+import { useBranchSalesLog, useProductSales, useSalesByBranch } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import type { BranchSalesReportItem, ProductSalesReportItem } from '@/types/models';
 
-function BranchSalesRow({ rank, item, share }: { rank: number; item: BranchSalesReportItem; share: number }) {
+function BranchSalesCard({
+  rank,
+  item,
+  expanded,
+  onToggle,
+  rangeType,
+  startIso,
+  endIso,
+}: {
+  rank: number;
+  item: BranchSalesReportItem;
+  expanded: boolean;
+  onToggle: () => void;
+  rangeType: 'today' | 'custom' | 'all_time';
+  startIso?: string;
+  endIso?: string;
+}) {
   const accent = accentForRank(rank);
-  const barColors = [accent.icon, accent.gradient[0]] as const;
+  const log = useBranchSalesLog(expanded ? item.branch_id : '', rangeType, startIso, endIso);
 
   return (
     <View style={styles.rankRowCard}>
-      <View style={styles.rankRowTop}>
-        <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
-          <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
-        </View>
-        <LinearGradient
-          colors={accent.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconChip}
-        >
-          <Ionicons name="storefront-outline" size={18} color={accent.icon} />
-        </LinearGradient>
-        <Text style={styles.rankRowTitle} numberOfLines={1}>
-          {item.branch_name}
-        </Text>
-        <Text style={styles.rankRowAmount}>{formatMoney(item.total_sales)}</Text>
-      </View>
-      <Text style={styles.rankRowMeta}>Transactions: {item.transaction_count}</Text>
-      <View style={styles.barRow}>
-        <View style={styles.barTrack}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} daily sales log for ${item.branch_name}`}
+        onPress={onToggle}
+      >
+        <View style={styles.rankRowTop}>
+          <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
+            <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
+          </View>
           <LinearGradient
-            colors={barColors}
+            colors={accent.gradient}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.barFill, { width: `${Math.max(share, 0)}%` }]}
-          />
+            end={{ x: 1, y: 1 }}
+            style={styles.iconChip}
+          >
+            <Ionicons name="storefront-outline" size={18} color={accent.icon} />
+          </LinearGradient>
+          <Text style={styles.rankRowTitle} numberOfLines={1}>
+            {item.branch_name}
+          </Text>
+          <Text style={styles.rankRowAmount}>{formatMoney(item.total_sales)}</Text>
         </View>
-        <Text style={[styles.barPercent, { color: accent.icon }]}>{share.toFixed(0)}%</Text>
-      </View>
+        <Text style={styles.rankRowMeta}>
+          Transactions: {item.transaction_count}
+          {expanded ? ' · Hide log' : ' · Daily sales log'}
+        </Text>
+      </Pressable>
+      {expanded ? (
+        <View style={styles.logBlock}>
+          <Text style={styles.logTitle}>DAILY SALES LOG</Text>
+          {log.isLoading ? <LoadingState label="Loading sales…" /> : null}
+          {log.error ? (
+            <ErrorState message={getErrorMessage(log.error)} onRetry={() => void log.refetch()} />
+          ) : null}
+          {log.data?.length === 0 ? (
+            <Text style={styles.logEmpty}>No completed sales in this range. Older detailed sales may have been archived.</Text>
+          ) : null}
+          {log.data?.map((sale) => (
+            <ListRowCard
+              key={sale.id}
+              title={sale.sale_number}
+              meta={`${formatDate(sale.sold_at)} · ${sale.cashier?.full_name ?? 'Cashier'}`}
+              trailing={<Text style={styles.rankRowAmount}>{formatMoney(sale.total_amount)}</Text>}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -99,16 +134,18 @@ export function SalesByBranchScreen() {
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [openBranchId, setOpenBranchId] = useState<string | null>(null);
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useSalesByBranch(rpcRangeType, startIso, endIso);
 
   const report = query.data ?? [];
-  const totalCompletedTx = report.reduce((acc, r) => acc + Number(r.transaction_count), 0);
-  const totalCompletedSales = report.reduce((acc, r) => acc + Number(r.total_sales), 0);
+  const activeBranches = report.filter((item) => Number(item.transaction_count) > 0);
+  const totalCompletedTx = activeBranches.reduce((acc, r) => acc + Number(r.transaction_count), 0);
+  const totalCompletedSales = activeBranches.reduce((acc, r) => acc + Number(r.total_sales), 0);
   const rankedBranches = useMemo(
-    () => [...report].sort((a, b) => Number(b.total_sales) - Number(a.total_sales)),
-    [report]
+    () => [...activeBranches].sort((a, b) => Number(b.total_sales) - Number(a.total_sales)),
+    [activeBranches],
   );
 
   return (
@@ -142,19 +179,23 @@ export function SalesByBranchScreen() {
         {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
-        {report.length === 0 && !query.isLoading && query.isFetched ? (
-          <EmptyState title="No sales recorded" message="Branches have no completed sales for this range." />
+        {activeBranches.length === 0 && !query.isLoading && query.isFetched ? (
+          <EmptyState title="No sales recorded" message="Selling branches have no completed sales for this range." />
         ) : null}
 
         {rankedBranches.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>BRANCHES</Text>
             {rankedBranches.map((item, index) => (
-              <BranchSalesRow
+              <BranchSalesCard
                 key={item.branch_id}
                 rank={index + 1}
                 item={item}
-                share={totalCompletedSales > 0 ? (Number(item.total_sales) / totalCompletedSales) * 100 : 0}
+                expanded={openBranchId === item.branch_id}
+                onToggle={() => setOpenBranchId((current) => (current === item.branch_id ? null : item.branch_id))}
+                rangeType={rpcRangeType}
+                startIso={startIso}
+                endIso={endIso}
               />
             ))}
           </View>
@@ -312,6 +353,14 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   skuTagLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, letterSpacing: 0.3 },
+  logBlock: { gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: managerColors.cardBorder },
+  logTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    letterSpacing: 0.6,
+  },
+  logEmpty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   barTrack: {
     flex: 1,

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
 import type { InventoryItem, PosVariant } from '@/types/models';
@@ -21,7 +20,6 @@ function Stepper({
   quantity,
   atMin,
   atMax,
-  outOfStock,
   compact,
   label,
   maxQuantity,
@@ -32,7 +30,6 @@ function Stepper({
   quantity: number;
   atMin: boolean;
   atMax: boolean;
-  outOfStock: boolean;
   compact: boolean;
   label: string;
   maxQuantity: number;
@@ -80,7 +77,6 @@ function Stepper({
         placeholderTextColor={managerColors.subtext}
         maxLength={6}
         selectTextOnFocus
-        editable={!outOfStock}
         onChangeText={(value) => {
           if (value === '' || /^\d{1,6}$/.test(value)) {
             setDraft(value);
@@ -94,15 +90,15 @@ function Stepper({
         accessibilityRole="button"
         accessibilityLabel={`Add one ${label}`}
         hitSlop={6}
-        disabled={outOfStock || atMax}
+        disabled={atMax}
         onPress={onIncrease}
         style={({ pressed }) => [
           styles.stepperButton,
           compact && styles.stepperButtonCompact,
-          pressed && !(outOfStock || atMax) && styles.stepperButtonPressed,
+          pressed && !atMax && styles.stepperButtonPressed,
         ]}
       >
-        <Text style={[styles.stepperSymbol, (outOfStock || atMax) && styles.stepperSymbolDisabled]}>+</Text>
+        <Text style={[styles.stepperSymbol, atMax && styles.stepperSymbolDisabled]}>+</Text>
       </Pressable>
     </View>
   );
@@ -121,74 +117,121 @@ export function PosProductCard({
   const hasVariants = variants.length > 0;
   const totalQuantity = [...quantityByVariant.values()].reduce((sum, qty) => sum + qty, 0);
   const atProductLimit = totalQuantity >= item.quantity_on_hand;
+  const selected = totalQuantity > 0;
+
+  const toggleSelect = (variantId: string | null, quantity: number) => {
+    if (quantity > 0) {
+      onQuantityChange(variantId, 0);
+      return;
+    }
+    if (atProductLimit) return;
+    onIncrease(variantId);
+  };
 
   return (
-    <View style={[styles.card, compact && styles.cardCompact]}>
-      <View style={styles.topRow}>
-        <View style={styles.copy}>
-          <Text style={[styles.name, compact && styles.nameCompact]} numberOfLines={compact ? 2 : undefined}>
-            {item.product.name}
-          </Text>
-          <Text style={styles.sku}>{item.product.sku}</Text>
-        </View>
-        {hasVariants ? null : (
-          <Text style={[styles.price, compact && styles.priceCompact]}>
-            {formatMoney(item.product.selling_price)}
-          </Text>
-        )}
-      </View>
-      {outOfStock ? (
-        <ManagerBadge label="Out of stock" tone="danger" />
-      ) : (
-        <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
-      )}
-
-      {hasVariants ? (
-        <View style={styles.variantList}>
-          {variants.map((variant: PosVariant) => {
-            const quantity = quantityByVariant.get(variant.id) ?? 0;
-            const otherQuantity = totalQuantity - quantity;
-            return (
-              <View key={variant.id} style={styles.variantRow}>
-                <View style={styles.variantCopy}>
-                  <Text style={styles.variantName} numberOfLines={1}>{variant.name}</Text>
-                  <Text style={styles.variantPrice}>{formatMoney(variant.selling_price)}</Text>
-                </View>
-                <Stepper
-                  quantity={quantity}
-                  atMin={quantity <= 0}
-                  atMax={atProductLimit}
-                  outOfStock={outOfStock}
-                  compact={compact}
-                  label={`${item.product.name} (${variant.name})`}
-                  maxQuantity={Math.max(0, item.quantity_on_hand - otherQuantity)}
-                  onIncrease={() => onIncrease(variant.id)}
-                  onDecrease={() => onDecrease(variant.id)}
-                  onQuantityChange={(next) => onQuantityChange(variant.id, next)}
-                />
+    <View
+      style={[
+        styles.card,
+        compact && styles.cardCompact,
+        selected && styles.cardSelected,
+        outOfStock && styles.cardOut,
+      ]}
+    >
+      <View style={outOfStock ? styles.dimmed : undefined} pointerEvents={outOfStock ? 'none' : 'auto'}>
+        {hasVariants ? (
+          <>
+            <View style={styles.topRow}>
+              <View style={styles.copy}>
+                <Text style={[styles.name, compact && styles.nameCompact]} numberOfLines={compact ? 2 : undefined}>
+                  {item.product.name}
+                </Text>
+                <Text style={styles.sku}>{item.product.sku}</Text>
               </View>
-            );
-          })}
-        </View>
-      ) : (
-        <View style={styles.controls}>
-          <Stepper
-            quantity={quantityByVariant.get(null) ?? 0}
-            atMin={(quantityByVariant.get(null) ?? 0) <= 0}
-            atMax={atProductLimit}
-            outOfStock={outOfStock}
-            compact={compact}
-            label={item.product.name}
-            maxQuantity={item.quantity_on_hand}
-            onIncrease={() => onIncrease(null)}
-            onDecrease={() => onDecrease(null)}
-            onQuantityChange={(next) => onQuantityChange(null, next)}
-          />
-        </View>
-      )}
+            </View>
+            <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
+            <View style={styles.variantList}>
+              {variants.map((variant: PosVariant) => {
+                const quantity = quantityByVariant.get(variant.id) ?? 0;
+                const otherQuantity = totalQuantity - quantity;
+                const label = `${item.product.name} (${variant.name})`;
+                return (
+                  <View key={variant.id} style={styles.variantRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={quantity > 0 ? `Remove ${label} from order` : `Add ${label} to order`}
+                      disabled={quantity <= 0 && atProductLimit}
+                      onPress={() => toggleSelect(variant.id, quantity)}
+                      style={({ pressed }) => [styles.variantCopy, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.variantName} numberOfLines={1}>{variant.name}</Text>
+                      <Text style={styles.variantPrice}>{formatMoney(variant.selling_price)}</Text>
+                    </Pressable>
+                    <Stepper
+                      quantity={quantity}
+                      atMin={quantity <= 0}
+                      atMax={atProductLimit}
+                      compact={compact}
+                      label={label}
+                      maxQuantity={Math.max(0, item.quantity_on_hand - otherQuantity)}
+                      onIncrease={() => onIncrease(variant.id)}
+                      onDecrease={() => onDecrease(variant.id)}
+                      onQuantityChange={(next) => onQuantityChange(variant.id, next)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                (quantityByVariant.get(null) ?? 0) > 0
+                  ? `Remove ${item.product.name} from order`
+                  : `Add ${item.product.name} to order`
+              }
+              disabled={(quantityByVariant.get(null) ?? 0) <= 0 && atProductLimit}
+              onPress={() => toggleSelect(null, quantityByVariant.get(null) ?? 0)}
+              style={({ pressed }) => [styles.selectArea, pressed && styles.pressed]}
+            >
+              <View style={styles.topRow}>
+                <View style={styles.copy}>
+                  <Text style={[styles.name, compact && styles.nameCompact]} numberOfLines={compact ? 2 : undefined}>
+                    {item.product.name}
+                  </Text>
+                  <Text style={styles.sku}>{item.product.sku}</Text>
+                </View>
+                <Text style={[styles.price, compact && styles.priceCompact]}>
+                  {formatMoney(item.product.selling_price)}
+                </Text>
+              </View>
+              <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
+            </Pressable>
+            <View style={styles.controls}>
+              <Stepper
+                quantity={quantityByVariant.get(null) ?? 0}
+                atMin={(quantityByVariant.get(null) ?? 0) <= 0}
+                atMax={atProductLimit}
+                compact={compact}
+                label={item.product.name}
+                maxQuantity={item.quantity_on_hand}
+                onIncrease={() => onIncrease(null)}
+                onDecrease={() => onDecrease(null)}
+                onQuantityChange={(next) => onQuantityChange(null, next)}
+              />
+            </View>
+          </>
+        )}
+        {atProductLimit && !outOfStock ? (
+          <Text style={styles.limit}>Maximum available quantity selected.</Text>
+        ) : null}
+      </View>
 
-      {atProductLimit && !outOfStock ? (
-        <Text style={styles.limit}>Maximum available quantity selected.</Text>
+      {outOfStock ? (
+        <View pointerEvents="none" style={styles.outOverlay}>
+          <Text style={styles.outLabel}>Out of stock</Text>
+        </View>
       ) : null}
     </View>
   );
@@ -203,13 +246,27 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 8,
     flex: 1,
+    overflow: 'hidden',
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
+    minHeight: 112,
   },
   cardCompact: { padding: 10, gap: 6 },
+  cardSelected: {
+    borderColor: managerColors.royalBlue,
+    backgroundColor: '#F7F9FD',
+  },
+  cardOut: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  dimmed: { opacity: 0.35 },
+  selectArea: { gap: 8 },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -245,7 +302,6 @@ const styles = StyleSheet.create({
     borderColor: managerColors.cardBorder,
     borderRadius: 10,
     backgroundColor: managerColors.cardSurface,
-    overflow: 'hidden',
   },
   stepperButton: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
   stepperButtonCompact: { width: 32 },
@@ -253,18 +309,32 @@ const styles = StyleSheet.create({
   stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 20 },
   stepperSymbolDisabled: { color: managerColors.cardBorder },
   quantityInput: {
-    width: 44,
+    width: 48,
     height: 40,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: managerColors.cardBorder,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
     color: managerColors.ink,
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
     textAlign: 'center',
     paddingVertical: 0,
   },
-  quantityInputCompact: { width: 40 },
+  quantityInputCompact: { width: 44 },
   limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'right' },
+  pressed: { opacity: 0.7 },
+  outOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  outLabel: {
+    color: '#6B7280',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
 });

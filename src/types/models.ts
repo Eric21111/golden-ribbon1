@@ -284,6 +284,7 @@ export type ShiftSummary = {
   ended_at: string | null;
   completed_transaction_count: number;
   total_sales: number;
+  leftover_return_id?: string | null;
 };
 
 export type BranchSalesReportItem = {

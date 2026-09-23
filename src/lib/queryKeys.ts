@@ -20,6 +20,8 @@ export const queryKeys = {
   shiftSummary: (id: string) => ['shifts', 'summary', id] as const,
   salesByBranch: (rangeType = 'today', startDate = '', endDate = '') =>
     ['reports', 'sales-by-branch', { rangeType, startDate, endDate }] as const,
+  branchSalesLog: (branchId: string, rangeType = 'today', startDate = '', endDate = '') =>
+    ['reports', 'sales-by-branch', 'log', branchId, { rangeType, startDate, endDate }] as const,
   productSales: (rangeType = 'today', branchId = '', startDate = '', endDate = '') =>
     ['reports', 'product-sales', { rangeType, branchId, startDate, endDate }] as const,
   ownerDashboard: ['dashboard', 'owner'] as const,

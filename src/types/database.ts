@@ -36,7 +36,15 @@ import type {
 } from './models';
 
 import type { Sale, SaleWithRelations } from '@/services/saleService';
-import type { StockReturn, ReturnItem, ReturnStock, ReturnRequest, ReturnDiscrepancy, ReturnStatus } from './returns';
+import type {
+  StockReturn,
+  ReturnItem,
+  ReturnStock,
+  ReturnRequest,
+  LeftoverReturnRequest,
+  ReturnDiscrepancy,
+  ReturnStatus,
+} from './returns';
 
 type BranchInsert = Omit<Branch, 'id' | 'created_at' | 'updated_at'> & {
   id?: string;
@@ -264,6 +272,11 @@ export type Database = {
         }>;
       };
       create_stock_return: { Args: ReturnRequest; Returns: string };
+      return_leftover_stock: { Args: LeftoverReturnRequest; Returns: string };
+      close_overdue_shifts: {
+        Args: Record<string, never>;
+        Returns: { closed_count: number; leftover_return_count: number; cutoff_at: string };
+      };
       confirm_sale: {
         Args: {
           p_shift_id: string;

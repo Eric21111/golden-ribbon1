@@ -68,6 +68,13 @@ const posSource = readFileSync('app/(cashier)/cashier/pos.tsx', 'utf8');
 assert.match(posSource, /setProductQuantity/);
 assert.match(posSource, /onQuantityChange/);
 
+const cardSource = readFileSync('src/features/pos/PosProductCard.tsx', 'utf8');
+assert.match(cardSource, /toggleSelect/);
+assert.match(cardSource, /Remove \$\{item\.product\.name\} from order/);
+assert.match(cardSource, /outOverlay/);
+assert.match(cardSource, /Out of stock/);
+assert.match(cardSource, /cardOut/);
+
 const paymentSource = readFileSync('app/(cashier)/cashier/payment.tsx', 'utf8');
 assert.doesNotMatch(paymentSource, /Money Given/);
 assert.doesNotMatch(paymentSource, /QUICK_CASH/);

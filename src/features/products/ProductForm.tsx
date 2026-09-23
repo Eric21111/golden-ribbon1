@@ -12,11 +12,6 @@ import { managerColors } from '@/components/dashboard/theme';
 import { generateSkuFromName } from './generateSku';
 import { productSchema, type ProductFormValues } from './productSchema';
 
-const PRICING_TYPE_OPTIONS = [
-  { label: 'Single price', value: 'single' as const },
-  { label: 'Has variants', value: 'variants' as const },
-];
-
 interface ProductFormProps {
   defaultValues?: ProductFormValues;
   /** Existing SKUs used to keep auto-generated codes unique (create flow). */
@@ -27,6 +22,8 @@ interface ProductFormProps {
   allowVariants?: boolean;
   /** Create flow hides this — products activate when opening stock is set. */
   showActiveToggle?: boolean;
+  /** Edit may show Active but cannot turn it on until Main has opening stock. */
+  canActivate?: boolean;
   /** Optional selling-branch price editor (create/edit). */
   branchOptions?: Array<{ id: string; name: string }>;
   resolveBranchPrice?: (branchId: string) => string | undefined;
@@ -49,6 +46,7 @@ export function ProductForm({
   autoGenerateSku = false,
   allowVariants = false,
   showActiveToggle = true,
+  canActivate = true,
   branchOptions = [],
   resolveBranchPrice,
   onBranchChange,
@@ -77,7 +75,6 @@ export function ProductForm({
   });
   const nameValue = watch('name');
   const basePrice = watch('selling_price');
-  const pricingType = watch('pricingType');
   const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
     control,
     name: 'variants',
@@ -162,108 +159,53 @@ export function ProductForm({
           />
         )}
       />
-      <Controller
-        control={control}
-        name="selling_price"
-        render={({ field, fieldState }) => (
-          <FormField
-            label="Default/base price (PHP)"
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-            labelStyle={styles.fieldLabel}
-            errorStyle={styles.fieldError}
-            accentColor={managerColors.royalBlue}
-            style={styles.fieldInput}
-          />
-        )}
-      />
       {allowVariants ? (
         <View style={styles.variantsBlock}>
-          <Text style={[styles.label, styles.fieldLabel]}>Pricing type</Text>
-          <Controller
-            control={control}
-            name="pricingType"
-            render={({ field }) => (
-              <FilterChipRow options={PRICING_TYPE_OPTIONS} value={field.value} onChange={field.onChange} />
-            )}
-          />
-          {pricingType === 'variants' ? (
-            <View style={styles.variantList}>
-              {variantFields.map((field, index) => (
-                <View key={field.id} style={styles.variantRow}>
-                  <Controller
-                    control={control}
-                    name={`variants.${index}.name`}
-                    render={({ field: nameField, fieldState }) => (
-                      <FormField
-                        label="Variant name"
-                        value={nameField.value}
-                        onChangeText={nameField.onChange}
-                        error={fieldState.error?.message}
-                        placeholder="e.g. With Rice"
-                        labelStyle={styles.fieldLabel}
-                        errorStyle={styles.fieldError}
-                        accentColor={managerColors.royalBlue}
-                        style={styles.fieldInput}
-                      />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name={`variants.${index}.default_price`}
-                    render={({ field: priceField, fieldState }) => (
-                      <FormField
-                        label="Default price (PHP)"
-                        value={priceField.value}
-                        onChangeText={priceField.onChange}
-                        error={fieldState.error?.message}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                        labelStyle={styles.fieldLabel}
-                        errorStyle={styles.fieldError}
-                        accentColor={managerColors.royalBlue}
-                        style={styles.fieldInput}
-                      />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name={`variants.${index}.is_active`}
-                    render={({ field: activeField }) => (
-                      <SwitchField
-                        label="Active"
-                        value={activeField.value}
-                        onValueChange={activeField.onChange}
-                        labelStyle={styles.fieldLabel}
-                        activeTrackColor={managerColors.royalBlue}
-                      />
-                    )}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove variant ${index + 1}`}
-                    onPress={() => removeVariant(index)}
-                    style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.removeButtonText}>Remove variant</Text>
-                  </Pressable>
-                </View>
-              ))}
-              {variantsErrorMessage ? <Text style={styles.error}>{variantsErrorMessage}</Text> : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add variant"
-                onPress={() => appendVariant({ name: '', default_price: '', is_active: true })}
-                style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.addButtonText}>Add variant</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          <Text style={[styles.label, styles.fieldLabel]}>Variants (optional names)</Text>
+          <Text style={styles.hint}>Price is set per selling branch, not as a company default.</Text>
+          <View style={styles.variantList}>
+            {variantFields.map((field, index) => (
+              <View key={field.id} style={styles.variantRow}>
+                <Controller
+                  control={control}
+                  name={`variants.${index}.name`}
+                  render={({ field: nameField, fieldState }) => (
+                    <FormField
+                      label="Variant name"
+                      value={nameField.value}
+                      onChangeText={nameField.onChange}
+                      error={fieldState.error?.message}
+                      placeholder="e.g. With Rice"
+                      labelStyle={styles.fieldLabel}
+                      errorStyle={styles.fieldError}
+                      accentColor={managerColors.royalBlue}
+                      style={styles.fieldInput}
+                    />
+                  )}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove variant ${index + 1}`}
+                  onPress={() => removeVariant(index)}
+                  style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.removeButtonText}>Remove variant</Text>
+                </Pressable>
+              </View>
+            ))}
+            {variantsErrorMessage ? <Text style={styles.error}>{variantsErrorMessage}</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add variant"
+              onPress={() => {
+                setValue('pricingType', 'variants');
+                appendVariant({ name: '', default_price: branchPrice || '0', is_active: true });
+              }}
+              style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.addButtonText}>Add variant</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
       {showActiveToggle ? (
@@ -273,9 +215,16 @@ export function ProductForm({
           render={({ field }) => (
             <SwitchField
               label="Active"
-              description="Inactive products are retained for historical records. New products activate when opening stock is set."
+              description={
+                canActivate
+                  ? 'Inactive products are retained for historical records.'
+                  : 'This product can become active only after Main sets opening stock.'
+              }
               value={field.value}
-              onValueChange={field.onChange}
+              onValueChange={(next) => {
+                if (next && !canActivate) return;
+                field.onChange(next);
+              }}
               labelStyle={styles.fieldLabel}
               descriptionStyle={styles.switchDescription}
               activeTrackColor={managerColors.royalBlue}
@@ -289,9 +238,9 @@ export function ProductForm({
       )}
       {branchOptions.length > 0 ? (
         <View style={styles.variantsBlock}>
-          <Text style={[styles.label, styles.fieldLabel]}>Branch price</Text>
+          <Text style={[styles.label, styles.fieldLabel]}>Selling branch price</Text>
           <Text style={styles.hint}>
-            Select a selling branch to view or update its price. Confirm separately from saving the product.
+            Price lives on the selling-branch catalog. There is no company default or pricing type.
           </Text>
           <FilterChipRow
             options={branchOptions.map((branch) => ({ label: branch.name, value: branch.id }))}
@@ -313,30 +262,42 @@ export function ProductForm({
             style={styles.fieldInput}
           />
           {branchPriceError ? <Text style={styles.error}>{branchPriceError}</Text> : null}
-          <ManagerActionButton
-            label="Confirm branch price"
-            variant="secondary"
-            loading={branchPriceLoading}
-            disabled={!branchId || !onConfirmBranchPrice}
-            onPress={() => {
-              if (!branchId || !onConfirmBranchPrice) return;
-              onConfirmBranchPrice({ branchId, selling_price: Number(branchPrice) });
-            }}
-          />
+          {onConfirmBranchPrice ? (
+            <ManagerActionButton
+              label="Confirm branch price"
+              variant="secondary"
+              loading={branchPriceLoading}
+              disabled={!branchId}
+              onPress={() => {
+                if (!branchId) return;
+                onConfirmBranchPrice({ branchId, selling_price: Number(branchPrice) });
+              }}
+            />
+          ) : null}
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ManagerActionButton
         label={submitLabel}
         loading={loading}
-        onPress={handleSubmit((values) =>
+        onPress={handleSubmit((values) => {
+          const fallbackPrice = branchPrice.trim() || values.selling_price || '0';
           onSubmit(
-            showActiveToggle ? values : { ...values, is_active: false },
+            {
+              ...values,
+              selling_price: fallbackPrice,
+              is_active: showActiveToggle ? values.is_active : false,
+              pricingType: values.variants.length > 0 ? 'variants' : 'single',
+              variants: values.variants.map((variant) => ({
+                ...variant,
+                default_price: variant.default_price.trim() || fallbackPrice,
+              })),
+            },
             branchId && Number.isFinite(Number(branchPrice))
               ? { branchId, selling_price: Number(branchPrice) }
               : undefined,
-          ),
-        )}
+          );
+        })}
       />
     </View>
   );

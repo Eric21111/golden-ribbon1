@@ -139,16 +139,25 @@ export default function CashierDashboard() {
       alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.');
       return;
     }
-    confirmAction('End shift?', 'The end time will be recorded and this shift cannot be reopened.', () =>
-      endMutation.mutate(shiftId, {
-        onSuccess: (summary) => {
-          clearCart();
-          alertNotice(
-            'Shift Ended',
-            `Completed Orders: ${summary.completed_transaction_count}\nTotal Sales: ${formatMoney(summary.total_sales)}`,
-          );
-        },
-      }),
+    confirmAction(
+      'End shift?',
+      'Leftover on-hand stock will be returned to Main automatically. Main will count it later. This shift cannot be reopened.',
+      () =>
+        endMutation.mutate(shiftId, {
+          onSuccess: (summary) => {
+            clearCart();
+            alertNotice(
+              'Shift Ended',
+              [
+                `Completed Orders: ${summary.completed_transaction_count}`,
+                `Total Sales: ${formatMoney(summary.total_sales)}`,
+                summary.leftover_return_id
+                  ? 'Leftover stock was returned to Main.'
+                  : 'No leftover stock was on hand.',
+              ].join('\n'),
+            );
+          },
+        }),
     );
   };
 

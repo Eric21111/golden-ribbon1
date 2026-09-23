@@ -61,21 +61,28 @@ const shift = (await db.query('select public.start_cashier_shift() id')).rows[0]
 await assert.rejects(db.query('select public.confirm_sale($1,$2::jsonb,1000,$3)',[shift,JSON.stringify([{product_id:p1,quantity:11}]),'sale-after-return-check']), /Insufficient stock/);
 await db.query('select public.end_cashier_shift($1)', [shift]);
 await db.exec(`select set_config('request.jwt.claim.sub','${owner}',false);`);
-assert.equal((await db.query('select * from public.stock_returns')).rows.length,1);
-assert.equal((await db.query('select * from public.stock_return_items')).rows.length,2);
+assert.equal((await db.query('select * from public.stock_returns')).rows.length,2);
+assert.equal((await db.query('select * from public.stock_return_items')).rows.length,3);
 await db.exec(`reset role; update public.profiles set is_active=false where id='${cashier}'; set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
 await assert.rejects(send('inactive-cashier-return'), /Cashier or Manager|active/);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,0);
 await db.exec('reset role');
-const header = (await db.query('select * from public.stock_returns')).rows[0];
+const header = (await db.query('select * from public.stock_returns where id=$1',[id])).rows[0];
 assert.match(header.return_number,/^RET-\d{6,}$/);
 assert.equal(header.status,'in_transit'); assert.equal(header.received_at,null);
 assert.equal(header.from_branch_id,branch); assert.equal(header.to_branch_id,main);
 assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2',[main,p1])).rows[0].quantity_on_hand),100);
-assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2',[branch,p1])).rows[0].quantity_on_hand),10);
-const movements = (await db.query("select * from public.inventory_movements where reference_type='stock_return' order by product_id")).rows;
-assert.deepEqual(movements.map(row=>Number(row.quantity)),[-20,-18]);
-assert.ok(movements.every(row=>row.reference_id===id && row.branch_id===branch && row.movement_type==='return_out'));
+assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2',[branch,p1])).rows[0].quantity_on_hand),0);
+const leftover = (await db.query('select * from public.stock_returns where id<>$1',[id])).rows[0];
+assert.equal(leftover.notes, 'Leftover return at end of shift');
+assert.equal(Number((await db.query('select quantity_returned from public.stock_return_items where stock_return_id=$1 and product_id=$2',[leftover.id,p1])).rows[0].quantity_returned),10);
+const movements = (await db.query("select * from public.inventory_movements where reference_type='stock_return' order by product_id, quantity")).rows;
+assert.deepEqual(movements.map(row=>Number(row.quantity)),[-20,-10,-18]);
+assert.ok(movements.every(row=>
+  (row.reference_id===id || row.reference_id===leftover.id) &&
+  row.branch_id===branch &&
+  row.movement_type==='return_out'
+));
 assert.ok((await db.query('select * from public.stock_return_items')).rows.every(row=>row.quantity_received===null));
 await db.close();
 console.log('Return tests passed: inactive stock, validation, full rollback, idempotency, competing sale/return stock limits, branch isolation, permissions, source-only deduction and pending receipt.');

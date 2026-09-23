@@ -5,9 +5,8 @@ export const productVariantSchema = z.object({
   default_price: z
     .string()
     .trim()
-    .min(1, 'Variant price is required.')
-    .refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0, 'Enter a valid non-negative price.')
-    .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), 'Use no more than 2 decimal places.'),
+    .refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0), 'Enter a valid non-negative price.')
+    .refine((value) => value === '' || /^\d+(\.\d{1,2})?$/.test(value), 'Use no more than 2 decimal places.'),
   is_active: z.boolean(),
 });
 
@@ -24,9 +23,8 @@ export const productSchema = z
     selling_price: z
       .string()
       .trim()
-      .min(1, 'Selling price is required.')
-      .refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0, 'Enter a valid non-negative price.')
-      .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), 'Use no more than 2 decimal places.'),
+      .refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0), 'Enter a valid non-negative price.')
+      .refine((value) => value === '' || /^\d+(\.\d{1,2})?$/.test(value), 'Use no more than 2 decimal places.'),
     is_active: z.boolean(),
     pricingType: z.enum(['single', 'variants']),
     variants: z.array(productVariantSchema),

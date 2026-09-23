@@ -127,6 +127,15 @@ export function getThisWeekRangeManila(): { start: string; end: string } {
   return { start, end };
 }
 
+/** Today's calendar day in Asia/Manila: 00:00 through the start of tomorrow. */
+export function getTodayRangeManila(): { start: string; end: string } {
+  const { y, m, d } = manilaTodayParts();
+  return {
+    start: toStartOfDayManila(dateString(y, m, d))!,
+    end: toNextDayStartManila(dateString(y, m, d))!,
+  };
+}
+
 /** "This month so far" in Asia/Manila: from the 1st 00:00 through the end of today. */
 export function getThisMonthRangeManila(): { start: string; end: string } {
   const { y, m, d } = manilaTodayParts();

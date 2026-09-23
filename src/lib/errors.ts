@@ -22,6 +22,9 @@ export function getErrorMessage(error: unknown): string {
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
   if (message.includes('products_sku_unique_ci')) return 'That SKU is already in use.';
   if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
+  if (message.includes('become active only') || message.includes('opening stock is set')) {
+    return 'This product can become active only after Main sets opening stock.';
+  }
   if (message.includes('unauthorized') || message.includes('permission denied') || message.includes('owner access')) return 'You are not authorized to perform this action.';
   if (message.includes('inactive account') || message.includes('profile is inactive')) return 'This account is inactive. Contact the owner.';
   if (isNetworkError(message)) return 'Unable to connect. Check your internet connection and try again.';
@@ -229,6 +232,8 @@ export function getInventoryErrorMessage(error: unknown): string {
   ) {
     return 'The app is out of date with the server. Update the app or try again shortly.';
   }
+  if (message.includes('no leftover stock')) return 'There is no leftover stock to return.';
+  if (message.includes('too many leftover')) return 'There are too many leftover products to return at once.';
   if (message.includes('positive') || message.includes('zero or greater')) return 'Enter a valid quantity.';
   if (message.includes('unauthorized') || message.includes('permission') || message.includes('42501')) {
     return 'You are not authorized to perform this action.';

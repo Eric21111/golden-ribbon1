@@ -24,10 +24,10 @@ import {
 import type { ProductFormValues } from '@/features/products/productSchema';
 import { useBranches } from '@/hooks/useBranches';
 import { useBranchProducts, useConfigureBranchProducts } from '@/hooks/useBranchProducts';
+import { useInventory } from '@/hooks/useInventory';
 import { useConfigureProductVariants, useCreateProduct, useProducts, useUpdateProduct } from '@/hooks/useProducts';
 import { alertNotice } from '@/lib/confirmAction';
 import { getErrorMessage } from '@/lib/errors';
-import { formatMoney } from '@/lib/format';
 import type { Product } from '@/types/models';
 
 export default function ManagerProductListScreen() {
@@ -42,6 +42,11 @@ export default function ManagerProductListScreen() {
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
     [branches.data],
   );
+  const mainBranch = useMemo(
+    () => (branches.data ?? []).find((branch) => branch.is_main_branch) ?? null,
+    [branches.data],
+  );
+  const mainInventory = useInventory(mainBranch, false);
   const query = useProducts(search);
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct(editProduct?.id ?? '');
@@ -82,7 +87,7 @@ export default function ManagerProductListScreen() {
         name: values.name.trim(),
         sku: values.sku.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
-        selling_price: Number(values.selling_price),
+        selling_price: Number(values.selling_price || branchPriceDraft?.selling_price || 0),
         is_active: false,
       },
       {
@@ -127,7 +132,7 @@ export default function ManagerProductListScreen() {
         name: values.name,
         sku: values.sku,
         description: values.description?.trim() || null,
-        selling_price: Number(values.selling_price),
+        selling_price: Number(values.selling_price || editProduct?.selling_price || 0),
         is_active: values.is_active,
       },
       { onSuccess: () => setEditProduct(null) },
@@ -180,11 +185,7 @@ export default function ManagerProductListScreen() {
               renderItem={({ item }) => (
                 <ListRowCard
                   title={item.name}
-                  meta={
-                    <>
-                      {item.sku} · Base <Text style={styles.price}>{formatMoney(item.selling_price)}</Text>
-                    </>
-                  }
+                  meta={item.is_active ? item.sku : `${item.sku} · Inactive until opening stock`}
                   trailing={
                     <ManagerBadge
                       label={item.is_active ? 'Active' : 'Inactive'}
@@ -252,6 +253,11 @@ export default function ManagerProductListScreen() {
             <ProductForm
               key={editProduct.id}
               showActiveToggle
+              canActivate={Boolean(
+                mainInventory.data?.some(
+                  (row) => row.product.id === editProduct.id && (row.quantity_on_hand > 0 || row.updated_at != null),
+                ),
+              )}
               branchOptions={branchOptions}
               onBranchChange={setEditBranchId}
               resolveBranchPrice={(branchId) => {

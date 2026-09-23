@@ -100,21 +100,19 @@ export function BranchForm({
           />
         )} />
       )}
-      <Controller control={control} name="is_active" render={({ field }) => (
-        <SwitchField
-          label="Active"
-          description={
-            protectMainBranch
-              ? 'The Main Branch cannot be deactivated.'
-              : 'Inactive branches remain available for historical records.'
-          }
-          value={field.value}
-          onValueChange={protectMainBranch ? () => undefined : field.onChange}
-          labelStyle={styles.fieldLabel}
-          descriptionStyle={styles.switchDescription}
-          activeTrackColor={managerColors.royalBlue}
-        />
-      )} />
+      {protectMainBranch || isMainBranch ? null : (
+        <Controller control={control} name="is_active" render={({ field }) => (
+          <SwitchField
+            label="Active"
+            description="Inactive branches remain available for historical records."
+            value={field.value}
+            onValueChange={field.onChange}
+            labelStyle={styles.fieldLabel}
+            descriptionStyle={styles.switchDescription}
+            activeTrackColor={managerColors.royalBlue}
+          />
+        )} />
+      )}
       {isMainBranch ? null : (
         <View style={styles.receivingModeBlock}>
           <Text style={[styles.label, styles.fieldLabel]}>Receiving mode</Text>

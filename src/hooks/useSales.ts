@@ -8,6 +8,7 @@ import {
   getOwnerDailyProductSummary,
   getOwnerDashboardMetrics,
   getSale,
+  listBranchSalesLog,
   reportProductSales,
   reportSalesByBranch,
 } from '@/services/saleService';
@@ -29,6 +30,19 @@ export function useSalesByBranch(
     queryKey: queryKeys.salesByBranch(rangeType, startDate, endDate),
     queryFn: () => reportSalesByBranch(rangeType, startDate, endDate),
     enabled: isReportRangeReady(rangeType, startDate, endDate),
+  });
+}
+
+export function useBranchSalesLog(
+  branchId: string,
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string,
+) {
+  return useQuery({
+    queryKey: queryKeys.branchSalesLog(branchId, rangeType, startDate, endDate),
+    queryFn: () => listBranchSalesLog(branchId, rangeType, startDate, endDate),
+    enabled: Boolean(branchId) && isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 

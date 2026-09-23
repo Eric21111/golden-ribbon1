@@ -58,6 +58,10 @@
     "test:default-variants": "node tests/milestone12_5_default_variants_and_carried.mjs",
     "test:no-duplicate-product": "node tests/milestone12_6_branch_price_no_duplicate_product.mjs",
     "test:opening-stock": "node tests/repeat_opening_stock.mjs",
+    "test:leftover": "node tests/leftover_return_and_auto_close.mjs",
+    "test:sales-log": "node tests/sales_by_branch_log.mjs",
+    "test:branch-performance": "node tests/branch_performance_return_badge.mjs",
+    "test:product-active": "node tests/product_active_after_opening.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

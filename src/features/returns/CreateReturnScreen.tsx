@@ -34,7 +34,7 @@ export default function CreateReturnScreen() {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const selected =
-    saved?.request.p_items ??
+    (saved?.request && 'p_items' in saved.request ? saved.request.p_items : undefined) ??
     Object.entries(quantities)
       .filter(([, value]) => value !== '' && value !== '0')
       .map(([product_id, value]) => ({ product_id, quantity_returned: Number(value) }));
@@ -66,11 +66,14 @@ export default function CreateReturnScreen() {
     lock.current = true;
     setBusy(true);
     setError('');
-    const request = saved?.request ?? {
-      p_items: selected,
-      p_notes: notes.trim() || null,
-      p_idempotency_key: makeIdempotencyKey('return'),
-    };
+    const request =
+      saved?.request && 'p_items' in saved.request
+        ? saved.request
+        : {
+            p_items: selected,
+            p_notes: notes.trim() || null,
+            p_idempotency_key: makeIdempotencyKey('return'),
+          };
     try {
       useReturnStore.getState().save(user, { request });
       const id = await createReturn(request);

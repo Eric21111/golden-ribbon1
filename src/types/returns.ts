@@ -70,6 +70,11 @@ export type ReturnRequest = {
   p_idempotency_key: string;
 };
 
+export type LeftoverReturnRequest = {
+  p_notes: string | null;
+  p_idempotency_key: string;
+};
+
 export type ReceiveReturnInput = {
   returnId: string;
   items: Array<{ stock_return_item_id: string; quantity_received: number }>;
