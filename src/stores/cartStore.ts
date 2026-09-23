@@ -13,6 +13,7 @@ interface CartState {
   /** Stock is shared across a product's variant lines: quantity_on_hand caps their combined total. */
   addProduct: (item: CartProduct, variant?: PosVariant | null) => void;
   decreaseProduct: (productId: string, variantId?: string | null) => void;
+  setProductQuantity: (item: CartProduct, quantity: number, variant?: PosVariant | null) => void;
   applyLivePrices: (prices: Record<string, number>) => {
     changed: boolean;
     previousTotalCents: number;
@@ -72,6 +73,42 @@ export const useCartStore = create<CartState>((set, get) => ({
       items: state.items.map((item) => (item.product_id === productId && item.variant_id === variantId)
         ? { ...item, quantity, subtotal: quantity * toCents(item.unit_price) / 100 }
         : item),
+    };
+  }),
+  setProductQuantity: ({ product, quantity_on_hand }, quantity, variant = null) => set((state) => {
+    if (useCheckoutStore.getState().request) return state;
+    if (!Number.isFinite(quantity)) return state;
+    const variantId = variant?.id ?? null;
+    const nextQuantity = Math.max(0, Math.min(Math.floor(quantity), 999999));
+    const otherQuantity = state.items
+      .filter((item) => item.product_id === product.id && item.variant_id !== variantId)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    const capped = Math.min(nextQuantity, Math.max(0, quantity_on_hand - otherQuantity));
+    const existing = state.items.find(
+      (item) => item.product_id === product.id && item.variant_id === variantId,
+    );
+    if (capped <= 0) {
+      return {
+        ...state,
+        items: state.items.filter((item) => !(item.product_id === product.id && item.variant_id === variantId)),
+      };
+    }
+    const unitPrice = variant ? variant.selling_price : product.selling_price;
+    const nextItem: CartItem = {
+      product_id: product.id,
+      variant_id: variantId,
+      product_name: product.name,
+      variant_name: variant?.name ?? null,
+      sku: product.sku,
+      quantity: capped,
+      unit_price: unitPrice,
+      subtotal: (capped * toCents(unitPrice)) / 100,
+    };
+    return {
+      ...state,
+      items: existing
+        ? state.items.map((item) => (item.product_id === product.id && item.variant_id === variantId ? nextItem : item))
+        : [...state.items, nextItem],
     };
   }),
   applyLivePrices: (prices) => {

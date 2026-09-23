@@ -7,6 +7,7 @@ import {
   listCashierPendingTransfers,
   listTransfers,
   receiveTransfer,
+  reportShipmentIssue,
   sendTransfer,
 } from '@/services/transferService';
 import type { ReceiveTransferInput, SendTransferInput, TransferStatus } from '@/types/models';
@@ -56,17 +57,35 @@ export function useCashierPendingTransfers(userId = '') {
   });
 }
 
+function invalidateCashierShipment(client: ReturnType<typeof useQueryClient>, transferId: string) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: ['cashier-pending-transfers'] }),
+    client.invalidateQueries({ queryKey: ['inventory'] }),
+    client.invalidateQueries({ queryKey: ['transfers'] }),
+    client.invalidateQueries({ queryKey: queryKeys.transfer(transferId) }),
+    client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
+    client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
+    client.invalidateQueries({ queryKey: ['reports', 'transfer-discrepancies'] }),
+  ]);
+}
+
 export function useConfirmShipmentArrival() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ transferId, idempotencyKey }: { transferId: string; idempotencyKey: string }) =>
       confirmShipmentArrival(transferId, idempotencyKey),
     onSuccess: async (_status, { transferId }) => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['cashier-pending-transfers'] }),
-        client.invalidateQueries({ queryKey: ['inventory'] }),
-        client.invalidateQueries({ queryKey: queryKeys.transfer(transferId) }),
-      ]);
+      await invalidateCashierShipment(client, transferId);
+    },
+  });
+}
+
+export function useReportShipmentIssue() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ReceiveTransferInput) => reportShipmentIssue(input),
+    onSuccess: async (_status, input) => {
+      await invalidateCashierShipment(client, input.transferId);
     },
   });
 }

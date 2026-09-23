@@ -63,8 +63,23 @@ export async function listCashierPendingTransfers(): Promise<CashierPendingTrans
   if (error) throw error;
   return ((data ?? []) as CashierPendingTransfer[]).map((row) => ({
     ...row,
-    items: (row.items ?? []).map((item) => ({ ...item, quantity_sent: Number(item.quantity_sent) })),
+    items: (row.items ?? []).map((item) => ({
+      ...item,
+      stock_transfer_item_id: String(item.stock_transfer_item_id),
+      quantity_sent: Number(item.quantity_sent),
+    })),
   }));
+}
+
+export async function reportShipmentIssue(input: ReceiveTransferInput): Promise<TransferStatus> {
+  const { data, error } = await supabase.rpc('report_shipment_issue', {
+    p_transfer_id: input.transferId,
+    p_items: input.items,
+    p_notes: input.notes ?? '',
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function confirmShipmentArrival(

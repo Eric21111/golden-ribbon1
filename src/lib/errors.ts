@@ -187,6 +187,12 @@ export function getInventoryErrorMessage(error: unknown): string {
   if (message.includes('destination branch')) return 'The destination branch is inactive or invalid.';
   if (message.includes('product is missing or inactive')) return 'A selected product is inactive or unavailable.';
   if (message.includes('opening stock has already')) return 'Opening stock was already initialized for a selected product.';
+  if (message.includes('describe what is wrong')) {
+    return 'Describe what is wrong with the shipment before confirming the issue.';
+  }
+  if (message.includes('different quantity than sent')) {
+    return 'Enter a quantity that differs from the sent amount, or confirm the shipment arrived as sent.';
+  }
   if (message.includes('cashier confirmation') || message.includes('cashier shipment confirmation')) {
     return 'This branch uses cashier confirmation. Open Incoming and tap Shipment Arrived.';
   }

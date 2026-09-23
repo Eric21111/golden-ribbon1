@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { managerColors } from '@/components/dashboard/theme';
@@ -13,6 +14,7 @@ type PosOrderPaneProps = {
   stockByProductId: Map<string, number>;
   onIncrease: (productId: string, variantId: string | null) => void;
   onDecrease: (productId: string, variantId: string | null) => void;
+  onQuantityChange: (productId: string, variantId: string | null, quantity: number) => void;
   onClear: () => void;
   onCheckout: () => void;
 };
@@ -22,6 +24,7 @@ export function PosOrderPane({
   stockByProductId,
   onIncrease,
   onDecrease,
+  onQuantityChange,
   onClear,
   onCheckout,
 }: PosOrderPaneProps) {
@@ -45,46 +48,21 @@ export function PosOrderPane({
         ) : (
           items.map((item) => {
             const stock = stockByProductId.get(item.product_id) ?? 0;
+            const otherQuantity = (totalByProduct.get(item.product_id) ?? 0) - item.quantity;
+            const maxQuantity = Math.max(0, stock - otherQuantity);
             const atLimit = (totalByProduct.get(item.product_id) ?? 0) >= stock;
             const label = item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name;
             return (
-              <View key={cartLineKey(item.product_id, item.variant_id)} style={styles.line}>
-                <View style={styles.lineCopy}>
-                  <Text style={styles.name} numberOfLines={2}>
-                    {label}
-                  </Text>
-                  <Text style={styles.calc}>
-                    {item.quantity} × {formatMoney(item.unit_price)}
-                  </Text>
-                </View>
-                <View style={styles.lineActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove one ${label}`}
-                    onPress={() => onDecrease(item.product_id, item.variant_id)}
-                    style={({ pressed }) => [styles.stepper, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.stepperText}>−</Text>
-                  </Pressable>
-                  <Text style={styles.qty}>{item.quantity}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Add one ${label}`}
-                    disabled={atLimit}
-                    onPress={() => onIncrease(item.product_id, item.variant_id)}
-                    style={({ pressed }) => [
-                      styles.stepper,
-                      atLimit && styles.disabled,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text style={styles.stepperText}>+</Text>
-                  </Pressable>
-                  <Text style={styles.subtotal}>
-                    {formatMoney((toCents(item.unit_price) * item.quantity) / 100)}
-                  </Text>
-                </View>
-              </View>
+              <OrderLine
+                key={cartLineKey(item.product_id, item.variant_id)}
+                item={item}
+                label={label}
+                atLimit={atLimit}
+                maxQuantity={maxQuantity}
+                onIncrease={() => onIncrease(item.product_id, item.variant_id)}
+                onDecrease={() => onDecrease(item.product_id, item.variant_id)}
+                onQuantityChange={(quantity) => onQuantityChange(item.product_id, item.variant_id, quantity)}
+              />
             );
           })
         )}
@@ -113,6 +91,94 @@ export function PosOrderPane({
             }
           />
         ) : null}
+      </View>
+    </View>
+  );
+}
+
+function OrderLine({
+  item,
+  label,
+  atLimit,
+  maxQuantity,
+  onIncrease,
+  onDecrease,
+  onQuantityChange,
+}: {
+  item: CartItem;
+  label: string;
+  atLimit: boolean;
+  maxQuantity: number;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  onQuantityChange: (quantity: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(item.quantity));
+
+  useEffect(() => {
+    setDraft(String(item.quantity));
+  }, [item.quantity]);
+
+  const commit = (raw: string) => {
+    if (raw === '') {
+      onQuantityChange(0);
+      return;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    onQuantityChange(Math.min(Math.max(0, parsed), maxQuantity));
+  };
+
+  return (
+    <View style={styles.line}>
+      <View style={styles.lineCopy}>
+        <Text style={styles.name} numberOfLines={2}>
+          {label}
+        </Text>
+        <Text style={styles.calc}>
+          {item.quantity} × {formatMoney(item.unit_price)}
+        </Text>
+      </View>
+      <View style={styles.lineActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove one ${label}`}
+          onPress={onDecrease}
+          style={({ pressed }) => [styles.stepper, pressed && styles.pressed]}
+        >
+          <Text style={styles.stepperText}>−</Text>
+        </Pressable>
+        <TextInput
+          accessibilityLabel={`${label} quantity`}
+          keyboardType="number-pad"
+          value={draft}
+          maxLength={6}
+          selectTextOnFocus
+          onChangeText={(value) => {
+            if (value === '' || /^\d{1,6}$/.test(value)) {
+              setDraft(value);
+              if (value !== '') commit(value);
+            }
+          }}
+          onBlur={() => commit(draft)}
+          style={styles.qtyInput}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Add one ${label}`}
+          disabled={atLimit}
+          onPress={onIncrease}
+          style={({ pressed }) => [
+            styles.stepper,
+            atLimit && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.stepperText}>+</Text>
+        </Pressable>
+        <Text style={styles.subtotal}>
+          {formatMoney((toCents(item.unit_price) * item.quantity) / 100)}
+        </Text>
       </View>
     </View>
   );
@@ -164,7 +230,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepperText: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 19 },
-  qty: { minWidth: 22, textAlign: 'center', color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  qtyInput: {
+    minWidth: 36,
+    height: 32,
+    textAlign: 'center',
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    paddingVertical: 0,
+  },
   subtotal: {
     marginLeft: 'auto',
     color: managerColors.ink,

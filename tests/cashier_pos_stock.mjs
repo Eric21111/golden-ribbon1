@@ -64,6 +64,25 @@ assert.match(source, /listCashierPosInventory/);
 assert.match(source, /invalidateQueries/);
 assert.doesNotMatch(source, /useInventory\(profile\?\.branch/);
 
+const posSource = readFileSync('app/(cashier)/cashier/pos.tsx', 'utf8');
+assert.match(posSource, /setProductQuantity/);
+assert.match(posSource, /onQuantityChange/);
+
+const paymentSource = readFileSync('app/(cashier)/cashier/payment.tsx', 'utf8');
+assert.doesNotMatch(paymentSource, /Money Given/);
+assert.doesNotMatch(paymentSource, /QUICK_CASH/);
+assert.match(paymentSource, /amountPaid: centsDecimal\(total\)/);
+
+const incomingSource = readFileSync('app/(cashier)/cashier/incoming.tsx', 'utf8');
+assert.match(incomingSource, /useReportShipmentIssue/);
+assert.match(incomingSource, /Report issue/);
+assert.match(incomingSource, /What is wrong/);
+
+const ownerHome = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
+assert.match(ownerHome, /transfer_discrepancies_count/);
+assert.match(ownerHome, /return_discrepancies_count/);
+assert.match(ownerHome, /Quantity discrepancy reported/);
+
 await asUser(cashier, async () => {
   const visible = (await db.query('select product_id, quantity_on_hand from public.branch_inventory')).rows;
   assert.equal(visible.length, 0, 'cashier RLS hides branch_inventory before an open shift');

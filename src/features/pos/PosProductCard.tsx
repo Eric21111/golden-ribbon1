@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { managerColors } from '@/components/dashboard/theme';
@@ -11,6 +12,7 @@ interface PosProductCardProps {
   quantityByVariant: Map<string | null, number>;
   onIncrease: (variantId: string | null) => void;
   onDecrease: (variantId: string | null) => void;
+  onQuantityChange: (variantId: string | null, quantity: number) => void;
   /** Tighter card for tablet product grids. */
   compact?: boolean;
 }
@@ -22,8 +24,10 @@ function Stepper({
   outOfStock,
   compact,
   label,
+  maxQuantity,
   onIncrease,
   onDecrease,
+  onQuantityChange,
 }: {
   quantity: number;
   atMin: boolean;
@@ -31,9 +35,27 @@ function Stepper({
   outOfStock: boolean;
   compact: boolean;
   label: string;
+  maxQuantity: number;
   onIncrease: () => void;
   onDecrease: () => void;
+  onQuantityChange: (quantity: number) => void;
 }) {
+  const [draft, setDraft] = useState(quantity > 0 ? String(quantity) : '');
+
+  useEffect(() => {
+    setDraft(quantity > 0 ? String(quantity) : '');
+  }, [quantity]);
+
+  const commit = (raw: string) => {
+    if (raw === '') {
+      onQuantityChange(0);
+      return;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    onQuantityChange(Math.min(Math.max(0, parsed), maxQuantity));
+  };
+
   return (
     <View style={styles.stepperPill}>
       <Pressable
@@ -50,9 +72,24 @@ function Stepper({
       >
         <Text style={[styles.stepperSymbol, atMin && styles.stepperSymbolDisabled]}>−</Text>
       </Pressable>
-      <Text accessibilityLabel={`${quantity} selected`} style={styles.quantity}>
-        {quantity}
-      </Text>
+      <TextInput
+        accessibilityLabel={`${label} quantity`}
+        keyboardType="number-pad"
+        value={draft}
+        placeholder="0"
+        placeholderTextColor={managerColors.subtext}
+        maxLength={6}
+        selectTextOnFocus
+        editable={!outOfStock}
+        onChangeText={(value) => {
+          if (value === '' || /^\d{1,6}$/.test(value)) {
+            setDraft(value);
+            if (value !== '') commit(value);
+          }
+        }}
+        onBlur={() => commit(draft)}
+        style={[styles.quantityInput, compact && styles.quantityInputCompact]}
+      />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Add one ${label}`}
@@ -76,6 +113,7 @@ export function PosProductCard({
   quantityByVariant,
   onIncrease,
   onDecrease,
+  onQuantityChange,
   compact = false,
 }: PosProductCardProps) {
   const outOfStock = item.quantity_on_hand === 0;
@@ -109,6 +147,7 @@ export function PosProductCard({
         <View style={styles.variantList}>
           {variants.map((variant: PosVariant) => {
             const quantity = quantityByVariant.get(variant.id) ?? 0;
+            const otherQuantity = totalQuantity - quantity;
             return (
               <View key={variant.id} style={styles.variantRow}>
                 <View style={styles.variantCopy}>
@@ -122,8 +161,10 @@ export function PosProductCard({
                   outOfStock={outOfStock}
                   compact={compact}
                   label={`${item.product.name} (${variant.name})`}
+                  maxQuantity={Math.max(0, item.quantity_on_hand - otherQuantity)}
                   onIncrease={() => onIncrease(variant.id)}
                   onDecrease={() => onDecrease(variant.id)}
+                  onQuantityChange={(next) => onQuantityChange(variant.id, next)}
                 />
               </View>
             );
@@ -138,8 +179,10 @@ export function PosProductCard({
             outOfStock={outOfStock}
             compact={compact}
             label={item.product.name}
+            maxQuantity={item.quantity_on_hand}
             onIncrease={() => onIncrease(null)}
             onDecrease={() => onDecrease(null)}
+            onQuantityChange={(next) => onQuantityChange(null, next)}
           />
         </View>
       )}
@@ -209,12 +252,19 @@ const styles = StyleSheet.create({
   stepperButtonPressed: { backgroundColor: '#E4E9F2' },
   stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 20 },
   stepperSymbolDisabled: { color: managerColors.cardBorder },
-  quantity: {
-    minWidth: 32,
+  quantityInput: {
+    width: 44,
+    height: 40,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: 'transparent',
     color: managerColors.ink,
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
     textAlign: 'center',
+    paddingVertical: 0,
   },
+  quantityInputCompact: { width: 40 },
   limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'right' },
 });

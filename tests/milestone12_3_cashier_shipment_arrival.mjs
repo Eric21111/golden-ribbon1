@@ -169,6 +169,7 @@ await asUser(cashier2, async () => {
   const [row] = pending;
   const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
   assert.equal(items.length, 1);
+  assert.ok(items[0].stock_transfer_item_id, 'pending items include the transfer line id');
   assert.equal(Number(items[0].quantity_sent), 25, 'sent items/quantities are shown read-only');
 
   const status = (
@@ -279,7 +280,167 @@ await asUser(owner, async () => {
   );
 });
 
+// ----------------------------------------------------------------------------
+// Test 6: report_shipment_issue credits only counted qty and notifies owner.
+// ----------------------------------------------------------------------------
+
+let issueShipment;
+await asUser(mainManager, async () => {
+  issueShipment = (
+    await db.query(
+      `select public.send_stock_transfer($1,'[{"product_id":"${product}","quantity_sent":15,"destination_price":50}]'::jsonb,null,$2) id`,
+      [branch2, 'm123-issue-send-key0000001'],
+    )
+  ).rows[0].id;
+});
+
+const issueItems = (await db.query(
+  'select id, quantity_sent from public.stock_transfer_items where stock_transfer_id=$1',
+  [issueShipment],
+)).rows;
+const issuePayload = JSON.stringify(
+  issueItems.map((row) => ({ stock_transfer_item_id: row.id, quantity_received: 9 })),
+);
+const matchingPayload = JSON.stringify(
+  issueItems.map((row) => ({ stock_transfer_item_id: row.id, quantity_received: Number(row.quantity_sent) })),
+);
+
+await asUser(manager1, async () => {
+  await assert.rejects(
+    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
+      issueShipment,
+      issuePayload,
+      'Short by six pieces',
+      'm123-issue-manager-key0001',
+    ]),
+    /cashier access/,
+  );
+});
+
+await asUser(cashier3, async () => {
+  await assert.rejects(
+    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
+      issueShipment,
+      issuePayload,
+      'Short by six pieces',
+      'm123-issue-wrongbranch-key',
+    ]),
+    /belongs to another branch/,
+  );
+});
+
+await asUser(cashier2, async () => {
+  await assert.rejects(
+    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
+      issueShipment,
+      matchingPayload,
+      'Looks complete',
+      'm123-issue-sameqty-key0001',
+    ]),
+    /different quantity than sent/,
+  );
+  await assert.rejects(
+    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
+      issueShipment,
+      issuePayload,
+      'no',
+      'm123-issue-shortnote-key01',
+    ]),
+    /describe what is wrong/i,
+  );
+
+  const status = (
+    await db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4) status', [
+      issueShipment,
+      issuePayload,
+      'Box arrived short by six pieces',
+      'm123-issue-recv-key0000001',
+    ])
+  ).rows[0].status;
+  assert.equal(status, 'received_with_discrepancy');
+
+  const replay = (
+    await db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4) status', [
+      issueShipment,
+      issuePayload,
+      'Box arrived short by six pieces',
+      'm123-issue-recv-key0000001',
+    ])
+  ).rows[0].status;
+  assert.equal(replay, 'received_with_discrepancy');
+
+  await assert.rejects(
+    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
+      issueShipment,
+      issuePayload,
+      'Box arrived short by six pieces',
+      'm123-issue-recv-key0000002',
+    ]),
+    /already been received|not pending receipt/,
+  );
+  await assert.rejects(
+    db.query('select public.confirm_shipment_arrival($1,$2)', [issueShipment, 'm123-issue-arrival-after01']),
+    /already been received|not pending receipt/,
+  );
+
+  const pending = (await db.query('select * from public.list_cashier_pending_transfers()')).rows;
+  assert.equal(pending.length, 0, 'a reported shipment leaves the incoming list');
+});
+
+assert.equal(
+  Number((await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2', [branch2, product])).rows[0].quantity_on_hand),
+  44,
+  'report_shipment_issue credits only the counted quantity (35 + 9)',
+);
+assert.equal(
+  Number(
+    (
+      await db.query(
+        `select quantity from public.inventory_movements where branch_id=$1 and product_id=$2 and movement_type='transfer_in' and reference_id=$3`,
+        [branch2, product, issueShipment],
+      )
+    ).rows[0].quantity,
+  ),
+  9,
+  'transfer_in movement uses counted quantity, not quantity sent',
+);
+{
+  const disc = (await db.query(
+    'select quantity_expected, quantity_received, difference, discrepancy_type, notes from public.transfer_discrepancies where stock_transfer_id=$1',
+    [issueShipment],
+  )).rows;
+  assert.equal(disc.length, 1);
+  assert.equal(Number(disc[0].quantity_expected), 15);
+  assert.equal(Number(disc[0].quantity_received), 9);
+  assert.equal(Number(disc[0].difference), 6);
+  assert.equal(disc[0].discrepancy_type, 'missing');
+  assert.match(disc[0].notes, /short by six/i);
+}
+
+await asUser(owner, async () => {
+  const metrics = (await db.query('select public.get_owner_dashboard_metrics() result')).rows[0].result;
+  const parsed = typeof metrics === 'string' ? JSON.parse(metrics) : metrics;
+  assert.equal(Number(parsed.transfer_discrepancies_count), 1, 'owner dashboard counts the reported shipment issue');
+  assert.equal(Number(parsed.return_discrepancies_count), 0);
+
+  const report = (await db.query("select public.report_transfer_discrepancies(null, null, 'all_time') result")).rows[0].result;
+  const rows = typeof report === 'string' ? JSON.parse(report) : report;
+  assert.equal(rows.length, 1);
+  assert.equal(Number(rows[0].quantity_sent), 15);
+  assert.equal(Number(rows[0].quantity_received), 9);
+  assert.equal(rows[0].discrepancy_type, 'missing');
+
+  const result = (await db.query('select public.report_inventory_reconciliation() result')).rows[0].result;
+  const reconciliation = typeof result === 'string' ? JSON.parse(result) : result;
+  assert.ok(
+    reconciliation.every((row) => Number(row.variance) === 0),
+    'short cashier receive still keeps reconciliation at zero variance',
+  );
+  const destination = reconciliation.find((row) => row.branch_id === branch2 && row.product_id === product);
+  assert.equal(Number(destination.transfer_missing_qty), 6);
+});
+
 await db.close();
 console.log(
-  'Milestone 12.3 tests passed: counted mode unchanged, cashier_confirm single-credit arrival, wrong-branch rejection, duplicate-confirmation rejection, and reconciliation.',
+  'Milestone 12.3 tests passed: counted mode unchanged, cashier_confirm single-credit arrival, wrong-branch rejection, duplicate-confirmation rejection, reconciliation, and report_shipment_issue.',
 );

@@ -330,11 +330,26 @@ export type Database = {
           from_branch_name: string;
           sent_at: string | null;
           notes: string | null;
-          items: Array<{ product_id: string; product_name: string; product_sku: string; quantity_sent: number }>;
+          items: Array<{
+            stock_transfer_item_id: string;
+            product_id: string;
+            product_name: string;
+            product_sku: string;
+            quantity_sent: number;
+          }>;
         }>;
       };
       confirm_shipment_arrival: {
         Args: { p_transfer_id: string; p_idempotency_key: string };
+        Returns: TransferStatus;
+      };
+      report_shipment_issue: {
+        Args: {
+          p_transfer_id: string;
+          p_items: Array<{ stock_transfer_item_id: string; quantity_received: number }>;
+          p_notes: string;
+          p_idempotency_key: string;
+        };
         Returns: TransferStatus;
       };
       receive_stock_return: {

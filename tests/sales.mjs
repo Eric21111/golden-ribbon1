@@ -15,7 +15,7 @@ assert.equal(refreshedCart.changed, true);
 assert.equal(refreshedCart.items[0].unit_price, 90);
 assert.equal(refreshedCart.items[0].subtotal, 90);
 assert.equal(cartTotalCents(refreshedCart.items), 9000);
-assert.ok(toCents('80') < cartTotalCents(refreshedCart.items), 'Money Given must use the refreshed ₱90 total');
+assert.ok(toCents('80') < cartTotalCents(refreshedCart.items), 'Checkout must use the refreshed ₱90 total');
 assert.equal(toCents('90'), cartTotalCents(refreshedCart.items));
 assert.equal(applyLiveCartPrices(refreshedCart.items, { [cartLineKey('prod-1', null)]: 90 }).changed, false);
 const db = new PGlite();

@@ -42,6 +42,7 @@ export default function CashierPosScreen() {
   const beginShift = useCartStore((state) => state.beginShift);
   const addProduct = useCartStore((state) => state.addProduct);
   const decreaseProduct = useCartStore((state) => state.decreaseProduct);
+  const setProductQuantity = useCartStore((state) => state.setProductQuantity);
   const clearCart = useCartStore((state) => state.clearCart);
 
   useEffect(() => {
@@ -155,6 +156,10 @@ export default function CashierPosScreen() {
               addProduct(item, variant);
             }}
             onDecrease={(variantId) => decreaseProduct(item.product.id, variantId)}
+            onQuantityChange={(variantId, quantity) => {
+              const variant = variantId ? item.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
+              setProductQuantity(item, quantity, variant);
+            }}
           />
         </View>
       )}
@@ -222,6 +227,14 @@ export default function CashierPosScreen() {
               stockByProductId={stockByProductId}
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
+              onQuantityChange={(productId, variantId, quantity) => {
+                const row = inventoryById.get(productId);
+                if (!row) return;
+                const variant = variantId
+                  ? row.variants?.find((candidate) => candidate.id === variantId) ?? null
+                  : null;
+                setProductQuantity(row, quantity, variant);
+              }}
               onClear={clearCart}
               onCheckout={() => router.push('/cashier/payment')}
             />

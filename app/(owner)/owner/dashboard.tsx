@@ -79,6 +79,38 @@ export default function OwnerDashboard() {
           />
         ) : (
           <View style={styles.content}>
+            {metrics && (metrics.transfer_discrepancies_count > 0 || metrics.return_discrepancies_count > 0) ? (
+              <View style={styles.alertCard}>
+                <Text style={styles.alertTitle}>Quantity discrepancy reported</Text>
+                <Text style={styles.alertBody}>
+                  {[
+                    metrics.transfer_discrepancies_count > 0
+                      ? `${metrics.transfer_discrepancies_count} transfer issue${metrics.transfer_discrepancies_count === 1 ? '' : 's'}`
+                      : null,
+                    metrics.return_discrepancies_count > 0
+                      ? `${metrics.return_discrepancies_count} return issue${metrics.return_discrepancies_count === 1 ? '' : 's'}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  . Only the counted quantity was added to inventory.
+                </Text>
+                <ManagerActionButton
+                  label="Review discrepancies"
+                  icon="alert-circle-outline"
+                  onPress={() =>
+                    router.push(
+                      (metrics.transfer_discrepancies_count > 0 && metrics.return_discrepancies_count > 0
+                        ? '/owner/reports/discrepancies'
+                        : metrics.transfer_discrepancies_count > 0
+                          ? '/owner/reports/transfer-discrepancies'
+                          : '/owner/reports/return-discrepancies') as never,
+                    )
+                  }
+                />
+              </View>
+            ) : null}
+
             {archive?.reminder_visible ? (
               <View style={styles.reminderCard}>
                 <Text style={styles.reminderTitle}>Data Archive Due</Text>
@@ -269,6 +301,17 @@ const styles = StyleSheet.create({
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
   revenue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  alertCard: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderLeftWidth: 3,
+    borderLeftColor: '#B91C1C',
+    borderRadius: 16,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  alertTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  alertBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   reminderCard: {
     backgroundColor: '#FFFBEF',
     borderColor: '#F1DFA8',
