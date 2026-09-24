@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { formatCatalogPrice } from '@/lib/format';
 import { cartLineKey } from '@/lib/money';
 import type { Database } from '@/types/database';
 import type { Product, ProductInput, ProductVariant } from '@/types/models';
@@ -87,7 +88,11 @@ export async function configureProductVariants(
 ): Promise<void> {
   const { error } = await supabase.rpc('configure_product_variants', {
     p_product_id: productId,
-    p_variants: variants,
+    p_variants: variants.map((variant) => ({
+      name: variant.name,
+      default_price: formatCatalogPrice(variant.default_price),
+      is_active: variant.is_active,
+    })),
   });
   if (error) throw error;
 }

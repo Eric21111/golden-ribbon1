@@ -294,6 +294,12 @@ export type BranchSalesReportItem = {
   total_sales: number;
 };
 
+export type BranchDailySalesItem = {
+  business_date: string;
+  transaction_count: number;
+  total_sales: number;
+};
+
 export type ProductSalesReportItem = {
   product_id: string;
   product_name: string;

@@ -107,8 +107,10 @@ export default function CashierPosScreen() {
   const activeSheetItem = sheetItem ? inventoryById.get(sheetItem.product.id) ?? sheetItem : null;
 
   const addFromSheet = (variant: PosVariant | null, quantity: number) => {
-    if (!activeSheetItem) return;
-    for (let i = 0; i < quantity; i += 1) addProduct(activeSheetItem, variant);
+    if (!activeSheetItem || quantity <= 0) return;
+    const variantId = variant?.id ?? null;
+    const current = quantitiesByProduct.get(activeSheetItem.product.id)?.get(variantId) ?? 0;
+    setProductQuantity(activeSheetItem, current + quantity, variant);
   };
 
   if (shiftQuery.isLoading || inventory.isLoading) {

@@ -1,3 +1,4 @@
+import { formatCatalogPrice } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import type { BranchProduct, BranchProductVariant } from '@/types/models';
 
@@ -27,7 +28,10 @@ export async function configureBranchProducts(
 ): Promise<void> {
   const { error } = await supabase.rpc('configure_branch_products', {
     p_branch_id: branchId,
-    p_items: items,
+    p_items: items.map((item) => ({
+      ...item,
+      selling_price: formatCatalogPrice(item.selling_price),
+    })),
   });
   if (error) throw error;
 }
@@ -57,7 +61,10 @@ export async function configureBranchProductVariants(
   const { error } = await supabase.rpc('configure_branch_product_variants', {
     p_branch_id: branchId,
     p_product_id: productId,
-    p_variants: variants,
+    p_variants: variants.map((variant) => ({
+      ...variant,
+      selling_price: formatCatalogPrice(variant.selling_price),
+    })),
   });
   if (error) throw error;
 }

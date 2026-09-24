@@ -20,6 +20,7 @@ import type {
   TransferStatus,
   UserRole,
   ShiftSummary,
+  BranchDailySalesItem,
   BranchSalesReportItem,
   ProductSalesReportItem,
   OwnerDashboardMetrics,
@@ -230,7 +231,7 @@ export type Database = {
       configure_branch_products: {
         Args: {
           p_branch_id: string;
-          p_items: Array<{ product_id: string; selling_price: number; is_active: boolean }>;
+          p_items: Array<{ product_id: string; selling_price: number | string; is_active: boolean }>;
         };
         Returns: undefined;
       };
@@ -246,14 +247,14 @@ export type Database = {
         Args: {
           p_branch_id: string;
           p_product_id: string;
-          p_variants: Array<{ name: string; selling_price: number; is_active: boolean }>;
+          p_variants: Array<{ name: string; selling_price: number | string; is_active: boolean }>;
         };
         Returns: undefined;
       };
       configure_product_variants: {
         Args: {
           p_product_id: string;
-          p_variants: Array<{ name: string; default_price: number; is_active: boolean }>;
+          p_variants: Array<{ name: string; default_price: number | string; is_active: boolean }>;
         };
         Returns: undefined;
       };
@@ -299,6 +300,15 @@ export type Database = {
       report_sales_by_branch: {
         Args: { p_range_type?: string; p_start_date?: string | null; p_end_date?: string | null };
         Returns: BranchSalesReportItem[];
+      };
+      report_branch_daily_sales: {
+        Args: {
+          p_branch_id: string;
+          p_range_type?: string;
+          p_start_date?: string | null;
+          p_end_date?: string | null;
+        };
+        Returns: BranchDailySalesItem[];
       };
       report_product_sales: {
         Args: { p_range_type?: string; p_branch_id?: string | null; p_start_date?: string | null; p_end_date?: string | null };

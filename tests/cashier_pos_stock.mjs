@@ -67,6 +67,22 @@ assert.doesNotMatch(source, /useInventory\(profile\?\.branch/);
 const posSource = readFileSync('app/(cashier)/cashier/pos.tsx', 'utf8');
 assert.match(posSource, /setProductQuantity/);
 assert.match(posSource, /onQuantityChange/);
+assert.match(posSource, /current \+ quantity/);
+assert.doesNotMatch(posSource, /for \(let i = 0; i < quantity/);
+
+const sheetSource = readFileSync('src/features/pos/PosItemSheet.tsx', 'utf8');
+assert.match(sheetSource, /Math.min\(Math.max\(0, parsed\), remaining\)/);
+assert.match(sheetSource, /Maximum available quantity selected/);
+
+const cartSource = readFileSync('src/stores/cartStore.ts', 'utf8');
+assert.match(cartSource, /Math.min\(nextQuantity, Math.max\(0, quantity_on_hand - otherQuantity\)\)/);
+
+const capAdd = (current, add, stock, other = 0) =>
+  Math.min(Math.max(0, current + add), Math.max(0, stock - other));
+assert.equal(capAdd(0, 55, 55), 55);
+assert.equal(capAdd(5, 10, 20), 15);
+assert.equal(capAdd(5, 50, 20), 20);
+assert.equal(capAdd(0, 999, 30), 30);
 
 const cardSource = readFileSync('src/features/pos/PosProductCard.tsx', 'utf8');
 assert.match(cardSource, /toggleSelect/);

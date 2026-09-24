@@ -3,6 +3,12 @@ import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
 
+/** Catalog RPC prices must be plain decimal text with at most two places. */
+export function formatCatalogPrice(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '0.00';
+  return (Math.round(value * 100) / 100).toFixed(2);
+}
+
 /** First letter of first and last name, e.g. "Alshaik Reyes" → "AR". Falls back to the first 1-2 letters for a single-word name. */
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -14,6 +20,15 @@ export function getInitials(name: string): string {
 export function formatDate(value: string | null): string {
   if (!value) return 'Pending';
   return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+/** YYYY-MM-DD (Manila business date) without a clock time. */
+export function formatManilaDate(dateStr: string): string {
+  const parts = dateStr.trim().split('-');
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts.map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
 
 /** Compact date + time for tight list-row meta text — drops the year to avoid wrapping next to a badge. */

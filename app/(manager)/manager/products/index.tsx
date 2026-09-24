@@ -14,7 +14,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
-import { ProductForm } from '@/features/products/ProductForm';
+import { ProductForm, type BranchCatalogDraft } from '@/features/products/ProductForm';
 import {
   PRODUCT_FILTER_CHOICES,
   matchesProductFilter,
@@ -37,6 +37,7 @@ export default function ManagerProductListScreen() {
   const [createKey, setCreateKey] = useState(0);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [editBranchId, setEditBranchId] = useState('');
+  const [createFollowupError, setCreateFollowupError] = useState<string | undefined>();
   const branches = useBranches();
   const sellingBranches = useMemo(
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
@@ -78,52 +79,64 @@ export default function ManagerProductListScreen() {
     await configureBranchProducts(branchId, items);
   }
 
-  const submitCreate = (
-    values: ProductFormValues,
-    branchPriceDraft?: { branchId: string; selling_price: number },
-  ) => {
-    createMutation.mutate(
-      {
+  async function configureBranchVariantsFor(
+    branchId: string,
+    productId: string,
+    variants: Array<{ name: string; selling_price: number; is_active: boolean }>,
+  ) {
+    const { configureBranchProductVariants } = await import('@/services/branchProductService');
+    await configureBranchProductVariants(branchId, productId, variants);
+  }
+
+  const submitCreate = (values: ProductFormValues, catalogDrafts: BranchCatalogDraft[]) => {
+    setCreateFollowupError(undefined);
+    const fallbackPrice = Number(values.selling_price || catalogDrafts[0]?.selling_price || 0);
+    void createMutation
+      .mutateAsync({
         name: values.name.trim(),
         sku: values.sku.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
-        selling_price: Number(values.selling_price || branchPriceDraft?.selling_price || 0),
+        selling_price: fallbackPrice,
         is_active: false,
-      },
-      {
-        onSuccess: async (product) => {
-          try {
-            if (branchPriceDraft && Number.isFinite(branchPriceDraft.selling_price)) {
-              await configureBranchProductsFor(branchPriceDraft.branchId, [
-                {
-                  product_id: product.id,
-                  selling_price: branchPriceDraft.selling_price,
-                  is_active: true,
-                },
-              ]);
-            }
-            if (values.pricingType === 'variants') {
-              configureVariantsMutation.mutate(
-                {
-                  productId: product.id,
-                  variants: values.variants.map((variant) => ({
-                    name: variant.name.trim(),
-                    default_price: Number(variant.default_price),
-                    is_active: variant.is_active,
-                  })),
-                },
-                { onSuccess: () => setCreateOpen(false) },
-              );
-              return;
-            }
-            setCreateOpen(false);
-          } catch (error) {
-            alertNotice('Product created', getErrorMessage(error));
-            setCreateOpen(false);
+      })
+      .then(async (product) => {
+        try {
+          if (values.pricingType === 'variants') {
+            await configureVariantsMutation.mutateAsync({
+              productId: product.id,
+              variants: values.variants.map((variant) => ({
+                name: variant.name.trim(),
+                default_price: Number(variant.default_price),
+                is_active: variant.is_active,
+              })),
+            });
           }
-        },
-      },
-    );
+          for (const draft of catalogDrafts) {
+            if (!Number.isFinite(draft.selling_price) || draft.selling_price < 0) continue;
+            await configureBranchProductsFor(draft.branchId, [
+              {
+                product_id: product.id,
+                selling_price: draft.selling_price,
+                is_active: true,
+              },
+            ]);
+            if (values.pricingType === 'variants') {
+              await configureBranchVariantsFor(
+                draft.branchId,
+                product.id,
+                values.variants.map((variant) => ({
+                  name: variant.name.trim(),
+                  selling_price: Number(variant.default_price),
+                  is_active: variant.is_active,
+                })),
+              );
+            }
+          }
+          setCreateOpen(false);
+        } catch (error) {
+          setCreateFollowupError(getErrorMessage(error));
+        }
+      });
   };
 
   const submitEdit = (values: ProductFormValues) => {
@@ -208,6 +221,7 @@ export default function ManagerProductListScreen() {
               onPress={() => {
                 createMutation.reset();
                 configureVariantsMutation.reset();
+                setCreateFollowupError(undefined);
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
@@ -233,11 +247,12 @@ export default function ManagerProductListScreen() {
             submitLabel="Create product"
             loading={createMutation.isPending || configureVariantsMutation.isPending}
             error={
-              createMutation.error
-                ? getErrorMessage(createMutation.error)
-                : configureVariantsMutation.error
-                  ? getErrorMessage(configureVariantsMutation.error)
-                  : undefined
+              createFollowupError
+                ?? (createMutation.error
+                  ? getErrorMessage(createMutation.error)
+                  : configureVariantsMutation.error
+                    ? getErrorMessage(configureVariantsMutation.error)
+                    : undefined)
             }
             onSubmit={submitCreate}
           />

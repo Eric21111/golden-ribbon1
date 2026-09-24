@@ -12,6 +12,11 @@ import { managerColors } from '@/components/dashboard/theme';
 import { generateSkuFromName } from './generateSku';
 import { productSchema, type ProductFormValues } from './productSchema';
 
+export type BranchCatalogDraft = {
+  branchId: string;
+  selling_price: number;
+};
+
 interface ProductFormProps {
   defaultValues?: ProductFormValues;
   /** Existing SKUs used to keep auto-generated codes unique (create flow). */
@@ -34,10 +39,7 @@ interface ProductFormProps {
   error?: string;
   loading?: boolean;
   submitLabel: string;
-  onSubmit: (
-    values: ProductFormValues,
-    branchPriceDraft?: { branchId: string; selling_price: number },
-  ) => void;
+  onSubmit: (values: ProductFormValues, catalogDrafts: BranchCatalogDraft[]) => void;
 }
 
 export function ProductForm({
@@ -60,7 +62,7 @@ export function ProductForm({
 }: ProductFormProps) {
   const skuEditedRef = useRef(Boolean(defaultValues?.sku?.trim()));
   const [branchId, setBranchId] = useState(branchOptions[0]?.id ?? '');
-  const [branchPrice, setBranchPrice] = useState('');
+  const [branchPriceDrafts, setBranchPriceDrafts] = useState<Record<string, string>>({});
   const { control, handleSubmit, setValue, watch, formState } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: defaultValues ?? {
@@ -74,11 +76,11 @@ export function ProductForm({
     },
   });
   const nameValue = watch('name');
-  const basePrice = watch('selling_price');
   const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
     control,
     name: 'variants',
   });
+  const branchPrice = branchPriceDrafts[branchId] ?? '';
 
   useEffect(() => {
     if (!autoGenerateSku || skuEditedRef.current) return;
@@ -88,11 +90,25 @@ export function ProductForm({
 
   useEffect(() => {
     if (!branchId) return;
-    const resolved = resolveBranchPrice?.(branchId);
-    setBranchPrice(resolved?.trim() ? resolved : basePrice || '');
-  }, [basePrice, branchId, resolveBranchPrice]);
+    setBranchPriceDrafts((current) => {
+      if (current[branchId] != null) return current;
+      const resolved = resolveBranchPrice?.(branchId);
+      return { ...current, [branchId]: resolved?.trim() ?? '' };
+    });
+  }, [branchId, resolveBranchPrice]);
 
   const variantsErrorMessage = formState.errors.variants?.message;
+
+  function setBranchPrice(value: string) {
+    if (!branchId) return;
+    setBranchPriceDrafts((current) => ({ ...current, [branchId]: value }));
+  }
+
+  function catalogDraftsFromState(): BranchCatalogDraft[] {
+    return Object.entries(branchPriceDrafts)
+      .filter(([, price]) => price.trim() !== '' && Number.isFinite(Number(price)) && Number(price) >= 0)
+      .map(([id, price]) => ({ branchId: id, selling_price: Number(price) }));
+  }
 
   return (
     <View style={styles.form}>
@@ -161,8 +177,8 @@ export function ProductForm({
       />
       {allowVariants ? (
         <View style={styles.variantsBlock}>
-          <Text style={[styles.label, styles.fieldLabel]}>Variants (optional names)</Text>
-          <Text style={styles.hint}>Price is set per selling branch, not as a company default.</Text>
+          <Text style={[styles.label, styles.fieldLabel]}>Variants (optional)</Text>
+          <Text style={styles.hint}>Each variant has its own price. Branch chips below keep a separate selling price per store.</Text>
           <View style={styles.variantList}>
             {variantFields.map((field, index) => (
               <View key={field.id} style={styles.variantRow}>
@@ -176,6 +192,24 @@ export function ProductForm({
                       onChangeText={nameField.onChange}
                       error={fieldState.error?.message}
                       placeholder="e.g. With Rice"
+                      labelStyle={styles.fieldLabel}
+                      errorStyle={styles.fieldError}
+                      accentColor={managerColors.royalBlue}
+                      style={styles.fieldInput}
+                    />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name={`variants.${index}.default_price`}
+                  render={({ field: priceField, fieldState }) => (
+                    <FormField
+                      label="Variant price (PHP)"
+                      value={priceField.value}
+                      onChangeText={priceField.onChange}
+                      error={fieldState.error?.message}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
                       labelStyle={styles.fieldLabel}
                       errorStyle={styles.fieldError}
                       accentColor={managerColors.royalBlue}
@@ -240,7 +274,7 @@ export function ProductForm({
         <View style={styles.variantsBlock}>
           <Text style={[styles.label, styles.fieldLabel]}>Selling branch price</Text>
           <Text style={styles.hint}>
-            Price lives on the selling-branch catalog. There is no company default or pricing type.
+            Price lives on the selling-branch catalog. Switching branches keeps the price you already typed.
           </Text>
           <FilterChipRow
             options={branchOptions.map((branch) => ({ label: branch.name, value: branch.id }))}
@@ -281,7 +315,8 @@ export function ProductForm({
         label={submitLabel}
         loading={loading}
         onPress={handleSubmit((values) => {
-          const fallbackPrice = branchPrice.trim() || values.selling_price || '0';
+          const drafts = catalogDraftsFromState();
+          const fallbackPrice = drafts[0]?.selling_price.toFixed(2) || values.selling_price || '0';
           onSubmit(
             {
               ...values,
@@ -293,9 +328,7 @@ export function ProductForm({
                 default_price: variant.default_price.trim() || fallbackPrice,
               })),
             },
-            branchId && Number.isFinite(Number(branchPrice))
-              ? { branchId, selling_price: Number(branchPrice) }
-              : undefined,
+            drafts,
           );
         })}
       />

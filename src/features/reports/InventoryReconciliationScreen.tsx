@@ -18,16 +18,63 @@ import { getErrorMessage } from '@/lib/errors';
 import { accentForName } from '@/lib/nameAccent';
 import type { InventoryReconciliationItem } from '@/types/models';
 
+function qtyPart(missing: number, excess: number): string {
+  const parts = [];
+  if (missing > 0) parts.push(`${missing} missing`);
+  if (excess > 0) parts.push(`${excess} excess`);
+  return parts.join(' · ');
+}
+
+export function hasAuditDiscrepancy(item: InventoryReconciliationItem): boolean {
+  return (
+    Number(item.transfer_missing_qty) > 0 ||
+    Number(item.transfer_excess_qty) > 0 ||
+    Number(item.return_missing_qty) > 0 ||
+    Number(item.return_excess_qty) > 0
+  );
+}
+
+/** Ledger variance or a counted return/transfer difference — testers see this as an issue. */
+export function hasVisibleReconciliationIssue(item: InventoryReconciliationItem): boolean {
+  return Boolean(item.has_reconciliation_issue) || hasAuditDiscrepancy(item);
+}
+
+export function reconciliationIssueBadge(item: InventoryReconciliationItem): { label: string; tone: 'danger' | 'warning' | 'success' } {
+  const ledger = Boolean(item.has_reconciliation_issue);
+  const transfer = Number(item.transfer_missing_qty) > 0 || Number(item.transfer_excess_qty) > 0;
+  const returned = Number(item.return_missing_qty) > 0 || Number(item.return_excess_qty) > 0;
+  if (!ledger && !transfer && !returned) return { label: 'Balanced', tone: 'success' };
+  if (ledger) return { label: 'Issue', tone: 'danger' };
+  if (returned && transfer) return { label: 'Audit issue', tone: 'warning' };
+  if (returned) return { label: 'Return issue', tone: 'warning' };
+  return { label: 'Transfer issue', tone: 'warning' };
+}
+
+export function auditDiscrepancySummary(item: InventoryReconciliationItem): string | null {
+  const parts = [];
+  const transfer = qtyPart(Number(item.transfer_missing_qty), Number(item.transfer_excess_qty));
+  const returned = qtyPart(Number(item.return_missing_qty), Number(item.return_excess_qty));
+  if (transfer) parts.push(`Transfer ${transfer}`);
+  if (returned) parts.push(`Return ${returned}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 export function InventoryReconciliationScreen() {
   const branches = useBranches();
   const [selectedBranchId, setSelectedBranchId] = useState('');
 
   const query = useInventoryReconciliation(selectedBranchId || undefined);
   const items = query.data ?? [];
-  const pagination = useClientPagination(items, selectedBranchId);
+  const rankedItems = [...items].sort(
+    (a, b) => Number(hasVisibleReconciliationIssue(b)) - Number(hasVisibleReconciliationIssue(a)),
+  );
+  const pagination = useClientPagination(rankedItems, selectedBranchId);
 
   const totalProducts = items.length;
-  const issueCount = items.filter((i) => i.has_reconciliation_issue).length;
+  const issueCount = items.filter(hasVisibleReconciliationIssue).length;
+  const returnIssueCount = items.filter(
+    (item) => Number(item.return_missing_qty) > 0 || Number(item.return_excess_qty) > 0,
+  ).length;
   const balancedCount = totalProducts - issueCount;
 
   const branchOptions = [
@@ -42,11 +89,16 @@ export function InventoryReconciliationScreen() {
         <FilterChipRow options={branchOptions} value={selectedBranchId} onChange={setSelectedBranchId} />
 
         <Text style={styles.sectionTitle}>RECONCILIATION OVERVIEW</Text>
+        <Text style={styles.hint}>
+          Return and transfer count differences appear after Main receives. They stay visible here even when Calculated
+          and Current stock still match.
+        </Text>
         <StatTile layout="wide" emphasis icon="alert-circle-outline" label="Reconciliation issues" value={issueCount} />
         <View style={styles.statsRow}>
           <StatTile style={styles.statHalf} compact icon="cube-outline" label="Audited items" value={totalProducts} />
-          <StatTile style={styles.statHalf} compact icon="checkmark-circle-outline" label="Balanced items" value={balancedCount} />
+          <StatTile style={styles.statHalf} compact icon="return-up-back-outline" label="Return issues" value={returnIssueCount} />
         </View>
+        <StatTile compact icon="checkmark-circle-outline" label="Balanced items" value={balancedCount} />
 
         {query.isLoading ? <LoadingState label="Reconciling inventory ledgers…" /> : null}
         {query.error ? (
@@ -71,10 +123,11 @@ export function InventoryReconciliationScreen() {
 
 function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem }) {
   const [expanded, setExpanded] = useState(false);
-  const isIssue = item.has_reconciliation_issue;
-  const hasAuditRef =
-    item.transfer_missing_qty > 0 || item.transfer_excess_qty > 0 || item.return_missing_qty > 0 || item.return_excess_qty > 0;
-  const varianceTone = isIssue ? styles.varianceIssue : styles.varianceOk;
+  const ledgerIssue = Boolean(item.has_reconciliation_issue);
+  const isIssue = hasVisibleReconciliationIssue(item);
+  const badge = reconciliationIssueBadge(item);
+  const auditSummary = auditDiscrepancySummary(item);
+  const varianceTone = ledgerIssue ? styles.varianceIssue : styles.varianceOk;
   const varianceLabel = item.variance > 0 ? `+${item.variance}` : String(item.variance);
   const branchChip = statChipColors[accentForName(item.branch_name)];
 
@@ -89,7 +142,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
         <Text style={styles.productName} numberOfLines={2}>
           {item.product_name}
         </Text>
-        <ManagerBadge label={isIssue ? 'Issue' : 'Balanced'} tone={isIssue ? 'danger' : 'success'} />
+        <ManagerBadge label={badge.label} tone={badge.tone} />
       </View>
 
       <View style={styles.subRow}>
@@ -121,6 +174,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
           <Text style={[styles.summaryValue, varianceTone]}>{varianceLabel}</Text>
         </View>
       </View>
+      {auditSummary ? <Text style={styles.auditSummary}>{auditSummary}</Text> : null}
 
       {expanded ? (
         <View style={styles.ledger}>
@@ -147,7 +201,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
             </View>
           ) : null}
 
-          {hasAuditRef ? (
+          {auditSummary ? (
             <View style={styles.auditRefSection}>
               <View style={styles.auditRefHeader}>
                 <Ionicons name="information-circle-outline" size={13} color={managerColors.subtext} />
@@ -186,6 +240,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
   },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, lineHeight: 18, marginTop: -6 },
+  auditSummary: { color: '#92400E', fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18 },
   statsRow: { flexDirection: 'row', gap: 10 },
   statHalf: { flex: 1 },
   pager: { paddingVertical: 8 },

@@ -4,16 +4,28 @@ import { PGlite } from '@electric-sql/pglite';
 
 const source = readFileSync('src/features/reports/ReportsScreens.tsx', 'utf8');
 const branchCard = source.slice(source.indexOf('function BranchSalesCard'), source.indexOf('function ProductSalesRow'));
-assert.match(branchCard, /DAILY SALES LOG/);
+assert.match(branchCard, /shouldShowBranchOrderLog/);
 assert.match(branchCard, /useBranchSalesLog/);
+assert.match(branchCard, /useBranchDailySales/);
 assert.match(branchCard, /sale_number/);
 assert.match(branchCard, /cashier\?\.full_name/);
+assert.match(branchCard, /business_date/);
+assert.match(branchCard, /SALES BY DAY/);
+assert.match(branchCard, /ORDERS/);
 assert.doesNotMatch(branchCard, /barPercent|share\.toFixed|width: `\$\{Math\.max\(share/);
 assert.match(source, /transaction_count\) > 0/);
 assert.match(source, /Selling branches have no completed sales/);
+assert.match(source, /filterType=\{rangeType\}/);
+
+const filter = readFileSync('src/features/reports/DateRangeFilter.tsx', 'utf8');
+assert.match(filter, /export function shouldShowBranchOrderLog/);
+assert.match(filter, /rangeType === 'today'/);
+assert.match(filter, /24 \* 60 \* 60 \* 1000/);
 
 const service = readFileSync('src/services/saleService.ts', 'utf8');
 assert.match(service, /export async function listBranchSalesLog/);
+assert.match(service, /export async function reportBranchDailySales/);
+assert.match(service, /report_branch_daily_sales/);
 assert.match(service, /getTodayRangeManila/);
 assert.match(service, /status', 'completed'/);
 
@@ -57,7 +69,7 @@ await db.exec(`
   insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
     ('${branch1}','${product}',80,true),('${branch2}','${product}',80,true);
   insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values
-    ('${branch1}','${product}',10),('${branch2}','${product}',10);
+    ('${branch1}','${product}',20),('${branch2}','${product}',10);
 `);
 
 const asUser = async (userId, work) => {
@@ -69,50 +81,136 @@ const asUser = async (userId, work) => {
   }
 };
 
-const sale1 = await asUser(cashier1, async () => {
+const saleYesterday = await asUser(cashier1, async () => {
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
   const sale = (
     await db.query('select (public.confirm_sale($1,$2::jsonb,$3,$4)).*', [
       shift,
       JSON.stringify([{ product_id: product, quantity: 2 }]),
       '160.00',
-      'sales-log-branch1-key01',
+      'sales-log-branch1-yesterday',
     ])
   ).rows[0];
   await db.query('select public.end_cashier_shift($1)', [shift]);
   return sale;
 });
 
+await db.exec(`
+  alter table public.sales disable trigger sales_immutable;
+  update public.sales
+  set sold_at = ((timezone('Asia/Manila', now()))::date - 1)::timestamp at time zone 'Asia/Manila' + interval '10 hours'
+  where id = '${saleYesterday.id}';
+  alter table public.sales enable trigger sales_immutable;
+  update public.branch_inventory
+  set quantity_on_hand = 10
+  where branch_id = '${branch1}' and product_id = '${product}';
+`);
+
+const saleToday = await asUser(cashier1, async () => {
+  const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
+  const sale = (
+    await db.query('select (public.confirm_sale($1,$2::jsonb,$3,$4)).*', [
+      shift,
+      JSON.stringify([{ product_id: product, quantity: 1 }]),
+      '80.00',
+      'sales-log-branch1-today',
+    ])
+  ).rows[0];
+  await db.query('select public.end_cashier_shift($1)', [shift]);
+  return sale;
+});
+
+await db.exec(`
+  insert into public.daily_branch_sales_summary(business_date, branch_id, transaction_count, quantity_sold, revenue)
+  values ('2026-08-01', '${branch1}', 2, 4, 320.00);
+`);
+
+const manilaDates = (
+  await db.query(`
+    select
+      (timezone('Asia/Manila', now()))::date::text as today,
+      ((timezone('Asia/Manila', now()))::date - 1)::text as yesterday
+  `)
+).rows[0];
+
 await asUser(owner, async () => {
-  const report = (await db.query(`select public.report_sales_by_branch('today', null, null) result`)).rows[0].result;
-  const withSales = report.filter((row) => Number(row.transaction_count) > 0);
-  assert.equal(withSales.length, 1);
-  assert.equal(withSales[0].branch_id, branch1);
-  assert.equal(Number(withSales[0].transaction_count), 1);
-  assert.equal(Number(withSales[0].total_sales), 160);
+  const todayReport = (await db.query(`select public.report_sales_by_branch('today', null, null) result`)).rows[0].result;
+  const todayBranches = todayReport.filter((row) => Number(row.transaction_count) > 0);
+  assert.equal(todayBranches.length, 1);
+  assert.equal(todayBranches[0].branch_id, branch1);
+  assert.equal(Number(todayBranches[0].transaction_count), 1);
+  assert.equal(Number(todayBranches[0].total_sales), 80);
+
+  const allReport = (await db.query(`select public.report_sales_by_branch('all_time', null, null) result`)).rows[0].result;
+  const allBranches = allReport.filter((row) => Number(row.transaction_count) > 0);
+  assert.equal(allBranches.length, 1);
+  assert.equal(Number(allBranches[0].transaction_count), 4);
+  assert.equal(Number(allBranches[0].total_sales), 560);
+
+  const todayDays = (
+    await db.query(`select public.report_branch_daily_sales($1, 'today', null, null) result`, [branch1])
+  ).rows[0].result;
+  assert.equal(todayDays.length, 1);
+  assert.equal(String(todayDays[0].business_date), manilaDates.today);
+  assert.equal(Number(todayDays[0].transaction_count), 1);
+  assert.equal(Number(todayDays[0].total_sales), 80);
+
+  const allDays = (
+    await db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null) result`, [branch1])
+  ).rows[0].result;
+  assert.equal(allDays.length, 3);
+  assert.equal(String(allDays[0].business_date), manilaDates.today);
+  assert.equal(Number(allDays[0].total_sales), 80);
+  assert.equal(String(allDays[1].business_date), manilaDates.yesterday);
+  assert.equal(Number(allDays[1].total_sales), 160);
+  assert.equal(String(allDays[2].business_date), '2026-08-01');
+  assert.equal(Number(allDays[2].total_sales), 320);
+
+  const weekStart = (
+    await db.query(`
+      select ((timezone('Asia/Manila', now()))::date - 1)::timestamp at time zone 'Asia/Manila' as start,
+             ((timezone('Asia/Manila', now()))::date + 1)::timestamp at time zone 'Asia/Manila' as end
+    `)
+  ).rows[0];
+  const weekDays = (
+    await db.query(`select public.report_branch_daily_sales($1, 'custom', $2, $3) result`, [
+      branch1,
+      weekStart.start,
+      weekStart.end,
+    ])
+  ).rows[0].result;
+  assert.equal(weekDays.length, 2);
+  assert.equal(Number(weekDays.reduce((sum, row) => sum + Number(row.total_sales), 0)), 240);
+  assert.ok(!weekDays.some((row) => String(row.business_date) === '2026-08-01'));
 
   const log = (
     await db.query(
       `select sale_number, total_amount, cashier_id from public.sales
-       where branch_id=$1 and status='completed' order by sold_at desc`,
+       where branch_id=$1 and status='completed'
+         and sold_at >= (timezone('Asia/Manila', now()))::date::timestamp at time zone 'Asia/Manila'
+       order by sold_at desc`,
       [branch1],
     )
   ).rows;
   assert.equal(log.length, 1);
-  assert.equal(log[0].sale_number, sale1.sale_number);
-  assert.equal(Number(log[0].total_amount), 160);
+  assert.equal(log[0].sale_number, saleToday.sale_number);
+  assert.equal(Number(log[0].total_amount), 80);
   assert.equal(log[0].cashier_id, cashier1);
 
   const empty = (
-    await db.query(`select id from public.sales where branch_id=$1 and status='completed'`, [branch2])
-  ).rows;
+    await db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null) result`, [branch2])
+  ).rows[0].result;
   assert.equal(empty.length, 0);
 });
 
 await asUser(cashier2, async () => {
   const hidden = (await db.query('select id from public.sales')).rows;
   assert.equal(hidden.length, 0);
+  await assert.rejects(
+    () => db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null)`, [branch1]),
+    /Owner access required/,
+  );
 });
 
 await db.close();
-console.log('Sales by Branch log tests passed: no share %, daily log fields, only branches with sales.');
+console.log('Sales by Branch log tests passed: orders today, daily totals for longer ranges.');

@@ -11,12 +11,17 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
-import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import {
+  DateRangeFilter,
+  resolveReportRange,
+  shouldShowBranchOrderLog,
+  type DateFilterType,
+} from '@/features/reports/DateRangeFilter';
 import { accentForRank } from '@/features/reports/reportAccents';
 import { useBranches } from '@/hooks/useBranches';
-import { useBranchSalesLog, useProductSales, useSalesByBranch } from '@/hooks/useSales';
+import { useBranchDailySales, useBranchSalesLog, useProductSales, useSalesByBranch } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatManilaDate, formatMoney } from '@/lib/format';
 import type { BranchSalesReportItem, ProductSalesReportItem } from '@/types/models';
 
 function BranchSalesCard({
@@ -24,6 +29,7 @@ function BranchSalesCard({
   item,
   expanded,
   onToggle,
+  filterType,
   rangeType,
   startIso,
   endIso,
@@ -32,18 +38,22 @@ function BranchSalesCard({
   item: BranchSalesReportItem;
   expanded: boolean;
   onToggle: () => void;
+  filterType: DateFilterType;
   rangeType: 'today' | 'custom' | 'all_time';
   startIso?: string;
   endIso?: string;
 }) {
   const accent = accentForRank(rank);
-  const log = useBranchSalesLog(expanded ? item.branch_id : '', rangeType, startIso, endIso);
+  const showOrders = shouldShowBranchOrderLog(filterType, startIso, endIso);
+  const log = useBranchSalesLog(expanded && showOrders ? item.branch_id : '', rangeType, startIso, endIso);
+  const days = useBranchDailySales(expanded && !showOrders ? item.branch_id : '', rangeType, startIso, endIso);
+  const detail = showOrders ? log : days;
 
   return (
     <View style={styles.rankRowCard}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} daily sales log for ${item.branch_name}`}
+        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} ${showOrders ? 'orders' : 'daily totals'} for ${item.branch_name}`}
         onPress={onToggle}
       >
         <View style={styles.rankRowTop}>
@@ -65,27 +75,40 @@ function BranchSalesCard({
         </View>
         <Text style={styles.rankRowMeta}>
           Transactions: {item.transaction_count}
-          {expanded ? ' · Hide log' : ' · Daily sales log'}
+          {expanded ? ' · Hide' : showOrders ? ' · Orders' : ' · Sales by day'}
         </Text>
       </Pressable>
       {expanded ? (
         <View style={styles.logBlock}>
-          <Text style={styles.logTitle}>DAILY SALES LOG</Text>
-          {log.isLoading ? <LoadingState label="Loading sales…" /> : null}
-          {log.error ? (
-            <ErrorState message={getErrorMessage(log.error)} onRetry={() => void log.refetch()} />
+          <Text style={styles.logTitle}>{showOrders ? 'ORDERS' : 'SALES BY DAY'}</Text>
+          {detail.isLoading ? <LoadingState label={showOrders ? 'Loading sales…' : 'Loading daily totals…'} /> : null}
+          {detail.error ? (
+            <ErrorState message={getErrorMessage(detail.error)} onRetry={() => void detail.refetch()} />
           ) : null}
-          {log.data?.length === 0 ? (
-            <Text style={styles.logEmpty}>No completed sales in this range. Older detailed sales may have been archived.</Text>
+          {detail.data?.length === 0 ? (
+            <Text style={styles.logEmpty}>
+              {showOrders
+                ? 'No completed sales in this range. Older detailed sales may have been archived.'
+                : 'No completed sales in this range.'}
+            </Text>
           ) : null}
-          {log.data?.map((sale) => (
-            <ListRowCard
-              key={sale.id}
-              title={sale.sale_number}
-              meta={`${formatDate(sale.sold_at)} · ${sale.cashier?.full_name ?? 'Cashier'}`}
-              trailing={<Text style={styles.rankRowAmount}>{formatMoney(sale.total_amount)}</Text>}
-            />
-          ))}
+          {showOrders
+            ? log.data?.map((sale) => (
+                <ListRowCard
+                  key={sale.id}
+                  title={sale.sale_number}
+                  meta={`${formatDate(sale.sold_at)} · ${sale.cashier?.full_name ?? 'Cashier'}`}
+                  trailing={<Text style={styles.rankRowAmount}>{formatMoney(sale.total_amount)}</Text>}
+                />
+              ))
+            : days.data?.map((row) => (
+                <ListRowCard
+                  key={row.business_date}
+                  title={formatManilaDate(row.business_date)}
+                  meta={`${row.transaction_count} ${Number(row.transaction_count) === 1 ? 'sale' : 'sales'}`}
+                  trailing={<Text style={styles.rankRowAmount}>{formatMoney(row.total_sales)}</Text>}
+                />
+              ))}
         </View>
       ) : null}
     </View>
@@ -193,6 +216,7 @@ export function SalesByBranchScreen() {
                 item={item}
                 expanded={openBranchId === item.branch_id}
                 onToggle={() => setOpenBranchId((current) => (current === item.branch_id ? null : item.branch_id))}
+                filterType={rangeType}
                 rangeType={rpcRangeType}
                 startIso={startIso}
                 endIso={endIso}

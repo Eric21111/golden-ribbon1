@@ -22,6 +22,19 @@ export function getErrorMessage(error: unknown): string {
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
   if (message.includes('products_sku_unique_ci')) return 'That SKU is already in use.';
   if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
+  if (message.includes('each variant name may appear only once')) return 'Each variant name may appear only once.';
+  if (message.includes('provide 1 to 50 variants')) return 'Add between 1 and 50 variants.';
+  if (message.includes('each variant requires a name')) {
+    return 'Each variant needs a name and a price with at most two decimals.';
+  }
+  if (message.includes('catalog item requires a product')) {
+    return 'Each selling branch needs a valid price with at most two decimals.';
+  }
+  if (message.includes('configure the branch catalog price')) {
+    return 'Save the selling-branch price before adding variant prices.';
+  }
+  if (message.includes('catalog branch is missing')) return 'That selling branch is missing or inactive.';
+  if (message.includes('product does not exist')) return 'That product could not be found. Try creating it again.';
   if (message.includes('become active only') || message.includes('opening stock is set')) {
     return 'This product can become active only after Main sets opening stock.';
   }

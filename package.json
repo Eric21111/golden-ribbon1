@@ -61,6 +61,7 @@
     "test:leftover": "node tests/leftover_return_and_auto_close.mjs",
     "test:sales-log": "node tests/sales_by_branch_log.mjs",
     "test:branch-performance": "node tests/branch_performance_return_badge.mjs",
+    "test:recon-return": "node tests/inventory_reconciliation_return_issue.mjs",
     "test:product-active": "node tests/product_active_after_opening.mjs",
     "doctor": "expo-doctor"
   },

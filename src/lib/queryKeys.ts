@@ -22,6 +22,8 @@ export const queryKeys = {
     ['reports', 'sales-by-branch', { rangeType, startDate, endDate }] as const,
   branchSalesLog: (branchId: string, rangeType = 'today', startDate = '', endDate = '') =>
     ['reports', 'sales-by-branch', 'log', branchId, { rangeType, startDate, endDate }] as const,
+  branchDailySales: (branchId: string, rangeType = 'all_time', startDate = '', endDate = '') =>
+    ['reports', 'sales-by-branch', 'daily', branchId, { rangeType, startDate, endDate }] as const,
   productSales: (rangeType = 'today', branchId = '', startDate = '', endDate = '') =>
     ['reports', 'product-sales', { rangeType, branchId, startDate, endDate }] as const,
   ownerDashboard: ['dashboard', 'owner'] as const,

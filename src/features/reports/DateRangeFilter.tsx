@@ -43,6 +43,20 @@ export function resolveReportRange(
   return { rpcRangeType: 'custom', startIso: toStartOfDayManila(customStart), endIso: toNextDayStartManila(customEnd) };
 }
 
+/** Today and a one-day custom range list orders. Week / month / all-time list daily totals. */
+export function shouldShowBranchOrderLog(
+  rangeType: DateFilterType,
+  startIso?: string,
+  endIso?: string,
+): boolean {
+  if (rangeType === 'today') return true;
+  if (rangeType !== 'custom' || !startIso || !endIso) return false;
+  const startMs = Date.parse(startIso);
+  const endMs = Date.parse(endIso);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return false;
+  return endMs - startMs <= 24 * 60 * 60 * 1000;
+}
+
 interface DateRangeFilterProps {
   value: DateFilterType;
   onChange: (value: DateFilterType) => void;

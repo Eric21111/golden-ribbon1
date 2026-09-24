@@ -2,6 +2,7 @@ import { getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import type {
   Branch,
+  BranchDailySalesItem,
   BranchSalesReportItem,
   ManagerDashboardMetrics,
   OwnerDailyProductSummaryItem,
@@ -129,6 +130,22 @@ export async function listBranchSalesLog(
   const { data, error } = await query;
   if (error) throw error;
   return data as unknown as SaleWithRelations[];
+}
+
+export async function reportBranchDailySales(
+  branchId: string,
+  rangeType: 'today' | 'custom' | 'all_time' = 'all_time',
+  startDate?: string,
+  endDate?: string,
+): Promise<BranchDailySalesItem[]> {
+  const { data, error } = await supabase.rpc('report_branch_daily_sales', {
+    p_branch_id: branchId,
+    p_range_type: rangeType,
+    p_start_date: startDate || null,
+    p_end_date: endDate || null,
+  });
+  if (error) throw error;
+  return (data as unknown as BranchDailySalesItem[]) ?? [];
 }
 
 export async function reportSalesByBranch(
