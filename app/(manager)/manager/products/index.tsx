@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -26,13 +26,23 @@ import {
   productFilterEmptyMessage,
   type ProductFilter,
 } from '@/features/products/productFilters';
-import type { ProductFormValues } from '@/features/products/productSchema';
+import { PRICE_PATTERN, type ProductFormValues } from '@/features/products/productSchema';
 import { useBranches } from '@/hooks/useBranches';
-import { useBranchProducts, useConfigureBranchProducts } from '@/hooks/useBranchProducts';
+import { useBranchProductVariants, useBranchProducts, useConfigureBranchProducts } from '@/hooks/useBranchProducts';
 import { useInventory } from '@/hooks/useInventory';
-import { useConfigureProductVariants, useCreateProduct, useProducts, useUpdateProduct } from '@/hooks/useProducts';
+import {
+  useCreateCompleteProduct,
+  useProductSkus,
+  useProductVariants,
+  useProducts,
+  useUpdateBranchProductVariantPrice,
+  useUpdateProduct,
+  useUpdateProductVariant,
+} from '@/hooks/useProducts';
 import { alertNotice } from '@/lib/confirmAction';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
+import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
+import { configureBranchProducts } from '@/services/branchProductService';
 import type { Product } from '@/types/models';
 
 export default function ManagerProductListScreen() {
@@ -42,7 +52,8 @@ export default function ManagerProductListScreen() {
   const [createKey, setCreateKey] = useState(0);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [editBranchId, setEditBranchId] = useState('');
-  const [createFollowupError, setCreateFollowupError] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const branches = useBranches();
   const sellingBranches = useMemo(
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
@@ -54,10 +65,14 @@ export default function ManagerProductListScreen() {
   );
   const mainInventory = useInventory(mainBranch, false);
   const query = useProducts(search);
-  const createMutation = useCreateProduct();
+  const skuQuery = useProductSkus();
+  const createMutation = useCreateCompleteProduct();
   const updateMutation = useUpdateProduct(editProduct?.id ?? '');
-  const configureVariantsMutation = useConfigureProductVariants();
+  const updateVariantMutation = useUpdateProductVariant();
+  const updateBranchVariantMutation = useUpdateBranchProductVariantPrice();
+  const editVariants = useProductVariants(editProduct?.id ?? '');
   const editCatalog = useBranchProducts(editBranchId, false);
+  const editBranchVariants = useBranchProductVariants(editBranchId, editProduct?.id ?? '');
   const configureBranchMutation = useConfigureBranchProducts(editBranchId);
 
   const filtered = useMemo(
@@ -65,7 +80,7 @@ export default function ManagerProductListScreen() {
     [query.data, filter],
   );
 
-  const existingSkus = useMemo(() => (query.data ?? []).map((product) => product.sku), [query.data]);
+  const existingSkus = skuQuery.data ?? [];
   const branchOptions = useMemo(
     () => sellingBranches.map((branch) => ({ id: branch.id, name: branch.name })),
     [sellingBranches],
@@ -76,94 +91,67 @@ export default function ManagerProductListScreen() {
       ? productFilterEmptyMessage('all', false, true)
       : productFilterEmptyMessage(filter, Boolean(search.trim()), true);
 
-  async function configureBranchProductsFor(
-    branchId: string,
-    items: Array<{ product_id: string; selling_price: number; is_active: boolean }>,
-  ) {
-    const { configureBranchProducts } = await import('@/services/branchProductService');
-    await configureBranchProducts(branchId, items);
-  }
-
-  async function configureBranchVariantsFor(
-    branchId: string,
-    productId: string,
-    variants: Array<{ name: string; selling_price: number; is_active: boolean }>,
-  ) {
-    const { configureBranchProductVariants } = await import('@/services/branchProductService');
-    await configureBranchProductVariants(branchId, productId, variants);
-  }
-
   const submitCreate = (values: CreateProductValues, catalogDrafts: BranchPricingDraft[]) => {
-    setCreateFollowupError(undefined);
+    if (!tryBeginSubmit(submittingRef)) return;
+    setIsSubmitting(true);
     const hasVariants = values.variants.length > 0;
-    const allPrices = hasVariants
-      ? catalogDrafts.flatMap((draft) => Object.values(draft.variantPrices ?? {}))
-      : catalogDrafts.map((draft) => draft.selling_price ?? 0);
-    const basePrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
-
     void createMutation
       .mutateAsync({
         name: values.name,
         sku: values.sku,
         description: values.description ? values.description : null,
-        selling_price: basePrice,
-        is_active: false,
+        variants: values.variants.map((variant) => ({
+          name: variant.name,
+          default_price: variant.default_price,
+        })),
+        branches: catalogDrafts.map((draft) =>
+          hasVariants
+            ? { branch_id: draft.branchId, variants: draft.variants ?? [] }
+            : { branch_id: draft.branchId, selling_price: draft.selling_price },
+        ),
+        selling_price: hasVariants ? null : values.default_price,
       })
-      .then(async (product) => {
-        try {
-          if (hasVariants) {
-            await configureVariantsMutation.mutateAsync({
-              productId: product.id,
-              variants: values.variants.map((variant) => ({
-                name: variant.name,
-                default_price: basePrice,
-                is_active: true,
-              })),
-            });
-          }
-          for (const draft of catalogDrafts) {
-            const branchVariantPrices = Object.values(draft.variantPrices ?? {});
-            const branchBasePrice = hasVariants
-              ? (branchVariantPrices.length > 0 ? Math.min(...branchVariantPrices) : basePrice)
-              : (draft.selling_price ?? 0);
-            await configureBranchProductsFor(draft.branchId, [
-              {
-                product_id: product.id,
-                selling_price: branchBasePrice,
-                is_active: true,
-              },
-            ]);
-            if (hasVariants && draft.variantPrices) {
-              await configureBranchVariantsFor(
-                draft.branchId,
-                product.id,
-                values.variants
-                  .filter((variant) => draft.variantPrices![variant.id] != null)
-                  .map((variant) => ({
-                    name: variant.name,
-                    selling_price: draft.variantPrices![variant.id]!,
-                    is_active: true,
-                  })),
-              );
-            }
-          }
-          setCreateOpen(false);
-        } catch (error) {
-          setCreateFollowupError(getErrorMessage(error));
-        }
+      .then(() => setCreateOpen(false))
+      .finally(() => {
+        endSubmit(submittingRef);
+        setIsSubmitting(false);
       });
   };
 
   const submitEdit = (values: ProductFormValues) => {
+    if (!editProduct) return;
+    const defaultVariant = values.variants[0];
     updateMutation.mutate(
       {
         name: values.name,
         sku: values.sku,
         description: values.description?.trim() || null,
-        selling_price: Number(values.selling_price || editProduct?.selling_price || 0),
+        selling_price: PRICE_PATTERN.test((defaultVariant?.default_price || values.selling_price).trim())
+          ? Number(defaultVariant?.default_price || values.selling_price)
+          : editProduct.selling_price,
         is_active: values.is_active,
       },
-      { onSuccess: () => setEditProduct(null) },
+      {
+        onSuccess: () => {
+          const existing = editVariants.data ?? [];
+          void (async () => {
+            try {
+              for (const variant of values.variants) {
+                if (!variant.id) continue;
+                await updateVariantMutation.mutateAsync({
+                  variantId: variant.id,
+                  name: variant.name,
+                  defaultPrice: variant.default_price,
+                });
+              }
+              if (existing.length === 0) setEditProduct(null);
+              else setEditProduct(null);
+            } catch (error) {
+              alertNotice('Unable to save variants', getProductErrorMessage(error));
+            }
+          })();
+        },
+      },
     );
   };
 
@@ -172,9 +160,13 @@ export default function ManagerProductListScreen() {
       alertNotice('Invalid price', 'Enter a valid branch selling price.');
       return;
     }
+    if (!PRICE_PATTERN.test(String(draft.selling_price))) {
+      alertNotice('Invalid price', 'Enter a valid branch selling price.');
+      return;
+    }
     setEditBranchId(draft.branchId);
     const existing = editCatalog.data?.find((row) => row.product_id === editProduct.id);
-    void configureBranchProductsFor(draft.branchId, [
+    void configureBranchProducts(draft.branchId, [
       {
         product_id: editProduct.id,
         selling_price: draft.selling_price,
@@ -185,7 +177,25 @@ export default function ManagerProductListScreen() {
         alertNotice('Branch price saved', 'The selected branch price was updated.');
         void editCatalog.refetch();
       })
-      .catch((error) => alertNotice('Unable to save branch price', getErrorMessage(error)));
+      .catch((error) => alertNotice('Unable to save branch price', getProductErrorMessage(error)));
+  };
+
+  const confirmEditBranchVariantPrice = (payload: { branchVariantId: string; selling_price: string }) => {
+    if (!PRICE_PATTERN.test(payload.selling_price.trim())) {
+      alertNotice('Invalid price', 'Enter a valid non-negative price.');
+      return;
+    }
+    void updateBranchVariantMutation
+      .mutateAsync({
+        branchVariantId: payload.branchVariantId,
+        sellingPrice: payload.selling_price.trim(),
+      })
+      .then(() => {
+        alertNotice('Branch variant price saved', 'The selected variant price was updated.');
+        void editBranchVariants.refetch();
+        void editCatalog.refetch();
+      })
+      .catch((error) => alertNotice('Unable to save branch price', getProductErrorMessage(error)));
   };
 
   return (
@@ -235,8 +245,6 @@ export default function ManagerProductListScreen() {
               icon="add-circle-outline"
               onPress={() => {
                 createMutation.reset();
-                configureVariantsMutation.reset();
-                setCreateFollowupError(undefined);
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
@@ -255,15 +263,8 @@ export default function ManagerProductListScreen() {
             key={createKey}
             existingSkus={existingSkus}
             branchOptions={branchOptions}
-            loading={createMutation.isPending || configureVariantsMutation.isPending}
-            error={
-              createFollowupError
-                ?? (createMutation.error
-                  ? getErrorMessage(createMutation.error)
-                  : configureVariantsMutation.error
-                    ? getErrorMessage(configureVariantsMutation.error)
-                    : undefined)
-            }
+            loading={isSubmitting}
+            error={createMutation.error ? getProductErrorMessage(createMutation.error) : undefined}
             onSubmit={submitCreate}
           />
         </BottomSheet>
@@ -274,10 +275,14 @@ export default function ManagerProductListScreen() {
           scroll
           onClose={() => setEditProduct(null)}
         >
-          {editProduct ? (
+          {editProduct && editVariants.isLoading ? (
+            <LoadingState label="Loading product…" />
+          ) : editProduct ? (
             <ProductForm
-              key={editProduct.id}
+              key={`${editProduct.id}-${(editVariants.data ?? []).map((row) => row.id).join(',')}`}
               showActiveToggle
+              allowVariants={(editVariants.data ?? []).length > 0}
+              lockVariantSet
               canActivate={Boolean(
                 mainInventory.data?.some(
                   (row) => row.product.id === editProduct.id && (row.quantity_on_hand > 0 || row.updated_at != null),
@@ -291,22 +296,43 @@ export default function ManagerProductListScreen() {
                 return (entry?.selling_price ?? editProduct.selling_price).toFixed(2);
               }}
               onConfirmBranchPrice={confirmEditBranchPrice}
-              branchPriceLoading={configureBranchMutation.isPending}
+              branchVariantOptions={(editBranchVariants.data ?? []).map((row) => ({
+                id: row.id,
+                name: row.name,
+                selling_price: row.selling_price.toFixed(2),
+              }))}
+              onConfirmBranchVariantPrice={confirmEditBranchVariantPrice}
+              branchPriceLoading={configureBranchMutation.isPending || updateBranchVariantMutation.isPending}
               branchPriceError={
-                configureBranchMutation.error ? getErrorMessage(configureBranchMutation.error) : undefined
+                configureBranchMutation.error
+                  ? getProductErrorMessage(configureBranchMutation.error)
+                  : updateBranchVariantMutation.error
+                    ? getProductErrorMessage(updateBranchVariantMutation.error)
+                    : undefined
               }
               defaultValues={{
                 name: editProduct.name,
                 sku: editProduct.sku,
                 description: editProduct.description ?? '',
-                selling_price: editProduct.selling_price.toFixed(2),
+                selling_price: (editVariants.data?.[0]?.default_price ?? editProduct.selling_price).toFixed(2),
                 is_active: editProduct.is_active,
-                pricingType: 'single',
-                variants: [],
+                pricingType: (editVariants.data ?? []).length > 0 ? 'variants' : 'single',
+                variants: (editVariants.data ?? []).map((variant) => ({
+                  id: variant.id,
+                  name: variant.name,
+                  default_price: variant.default_price.toFixed(2),
+                  is_active: variant.is_active,
+                })),
               }}
               submitLabel="Save changes"
-              loading={updateMutation.isPending}
-              error={updateMutation.error ? getErrorMessage(updateMutation.error) : undefined}
+              loading={updateMutation.isPending || updateVariantMutation.isPending}
+              error={
+                updateMutation.error
+                  ? getProductErrorMessage(updateMutation.error)
+                  : updateVariantMutation.error
+                    ? getProductErrorMessage(updateVariantMutation.error)
+                    : undefined
+              }
               onSubmit={submitEdit}
             />
           ) : null}
@@ -320,7 +346,6 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
-  price: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 12.5 },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
   footer: {

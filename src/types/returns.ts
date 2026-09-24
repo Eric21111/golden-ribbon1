@@ -1,4 +1,9 @@
-import type { DiscrepancyType, Product } from './models';
+import type {
+  DiscrepancyResolutionReason,
+  DiscrepancyResolutionStatus,
+  DiscrepancyType,
+  Product,
+} from './models';
 
 export type ReturnStatus = 'draft' | 'in_transit' | 'received' | 'received_with_discrepancy' | 'cancelled';
 
@@ -55,6 +60,11 @@ export type ReturnDiscrepancy = {
   notes: string | null;
   recorded_by: string;
   created_at: string;
+  status: DiscrepancyResolutionStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_reason: DiscrepancyResolutionReason | null;
+  resolution_note: string | null;
   product?: Product | null;
   stock_return?: StockReturn | null;
 };

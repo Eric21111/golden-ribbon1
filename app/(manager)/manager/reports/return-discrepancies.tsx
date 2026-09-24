@@ -1,9 +1,9 @@
 import { ReturnDiscrepanciesReportScreen } from '@/features/reports/DiscrepancyReportsScreens';
 
-export default function ReturnDiscrepanciesRoute() {
+export default function ManagerReturnDiscrepanciesRoute() {
   return (
     <ReturnDiscrepanciesReportScreen
-      detailHref={(id) => `/owner/reports/discrepancies/return/${id}`}
+      detailHref={(id) => `/manager/discrepancies/return/${id}`}
     />
   );
 }

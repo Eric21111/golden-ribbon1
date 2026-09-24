@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -21,6 +22,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 
 type DiscrepancyFilterType = 'all' | 'missing' | 'excess';
+type StatusFilter = 'all' | 'open' | 'resolved';
 
 const TYPE_OPTIONS: Array<{ label: string; value: DiscrepancyFilterType }> = [
   { label: 'All', value: 'all' },
@@ -28,10 +30,21 @@ const TYPE_OPTIONS: Array<{ label: string; value: DiscrepancyFilterType }> = [
   { label: 'Excess', value: 'excess' },
 ];
 
-export function TransferDiscrepanciesReportScreen() {
+const STATUS_OPTIONS: Array<{ label: string; value: StatusFilter }> = [
+  { label: 'All', value: 'all' },
+  { label: 'Open', value: 'open' },
+  { label: 'Resolved', value: 'resolved' },
+];
+
+export function TransferDiscrepanciesReportScreen({
+  detailHref,
+}: {
+  detailHref: (id: string) => string;
+}) {
   const branches = useBranches();
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -42,13 +55,17 @@ export function TransferDiscrepanciesReportScreen() {
     discrepancyType,
     rpcRangeType,
     startIso,
-    endIso
+    endIso,
   );
 
-  const discrepancies = query.data ?? [];
+  const discrepancies = useMemo(
+    () =>
+      (query.data ?? []).filter((item) => statusFilter === 'all' || (item.status ?? 'open') === statusFilter),
+    [query.data, statusFilter],
+  );
   const pagination = useClientPagination(
     discrepancies,
-    `${selectedBranchId}|${discrepancyType}|${rangeType}|${customStart}|${customEnd}`,
+    `${selectedBranchId}|${discrepancyType}|${statusFilter}|${rangeType}|${customStart}|${customEnd}`,
   );
   const totalMissing = discrepancies
     .filter((d) => d.discrepancy_type === 'missing')
@@ -82,6 +99,9 @@ export function TransferDiscrepanciesReportScreen() {
           <View style={styles.filterItem}>
             <FilterDropdown label="Type" options={TYPE_OPTIONS} value={discrepancyType} onChange={setDiscrepancyType} />
           </View>
+          <View style={styles.filterItem}>
+            <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+          </View>
         </View>
 
         <StatTile
@@ -112,6 +132,7 @@ export function TransferDiscrepanciesReportScreen() {
 
         {pagination.pageItems.map((item) => {
           const isMissing = item.discrepancy_type === 'missing';
+          const status = item.status ?? 'open';
           return (
             <ListRowCard
               key={item.id}
@@ -119,11 +140,15 @@ export function TransferDiscrepanciesReportScreen() {
               subtitle={`${item.product_name} (${item.product_sku})`}
               meta={`Destination: ${item.branch_name} · Sent: ${item.quantity_sent} · Received: ${item.quantity_received} · ${formatDate(item.created_at)}${item.notes ? ` · Note: ${item.notes}` : ''}`}
               trailing={
-                <ManagerBadge
-                  label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
-                  tone={isMissing ? 'danger' : 'warning'}
-                />
+                <View style={styles.trailing}>
+                  <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
+                  <ManagerBadge
+                    label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
+                    tone={isMissing ? 'danger' : 'warning'}
+                  />
+                </View>
               }
+              onPress={() => router.push(detailHref(item.id) as never)}
             />
           );
         })}
@@ -137,10 +162,15 @@ export function TransferDiscrepanciesReportScreen() {
   );
 }
 
-export function ReturnDiscrepanciesReportScreen() {
+export function ReturnDiscrepanciesReportScreen({
+  detailHref,
+}: {
+  detailHref: (id: string) => string;
+}) {
   const branches = useBranches();
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -151,13 +181,17 @@ export function ReturnDiscrepanciesReportScreen() {
     discrepancyType,
     rpcRangeType,
     startIso,
-    endIso
+    endIso,
   );
 
-  const discrepancies = query.data ?? [];
+  const discrepancies = useMemo(
+    () =>
+      (query.data ?? []).filter((item) => statusFilter === 'all' || (item.status ?? 'open') === statusFilter),
+    [query.data, statusFilter],
+  );
   const pagination = useClientPagination(
     discrepancies,
-    `${selectedBranchId}|${discrepancyType}|${rangeType}|${customStart}|${customEnd}`,
+    `${selectedBranchId}|${discrepancyType}|${statusFilter}|${rangeType}|${customStart}|${customEnd}`,
   );
   const totalMissing = discrepancies
     .filter((d) => d.discrepancy_type === 'missing')
@@ -191,6 +225,9 @@ export function ReturnDiscrepanciesReportScreen() {
           <View style={styles.filterItem}>
             <FilterDropdown label="Type" options={TYPE_OPTIONS} value={discrepancyType} onChange={setDiscrepancyType} />
           </View>
+          <View style={styles.filterItem}>
+            <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+          </View>
         </View>
 
         <StatTile
@@ -218,6 +255,7 @@ export function ReturnDiscrepanciesReportScreen() {
 
         {pagination.pageItems.map((item) => {
           const isMissing = item.discrepancy_type === 'missing';
+          const status = item.status ?? 'open';
           return (
             <ListRowCard
               key={item.id}
@@ -225,11 +263,15 @@ export function ReturnDiscrepanciesReportScreen() {
               subtitle={`${item.product_name} (${item.product_sku})`}
               meta={`Origin: ${item.branch_name} · Returned: ${item.quantity_returned} · Main received: ${item.quantity_received} · ${formatDate(item.created_at)}${item.notes ? ` · Note: ${item.notes}` : ''}`}
               trailing={
-                <ManagerBadge
-                  label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
-                  tone={isMissing ? 'danger' : 'warning'}
-                />
+                <View style={styles.trailing}>
+                  <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
+                  <ManagerBadge
+                    label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
+                    tone={isMissing ? 'danger' : 'warning'}
+                  />
+                </View>
               }
+              onPress={() => router.push(detailHref(item.id) as never)}
             />
           );
         })}
@@ -250,5 +292,6 @@ const styles = StyleSheet.create({
   filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
   statsRow: { flexDirection: 'row', gap: 10 },
   statHalf: { flex: 1 },
+  trailing: { alignItems: 'flex-end', gap: 6 },
   pager: { paddingVertical: 8 },
 });

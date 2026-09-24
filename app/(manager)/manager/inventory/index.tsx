@@ -201,9 +201,9 @@ export default function ManagerInventoryScreen() {
             </View>
           ) : (
             <ManagerActionButton
-              label="Create return"
-              icon="add-circle-outline"
-              onPress={() => router.push('/manager/returns/create')}
+              label="View returns"
+              icon="return-up-back-outline"
+              onPress={() => router.push('/manager/returns')}
             />
           )}
         </View>
@@ -254,11 +254,11 @@ export default function ManagerInventoryScreen() {
               />
             ) : (
               <ManagerActionButton
-                label="Return unsold stock"
+                label="View returns"
                 icon="return-up-back-outline"
                 onPress={() => {
                   setSelected(null);
-                  router.push('/manager/returns/create');
+                  router.push('/manager/returns');
                 }}
               />
             )}

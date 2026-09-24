@@ -49,6 +49,63 @@ export async function getCashierLineSellingPrices(
   );
 }
 
+export type CreateCompleteProductInput = {
+  name: string;
+  sku: string;
+  description: string | null;
+  variants: Array<{ name: string; default_price: string }>;
+  branches: Array<{
+    branch_id: string;
+    selling_price?: string;
+    variants?: Array<{ name: string; selling_price: string }>;
+  }>;
+  selling_price?: string | null;
+};
+
+export async function listProductSkus(): Promise<string[]> {
+  const { data, error } = await supabase.from('products').select('sku');
+  if (error) throw error;
+  return (data ?? []).map((row) => row.sku);
+}
+
+export async function createCompleteProduct(input: CreateCompleteProductInput): Promise<Product> {
+  const { data, error } = await supabase.rpc('create_complete_product', {
+    p_name: input.name,
+    p_sku: input.sku,
+    p_description: input.description,
+    p_variants: input.variants,
+    p_branches: input.branches,
+    p_selling_price: input.selling_price ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProductVariant(
+  variantId: string,
+  name: string,
+  defaultPrice: string,
+): Promise<ProductVariant> {
+  const { data, error } = await supabase.rpc('update_product_variant', {
+    p_variant_id: variantId,
+    p_new_name: name,
+    p_new_default_price: defaultPrice,
+  });
+  if (error) throw error;
+  return { ...data, default_price: Number(data.default_price) };
+}
+
+export async function updateBranchProductVariantPrice(
+  branchVariantId: string,
+  sellingPrice: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_branch_product_variant_price', {
+    p_branch_variant_id: branchVariantId,
+    p_selling_price: sellingPrice,
+  });
+  if (error) throw error;
+}
+
 export async function createProduct(input: ProductInput): Promise<Product> {
   const values: ProductInsert = { ...input, sku: input.sku.trim().toUpperCase() };
   const { data, error } = await supabase

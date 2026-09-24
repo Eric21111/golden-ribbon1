@@ -246,7 +246,7 @@ export function ReceiveReturnScreen() {
                       setReview(null);
                       Alert.alert(
                         'Return received',
-                        `Main branch inventory was updated. Final status: ${finalStatus.replaceAll('_', ' ')}.`,
+                        `Counted leftover is waste and does not restock Main inventory. Final status: ${finalStatus.replaceAll('_', ' ')}.`,
                         [
                           {
                             text: 'View details',
@@ -283,7 +283,8 @@ export function ReceiveReturnScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         <Text style={styles.instructions}>
-          Physically count every product. Do not assume the returned quantity was received.
+          Physically count every product. Counted leftover is waste and does not restock Main
+          sellable inventory.
         </Text>
 
         {fields.map((field, index) => {

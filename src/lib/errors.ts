@@ -1,3 +1,9 @@
+function logDevError(error: unknown): void {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.error('[product-error]', readErrorMessage(error));
+  }
+}
+
 function readErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error) {
     const parts: string[] = [];
@@ -22,7 +28,9 @@ export function getErrorMessage(error: unknown): string {
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
   if (message.includes('products_sku_unique_ci')) return 'That SKU is already in use.';
   if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
-  if (message.includes('each variant name may appear only once')) return 'Each variant name may appear only once.';
+  if (message.includes('each variant name may appear only once') || message.includes('duplicate_variant_name')) {
+    return 'Each variant name may appear only once.';
+  }
   if (message.includes('provide 1 to 50 variants')) return 'Add between 1 and 50 variants.';
   if (message.includes('each variant requires a name')) {
     return 'Each variant needs a name and a price with at most two decimals.';
@@ -40,8 +48,39 @@ export function getErrorMessage(error: unknown): string {
   }
   if (message.includes('unauthorized') || message.includes('permission denied') || message.includes('owner access')) return 'You are not authorized to perform this action.';
   if (message.includes('inactive account') || message.includes('profile is inactive')) return 'This account is inactive. Contact the owner.';
+  if (
+    message.includes('schema cache')
+    || message.includes('could not find the function')
+    || message.includes('pgrst202')
+    || message.includes('pgrst203')
+  ) {
+    return 'The requested service is currently unavailable.';
+  }
+  if (message.includes('incomplete_branch_pricing')) {
+    return 'Complete the pricing for all selected branches.';
+  }
+  if (message.includes('invalid_product_price')) return 'Price must be a valid non-negative amount.';
+  if (message.includes('invalid_branch')) return 'That selling branch is missing or inactive.';
   if (isNetworkError(message)) return 'Unable to connect. Check your internet connection and try again.';
   return 'Something went wrong. Please try again.';
+}
+
+/** Create/Edit product screens only — product-specific PGRST202 wording. */
+export function getProductErrorMessage(error: unknown): string {
+  logDevError(error);
+  const message = readErrorMessage(error).toLowerCase();
+  if (
+    message.includes('schema cache')
+    || message.includes('could not find the function')
+    || message.includes('pgrst202')
+    || message.includes('pgrst203')
+  ) {
+    return 'Product service is unavailable. Please contact the administrator.';
+  }
+  if (message.includes('incomplete_branch_pricing') && message.includes('every enabled variant')) {
+    return 'Enter a price for every enabled variant.';
+  }
+  return getErrorMessage(error);
 }
 
 export function getAuthErrorMessage(error: unknown): string {
@@ -187,7 +226,55 @@ export function getChangeNameErrorMessage(error: unknown): string {
 }
 
 export function getInventoryErrorMessage(error: unknown): string {
+  logDevError(error);
   const message = readErrorMessage(error).toLowerCase();
+
+  if (message.includes('already been resolved')) {
+    return 'This discrepancy has already been resolved.';
+  }
+  if (message.includes('not allowed to resolve') || message.includes('only the main branch manager can resolve')) {
+    return 'You are not allowed to resolve discrepancies.';
+  }
+  if (message.includes('discrepancy is no longer available')) {
+    return 'This discrepancy is no longer available.';
+  }
+  if (message.includes('select a resolution reason')) {
+    return 'Select a resolution reason.';
+  }
+  if (message.includes('enter a note for this resolution')) {
+    return 'Enter a note for this resolution.';
+  }
+
+  if (message.includes('returns from selling branches are created by cashiers')) {
+    return 'Cashiers create leftover returns. Managers cannot create returns.';
+  }
+  if (
+    message.includes('main branch manager') &&
+    (message.includes('receive') || message.includes('required'))
+  ) {
+    return 'Only the Main Branch Manager can receive returns.';
+  }
+  if (message.includes('selling branch manager cannot receive')) {
+    return 'Only the Main Branch Manager can receive returns.';
+  }
+  if (message.includes('return') && message.includes('already been received')) {
+    return 'This return has already been received.';
+  }
+  if (
+    message.includes('no longer available for receiving') ||
+    message.includes('unable to load return')
+  ) {
+    return 'This return is no longer available for receiving.';
+  }
+  if (message.includes('received quantity cannot be negative')) {
+    return 'Received quantity cannot be negative.';
+  }
+  if (
+    message.includes('enter a valid received quantity') ||
+    message.includes('received quantities must be')
+  ) {
+    return 'Enter a valid received quantity.';
+  }
 
   if (message.includes('at least one item') || message.includes('requires an actual received')) {
     return 'This shipment could not be finalized. Pull to refresh and try again.';

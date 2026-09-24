@@ -8,19 +8,21 @@ import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
 
 import { generateSkuFromName } from './generateSku';
+import { PRICE_PATTERN } from './productSchema';
 
-export type CreateProductVariantDraft = { id: string; name: string };
+export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
 
 export type CreateProductValues = {
   name: string;
   sku: string;
   description: string;
+  default_price: string;
   variants: CreateProductVariantDraft[];
 };
 
 export type BranchPricingDraft =
-  | { branchId: string; selling_price: number; variantPrices?: undefined }
-  | { branchId: string; selling_price?: undefined; variantPrices: Record<string, number> };
+  | { branchId: string; selling_price: string; variants?: undefined }
+  | { branchId: string; selling_price?: undefined; variants: Array<{ name: string; selling_price: string }> };
 
 interface CreateProductWizardProps {
   existingSkus?: string[];
@@ -30,13 +32,10 @@ interface CreateProductWizardProps {
   onSubmit: (values: CreateProductValues, pricing: BranchPricingDraft[]) => void;
 }
 
-const PRICE_PATTERN = /^\d+(\.\d{1,2})?$/;
-
 function isValidPrice(raw: string): boolean {
   const trimmed = raw.trim();
   if (!trimmed) return false;
-  const num = Number(trimmed);
-  return Number.isFinite(num) && num >= 0 && PRICE_PATTERN.test(trimmed);
+  return PRICE_PATTERN.test(trimmed);
 }
 
 type PriceDraft = { base: string; variantPrices: Record<string, string> };
@@ -54,7 +53,7 @@ export function CreateProductWizard({
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [description, setDescription] = useState('');
-  const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string }>({});
+  const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
   const skuEditedRef = useRef(false);
 
   useEffect(() => {
@@ -62,10 +61,12 @@ export function CreateProductWizard({
     setSku(name.trim() ? generateSkuFromName(name, existingSkus) : '');
   }, [name, existingSkus]);
 
-  // Step 2 — variants (names only)
+  // Step 2 — variants (name + explicit default price) or single default price
   const idRef = useRef(0);
   const [variants, setVariants] = useState<CreateProductVariantDraft[]>([]);
+  const [defaultPrice, setDefaultPrice] = useState('');
   const [step2Error, setStep2Error] = useState<string | undefined>();
+  const [step3Error, setStep3Error] = useState<string | undefined>();
 
   // Step 3 — branch pricing
   const [branchId, setBranchId] = useState(branchOptions[0]?.id ?? '');
@@ -90,11 +91,11 @@ export function CreateProductWizard({
     for (const branch of branchOptions) {
       const draft = priceDrafts[branch.id];
       if (!draft) continue;
-      const priced =
+      const filled =
         variants.length === 0
-          ? isValidPrice(draft.base)
-          : variants.some((variant) => isValidPrice(draft.variantPrices[variant.id] ?? ''));
-      if (priced) ids.add(branch.id);
+          ? draft.base.trim() !== ''
+          : variants.some((variant) => (draft.variantPrices[variant.id] ?? '').trim() !== '');
+      if (filled) ids.add(branch.id);
     }
     return ids;
   }, [branchOptions, priceDrafts, variants]);
@@ -120,19 +121,48 @@ export function CreateProductWizard({
 
   function goToStep2() {
     const nameValue = name.trim();
-    const errors: { name?: string; sku?: string } = {};
+    const errors: { name?: string; sku?: string; description?: string } = {};
     if (nameValue.length < 2) errors.name = 'Product name must be at least 2 characters.';
+    else if (nameValue.length > 120) errors.name = 'Product name must be 120 characters or fewer.';
     if (sku.trim().length < 2) errors.sku = 'SKU must be at least 2 characters.';
+    else if (sku.trim().length > 40) errors.sku = 'SKU must be 40 characters or fewer.';
     else if (!/^[A-Za-z0-9-]+$/.test(sku.trim())) errors.sku = 'Use only letters, numbers, and hyphens.';
+    if (description.trim().length > 500) errors.description = 'Description must be 500 characters or fewer.';
     setStep1Errors(errors);
     if (Object.keys(errors).length > 0) return;
     setStep(2);
   }
 
   function goToStep3() {
+    if (variants.length > 50) {
+      setStep2Error('Add between 1 and 50 variants.');
+      return;
+    }
+    if (variants.length === 0) {
+      if (!isValidPrice(defaultPrice)) {
+        setStep2Error('Enter a default base price.');
+        return;
+      }
+      setStep2Error(undefined);
+      setStep(3);
+      return;
+    }
     const blank = variants.find((variant) => !variant.name.trim());
     if (blank) {
       setStep2Error('Enter a name for each variant, or remove it.');
+      return;
+    }
+    const names = variants.map((variant) => variant.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length) {
+      setStep2Error('Variant names must be unique.');
+      return;
+    }
+    if (variants.some((variant) => variant.name.trim().length > 60)) {
+      setStep2Error('Variant names must be 60 characters or fewer.');
+      return;
+    }
+    if (variants.some((variant) => !isValidPrice(variant.default_price))) {
+      setStep2Error('Enter a default price for every variant.');
       return;
     }
     setStep2Error(undefined);
@@ -140,28 +170,50 @@ export function CreateProductWizard({
   }
 
   function submit() {
-    const pricing: BranchPricingDraft[] = Object.entries(priceDrafts)
-      .map(([id, draft]): BranchPricingDraft | null => {
-        if (variants.length === 0) {
-          if (!isValidPrice(draft.base)) return null;
-          return { branchId: id, selling_price: Number(draft.base) };
+    const selectedIds = [...pricedBranchIds];
+    for (const id of selectedIds) {
+      const draft = priceDrafts[id];
+      if (!draft) {
+        setStep3Error('Complete the pricing for all selected branches.');
+        return;
+      }
+      if (variants.length === 0) {
+        if (!isValidPrice(draft.base)) {
+          setStep3Error('Complete the pricing for all selected branches.');
+          return;
         }
-        const variantPrices: Record<string, number> = {};
-        for (const variant of variants) {
-          const raw = draft.variantPrices[variant.id] ?? '';
-          if (isValidPrice(raw)) variantPrices[variant.id] = Number(raw);
-        }
-        if (Object.keys(variantPrices).length === 0) return null;
-        return { branchId: id, variantPrices };
-      })
-      .filter((entry): entry is BranchPricingDraft => entry != null);
+      } else if (variants.some((variant) => !isValidPrice(draft.variantPrices[variant.id] ?? ''))) {
+        setStep3Error('Enter a price for every enabled variant.');
+        return;
+      }
+    }
 
+    const pricing: BranchPricingDraft[] = selectedIds.map((id) => {
+      const draft = priceDrafts[id]!;
+      if (variants.length === 0) {
+        return { branchId: id, selling_price: draft.base.trim() };
+      }
+      return {
+        branchId: id,
+        variants: variants.map((variant) => ({
+          name: variant.name.trim(),
+          selling_price: draft.variantPrices[variant.id].trim(),
+        })),
+      };
+    });
+
+    setStep3Error(undefined);
     onSubmit(
       {
         name: name.trim(),
         sku: sku.trim(),
         description: description.trim(),
-        variants: variants.map((variant) => ({ id: variant.id, name: variant.name.trim() })),
+        default_price: variants.length === 0 ? defaultPrice.trim() : variants[0]!.default_price.trim(),
+        variants: variants.map((variant) => ({
+          id: variant.id,
+          name: variant.name.trim(),
+          default_price: variant.default_price.trim(),
+        })),
       },
       pricing,
     );
@@ -204,6 +256,7 @@ export function CreateProductWizard({
             label="Description (optional)"
             value={description}
             onChangeText={setDescription}
+            error={step1Errors.description}
             multiline
             numberOfLines={3}
             textAlignVertical="top"
@@ -217,7 +270,24 @@ export function CreateProductWizard({
 
       {step === 2 ? (
         <View style={styles.stepBody}>
-          <Text style={styles.hint}>Prices are set in the next step.</Text>
+          {variants.length === 0 ? (
+            <>
+              <Text style={styles.hint}>Enter the product default price. Branch prices are set next.</Text>
+              <FormField
+                label="Default / base price (PHP)"
+                value={defaultPrice}
+                onChangeText={setDefaultPrice}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                labelStyle={styles.fieldLabel}
+                errorStyle={styles.fieldError}
+                accentColor={managerColors.royalBlue}
+                style={styles.fieldInput}
+              />
+            </>
+          ) : (
+            <Text style={styles.hint}>The first variant is the Default. Each variant keeps its own default price.</Text>
+          )}
           <View style={styles.variantList}>
             {variants.map((variant, index) => (
               <View key={variant.id}>
@@ -225,7 +295,7 @@ export function CreateProductWizard({
                 <View style={styles.variantRow}>
                   <View style={styles.variantFieldCol}>
                     <FormField
-                      label="Variant name"
+                      label={index === 0 ? 'Default variant name' : 'Variant name'}
                       value={variant.name}
                       onChangeText={(text) =>
                         setVariants((current) =>
@@ -233,6 +303,21 @@ export function CreateProductWizard({
                         )
                       }
                       placeholder="e.g. With Rice"
+                      labelStyle={styles.fieldLabel}
+                      errorStyle={styles.fieldError}
+                      accentColor={managerColors.royalBlue}
+                      style={styles.fieldInput}
+                    />
+                    <FormField
+                      label={index === 0 ? 'Default price (PHP)' : 'Default price (PHP)'}
+                      value={variant.default_price}
+                      onChangeText={(text) =>
+                        setVariants((current) =>
+                          current.map((entry, i) => (i === index ? { ...entry, default_price: text } : entry)),
+                        )
+                      }
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
                       labelStyle={styles.fieldLabel}
                       errorStyle={styles.fieldError}
                       accentColor={managerColors.royalBlue}
@@ -257,7 +342,7 @@ export function CreateProductWizard({
               accessibilityLabel="Add variant"
               onPress={() => {
                 idRef.current += 1;
-                setVariants((current) => [...current, { id: `v${idRef.current}`, name: '' }]);
+                setVariants((current) => [...current, { id: `v${idRef.current}`, name: '', default_price: '' }]);
               }}
               style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
             >
@@ -270,7 +355,9 @@ export function CreateProductWizard({
       {step === 3 ? (
         <View style={styles.stepBody}>
           <Text style={styles.hint}>
-            {variants.length === 0 ? 'Set a selling price per branch.' : 'Set a price per variant, per branch.'}
+            {variants.length === 0
+              ? 'Set a selling price for each selected branch. Leave a branch blank to skip it.'
+              : 'Selected branches need a price for every variant. Leave a branch blank to skip it.'}
           </Text>
           {branchOptions.length === 0 ? (
             <Text style={styles.hint}>No selling branches available yet.</Text>
@@ -320,8 +407,11 @@ export function CreateProductWizard({
                 </View>
               )}
               {pricedBranchIds.size === 0 ? (
-                <Text style={styles.pricedHint}>Pricing is optional — you can add it later.</Text>
-              ) : null}
+                <Text style={styles.pricedHint}>No branch selected. Product defaults will still be saved.</Text>
+              ) : (
+                <Text style={styles.pricedHint}>Selected branches must have a complete price set.</Text>
+              )}
+              {step3Error ? <Text style={styles.error}>{step3Error}</Text> : null}
             </>
           )}
         </View>

@@ -1,9 +1,9 @@
 import { TransferDiscrepanciesReportScreen } from '@/features/reports/DiscrepancyReportsScreens';
 
-export default function TransferDiscrepanciesRoute() {
+export default function ManagerTransferDiscrepanciesRoute() {
   return (
     <TransferDiscrepanciesReportScreen
-      detailHref={(id) => `/owner/reports/discrepancies/transfer/${id}`}
+      detailHref={(id) => `/manager/discrepancies/transfer/${id}`}
     />
   );
 }

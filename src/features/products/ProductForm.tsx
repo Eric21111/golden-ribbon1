@@ -36,6 +36,10 @@ interface ProductFormProps {
   onConfirmBranchPrice?: (payload: { branchId: string; selling_price: number }) => void;
   branchPriceLoading?: boolean;
   branchPriceError?: string;
+  /** Hide add/remove when correcting existing variants. */
+  lockVariantSet?: boolean;
+  branchVariantOptions?: Array<{ id: string; name: string; selling_price: string }>;
+  onConfirmBranchVariantPrice?: (payload: { branchVariantId: string; selling_price: string }) => void;
   error?: string;
   loading?: boolean;
   submitLabel: string;
@@ -55,6 +59,9 @@ export function ProductForm({
   onConfirmBranchPrice,
   branchPriceLoading,
   branchPriceError,
+  lockVariantSet = false,
+  branchVariantOptions = [],
+  onConfirmBranchVariantPrice,
   error,
   loading,
   submitLabel,
@@ -63,6 +70,7 @@ export function ProductForm({
   const skuEditedRef = useRef(Boolean(defaultValues?.sku?.trim()));
   const [branchId, setBranchId] = useState(branchOptions[0]?.id ?? '');
   const [branchPriceDrafts, setBranchPriceDrafts] = useState<Record<string, string>>({});
+  const [branchVariantDrafts, setBranchVariantDrafts] = useState<Record<string, string>>({});
   const { control, handleSubmit, setValue, watch, formState } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: defaultValues ?? {
@@ -187,7 +195,7 @@ export function ProductForm({
                   name={`variants.${index}.name`}
                   render={({ field: nameField, fieldState }) => (
                     <FormField
-                      label="Variant name"
+                      label={index === 0 ? 'Default variant name' : 'Variant name'}
                       value={nameField.value}
                       onChangeText={nameField.onChange}
                       error={fieldState.error?.message}
@@ -204,7 +212,7 @@ export function ProductForm({
                   name={`variants.${index}.default_price`}
                   render={({ field: priceField, fieldState }) => (
                     <FormField
-                      label="Variant price (PHP)"
+                      label={index === 0 ? 'Default price (PHP)' : 'Variant price (PHP)'}
                       value={priceField.value}
                       onChangeText={priceField.onChange}
                       error={fieldState.error?.message}
@@ -217,28 +225,32 @@ export function ProductForm({
                     />
                   )}
                 />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove variant ${index + 1}`}
-                  onPress={() => removeVariant(index)}
-                  style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
-                >
-                  <Text style={styles.removeButtonText}>Remove variant</Text>
-                </Pressable>
+                {lockVariantSet ? null : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove variant ${index + 1}`}
+                    onPress={() => removeVariant(index)}
+                    style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.removeButtonText}>Remove variant</Text>
+                  </Pressable>
+                )}
               </View>
             ))}
             {variantsErrorMessage ? <Text style={styles.error}>{variantsErrorMessage}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add variant"
-              onPress={() => {
-                setValue('pricingType', 'variants');
-                appendVariant({ name: '', default_price: branchPrice || '0', is_active: true });
-              }}
-              style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.addButtonText}>Add variant</Text>
-            </Pressable>
+            {lockVariantSet ? null : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add variant"
+                onPress={() => {
+                  setValue('pricingType', 'variants');
+                  appendVariant({ name: '', default_price: '', is_active: true });
+                }}
+                style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.addButtonText}>Add variant</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       ) : null}
@@ -284,26 +296,61 @@ export function ProductForm({
               onBranchChange?.(next);
             }}
           />
-          <FormField
-            label="Branch selling price (PHP)"
-            value={branchPrice}
-            onChangeText={setBranchPrice}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-            labelStyle={styles.fieldLabel}
-            errorStyle={styles.fieldError}
-            accentColor={managerColors.royalBlue}
-            style={styles.fieldInput}
-          />
+          {branchVariantOptions.length > 0 ? (
+            <View style={styles.variantList}>
+              {branchVariantOptions.map((option) => (
+                <View key={option.id} style={styles.variantRow}>
+                  <FormField
+                    label={`${option.name} branch price (PHP)`}
+                    value={branchVariantDrafts[option.id] ?? option.selling_price}
+                    onChangeText={(text) =>
+                      setBranchVariantDrafts((current) => ({ ...current, [option.id]: text }))
+                    }
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    labelStyle={styles.fieldLabel}
+                    errorStyle={styles.fieldError}
+                    accentColor={managerColors.royalBlue}
+                    style={styles.fieldInput}
+                  />
+                  {onConfirmBranchVariantPrice ? (
+                    <ManagerActionButton
+                      label="Save variant price"
+                      variant="secondary"
+                      loading={branchPriceLoading}
+                      disabled={!branchId}
+                      onPress={() => {
+                        const raw = (branchVariantDrafts[option.id] ?? option.selling_price).trim();
+                        if (!raw) return;
+                        onConfirmBranchVariantPrice({ branchVariantId: option.id, selling_price: raw });
+                      }}
+                    />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <FormField
+              label="Branch selling price (PHP)"
+              value={branchPrice}
+              onChangeText={setBranchPrice}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              labelStyle={styles.fieldLabel}
+              errorStyle={styles.fieldError}
+              accentColor={managerColors.royalBlue}
+              style={styles.fieldInput}
+            />
+          )}
           {branchPriceError ? <Text style={styles.error}>{branchPriceError}</Text> : null}
-          {onConfirmBranchPrice ? (
+          {onConfirmBranchPrice && branchVariantOptions.length === 0 ? (
             <ManagerActionButton
               label="Confirm branch price"
               variant="secondary"
               loading={branchPriceLoading}
               disabled={!branchId}
               onPress={() => {
-                if (!branchId) return;
+                if (!branchId || !branchPrice.trim()) return;
                 onConfirmBranchPrice({ branchId, selling_price: Number(branchPrice) });
               }}
             />
@@ -316,16 +363,15 @@ export function ProductForm({
         loading={loading}
         onPress={handleSubmit((values) => {
           const drafts = catalogDraftsFromState();
-          const fallbackPrice = drafts[0]?.selling_price.toFixed(2) || values.selling_price || '0';
           onSubmit(
             {
               ...values,
-              selling_price: fallbackPrice,
+              selling_price: values.selling_price.trim(),
               is_active: showActiveToggle ? values.is_active : false,
               pricingType: values.variants.length > 0 ? 'variants' : 'single',
               variants: values.variants.map((variant) => ({
                 ...variant,
-                default_price: variant.default_price.trim() || fallbackPrice,
+                default_price: variant.default_price.trim(),
               })),
             },
             drafts,

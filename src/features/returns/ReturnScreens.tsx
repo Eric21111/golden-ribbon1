@@ -57,19 +57,12 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
       defaultEmptyMessage={
         isMainBranch
           ? 'Confirmed stock returns will appear here.'
-          : 'Create a return to send unsold stock to Main Branch.'
+          : 'Leftover returns are created by cashiers at end of shift.'
       }
       statusFilter={status}
       onStatusFilterChange={setStatus}
       statusChoices={isMainBranch ? OWNER_RETURN_STATUS_CHOICES : MANAGER_RETURN_STATUS_CHOICES}
-      primaryAction={
-        role === 'manager' && !isMainBranch
-          ? {
-              label: 'Create return',
-              onPress: () => router.push('/manager/returns/create'),
-            }
-          : undefined
-      }
+      primaryAction={undefined}
       overflowActions={[]}
       onPressReturn={(stockReturn) =>
         router.push({ pathname: '/manager/returns/[id]', params: { id: stockReturn.id } })

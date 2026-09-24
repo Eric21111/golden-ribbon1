@@ -49,8 +49,34 @@ function getGroups(isMain: boolean): SidebarGroup[] {
                 { label: 'Opening stock', href: '/manager/inventory/setup', icon: 'clipboard-outline', selectedIcon: 'clipboard-outline' },
               ],
             },
-            { label: 'Transfers', href: '/manager/transfers', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
-            { label: 'Returns', href: '/manager/returns', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+            {
+              label: 'Transfers',
+              href: '/manager/transfers',
+              icon: 'swap-horizontal-outline',
+              selectedIcon: 'swap-horizontal',
+              children: [
+                {
+                  label: 'Transfer discrepancies',
+                  href: '/manager/reports/transfer-discrepancies',
+                  icon: 'alert-circle-outline',
+                  selectedIcon: 'alert-circle',
+                },
+              ],
+            },
+            {
+              label: 'Returns',
+              href: '/manager/returns',
+              icon: 'return-up-back-outline',
+              selectedIcon: 'return-up-back',
+              children: [
+                {
+                  label: 'Return discrepancies',
+                  href: '/manager/reports/return-discrepancies',
+                  icon: 'alert-circle-outline',
+                  selectedIcon: 'alert-circle',
+                },
+              ],
+            },
           ]
         : [
             { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },

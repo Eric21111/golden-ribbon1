@@ -283,6 +283,9 @@ export function BranchPerformanceDetailScreen() {
                       tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
                     />
                   }
+                  onPress={() =>
+                    router.push(`/owner/reports/discrepancies/transfer/${disc.id}` as never)
+                  }
                 />
               ))
             )}
@@ -305,6 +308,9 @@ export function BranchPerformanceDetailScreen() {
                       }
                       tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
                     />
+                  }
+                  onPress={() =>
+                    router.push(`/owner/reports/discrepancies/return/${disc.id}` as never)
                   }
                 />
               ))

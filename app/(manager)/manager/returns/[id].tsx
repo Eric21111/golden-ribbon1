@@ -85,6 +85,31 @@ export default function ManagerReturnDetailsScreen() {
         ) : null}
 
         <Text style={styles.sectionTitle}>RETURNED PRODUCTS</Text>
+        {(row.discrepancies ?? []).length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>DISCREPANCIES</Text>
+            {row.discrepancies.map((disc) => (
+              <ListRowCard
+                key={disc.id}
+                title={disc.product?.name ?? `Product (${disc.product_id})`}
+                subtitle={`${disc.quantity_expected} expected · ${disc.quantity_received} received`}
+                meta={disc.notes ? `Note: ${disc.notes}` : undefined}
+                trailing={
+                  <ManagerBadge
+                    label={
+                      disc.discrepancy_type === 'missing'
+                        ? `${disc.difference} missing`
+                        : `${Math.abs(disc.difference)} excess`
+                    }
+                    tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
+                  />
+                }
+                onPress={() => router.push(`/manager/discrepancies/return/${disc.id}` as never)}
+              />
+            ))}
+          </>
+        ) : null}
+
         {row.items.map((item) => {
           const isReceived = item.quantity_received !== null;
           const diff = isReceived ? item.quantity_returned - item.quantity_received! : null;

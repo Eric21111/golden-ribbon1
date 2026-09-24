@@ -211,6 +211,16 @@ export type StockTransferItem = {
   updated_at: string;
 };
 
+export type DiscrepancyResolutionStatus = 'open' | 'resolved';
+export type DiscrepancyResolutionReason =
+  | 'confirmed_shortage'
+  | 'confirmed_excess'
+  | 'counting_error'
+  | 'encoding_error'
+  | 'transfer_handling_issue'
+  | 'return_handling_issue'
+  | 'other';
+
 export type TransferDiscrepancy = {
   id: string;
   stock_transfer_id: string;
@@ -223,6 +233,11 @@ export type TransferDiscrepancy = {
   notes: string | null;
   recorded_by: string;
   created_at: string;
+  status: DiscrepancyResolutionStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_reason: DiscrepancyResolutionReason | null;
+  resolution_note: string | null;
 };
 
 export type StockTransferSummary = StockTransfer & {
@@ -443,6 +458,8 @@ export type TransferDiscrepancyReportItem = {
   transfer_number: string;
   branch_id: string;
   branch_name: string;
+  from_branch_name?: string | null;
+  to_branch_name?: string | null;
   product_id: string;
   product_name: string;
   product_sku: string;
@@ -452,6 +469,12 @@ export type TransferDiscrepancyReportItem = {
   discrepancy_type: 'missing' | 'excess';
   created_at: string;
   notes: string | null;
+  status: DiscrepancyResolutionStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_reason: DiscrepancyResolutionReason | null;
+  resolution_note: string | null;
+  resolved_by_name: string | null;
 };
 
 export type ReturnDiscrepancyReportItem = {
@@ -460,6 +483,8 @@ export type ReturnDiscrepancyReportItem = {
   return_number: string;
   branch_id: string;
   branch_name: string;
+  from_branch_name?: string | null;
+  to_branch_name?: string | null;
   product_id: string;
   product_name: string;
   product_sku: string;
@@ -469,6 +494,12 @@ export type ReturnDiscrepancyReportItem = {
   discrepancy_type: 'missing' | 'excess';
   created_at: string;
   notes: string | null;
+  status: DiscrepancyResolutionStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_reason: DiscrepancyResolutionReason | null;
+  resolution_note: string | null;
+  resolved_by_name: string | null;
 };
 
 export type InventoryReconciliationItem = {

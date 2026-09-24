@@ -14,8 +14,9 @@ assert.match(form, /catalogDrafts/);
 const products = readFileSync('app/(manager)/manager/products/index.tsx', 'utf8');
 assert.match(products, /Inactive until opening stock/);
 assert.match(products, /canActivate=/);
-assert.match(products, /configureBranchProductVariants/);
-assert.match(products, /for \(const draft of catalogDrafts\)/);
+assert.match(products, /createCompleteProduct|useCreateCompleteProduct/);
+assert.match(products, /tryBeginSubmit/);
+assert.match(products, /update_branch_product_variant_price|useUpdateBranchProductVariantPrice/);
 
 const branches = readFileSync('src/features/branches/BranchForm.tsx', 'utf8');
 assert.match(branches, /protectMainBranch \|\| isMainBranch \? null/);

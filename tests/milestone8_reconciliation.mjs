@@ -66,8 +66,8 @@ console.log('Testing Owner-only authorization...');
 await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${cashierId}', false);`);
 await assert.rejects(db.query(`select public.report_branch_performance()`), /Owner access required/);
 await assert.rejects(db.query(`select public.get_branch_performance_details('${branch1Id}')`), /Owner access required/);
-await assert.rejects(db.query(`select public.report_transfer_discrepancies()`), /Owner access required/);
-await assert.rejects(db.query(`select public.report_return_discrepancies()`), /Owner access required/);
+await assert.rejects(db.query(`select public.report_transfer_discrepancies()`), /Owner or Main Branch Manager access is required/);
+await assert.rejects(db.query(`select public.report_return_discrepancies()`), /Owner or Main Branch Manager access is required/);
 await assert.rejects(db.query(`select public.report_inventory_reconciliation()`), /Owner access required/);
 
 // As Manager: must fail

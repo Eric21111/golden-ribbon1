@@ -4,6 +4,8 @@ import type {
   BranchProduct,
   BranchProductVariant,
   BranchReceivingMode,
+  DiscrepancyResolutionReason,
+  DiscrepancyResolutionStatus,
   DiscrepancyType,
   ProductVariant,
   EmployeeRecord,
@@ -84,9 +86,17 @@ type StockTransferItemInsert = Omit<StockTransferItem, 'id' | 'created_at' | 'up
   created_at?: string;
   updated_at?: string;
 };
-type TransferDiscrepancyInsert = Omit<TransferDiscrepancy, 'id' | 'created_at'> & {
+type TransferDiscrepancyInsert = Omit<
+  TransferDiscrepancy,
+  'id' | 'created_at' | 'status' | 'resolved_by' | 'resolved_at' | 'resolution_reason' | 'resolution_note'
+> & {
   id?: string;
   created_at?: string;
+  status?: TransferDiscrepancy['status'];
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  resolution_reason?: TransferDiscrepancy['resolution_reason'];
+  resolution_note?: string | null;
 };
 type ShiftInsert = Omit<Shift, 'id' | 'created_at' | 'updated_at'> & {
   id?: string;
@@ -258,6 +268,36 @@ export type Database = {
         };
         Returns: undefined;
       };
+      create_complete_product: {
+        Args: {
+          p_name: string;
+          p_sku: string;
+          p_description: string | null;
+          p_variants: Array<{ name: string; default_price: string }>;
+          p_branches: Array<{
+            branch_id: string;
+            selling_price?: string;
+            variants?: Array<{ name: string; selling_price: string }>;
+          }>;
+          p_selling_price?: string | null;
+        };
+        Returns: Product;
+      };
+      update_product_variant: {
+        Args: {
+          p_variant_id: string;
+          p_new_name: string;
+          p_new_default_price: string;
+        };
+        Returns: ProductVariant;
+      };
+      update_branch_product_variant_price: {
+        Args: {
+          p_branch_variant_id: string;
+          p_selling_price: string;
+        };
+        Returns: BranchProductVariant;
+      };
       list_cashier_pos_inventory: {
         Args: Record<string, never>;
         Returns: Array<{
@@ -399,6 +439,14 @@ export type Database = {
         Args: { p_branch_id?: string | null };
         Returns: InventoryReconciliationItem[];
       };
+      resolve_return_discrepancy: {
+        Args: { p_id: string; p_reason: string; p_note?: string | null };
+        Returns: Record<string, unknown>;
+      };
+      resolve_transfer_discrepancy: {
+        Args: { p_id: string; p_reason: string; p_note?: string | null };
+        Returns: Record<string, unknown>;
+      };
       get_archive_status: { Args: Record<string, never>; Returns: ArchiveStatus };
       dismiss_archive_reminder: { Args: Record<string, never>; Returns: ArchiveStatus };
       prepare_sales_archive: { Args: Record<string, never>; Returns: DataArchiveRecord };
@@ -413,6 +461,8 @@ export type Database = {
       stock_transfer_status: TransferStatus;
       stock_return_status: ReturnStatus;
       transfer_discrepancy_type: DiscrepancyType;
+      discrepancy_resolution_status: DiscrepancyResolutionStatus;
+      discrepancy_resolution_reason: DiscrepancyResolutionReason;
       shift_status: ShiftStatus;
     };
     CompositeTypes: Record<string, never>;
