@@ -102,7 +102,7 @@ export default function PaymentScreen() {
     }
     setValidation('');
     confirmAction(
-      'Confirm order?',
+      'Checkout order?',
       `Total ${formatMoney(total / 100)}. Stock will be deducted.`,
       runSubmit,
     );
@@ -134,7 +134,7 @@ export default function PaymentScreen() {
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <ConstrainedWidth maxWidth={paymentMaxWidth} fill>
         <View style={styles.layout}>
-          <ManagerScreenHeader title="Checkout" showBack />
+          <ManagerScreenHeader title="Order Summary" showBack />
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
@@ -156,10 +156,6 @@ export default function PaymentScreen() {
                 {priceNotice}
               </Text>
             ) : null}
-            <Text style={styles.hint}>
-              Review the items, then confirm. Final prices and available stock are checked when you
-              confirm.
-            </Text>
             {validation || checkout.error ? (
               <Text accessibilityRole="alert" style={styles.error}>
                 {validation || checkout.error}
@@ -169,8 +165,8 @@ export default function PaymentScreen() {
 
           <View style={styles.footer}>
             <ManagerActionButton
-              label={checkout.request ? 'Retry confirmation' : 'Confirm'}
-              icon="checkmark-circle-outline"
+              label={checkout.request ? 'Retry checkout' : 'Checkout'}
+              icon="card-outline"
               loading={checkout.pending}
               disabled={!canConfirm}
               onPress={submit}
@@ -218,7 +214,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
-  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
   notice: {
     color: '#92400E',
     backgroundColor: '#FEF3C7',

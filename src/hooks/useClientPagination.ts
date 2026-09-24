@@ -11,11 +11,15 @@ import {
  * Client-side page slicing. Resets to page 0 when `resetKey` changes
  * (e.g. search/filter string) or when the item count shrinks below the page.
  */
-export function useClientPagination<T>(items: T[], resetKey: string | number = '') {
+export function useClientPagination<T>(
+  items: T[],
+  resetKey: string | number = '',
+  pageSize: number = PAGE_SIZE,
+) {
   const [page, setPage] = useState(0);
   const total = items.length;
-  const totalPages = totalPagesFor(total);
-  const showPagination = total >= PAGINATION_MIN_ITEMS;
+  const totalPages = totalPagesFor(total, pageSize);
+  const showPagination = total >= Math.min(pageSize, PAGINATION_MIN_ITEMS);
 
   useEffect(() => {
     setPage(0);
@@ -26,8 +30,8 @@ export function useClientPagination<T>(items: T[], resetKey: string | number = '
   }, [page, totalPages]);
 
   const pageItems = useMemo(
-    () => slicePage(items, Math.min(page, totalPages - 1), PAGE_SIZE),
-    [items, page, totalPages],
+    () => slicePage(items, Math.min(page, totalPages - 1), pageSize),
+    [items, page, totalPages, pageSize],
   );
 
   return {
@@ -37,6 +41,6 @@ export function useClientPagination<T>(items: T[], resetKey: string | number = '
     pageItems,
     showPagination,
     total,
-    pageSize: PAGE_SIZE,
+    pageSize,
   };
 }

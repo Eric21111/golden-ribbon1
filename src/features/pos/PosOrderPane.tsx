@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { managerColors } from '@/components/dashboard/theme';
 import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney } from '@/lib/format';
-import { cartLineKey, cartTotalCents, toCents } from '@/lib/money';
+import { cartLineKey, cartTotalCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
+
+import { OrderLine } from './PosOrderLine';
 
 type PosOrderPaneProps = {
   items: CartItem[];
@@ -62,6 +63,7 @@ export function PosOrderPane({
                 onIncrease={() => onIncrease(item.product_id, item.variant_id)}
                 onDecrease={() => onDecrease(item.product_id, item.variant_id)}
                 onQuantityChange={(quantity) => onQuantityChange(item.product_id, item.variant_id, quantity)}
+                onRemove={() => onQuantityChange(item.product_id, item.variant_id, 0)}
               />
             );
           })
@@ -77,7 +79,7 @@ export function PosOrderPane({
           </Text>
           <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
         </View>
-        <ManagerActionButton label="Checkout" icon="card-outline" disabled={items.length === 0} onPress={onCheckout} />
+        <ManagerActionButton label="Confirm Order" icon="checkmark-circle-outline" disabled={items.length === 0} onPress={onCheckout} />
         {items.length > 0 ? (
           <ManagerActionButton
             label="Clear order"
@@ -91,94 +93,6 @@ export function PosOrderPane({
             }
           />
         ) : null}
-      </View>
-    </View>
-  );
-}
-
-function OrderLine({
-  item,
-  label,
-  atLimit,
-  maxQuantity,
-  onIncrease,
-  onDecrease,
-  onQuantityChange,
-}: {
-  item: CartItem;
-  label: string;
-  atLimit: boolean;
-  maxQuantity: number;
-  onIncrease: () => void;
-  onDecrease: () => void;
-  onQuantityChange: (quantity: number) => void;
-}) {
-  const [draft, setDraft] = useState(String(item.quantity));
-
-  useEffect(() => {
-    setDraft(String(item.quantity));
-  }, [item.quantity]);
-
-  const commit = (raw: string) => {
-    if (raw === '') {
-      onQuantityChange(0);
-      return;
-    }
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) return;
-    onQuantityChange(Math.min(Math.max(0, parsed), maxQuantity));
-  };
-
-  return (
-    <View style={styles.line}>
-      <View style={styles.lineCopy}>
-        <Text style={styles.name} numberOfLines={2}>
-          {label}
-        </Text>
-        <Text style={styles.calc}>
-          {item.quantity} × {formatMoney(item.unit_price)}
-        </Text>
-      </View>
-      <View style={styles.lineActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Remove one ${label}`}
-          onPress={onDecrease}
-          style={({ pressed }) => [styles.stepper, pressed && styles.pressed]}
-        >
-          <Text style={styles.stepperText}>−</Text>
-        </Pressable>
-        <TextInput
-          accessibilityLabel={`${label} quantity`}
-          keyboardType="number-pad"
-          value={draft}
-          maxLength={6}
-          selectTextOnFocus
-          onChangeText={(value) => {
-            if (value === '' || /^\d{1,6}$/.test(value)) {
-              setDraft(value);
-              if (value !== '') commit(value);
-            }
-          }}
-          onBlur={() => commit(draft)}
-          style={styles.qtyInput}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Add one ${label}`}
-          disabled={atLimit}
-          onPress={onIncrease}
-          style={({ pressed }) => [
-            styles.stepper,
-            atLimit && styles.disabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.stepperText}>+</Text>
-        </Pressable>
-        <Text style={styles.subtotal}>
-          {formatMoney((toCents(item.unit_price) * item.quantity) / 100)}
-        </Text>
       </View>
     </View>
   );
@@ -203,50 +117,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
   empty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, paddingVertical: 16 },
-  line: {
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-    backgroundColor: managerColors.cardSurface,
-  },
-  lineCopy: { gap: 2 },
-  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  calc: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
-  lineActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  stepper: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperText: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 19 },
-  qtyInput: {
-    minWidth: 36,
-    height: 32,
-    textAlign: 'center',
-    color: managerColors.ink,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    paddingVertical: 0,
-  },
-  subtotal: {
-    marginLeft: 'auto',
-    color: managerColors.ink,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-  },
-  disabled: { opacity: 0.35 },
-  pressed: { opacity: 0.7 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,

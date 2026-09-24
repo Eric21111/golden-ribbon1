@@ -102,35 +102,16 @@ export default function CashierDashboard() {
 
   const openPos = () => void ensureStockAllowsPos(() => router.push('/cashier/pos'));
 
-  const incomingTile =
-    profile?.branch?.receiving_mode === 'cashier_confirm' ? (
-      <Row>
-        <NavTile
-          layout="tile"
-          icon="cube-outline"
-          accent="gold"
-          title="Incoming shipments"
-          onPress={() => router.push('/cashier/incoming' as never)}
-        />
-        <NavTile
-          layout="tile"
-          icon="return-up-back-outline"
-          accent="teal"
-          title="Create return"
-          onPress={() => router.push('/cashier/returns/create' as never)}
-        />
-      </Row>
-    ) : (
-      <Row>
-        <NavTile
-          layout="tile"
-          icon="return-up-back-outline"
-          accent="teal"
-          title="Create return"
-          onPress={() => router.push('/cashier/returns/create' as never)}
-        />
-      </Row>
-    );
+  const showIncomingTile = profile?.branch?.receiving_mode === 'cashier_confirm';
+  const incomingTile = showIncomingTile ? (
+    <NavTile
+      layout="tile"
+      icon="cube-outline"
+      accent="gold"
+      title="Incoming shipments"
+      onPress={() => router.push('/cashier/incoming' as never)}
+    />
+  ) : null;
 
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
@@ -216,7 +197,7 @@ export default function CashierDashboard() {
           <View style={styles.noticeCard}>
             <Text style={styles.noticeTitle}>No Active Shift</Text>
             <Text style={styles.noticeText}>
-              Start a shift to sell. You can confirm incoming shipments and create returns anytime.
+              Start a shift to sell. You can confirm incoming shipments anytime.
             </Text>
             {startMutation.error ? (
               <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
@@ -227,8 +208,12 @@ export default function CashierDashboard() {
               loading={startMutation.isPending}
               onPress={startShift}
             />
-            <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
-            {incomingTile}
+            {showIncomingTile ? (
+              <>
+                <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
+                <Row>{incomingTile}</Row>
+              </>
+            ) : null}
           </View>
         ) : (
           <View style={styles.content}>
@@ -305,8 +290,8 @@ export default function CashierDashboard() {
                 title="Current shift sales"
                 onPress={() => router.push('/cashier/sales')}
               />
+              {incomingTile}
             </Row>
-            {incomingTile}
           </View>
         )}
       </ConstrainedWidth>

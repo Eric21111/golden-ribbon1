@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
@@ -86,26 +85,33 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
       />
 
       <Text style={styles.sectionTitle}>ITEMS ORDERED</Text>
-      {sale.items.map((item) => (
-        <ListRowCard
-          key={item.id}
-          title={
-            item.variant_name
-              ? `${item.product?.name ?? `Product (${item.product_id})`} (${item.variant_name})`
-              : item.product?.name ?? `Product (${item.product_id})`
-          }
-          meta={`Quantity: ${item.quantity} · Historical price: ${formatMoney(item.unit_price)}`}
-          trailing={<Text style={styles.itemSubtotal}>{formatMoney(item.subtotal)}</Text>}
-        />
-      ))}
+      <View style={styles.receipt}>
+        {sale.items.map((item, index) => {
+          const name = item.variant_name
+            ? `${item.product?.name ?? `Product (${item.product_id})`} (${item.variant_name})`
+            : item.product?.name ?? `Product (${item.product_id})`;
+          return (
+            <View key={item.id}>
+              {index > 0 ? <View style={styles.receiptDivider} /> : null}
+              <View style={styles.receiptRow}>
+                <View style={styles.receiptCopy}>
+                  <Text style={styles.receiptName} numberOfLines={2}>{name}</Text>
+                  <Text style={styles.receiptMeta}>
+                    Qty {item.quantity} × {formatMoney(item.unit_price)}
+                  </Text>
+                </View>
+                <Text style={styles.receiptSubtotal}>{formatMoney(item.subtotal)}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
 
       <Text style={styles.sectionTitle}>PAYMENT SUMMARY</Text>
       <SummaryCard
         rows={[
           { label: 'Subtotal', value: formatMoney(sale.subtotal) },
           { label: 'Total amount', value: formatMoney(sale.total_amount), emphasis: true },
-          { label: 'Amount paid', value: formatMoney(sale.amount_paid) },
-          { label: 'Change given', value: formatMoney(sale.change_amount) },
         ]}
       />
     </View>
@@ -139,5 +145,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
   },
-  itemSubtotal: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  receipt: {
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+  },
+  receiptDivider: { height: StyleSheet.hairlineWidth, backgroundColor: managerColors.cardBorder },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  receiptCopy: { flex: 1, minWidth: 0, gap: 3 },
+  receiptName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },
+  receiptMeta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
+  receiptSubtotal: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
 });

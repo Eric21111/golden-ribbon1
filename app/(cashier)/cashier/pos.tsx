@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -16,24 +17,30 @@ import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PosItemSheet } from '@/features/pos/PosItemSheet';
 import { PosOrderPane } from '@/features/pos/PosOrderPane';
-import { PosProductCard } from '@/features/pos/PosProductCard';
+import { PosProductRow } from '@/features/pos/PosProductRow';
+import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCashierPosInventory } from '@/hooks/useInventory';
 import { useActiveShift } from '@/hooks/useShifts';
-import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { cartTotalCents } from '@/lib/money';
 import { useCartStore } from '@/stores/cartStore';
-import type { InventoryItem } from '@/types/models';
+import type { InventoryItem, PosVariant } from '@/types/models';
+
+const POS_PAGE_SIZE = 10;
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
-  const { posSplit, posColumns } = useLayout();
+  const { posSplit } = useLayout();
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
+  const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
+  const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const shiftQuery = useActiveShift(cashierId);
   const posBranchId = shiftQuery.data?.branch_id ?? null;
   const inventory = useCashierPosInventory(posBranchId);
@@ -53,6 +60,8 @@ export default function CashierPosScreen() {
     () => filterPosInventory(inventory.data ?? [], search),
     [inventory.data, search],
   );
+
+  const pagination = useClientPagination(filteredInventory, search, POS_PAGE_SIZE);
 
   const quantitiesByProduct = useMemo(() => {
     const map = new Map<string, Map<string | null, number>>();
@@ -95,6 +104,13 @@ export default function CashierPosScreen() {
     addProduct(row, variant);
   };
 
+  const activeSheetItem = sheetItem ? inventoryById.get(sheetItem.product.id) ?? sheetItem : null;
+
+  const addFromSheet = (variant: PosVariant | null, quantity: number) => {
+    if (!activeSheetItem) return;
+    for (let i = 0; i < quantity; i += 1) addProduct(activeSheetItem, variant);
+  };
+
   if (shiftQuery.isLoading || inventory.isLoading) {
     return <LoadingState label="Opening POS…" />;
   }
@@ -122,16 +138,13 @@ export default function CashierPosScreen() {
 
   const productList = (
     <FlatList
-      key={`pos-cols-${posColumns}`}
-      data={filteredInventory}
+      data={pagination.pageItems}
       keyExtractor={(item) => item.product.id}
-      numColumns={posColumns}
       style={styles.list}
       contentContainerStyle={styles.listContent}
-      columnWrapperStyle={posColumns > 1 ? styles.columnWrapper : undefined}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      ItemSeparatorComponent={posColumns === 1 ? () => <View style={styles.separator} /> : undefined}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={managerColors.royalBlue} />
       }
@@ -145,23 +158,29 @@ export default function CashierPosScreen() {
           }
         />
       }
+      ListFooterComponent={
+        pagination.showPagination ? (
+          <View style={styles.pager}>
+            <Text style={styles.pagerLabel}>
+              Page {pagination.page + 1} of {pagination.totalPages}
+            </Text>
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              onPageChange={pagination.setPage}
+            />
+          </View>
+        ) : null
+      }
       renderItem={({ item }) => (
-        <View style={posColumns > 1 ? styles.gridCell : undefined}>
-          <PosProductCard
-            item={item}
-            compact={posColumns > 1}
-            quantityByVariant={quantitiesByProduct.get(item.product.id) ?? new Map()}
-            onIncrease={(variantId) => {
-              const variant = variantId ? item.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
-              addProduct(item, variant);
-            }}
-            onDecrease={(variantId) => decreaseProduct(item.product.id, variantId)}
-            onQuantityChange={(variantId, quantity) => {
-              const variant = variantId ? item.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
-              setProductQuantity(item, quantity, variant);
-            }}
-          />
-        </View>
+        <PosProductRow
+          item={item}
+          cartQuantity={[...(quantitiesByProduct.get(item.product.id) ?? new Map()).values()].reduce(
+            (sum, qty) => sum + qty,
+            0,
+          )}
+          onPress={() => setSheetItem(item)}
+        />
       )}
     />
   );
@@ -174,6 +193,13 @@ export default function CashierPosScreen() {
     />
   );
 
+  const changeCartQuantity = (productId: string, variantId: string | null, quantity: number) => {
+    const row = inventoryById.get(productId);
+    if (!row) return;
+    const variant = variantId ? row.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
+    setProductQuantity(row, quantity, variant);
+  };
+
   const mobileFooter = (
     <View style={styles.footer}>
       <View style={styles.totalRow}>
@@ -185,24 +211,11 @@ export default function CashierPosScreen() {
         <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
       </View>
       <ManagerActionButton
-        label="Checkout"
-        icon="card-outline"
+        label="View Order"
+        icon="receipt-outline"
         disabled={items.length === 0}
-        onPress={() => router.push('/cashier/payment')}
+        onPress={() => setOrderSheetOpen(true)}
       />
-      {items.length > 0 ? (
-        <ManagerActionButton
-          label="Clear order"
-          variant="secondary"
-          onPress={() =>
-            confirmAction(
-              'Clear order?',
-              'Remove all products from this unfinished order.',
-              clearCart,
-            )
-          }
-        />
-      ) : null}
     </View>
   );
 
@@ -227,14 +240,7 @@ export default function CashierPosScreen() {
               stockByProductId={stockByProductId}
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
-              onQuantityChange={(productId, variantId, quantity) => {
-                const row = inventoryById.get(productId);
-                if (!row) return;
-                const variant = variantId
-                  ? row.variants?.find((candidate) => candidate.id === variantId) ?? null
-                  : null;
-                setProductQuantity(row, quantity, variant);
-              }}
+              onQuantityChange={changeCartQuantity}
               onClear={clearCart}
               onCheckout={() => router.push('/cashier/payment')}
             />
@@ -253,6 +259,28 @@ export default function CashierPosScreen() {
           {productList}
           {mobileFooter}
         </View>
+      )}
+      <PosItemSheet
+        item={activeSheetItem}
+        quantityByVariant={sheetItem ? quantitiesByProduct.get(sheetItem.product.id) ?? new Map() : new Map()}
+        onAdd={addFromSheet}
+        onClose={() => setSheetItem(null)}
+      />
+      {posSplit ? null : (
+        <PosViewOrderSheet
+          visible={orderSheetOpen}
+          items={items}
+          stockByProductId={stockByProductId}
+          onIncrease={increaseFromCart}
+          onDecrease={decreaseProduct}
+          onQuantityChange={changeCartQuantity}
+          onClear={clearCart}
+          onConfirm={() => {
+            setOrderSheetOpen(false);
+            router.push('/cashier/payment');
+          }}
+          onClose={() => setOrderSheetOpen(false)}
+        />
       )}
     </Screen>
   );
@@ -273,9 +301,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.sm,
   },
-  columnWrapper: { gap: spacing.sm },
-  gridCell: { flex: 1 },
   separator: { height: spacing.sm },
+  pager: { alignItems: 'center', gap: 8, paddingTop: spacing.sm },
+  pagerLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,

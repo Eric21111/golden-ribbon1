@@ -113,15 +113,6 @@ export function BranchForm({
           />
         )} />
       )}
-      {isMainBranch ? null : (
-        <View style={styles.receivingModeBlock}>
-          <Text style={[styles.label, styles.fieldLabel]}>Receiving mode</Text>
-          <Text style={styles.receivingModeDescription}>
-            Selling-branch cashiers confirm shipments. Manager count-and-receive is no longer used.
-          </Text>
-          <Text style={styles.receivingModeValue}>Cashier confirms arrival</Text>
-        </View>
-      )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ManagerActionButton
         label={submitLabel}
@@ -145,16 +136,4 @@ const styles = StyleSheet.create({
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
   switchDescription: { fontFamily: 'Inter_400Regular' },
-  receivingModeBlock: { gap: 8 },
-  receivingModeDescription: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  receivingModeValue: {
-    color: managerColors.ink,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-  },
 });
