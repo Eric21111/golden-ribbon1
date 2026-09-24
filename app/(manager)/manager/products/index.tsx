@@ -14,7 +14,12 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
-import { ProductForm, type BranchCatalogDraft } from '@/features/products/ProductForm';
+import {
+  CreateProductWizard,
+  type BranchPricingDraft,
+  type CreateProductValues,
+} from '@/features/products/CreateProductWizard';
+import { ProductForm } from '@/features/products/ProductForm';
 import {
   PRODUCT_FILTER_CHOICES,
   matchesProductFilter,
@@ -88,47 +93,57 @@ export default function ManagerProductListScreen() {
     await configureBranchProductVariants(branchId, productId, variants);
   }
 
-  const submitCreate = (values: ProductFormValues, catalogDrafts: BranchCatalogDraft[]) => {
+  const submitCreate = (values: CreateProductValues, catalogDrafts: BranchPricingDraft[]) => {
     setCreateFollowupError(undefined);
-    const fallbackPrice = Number(values.selling_price || catalogDrafts[0]?.selling_price || 0);
+    const hasVariants = values.variants.length > 0;
+    const allPrices = hasVariants
+      ? catalogDrafts.flatMap((draft) => Object.values(draft.variantPrices ?? {}))
+      : catalogDrafts.map((draft) => draft.selling_price ?? 0);
+    const basePrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
+
     void createMutation
       .mutateAsync({
-        name: values.name.trim(),
-        sku: values.sku.trim(),
-        description: values.description?.trim() ? values.description.trim() : null,
-        selling_price: fallbackPrice,
+        name: values.name,
+        sku: values.sku,
+        description: values.description ? values.description : null,
+        selling_price: basePrice,
         is_active: false,
       })
       .then(async (product) => {
         try {
-          if (values.pricingType === 'variants') {
+          if (hasVariants) {
             await configureVariantsMutation.mutateAsync({
               productId: product.id,
               variants: values.variants.map((variant) => ({
-                name: variant.name.trim(),
-                default_price: Number(variant.default_price),
-                is_active: variant.is_active,
+                name: variant.name,
+                default_price: basePrice,
+                is_active: true,
               })),
             });
           }
           for (const draft of catalogDrafts) {
-            if (!Number.isFinite(draft.selling_price) || draft.selling_price < 0) continue;
+            const branchVariantPrices = Object.values(draft.variantPrices ?? {});
+            const branchBasePrice = hasVariants
+              ? (branchVariantPrices.length > 0 ? Math.min(...branchVariantPrices) : basePrice)
+              : (draft.selling_price ?? 0);
             await configureBranchProductsFor(draft.branchId, [
               {
                 product_id: product.id,
-                selling_price: draft.selling_price,
+                selling_price: branchBasePrice,
                 is_active: true,
               },
             ]);
-            if (values.pricingType === 'variants') {
+            if (hasVariants && draft.variantPrices) {
               await configureBranchVariantsFor(
                 draft.branchId,
                 product.id,
-                values.variants.map((variant) => ({
-                  name: variant.name.trim(),
-                  selling_price: Number(variant.default_price),
-                  is_active: variant.is_active,
-                })),
+                values.variants
+                  .filter((variant) => draft.variantPrices![variant.id] != null)
+                  .map((variant) => ({
+                    name: variant.name,
+                    selling_price: draft.variantPrices![variant.id]!,
+                    is_active: true,
+                  })),
               );
             }
           }
@@ -236,15 +251,10 @@ export default function ManagerProductListScreen() {
         </ConstrainedWidth>
 
         <BottomSheet visible={createOpen} title="Create product" scroll onClose={() => setCreateOpen(false)}>
-          <ProductForm
+          <CreateProductWizard
             key={createKey}
-            autoGenerateSku
-            allowVariants
-            showActiveToggle={false}
             existingSkus={existingSkus}
             branchOptions={branchOptions}
-            resolveBranchPrice={() => undefined}
-            submitLabel="Create product"
             loading={createMutation.isPending || configureVariantsMutation.isPending}
             error={
               createFollowupError

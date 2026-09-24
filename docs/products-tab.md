@@ -1,61 +1,40 @@
 # Products Tab
 
-Shared **Product hub** for Owner (write) and Manager (read-only). Cashier has no Products tab.
-
-Matches Branches / Inventory / Transfers hub patterns.
+**Manager-only** (Main Branch Manager, via `MainBranchGuard`). Owner and other roles have no Products screen.
 
 | Role | Route | Screen |
 |------|-------|--------|
-| Owner | `/owner/products` | `app/(owner)/owner/products/index.tsx` |
-| Manager | `/manager/products` | `app/(manager)/manager/products.tsx` |
-
-Shared: `src/features/products/ProductHub.tsx`
-
-**Tablet:** 2-column product grid, catalog max width ~900.
+| Manager | `/manager/products` | `app/(manager)/manager/products/index.tsx` |
 
 ---
 
 ## Shell
 
 ```
-Header + subtitle
-Search (name or SKU)
-Chips (Owner): All | Active | Inactive
+Header
+Search (name or SKU) + status chips (All | Active | Inactive)
 Product list (pull to refresh)
-Sticky CTA (Owner): [ Create product ]
+Sticky footer: [ Create product ]  [ View branch catalogs ]
 ```
 
-| Element | Behavior |
-|---------|----------|
-| Search | Server-side `ilike` on name + SKU via `useProducts` |
-| Activity chips | Owner only; client filter on fetched results |
-| Manager scope | `activeOnly=true` always; no chips; no row press |
-| Sort | Server: name A–Z |
-| Row tap (Owner) | Edit `/owner/products/[id]` |
-| Pull to refresh | Refetch products |
+Row tap opens the **Edit product** bottom sheet (`ProductForm`, single page: info, branch price per branch, Active toggle once opening stock exists).
 
 ---
 
-## Owner
+## Create product — 3-step wizard
 
-**Subtitle:** Catalog master data  
-**Primary CTA:** Create product → bottom sheet modal (`ProductForm`)  
-**Row →** `/owner/products/[id]` (edit)
+**Primary CTA:** Create product → bottom sheet modal (`CreateProductWizard`, `src/features/products/CreateProductWizard.tsx`).
 
-Legacy `/owner/products/create` redirects to the list.
+Flow: **Product Information → Variants → Branch Pricing → Create product**, with a step indicator (1‑2‑3) and Back/Next at the bottom of the sheet.
 
-## Manager
+1. **Product Information** — Product name, SKU (auto-filled from name, editable), Description (optional). Must pass validation before advancing.
+2. **Variants (optional)** — Variant **names only** (e.g. Without Rice, With Rice); add/remove freely. No price entry here.
+3. **Branch Pricing** — Pick a selling branch (chips); if there are variants, set a price per variant for that branch (any can be left blank); if not, set one branch price. Switching branches keeps prices already typed for each one, so pricing for other branches can be added without losing work. Setting a price is optional — the product can be created with none set and priced later from branch catalogs.
 
-**Subtitle:** Active catalog reference  
-**No CTA, no chevron, rows not pressable**
+New products are always created **inactive**; a Main Manager must set opening stock before a product can activate.
 
 ---
 
-## Related (unchanged)
+## Related
 
-| Screen | Route |
-|--------|-------|
-| Create | `/owner/products/create` |
-| Edit | `/owner/products/[id]` |
-
-Soft-deactivate via inactive (no hard delete). Phase 2: confirm on deactivate; Manager peek sheet.
+`ProductForm` (`src/features/products/ProductForm.tsx`) is still used for **Edit** only. `src/features/products/productSchema.ts` / `generateSku.ts` are shared helpers.
