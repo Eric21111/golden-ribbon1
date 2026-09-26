@@ -1,5 +1,6 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -19,41 +20,52 @@ import {
   type BranchPricingDraft,
   type CreateProductValues,
 } from '@/features/products/CreateProductWizard';
-import { ProductForm } from '@/features/products/ProductForm';
+import {
+  EditProductWizard,
+  type BranchPricingDraft as EditBranchPricingDraft,
+  type EditProductValues,
+} from '@/features/products/EditProductWizard';
 import {
   PRODUCT_FILTER_CHOICES,
   matchesProductFilter,
   productFilterEmptyMessage,
   type ProductFilter,
 } from '@/features/products/productFilters';
-import { PRICE_PATTERN, type ProductFormValues } from '@/features/products/productSchema';
 import { useBranches } from '@/hooks/useBranches';
-import { useBranchProductVariants, useBranchProducts, useConfigureBranchProducts } from '@/hooks/useBranchProducts';
+import { useProductBranchPrices, useProductBranchVariantPrices } from '@/hooks/useBranchProducts';
 import { useInventory } from '@/hooks/useInventory';
 import {
   useCreateCompleteProduct,
   useProductSkus,
   useProductVariants,
   useProducts,
-  useUpdateBranchProductVariantPrice,
-  useUpdateProduct,
-  useUpdateProductVariant,
+  useUpdateCompleteProduct,
 } from '@/hooks/useProducts';
-import { alertNotice } from '@/lib/confirmAction';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
-import { configureBranchProducts } from '@/services/branchProductService';
 import type { Product } from '@/types/models';
+
+type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
+
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Name (A–Z)', value: 'name-asc' },
+  { label: 'Name (Z–A)', value: 'name-desc' },
+  { label: 'Price (Low to High)', value: 'price-asc' },
+  { label: 'Price (High to Low)', value: 'price-desc' },
+];
 
 export default function ManagerProductListScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ProductFilter>('all');
+  const [sort, setSort] = useState<SortOption>('name-asc');
+  const [sortOpen, setSortOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createKey, setCreateKey] = useState(0);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [editBranchId, setEditBranchId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const editSubmittingRef = useRef(false);
   const branches = useBranches();
   const sellingBranches = useMemo(
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
@@ -67,18 +79,26 @@ export default function ManagerProductListScreen() {
   const query = useProducts(search);
   const skuQuery = useProductSkus();
   const createMutation = useCreateCompleteProduct();
-  const updateMutation = useUpdateProduct(editProduct?.id ?? '');
-  const updateVariantMutation = useUpdateProductVariant();
-  const updateBranchVariantMutation = useUpdateBranchProductVariantPrice();
+  const updateCompleteMutation = useUpdateCompleteProduct();
   const editVariants = useProductVariants(editProduct?.id ?? '');
-  const editCatalog = useBranchProducts(editBranchId, false);
-  const editBranchVariants = useBranchProductVariants(editBranchId, editProduct?.id ?? '');
-  const configureBranchMutation = useConfigureBranchProducts(editBranchId);
+  const editBranchPrices = useProductBranchPrices(editProduct?.id ?? '');
+  const editBranchVariantPrices = useProductBranchVariantPrices(editProduct?.id ?? '');
 
-  const filtered = useMemo(
-    () => (query.data ?? []).filter((product) => matchesProductFilter(product.is_active, filter)),
-    [query.data, filter],
-  );
+  const filtered = useMemo(() => {
+    const rows = (query.data ?? []).filter((product) => matchesProductFilter(product.is_active, filter));
+    return [...rows].sort((a, b) => {
+      switch (sort) {
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'price-asc':
+          return a.selling_price - b.selling_price;
+        case 'price-desc':
+          return b.selling_price - a.selling_price;
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+  }, [query.data, filter, sort]);
 
   const existingSkus = skuQuery.data ?? [];
   const branchOptions = useMemo(
@@ -118,84 +138,32 @@ export default function ManagerProductListScreen() {
       });
   };
 
-  const submitEdit = (values: ProductFormValues) => {
+  const submitEdit = (values: EditProductValues, catalogDrafts: EditBranchPricingDraft[]) => {
     if (!editProduct) return;
-    const defaultVariant = values.variants[0];
-    updateMutation.mutate(
-      {
+    if (!tryBeginSubmit(editSubmittingRef)) return;
+    setIsEditSubmitting(true);
+    const hasVariants = values.variants.length > 0;
+    void updateCompleteMutation
+      .mutateAsync({
+        productId: editProduct.id,
         name: values.name,
         sku: values.sku,
-        description: values.description?.trim() || null,
-        selling_price: PRICE_PATTERN.test((defaultVariant?.default_price || values.selling_price).trim())
-          ? Number(defaultVariant?.default_price || values.selling_price)
-          : editProduct.selling_price,
-        is_active: values.is_active,
-      },
-      {
-        onSuccess: () => {
-          const existing = editVariants.data ?? [];
-          void (async () => {
-            try {
-              for (const variant of values.variants) {
-                if (!variant.id) continue;
-                await updateVariantMutation.mutateAsync({
-                  variantId: variant.id,
-                  name: variant.name,
-                  defaultPrice: variant.default_price,
-                });
-              }
-              if (existing.length === 0) setEditProduct(null);
-              else setEditProduct(null);
-            } catch (error) {
-              alertNotice('Unable to save variants', getProductErrorMessage(error));
-            }
-          })();
-        },
-      },
-    );
-  };
-
-  const confirmEditBranchPrice = (draft: { branchId: string; selling_price: number }) => {
-    if (!editProduct || !Number.isFinite(draft.selling_price) || draft.selling_price < 0) {
-      alertNotice('Invalid price', 'Enter a valid branch selling price.');
-      return;
-    }
-    if (!PRICE_PATTERN.test(String(draft.selling_price))) {
-      alertNotice('Invalid price', 'Enter a valid branch selling price.');
-      return;
-    }
-    setEditBranchId(draft.branchId);
-    const existing = editCatalog.data?.find((row) => row.product_id === editProduct.id);
-    void configureBranchProducts(draft.branchId, [
-      {
-        product_id: editProduct.id,
-        selling_price: draft.selling_price,
-        is_active: existing?.is_active ?? true,
-      },
-    ])
-      .then(() => {
-        alertNotice('Branch price saved', 'The selected branch price was updated.');
-        void editCatalog.refetch();
+        description: values.description ? values.description : null,
+        isActive: values.isActive,
+        variants: values.variants,
+        deletedVariantIds: values.deletedVariantIds,
+        branches: catalogDrafts.map((draft) =>
+          hasVariants
+            ? { branch_id: draft.branchId, variants: draft.variants ?? [] }
+            : { branch_id: draft.branchId, selling_price: draft.selling_price },
+        ),
+        selling_price: hasVariants ? null : values.default_price,
       })
-      .catch((error) => alertNotice('Unable to save branch price', getProductErrorMessage(error)));
-  };
-
-  const confirmEditBranchVariantPrice = (payload: { branchVariantId: string; selling_price: string }) => {
-    if (!PRICE_PATTERN.test(payload.selling_price.trim())) {
-      alertNotice('Invalid price', 'Enter a valid non-negative price.');
-      return;
-    }
-    void updateBranchVariantMutation
-      .mutateAsync({
-        branchVariantId: payload.branchVariantId,
-        sellingPrice: payload.selling_price.trim(),
-      })
-      .then(() => {
-        alertNotice('Branch variant price saved', 'The selected variant price was updated.');
-        void editBranchVariants.refetch();
-        void editCatalog.refetch();
-      })
-      .catch((error) => alertNotice('Unable to save branch price', getProductErrorMessage(error)));
+      .then(() => setEditProduct(null))
+      .finally(() => {
+        endSubmit(editSubmittingRef);
+        setIsEditSubmitting(false);
+      });
   };
 
   return (
@@ -205,7 +173,19 @@ export default function ManagerProductListScreen() {
 
         <ConstrainedWidth style={styles.column}>
           <View style={styles.filters}>
-            <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+            <View style={styles.searchRow}>
+              <View style={styles.searchField}>
+                <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+                onPress={() => setSortOpen(true)}
+                style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="options-outline" size={20} color={managerColors.ink} />
+              </Pressable>
+            </View>
             <FilterChipRow options={PRODUCT_FILTER_CHOICES} value={filter} onChange={setFilter} />
           </View>
 
@@ -230,10 +210,7 @@ export default function ManagerProductListScreen() {
                       tone={item.is_active ? 'success' : 'neutral'}
                     />
                   }
-                  onPress={() => {
-                    setEditBranchId(sellingBranches[0]?.id ?? '');
-                    setEditProduct(item);
-                  }}
+                  onPress={() => setEditProduct(item)}
                 />
               )}
             />
@@ -275,67 +252,73 @@ export default function ManagerProductListScreen() {
           scroll
           onClose={() => setEditProduct(null)}
         >
-          {editProduct && editVariants.isLoading ? (
+          {editProduct && (editVariants.isLoading || editBranchPrices.isLoading || editBranchVariantPrices.isLoading) ? (
             <LoadingState label="Loading product…" />
           ) : editProduct ? (
-            <ProductForm
-              key={`${editProduct.id}-${(editVariants.data ?? []).map((row) => row.id).join(',')}`}
-              showActiveToggle
-              allowVariants={(editVariants.data ?? []).length > 0}
-              lockVariantSet
+            <EditProductWizard
+              key={editProduct.id}
+              product={{
+                name: editProduct.name,
+                sku: editProduct.sku,
+                description: editProduct.description,
+                is_active: editProduct.is_active,
+              }}
+              sourceVariants={(editVariants.data ?? []).map((variant) => ({
+                id: variant.id,
+                name: variant.name,
+                default_price: variant.default_price,
+              }))}
+              sourceBranchPrices={(editBranchPrices.data ?? []).map((row) => ({
+                branch_id: row.branch_id,
+                selling_price: row.selling_price,
+              }))}
+              sourceBranchVariantPrices={(editBranchVariantPrices.data ?? []).map((row) => ({
+                branch_id: row.branch_id,
+                name: row.name,
+                selling_price: row.selling_price,
+              }))}
+              branchOptions={branchOptions}
               canActivate={Boolean(
                 mainInventory.data?.some(
                   (row) => row.product.id === editProduct.id && (row.quantity_on_hand > 0 || row.updated_at != null),
                 ),
               )}
-              branchOptions={branchOptions}
-              onBranchChange={setEditBranchId}
-              resolveBranchPrice={(branchId) => {
-                if (branchId !== editBranchId) return editProduct.selling_price.toFixed(2);
-                const entry = editCatalog.data?.find((row) => row.product_id === editProduct.id);
-                return (entry?.selling_price ?? editProduct.selling_price).toFixed(2);
-              }}
-              onConfirmBranchPrice={confirmEditBranchPrice}
-              branchVariantOptions={(editBranchVariants.data ?? []).map((row) => ({
-                id: row.id,
-                name: row.name,
-                selling_price: row.selling_price.toFixed(2),
-              }))}
-              onConfirmBranchVariantPrice={confirmEditBranchVariantPrice}
-              branchPriceLoading={configureBranchMutation.isPending || updateBranchVariantMutation.isPending}
-              branchPriceError={
-                configureBranchMutation.error
-                  ? getProductErrorMessage(configureBranchMutation.error)
-                  : updateBranchVariantMutation.error
-                    ? getProductErrorMessage(updateBranchVariantMutation.error)
-                    : undefined
-              }
-              defaultValues={{
-                name: editProduct.name,
-                sku: editProduct.sku,
-                description: editProduct.description ?? '',
-                selling_price: (editVariants.data?.[0]?.default_price ?? editProduct.selling_price).toFixed(2),
-                is_active: editProduct.is_active,
-                pricingType: (editVariants.data ?? []).length > 0 ? 'variants' : 'single',
-                variants: (editVariants.data ?? []).map((variant) => ({
-                  id: variant.id,
-                  name: variant.name,
-                  default_price: variant.default_price.toFixed(2),
-                  is_active: variant.is_active,
-                })),
-              }}
-              submitLabel="Save changes"
-              loading={updateMutation.isPending || updateVariantMutation.isPending}
-              error={
-                updateMutation.error
-                  ? getProductErrorMessage(updateMutation.error)
-                  : updateVariantMutation.error
-                    ? getProductErrorMessage(updateVariantMutation.error)
-                    : undefined
-              }
+              loading={isEditSubmitting}
+              error={updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined}
               onSubmit={submitEdit}
             />
           ) : null}
+        </BottomSheet>
+
+        <BottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+          <View style={styles.sortList}>
+            {SORT_OPTIONS.map((option) => {
+              const isSelected = option.value === sort;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => {
+                    setSort(option.value);
+                    setSortOpen(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.sortRow,
+                    isSelected && styles.sortRowSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.sortRowLabel, isSelected && styles.sortRowLabelSelected]}>
+                    {option.label}
+                  </Text>
+                  {isSelected ? (
+                    <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
         </BottomSheet>
       </Screen>
     </MainBranchGuard>
@@ -346,6 +329,35 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchField: { flex: 1 },
+  sortButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: managerColors.cardSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.75 },
+  sortList: { gap: 8, paddingBottom: 8 },
+  sortRow: {
+    minHeight: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sortRowSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  sortRowLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
   footer: {

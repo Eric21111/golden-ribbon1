@@ -81,6 +81,38 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
   return data;
 }
 
+export type UpdateCompleteProductInput = {
+  productId: string;
+  name: string;
+  sku: string;
+  description: string | null;
+  isActive: boolean;
+  variants: Array<{ id: string | null; name: string; default_price: string }>;
+  deletedVariantIds: string[];
+  branches: Array<{
+    branch_id: string;
+    selling_price?: string;
+    variants?: Array<{ name: string; selling_price: string }>;
+  }>;
+  selling_price?: string | null;
+};
+
+export async function updateCompleteProduct(input: UpdateCompleteProductInput): Promise<Product> {
+  const { data, error } = await supabase.rpc('update_complete_product', {
+    p_product_id: input.productId,
+    p_name: input.name,
+    p_sku: input.sku,
+    p_description: input.description,
+    p_is_active: input.isActive,
+    p_variants: input.variants,
+    p_deleted_variant_ids: input.deletedVariantIds,
+    p_branches: input.branches,
+    p_selling_price: input.selling_price ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function updateProductVariant(
   variantId: string,
   name: string,

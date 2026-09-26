@@ -6,6 +6,8 @@ import {
   configureBranchProductVariants,
   listBranchProducts,
   listBranchProductVariants,
+  listProductBranchPrices,
+  listProductBranchVariantPrices,
 } from '@/services/branchProductService';
 
 export function useBranchProducts(branchId: string, activeOnly = false) {
@@ -50,5 +52,23 @@ export function useConfigureBranchProductVariants(branchId: string, productId: s
         client.invalidateQueries({ queryKey: ['inventory'] }),
       ]);
     },
+  });
+}
+
+/** All selling branches' base prices for one product — pre-fills the Edit wizard's pricing step. */
+export function useProductBranchPrices(productId: string) {
+  return useQuery({
+    queryKey: ['product-branch-prices', productId],
+    queryFn: () => listProductBranchPrices(productId),
+    enabled: Boolean(productId),
+  });
+}
+
+/** All selling branches' per-variant prices for one product — pre-fills the Edit wizard's pricing step. */
+export function useProductBranchVariantPrices(productId: string) {
+  return useQuery({
+    queryKey: ['product-branch-variant-prices', productId],
+    queryFn: () => listProductBranchVariantPrices(productId),
+    enabled: Boolean(productId),
   });
 }

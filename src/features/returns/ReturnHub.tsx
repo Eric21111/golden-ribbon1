@@ -12,6 +12,7 @@ import {
 import { AppButton } from '@/components/AppButton';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/Feedback';
+import { FilterDropdown } from '@/components/FilterDropdown';
 import { MasterDetailLayout } from '@/components/MasterDetailLayout';
 import { OverflowSheet, type OverflowAction } from '@/components/OverflowSheet';
 import { PageHeader } from '@/components/PageHeader';
@@ -51,6 +52,14 @@ type ReturnHubProps = {
   enableMasterDetail?: boolean;
 };
 
+type SortOption = 'newest' | 'oldest' | 'number';
+
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Newest first', value: 'newest' },
+  { label: 'Oldest first', value: 'oldest' },
+  { label: 'Return #', value: 'number' },
+];
+
 export function ReturnHub({
   title,
   subtitle,
@@ -74,23 +83,36 @@ export function ReturnHub({
   const { isTablet, hubMaxWidth } = useLayout();
   const useSplit = isTablet && enableMasterDetail;
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortOption>('newest');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return returns ?? [];
-    return (returns ?? []).filter((stockReturn) => {
-      const haystack = [
-        stockReturn.return_number,
-        stockReturn.from_branch_name,
-        stockReturn.to_branch_name,
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
+    const rows = !query
+      ? [...(returns ?? [])]
+      : (returns ?? []).filter((stockReturn) => {
+          const haystack = [
+            stockReturn.return_number,
+            stockReturn.from_branch_name,
+            stockReturn.to_branch_name,
+          ]
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(query);
+        });
+
+    return rows.sort((a, b) => {
+      switch (sort) {
+        case 'oldest':
+          return a.created_at.localeCompare(b.created_at);
+        case 'number':
+          return a.return_number.localeCompare(b.return_number);
+        default:
+          return b.created_at.localeCompare(a.created_at);
+      }
     });
-  }, [returns, search]);
+  }, [returns, search, sort]);
 
   useEffect(() => {
     if (!useSplit) return;
@@ -139,6 +161,9 @@ export function ReturnHub({
       />
 
       <ChoiceChips choices={statusChoices} value={statusFilter} onChange={onStatusFilterChange} />
+      <View style={styles.sortRow}>
+        <FilterDropdown label="Sort" options={SORT_OPTIONS} value={sort} onChange={setSort} />
+      </View>
     </View>
   );
 
@@ -209,6 +234,7 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   headerCopy: { flex: 1, minWidth: 0 },
+  sortRow: { alignSelf: 'flex-start', minWidth: 140 },
   overflowButton: {
     width: 40,
     height: 40,

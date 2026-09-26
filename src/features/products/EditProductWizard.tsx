@@ -1,35 +1,49 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FormField } from '@/components/FormField';
+import { SwitchField } from '@/components/SwitchField';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
 
-import { generateSkuFromName } from './generateSku';
 import { PRICE_PATTERN } from './productSchema';
 
-export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
+type PricingMode = 'same' | 'different';
+type PriceDraft = { base: string; variantPrices: Record<string, string> };
+type EditVariantDraft = { key: string; id: string | null; name: string };
 
-export type CreateProductValues = {
+export type EditProductVariantValue = { id: string | null; name: string; default_price: string };
+
+export type EditProductValues = {
   name: string;
   sku: string;
   description: string;
+  isActive: boolean;
   default_price: string;
-  variants: CreateProductVariantDraft[];
+  variants: EditProductVariantValue[];
+  deletedVariantIds: string[];
 };
 
 export type BranchPricingDraft =
   | { branchId: string; selling_price: string; variants?: undefined }
   | { branchId: string; selling_price?: undefined; variants: Array<{ name: string; selling_price: string }> };
 
-interface CreateProductWizardProps {
-  existingSkus?: string[];
+export type EditProductSourceVariant = { id: string; name: string; default_price: number };
+export type EditProductSourceBranchPrice = { branch_id: string; selling_price: number };
+export type EditProductSourceBranchVariantPrice = { branch_id: string; name: string; selling_price: number };
+
+interface EditProductWizardProps {
+  product: { name: string; sku: string; description: string | null; is_active: boolean };
+  sourceVariants: EditProductSourceVariant[];
+  sourceBranchPrices: EditProductSourceBranchPrice[];
+  sourceBranchVariantPrices: EditProductSourceBranchVariantPrice[];
   branchOptions: Array<{ id: string; name: string }>;
+  canActivate: boolean;
   loading?: boolean;
   error?: string;
-  onSubmit: (values: CreateProductValues, pricing: BranchPricingDraft[]) => void;
+  onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[]) => void;
 }
 
 function isValidPrice(raw: string): boolean {
@@ -38,58 +52,124 @@ function isValidPrice(raw: string): boolean {
   return PRICE_PATTERN.test(trimmed);
 }
 
-type PricingMode = 'same' | 'different';
-type PriceDraft = { base: string; variantPrices: Record<string, string> };
+/** True when every branch id maps to the same fingerprint (e.g. same price for every variant). */
+function allBranchesMatch(branchIds: string[], fingerprint: (id: string) => string): boolean {
+  if (branchIds.length === 0) return false;
+  const first = fingerprint(branchIds[0]!);
+  return branchIds.every((id) => fingerprint(id) === first);
+}
 
-export function CreateProductWizard({
-  existingSkus = [],
+export function EditProductWizard({
+  product,
+  sourceVariants,
+  sourceBranchPrices,
+  sourceBranchVariantPrices,
   branchOptions,
+  canActivate,
   loading = false,
   error,
   onSubmit,
-}: CreateProductWizardProps) {
+}: EditProductWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const idRef = useRef(0);
+  const nextKey = () => {
+    idRef.current += 1;
+    return `k${idRef.current}`;
+  };
 
   // Step 1 — product info
-  const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(product.name);
+  const [sku, setSku] = useState(product.sku);
+  const [description, setDescription] = useState(product.description ?? '');
+  const [isActive, setIsActive] = useState(product.is_active);
   const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
-  const skuEditedRef = useRef(false);
 
-  useEffect(() => {
-    if (skuEditedRef.current) return;
-    setSku(name.trim() ? generateSkuFromName(name, existingSkus) : '');
-  }, [name, existingSkus]);
-
-  // Step 2 — variant names only
-  const idRef = useRef(0);
-  const [variants, setVariants] = useState<{ id: string; name: string }[]>([]);
+  // Step 2 — variants (pre-filled), with hard-delete tracking
+  const [variants, setVariants] = useState<EditVariantDraft[]>(() =>
+    sourceVariants.map((variant) => ({ key: nextKey(), id: variant.id, name: variant.name })),
+  );
+  const [deletedVariantIds, setDeletedVariantIds] = useState<string[]>([]);
   const [step2Error, setStep2Error] = useState<string | undefined>();
   const [step3Error, setStep3Error] = useState<string | undefined>();
 
-  // Step 3 — branch pricing
-  const [pricingMode, setPricingMode] = useState<PricingMode>('same');
+  // Step 3 — branch pricing, pre-filled from existing catalog data
+  const initialPricing = useMemo(() => {
+    const hasVariants = sourceVariants.length > 0;
+    const branchIds = branchOptions.map((branch) => branch.id);
 
-  // "Same for All" mode — applies to every selling branch automatically
-  const [uniformBase, setUniformBase] = useState('');
-  const [uniformVariantPrices, setUniformVariantPrices] = useState<Record<string, string>>({});
+    if (hasVariants) {
+      const byBranch = new Map<string, Map<string, number>>();
+      for (const row of sourceBranchVariantPrices) {
+        if (!byBranch.has(row.branch_id)) byBranch.set(row.branch_id, new Map());
+        byBranch.get(row.branch_id)!.set(row.name, row.selling_price);
+      }
+      const pricedBranchIds = branchIds.filter((id) => byBranch.has(id));
+      const fingerprint = (id: string) =>
+        sourceVariants.map((variant) => byBranch.get(id)?.get(variant.name) ?? '').join('|');
+      const isUniform =
+        pricedBranchIds.length > 0 &&
+        pricedBranchIds.length === branchIds.length &&
+        allBranchesMatch(branchIds, fingerprint);
 
-  // "Different per Branch" mode
-  const [branchId, setBranchId] = useState(branchOptions[0]?.id ?? '');
-  const [priceDrafts, setPriceDrafts] = useState<Record<string, PriceDraft>>({});
+      if (isUniform) {
+        const first = byBranch.get(branchIds[0]!)!;
+        return {
+          mode: 'same' as PricingMode,
+          uniformBase: '',
+          uniformVariantPrices: Object.fromEntries(
+            sourceVariants.map((variant) => [variant.id, String(first.get(variant.name) ?? '')]),
+          ),
+          priceDrafts: {} as Record<string, PriceDraft>,
+        };
+      }
 
-  useEffect(() => {
-    if (!branchId && branchOptions[0]) setBranchId(branchOptions[0].id);
-  }, [branchId, branchOptions]);
+      const priceDrafts: Record<string, PriceDraft> = {};
+      for (const id of pricedBranchIds) {
+        const prices = byBranch.get(id)!;
+        priceDrafts[id] = {
+          base: '',
+          variantPrices: Object.fromEntries(
+            sourceVariants.map((variant) => [variant.id, String(prices.get(variant.name) ?? '')]),
+          ),
+        };
+      }
+      return { mode: 'different' as PricingMode, uniformBase: '', uniformVariantPrices: {}, priceDrafts };
+    }
 
-  useEffect(() => {
-    if (!branchId) return;
-    setPriceDrafts((current) => {
-      if (current[branchId]) return current;
-      return { ...current, [branchId]: { base: '', variantPrices: {} } };
-    });
-  }, [branchId]);
+    const byBranch = new Map(sourceBranchPrices.map((row) => [row.branch_id, row.selling_price]));
+    const pricedBranchIds = branchIds.filter((id) => byBranch.has(id));
+    const fingerprint = (id: string) => String(byBranch.get(id) ?? '');
+    const isUniform =
+      pricedBranchIds.length > 0 &&
+      pricedBranchIds.length === branchIds.length &&
+      allBranchesMatch(branchIds, fingerprint);
+
+    if (isUniform) {
+      return {
+        mode: 'same' as PricingMode,
+        uniformBase: String(byBranch.get(branchIds[0]!) ?? ''),
+        uniformVariantPrices: {},
+        priceDrafts: {} as Record<string, PriceDraft>,
+      };
+    }
+
+    const priceDrafts: Record<string, PriceDraft> = {};
+    for (const id of pricedBranchIds) {
+      priceDrafts[id] = { base: String(byBranch.get(id) ?? ''), variantPrices: {} };
+    }
+    return { mode: 'same' as PricingMode, uniformBase: '', uniformVariantPrices: {}, priceDrafts };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [pricingMode, setPricingMode] = useState<PricingMode>(initialPricing.mode);
+  const [uniformBase, setUniformBase] = useState(initialPricing.uniformBase);
+  const [uniformVariantPrices, setUniformVariantPrices] = useState<Record<string, string>>(
+    initialPricing.uniformVariantPrices,
+  );
+  const [branchId, setBranchId] = useState(
+    Object.keys(initialPricing.priceDrafts)[0] ?? branchOptions[0]?.id ?? '',
+  );
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, PriceDraft>>(initialPricing.priceDrafts);
 
   const currentDraft = priceDrafts[branchId] ?? { base: '', variantPrices: {} };
 
@@ -115,7 +195,7 @@ export function CreateProductWizard({
       const filled =
         variants.length === 0
           ? draft.base.trim() !== ''
-          : variants.some((variant) => (draft.variantPrices[variant.id] ?? '').trim() !== '');
+          : variants.some((variant) => (draft.variantPrices[variant.key] ?? '').trim() !== '');
       if (filled) ids.add(branch.id);
     }
     return ids;
@@ -129,13 +209,13 @@ export function CreateProductWizard({
     }));
   }
 
-  function setVariantPrice(variantId: string, value: string) {
+  function setVariantPrice(variantKey: string, value: string) {
     if (!branchId) return;
     setPriceDrafts((current) => {
       const draft = current[branchId] ?? { base: '', variantPrices: {} };
       return {
         ...current,
-        [branchId]: { ...draft, variantPrices: { ...draft.variantPrices, [variantId]: value } },
+        [branchId]: { ...draft, variantPrices: { ...draft.variantPrices, [variantKey]: value } },
       };
     });
   }
@@ -190,8 +270,8 @@ export function CreateProductWizard({
         }
         pricing = hasPrice ? branchIds.map((id) => ({ branchId: id, selling_price: uniformBase.trim() })) : [];
       } else {
-        const anyFilled = variants.some((variant) => (uniformVariantPrices[variant.id] ?? '').trim() !== '');
-        const missingPrice = variants.some((variant) => !isValidPrice(uniformVariantPrices[variant.id] ?? ''));
+        const anyFilled = variants.some((variant) => (uniformVariantPrices[variant.key] ?? '').trim() !== '');
+        const missingPrice = variants.some((variant) => !isValidPrice(uniformVariantPrices[variant.key] ?? ''));
         if (anyFilled && missingPrice) {
           setStep3Error('Enter a price for every variant.');
           return;
@@ -201,7 +281,7 @@ export function CreateProductWizard({
               branchId: id,
               variants: variants.map((variant) => ({
                 name: variant.name.trim(),
-                selling_price: uniformVariantPrices[variant.id]!.trim(),
+                selling_price: uniformVariantPrices[variant.key]!.trim(),
               })),
             }))
           : [];
@@ -215,7 +295,7 @@ export function CreateProductWizard({
             setStep3Error('Complete the pricing for all selected branches.');
             return;
           }
-        } else if (!draft || variants.some((variant) => !isValidPrice(draft.variantPrices[variant.id] ?? ''))) {
+        } else if (!draft || variants.some((variant) => !isValidPrice(draft.variantPrices[variant.key] ?? ''))) {
           setStep3Error('Enter a price for every variant on each selected branch.');
           return;
         }
@@ -227,7 +307,7 @@ export function CreateProductWizard({
           branchId: id,
           variants: variants.map((variant) => ({
             name: variant.name.trim(),
-            selling_price: draft.variantPrices[variant.id]!.trim(),
+            selling_price: draft.variantPrices[variant.key]!.trim(),
           })),
         };
       });
@@ -240,11 +320,11 @@ export function CreateProductWizard({
     )?.selling_price;
     const topLevelPrice = variants.length === 0 ? (firstBasePrice || uniformBase.trim() || '0.00') : '0.00';
 
-    const variantValues: CreateProductVariantDraft[] = variants.map((variant) => {
+    const variantValues: EditProductVariantValue[] = variants.map((variant) => {
       const fromPricing = pricing
         .flatMap((draft) => draft.variants ?? [])
         .find((entry) => entry.name === variant.name.trim());
-      const price = fromPricing?.selling_price || uniformVariantPrices[variant.id] || '0.00';
+      const price = fromPricing?.selling_price || uniformVariantPrices[variant.key] || '0.00';
       return { id: variant.id, name: variant.name.trim(), default_price: price };
     });
 
@@ -253,8 +333,10 @@ export function CreateProductWizard({
         name: name.trim(),
         sku: sku.trim(),
         description: description.trim(),
+        isActive,
         default_price: topLevelPrice,
         variants: variantValues,
+        deletedVariantIds,
       },
       pricing,
     );
@@ -282,13 +364,9 @@ export function CreateProductWizard({
           <FormField
             label="SKU"
             value={sku}
-            onChangeText={(text) => {
-              skuEditedRef.current = true;
-              setSku(text);
-            }}
+            onChangeText={setSku}
             error={step1Errors.sku}
             autoCapitalize="characters"
-            placeholder="Auto from name"
             labelStyle={styles.fieldLabel}
             errorStyle={styles.fieldError}
             accentColor={managerColors.royalBlue}
@@ -307,6 +385,22 @@ export function CreateProductWizard({
             accentColor={managerColors.royalBlue}
             style={styles.fieldInput}
           />
+          <SwitchField
+            label="Active"
+            description={
+              canActivate
+                ? 'Inactive products are retained for historical records.'
+                : 'This product can become active only after Main sets opening stock.'
+            }
+            value={isActive}
+            onValueChange={(next) => {
+              if (next && !canActivate) return;
+              setIsActive(next);
+            }}
+            labelStyle={styles.fieldLabel}
+            descriptionStyle={styles.switchDescription}
+            activeTrackColor={managerColors.royalBlue}
+          />
         </View>
       ) : null}
 
@@ -314,7 +408,7 @@ export function CreateProductWizard({
         <View style={styles.stepBody}>
           <View style={styles.variantList}>
             {variants.map((variant, index) => (
-              <View key={variant.id}>
+              <View key={variant.key}>
                 {index > 0 ? <View style={styles.variantDivider} /> : null}
                 <View style={styles.variantRow}>
                   <View style={styles.variantFieldCol}>
@@ -337,7 +431,10 @@ export function CreateProductWizard({
                     accessibilityRole="button"
                     accessibilityLabel={`Remove variant ${index + 1}`}
                     hitSlop={8}
-                    onPress={() => setVariants((current) => current.filter((_, i) => i !== index))}
+                    onPress={() => {
+                      if (variant.id) setDeletedVariantIds((current) => [...current, variant.id!]);
+                      setVariants((current) => current.filter((_, i) => i !== index));
+                    }}
                     style={({ pressed }) => [styles.removeIconButton, pressed && styles.pressed]}
                   >
                     <Ionicons name="close" size={16} color={managerColors.subtext} />
@@ -349,10 +446,7 @@ export function CreateProductWizard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add variant"
-              onPress={() => {
-                idRef.current += 1;
-                setVariants((current) => [...current, { id: `v${idRef.current}`, name: '' }]);
-              }}
+              onPress={() => setVariants((current) => [...current, { key: nextKey(), id: null, name: '' }])}
               style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
             >
               <Text style={styles.addButtonText}>Add variant</Text>
@@ -394,16 +488,16 @@ export function CreateProductWizard({
               {hasVariants ? (
                 <View style={styles.variantPriceList}>
                   {variants.map((variant) => (
-                    <View key={variant.id} style={styles.variantPriceRow}>
+                    <View key={variant.key} style={styles.variantPriceRow}>
                       <Text style={styles.variantPriceName} numberOfLines={1}>
                         {variant.name || 'Unnamed variant'}
                       </Text>
                       <FormField
                         label="Price (PHP)"
                         accessibilityLabel={`${variant.name || 'Variant'} price (PHP)`}
-                        value={uniformVariantPrices[variant.id] ?? ''}
+                        value={uniformVariantPrices[variant.key] ?? ''}
                         onChangeText={(text) =>
-                          setUniformVariantPrices((current) => ({ ...current, [variant.id]: text }))
+                          setUniformVariantPrices((current) => ({ ...current, [variant.key]: text }))
                         }
                         keyboardType="decimal-pad"
                         placeholder="0.00"
@@ -458,15 +552,15 @@ export function CreateProductWizard({
               ) : (
                 <View style={styles.variantPriceList}>
                   {variants.map((variant) => (
-                    <View key={variant.id} style={styles.variantPriceRow}>
+                    <View key={variant.key} style={styles.variantPriceRow}>
                       <Text style={styles.variantPriceName} numberOfLines={1}>
                         {variant.name || 'Unnamed variant'}
                       </Text>
                       <FormField
                         label="Price (PHP)"
                         accessibilityLabel={`${variant.name || 'Variant'} price (PHP)`}
-                        value={currentDraft.variantPrices[variant.id] ?? ''}
-                        onChangeText={(text) => setVariantPrice(variant.id, text)}
+                        value={currentDraft.variantPrices[variant.key] ?? ''}
+                        onChangeText={(text) => setVariantPrice(variant.key, text)}
                         keyboardType="decimal-pad"
                         placeholder="0.00"
                         labelStyle={styles.variantPriceLabel}
@@ -506,7 +600,7 @@ export function CreateProductWizard({
           ) : step === 2 ? (
             <ManagerActionButton label="Next" onPress={goToStep3} />
           ) : (
-            <ManagerActionButton label="Create product" loading={loading} onPress={submit} />
+            <ManagerActionButton label="Save changes" loading={loading} onPress={submit} />
           )}
         </View>
       </View>
@@ -543,6 +637,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
+  switchDescription: { fontFamily: 'Inter_400Regular' },
   variantList: { gap: 4 },
   variantRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingVertical: 10 },
   variantFieldCol: { flex: 1, minWidth: 0 },

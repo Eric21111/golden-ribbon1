@@ -64,6 +64,7 @@
     "test:recon-return": "node tests/inventory_reconciliation_return_issue.mjs",
     "test:product-active": "node tests/product_active_after_opening.mjs",
     "test:create-product": "node tests/create_product_integrity.mjs",
+    "test:update-product": "node tests/update_complete_product_integrity.mjs",
     "test:return-integrity": "node tests/return_inventory_integrity.mjs",
     "test:discrepancy-resolution": "node tests/discrepancy_resolution.mjs",
     "doctor": "expo-doctor"

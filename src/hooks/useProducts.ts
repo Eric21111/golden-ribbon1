@@ -10,9 +10,11 @@ import {
   listProductVariants,
   listProducts,
   updateBranchProductVariantPrice,
+  updateCompleteProduct,
   updateProduct,
   updateProductVariant,
   type CreateCompleteProductInput,
+  type UpdateCompleteProductInput,
 } from '@/services/productService';
 import type { ProductInput } from '@/types/models';
 
@@ -71,6 +73,24 @@ export function useCreateCompleteProduct() {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['products'] }),
         client.invalidateQueries({ queryKey: ['product-variants'] }),
+        client.invalidateQueries({ queryKey: ['branch-products'] }),
+        client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
+      ]);
+    },
+  });
+}
+
+export function useUpdateCompleteProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateCompleteProductInput) => updateCompleteProduct(input),
+    onSuccess: async (_product, { productId }) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['products'] }),
+        client.invalidateQueries({ queryKey: queryKeys.product(productId) }),
+        client.invalidateQueries({ queryKey: ['product-variants', productId] }),
+        client.invalidateQueries({ queryKey: ['product-branch-prices', productId] }),
+        client.invalidateQueries({ queryKey: ['product-branch-variant-prices', productId] }),
         client.invalidateQueries({ queryKey: ['branch-products'] }),
         client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
       ]);

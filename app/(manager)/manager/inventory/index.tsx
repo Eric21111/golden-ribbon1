@@ -1,6 +1,7 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -49,6 +50,15 @@ function stockPillLabel(status: ReturnType<typeof getStockStatus>, quantity: num
   }
 }
 
+type SortOption = 'name-asc' | 'name-desc' | 'qty-desc' | 'qty-asc';
+
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Name (A–Z)', value: 'name-asc' },
+  { label: 'Name (Z–A)', value: 'name-desc' },
+  { label: 'Quantity (High to Low)', value: 'qty-desc' },
+  { label: 'Quantity (Low to High)', value: 'qty-asc' },
+];
+
 export default function ManagerInventoryScreen() {
   const { profile } = useAuth();
   const isMain = isMainBranchManager(profile);
@@ -59,17 +69,31 @@ export default function ManagerInventoryScreen() {
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StockFilter>('all');
+  const [sort, setSort] = useState<SortOption>('name-asc');
+  const [sortOpen, setSortOpen] = useState(false);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
 
   const filtered = useMemo(() => {
     const items = query.data ?? [];
     const term = search.trim().toLowerCase();
-    return items.filter((item) => {
+    const rows = items.filter((item) => {
       if (!matchesStockFilter(item, filter)) return false;
       if (!term) return true;
       return `${item.product.name} ${item.product.sku}`.toLowerCase().includes(term);
     });
-  }, [query.data, filter, search]);
+    return [...rows].sort((a, b) => {
+      switch (sort) {
+        case 'name-desc':
+          return b.product.name.localeCompare(a.product.name);
+        case 'qty-desc':
+          return b.quantity_on_hand - a.quantity_on_hand;
+        case 'qty-asc':
+          return a.quantity_on_hand - b.quantity_on_hand;
+        default:
+          return a.product.name.localeCompare(b.product.name);
+      }
+    });
+  }, [query.data, filter, search, sort]);
 
   const filterOptions = useMemo(() => {
     const base: Array<{ label: string; value: StockFilter }> = [
@@ -139,7 +163,19 @@ export default function ManagerInventoryScreen() {
 
       <ConstrainedWidth style={styles.column}>
         <View style={styles.filters}>
-          <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+          <View style={styles.searchRow}>
+            <View style={styles.searchField}>
+              <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+              onPress={() => setSortOpen(true)}
+              style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="options-outline" size={20} color={managerColors.ink} />
+            </Pressable>
+          </View>
           <FilterChipRow options={filterOptions} value={filter} onChange={setFilter} />
         </View>
 
@@ -265,6 +301,35 @@ export default function ManagerInventoryScreen() {
           </View>
         ) : null}
       </BottomSheet>
+
+      <BottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+        <View style={styles.sortList}>
+          {SORT_OPTIONS.map((option) => {
+            const isSelected = option.value === sort;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => {
+                  setSort(option.value);
+                  setSortOpen(false);
+                }}
+                style={({ pressed }) => [
+                  styles.sortRow,
+                  isSelected && styles.sortRowSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.sortRowLabel, isSelected && styles.sortRowLabelSelected]}>
+                  {option.label}
+                </Text>
+                {isSelected ? <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
     </Screen>
   );
 }
@@ -273,6 +338,35 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchField: { flex: 1 },
+  sortButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: managerColors.cardSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.75 },
+  sortList: { gap: 8, paddingBottom: 8 },
+  sortRow: {
+    minHeight: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sortRowSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  sortRowLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   resultsCount: {
     color: managerColors.subtext,
     fontFamily: 'Inter_500Medium',

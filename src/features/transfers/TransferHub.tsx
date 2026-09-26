@@ -64,6 +64,14 @@ type TransferHubProps = {
   filterPresentation?: 'chips' | 'dropdown';
 };
 
+type SortOption = 'newest' | 'oldest' | 'number';
+
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Newest first', value: 'newest' },
+  { label: 'Oldest first', value: 'oldest' },
+  { label: 'Transfer #', value: 'number' },
+];
+
 export function TransferHub({
   title,
   subtitle,
@@ -94,27 +102,40 @@ export function TransferHub({
   const useSplit = isTablet && enableMasterDetail;
   const useDropdowns = filterPresentation === 'dropdown';
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortOption>('newest');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return transfers ?? [];
-    return (transfers ?? []).filter((transfer) => {
-      const haystack = [
-        transfer.transfer_number,
-        transfer.from_branch?.name ?? '',
-        transfer.to_branch?.name ?? '',
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
+    const rows = !query
+      ? [...(transfers ?? [])]
+      : (transfers ?? []).filter((transfer) => {
+          const haystack = [
+            transfer.transfer_number,
+            transfer.from_branch?.name ?? '',
+            transfer.to_branch?.name ?? '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(query);
+        });
+
+    return rows.sort((a, b) => {
+      switch (sort) {
+        case 'oldest':
+          return a.created_at.localeCompare(b.created_at);
+        case 'number':
+          return a.transfer_number.localeCompare(b.transfer_number);
+        default:
+          return b.created_at.localeCompare(a.created_at);
+      }
     });
-  }, [transfers, search]);
+  }, [transfers, search, sort]);
 
   const pagination = useClientPagination(
     filtered,
-    `${search}|${statusFilter}|${destinationBranchId}`,
+    `${search}|${statusFilter}|${destinationBranchId}|${sort}`,
   );
 
   useEffect(() => {
@@ -195,6 +216,9 @@ export function TransferHub({
               />
             </View>
           ) : null}
+          <View style={styles.filterItem}>
+            <FilterDropdown label="Sort" options={SORT_OPTIONS} value={sort} onChange={setSort} />
+          </View>
         </View>
       ) : (
         <>
@@ -207,6 +231,9 @@ export function TransferHub({
               allowAll
             />
           ) : null}
+          <View style={styles.sortRow}>
+            <FilterDropdown label="Sort" options={SORT_OPTIONS} value={sort} onChange={setSort} />
+          </View>
         </>
       )}
     </View>
@@ -306,6 +333,7 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
+  sortRow: { alignSelf: 'flex-start', minWidth: 140 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   headerCopy: { flex: 1, minWidth: 0 },
   overflowButton: {

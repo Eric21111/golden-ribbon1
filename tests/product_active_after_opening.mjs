@@ -16,7 +16,10 @@ assert.match(products, /Inactive until opening stock/);
 assert.match(products, /canActivate=/);
 assert.match(products, /createCompleteProduct|useCreateCompleteProduct/);
 assert.match(products, /tryBeginSubmit/);
-assert.match(products, /update_branch_product_variant_price|useUpdateBranchProductVariantPrice/);
+// Edit now saves atomically (info + variants + branch pricing in one transaction) via
+// update_complete_product instead of chaining per-variant/per-branch-variant RPCs —
+// see tests/update_complete_product_integrity.mjs for that contract.
+assert.match(products, /update_complete_product|useUpdateCompleteProduct/);
 
 const branches = readFileSync('src/features/branches/BranchForm.tsx', 'utf8');
 assert.match(branches, /protectMainBranch \|\| isMainBranch \? null/);

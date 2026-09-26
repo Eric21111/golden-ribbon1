@@ -68,3 +68,17 @@ export async function configureBranchProductVariants(
   });
   if (error) throw error;
 }
+
+/** Every selling branch's base price for one product — used to pre-fill the Edit wizard's pricing step. */
+export async function listProductBranchPrices(productId: string): Promise<BranchProduct[]> {
+  const { data, error } = await supabase.from('branch_products').select('*').eq('product_id', productId);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...row, selling_price: Number(row.selling_price) }));
+}
+
+/** Every selling branch's per-variant prices for one product — used to pre-fill the Edit wizard's pricing step. */
+export async function listProductBranchVariantPrices(productId: string): Promise<BranchProductVariant[]> {
+  const { data, error } = await supabase.from('branch_product_variants').select('*').eq('product_id', productId);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...row, selling_price: Number(row.selling_price) }));
+}

@@ -283,6 +283,24 @@ export type Database = {
         };
         Returns: Product;
       };
+      update_complete_product: {
+        Args: {
+          p_product_id: string;
+          p_name: string;
+          p_sku: string;
+          p_description: string | null;
+          p_is_active: boolean;
+          p_variants: Array<{ id: string | null; name: string; default_price: string }>;
+          p_deleted_variant_ids: string[];
+          p_branches: Array<{
+            branch_id: string;
+            selling_price?: string;
+            variants?: Array<{ name: string; selling_price: string }>;
+          }>;
+          p_selling_price?: string | null;
+        };
+        Returns: Product;
+      };
       update_product_variant: {
         Args: {
           p_variant_id: string;

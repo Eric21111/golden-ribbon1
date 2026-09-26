@@ -4,8 +4,11 @@ import { PGlite } from '@electric-sql/pglite';
 
 const wizard = readFileSync('src/features/products/CreateProductWizard.tsx', 'utf8');
 assert.doesNotMatch(wizard, /Pricing is optional/);
-assert.match(wizard, /Default \/ base price/);
-assert.match(wizard, /Default variant name/);
+// Variants step collects names only — no manual default/base price entry.
+assert.doesNotMatch(wizard, /Default \/ base price/);
+assert.doesNotMatch(wizard, /Default variant name/);
+assert.match(wizard, /Same for All/);
+assert.match(wizard, /Different per Branch/);
 
 const products = readFileSync('app/(manager)/manager/products/index.tsx', 'utf8');
 assert.match(products, /tryBeginSubmit/);
