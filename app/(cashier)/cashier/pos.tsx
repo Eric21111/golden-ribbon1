@@ -163,9 +163,6 @@ export default function CashierPosScreen() {
       ListFooterComponent={
         pagination.showPagination ? (
           <View style={styles.pager}>
-            <Text style={styles.pagerLabel}>
-              Page {pagination.page + 1} of {pagination.totalPages}
-            </Text>
             <Pagination
               page={pagination.page}
               totalPages={pagination.totalPages}
@@ -305,7 +302,6 @@ const styles = StyleSheet.create({
   },
   separator: { height: spacing.sm },
   pager: { alignItems: 'center', gap: 8, paddingTop: spacing.sm },
-  pagerLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,

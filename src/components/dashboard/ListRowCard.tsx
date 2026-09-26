@@ -47,7 +47,9 @@ export function ListRowCard({
               </Text>
             </View>
           ) : (
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
           )
         ) : null}
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}

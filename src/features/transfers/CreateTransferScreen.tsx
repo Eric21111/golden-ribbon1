@@ -8,19 +8,39 @@ import { z } from 'zod';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { FormField } from '@/components/FormField';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { RouteBanner } from '@/components/dashboard/RouteBanner';
+import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { useBranchProducts } from '@/hooks/useBranchProducts';
 import { useBranches } from '@/hooks/useBranches';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatMoney, makeIdempotencyKey } from '@/lib/format';
+
+type StockFilter = 'in_stock' | 'all';
+type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
+
+const STOCK_FILTER_OPTIONS: Array<{ label: string; value: StockFilter }> = [
+  { label: 'In stock', value: 'in_stock' },
+  { label: 'All products', value: 'all' },
+];
+
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Name (A–Z)', value: 'name-asc' },
+  { label: 'Name (Z–A)', value: 'name-desc' },
+  { label: 'Available (High to Low)', value: 'available-desc' },
+  { label: 'Available (Low to High)', value: 'available-asc' },
+];
 
 const schema = z
   .object({
@@ -42,6 +62,10 @@ type Values = z.infer<typeof schema>;
 export function CreateTransferScreen() {
   const [review, setReview] = useState<Values | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [stockFilter, setStockFilter] = useState<StockFilter>('in_stock');
+  const [sort, setSort] = useState<SortOption>('name-asc');
+  const [sortOpen, setSortOpen] = useState(false);
   const requestKey = useRef(makeIdempotencyKey('send'));
   const formInitialized = useRef(false);
   const branches = useBranches();
@@ -63,6 +87,40 @@ export function CreateTransferScreen() {
     () => new Map((destinationCatalog.data ?? []).map((entry) => [entry.product_id, entry])),
     [destinationCatalog.data],
   );
+
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const list = fields
+      .map((field, index) => ({ field, index, item: inventory.data?.[index] }))
+      .filter((row) => {
+        if (!row.item) return false;
+        if (stockFilter === 'in_stock' && row.item.quantity_on_hand <= 0) return false;
+        if (!term) return true;
+        return `${row.item.product.name} ${row.item.product.sku}`.toLowerCase().includes(term);
+      });
+
+    return list.sort((a, b) => {
+      switch (sort) {
+        case 'name-desc':
+          return (b.item?.product.name ?? '').localeCompare(a.item?.product.name ?? '');
+        case 'available-desc':
+          return (b.item?.quantity_on_hand ?? 0) - (a.item?.quantity_on_hand ?? 0);
+        case 'available-asc':
+          return (a.item?.quantity_on_hand ?? 0) - (b.item?.quantity_on_hand ?? 0);
+        default:
+          return (a.item?.product.name ?? '').localeCompare(b.item?.product.name ?? '');
+      }
+    });
+  }, [fields, inventory.data, search, stockFilter, sort]);
+
+  const pagination = useClientPagination(
+    rows,
+    `${selectedBranchId}|${search}|${stockFilter}|${sort}`,
+    10,
+  );
+
+  const watchedItems = watch('items');
+  const selectedQuantityCount = watchedItems.filter((item) => Number(item.quantity) > 0).length;
 
   useEffect(() => {
     if (inventory.data && !formInitialized.current) {
@@ -274,8 +332,32 @@ export function CreateTransferScreen() {
               entry at that product's base selling price — reprice it later in the branch catalog.
             </Text>
           ) : null}
-          {fields.map((field, index) => {
-            const item = inventory.data?.[index];
+
+          {selectedBranchId && !destinationCatalog.isLoading && !destinationCatalog.error ? (
+            <>
+              <View style={styles.searchRow}>
+                <View style={styles.searchField}>
+                  <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+                  onPress={() => setSortOpen(true)}
+                  style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="options-outline" size={20} color={managerColors.ink} />
+                </Pressable>
+              </View>
+              <FilterChipRow options={STOCK_FILTER_OPTIONS} value={stockFilter} onChange={setStockFilter} />
+              <Text style={styles.summary}>
+                {selectedQuantityCount > 0
+                  ? `${selectedQuantityCount} product${selectedQuantityCount === 1 ? '' : 's'} to send`
+                  : 'Enter a quantity to add a product to this transfer.'}
+              </Text>
+            </>
+          ) : null}
+
+          {pagination.pageItems.map(({ field, index, item }) => {
             if (!item || !selectedBranchId) return null;
             const catalogEntry = catalogByProductId.get(item.product.id);
             const isNew = !catalogEntry;
@@ -386,6 +468,13 @@ export function CreateTransferScreen() {
               />
             );
           })}
+
+          {pagination.showPagination ? (
+            <View style={styles.pager}>
+              <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
+            </View>
+          ) : null}
+
           {formState.errors.items?.root?.message ? (
             <Text style={styles.error}>{formState.errors.items.root.message}</Text>
           ) : null}
@@ -420,6 +509,35 @@ export function CreateTransferScreen() {
           />
         </View>
       </View>
+
+      <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+        <View style={styles.sortList}>
+          {SORT_OPTIONS.map((option) => {
+            const isSelected = option.value === sort;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => {
+                  setSort(option.value);
+                  setSortOpen(false);
+                }}
+                style={({ pressed }) => [
+                  styles.sortRow,
+                  isSelected && styles.sortRowSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.sortRowLabel, isSelected && styles.sortRowLabelSelected]}>
+                  {option.label}
+                </Text>
+                {isSelected ? <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </ManagerBottomSheet>
     </Screen>
   );
 }
@@ -434,6 +552,37 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13, marginBottom: -2 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchField: { flex: 1 },
+  sortButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: managerColors.cardSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.75 },
+  summary: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  pager: { alignItems: 'center', paddingTop: 4 },
+  sortList: { gap: 8, paddingBottom: 8 },
+  sortRow: {
+    minHeight: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sortRowSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  sortRowLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   branchOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   branchOption: {
     flexBasis: '47%',

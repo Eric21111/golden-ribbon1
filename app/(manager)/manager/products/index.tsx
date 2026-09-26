@@ -4,6 +4,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
@@ -33,6 +34,7 @@ import {
 } from '@/features/products/productFilters';
 import { useBranches } from '@/hooks/useBranches';
 import { useProductBranchPrices, useProductBranchVariantPrices } from '@/hooks/useBranchProducts';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import {
   useCreateCompleteProduct,
@@ -99,6 +101,8 @@ export default function ManagerProductListScreen() {
       }
     });
   }, [query.data, filter, sort]);
+
+  const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}`, 10);
 
   const existingSkus = skuQuery.data ?? [];
   const branchOptions = useMemo(
@@ -195,11 +199,22 @@ export default function ManagerProductListScreen() {
             <LoadingState label="Loading products…" />
           ) : (
             <FlatList
-              data={filtered}
+              data={pagination.pageItems}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
+              }
               renderItem={({ item }) => (
                 <ListRowCard
                   title={item.name}
@@ -360,6 +375,7 @@ const styles = StyleSheet.create({
   sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
+  pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   footer: {
     marginHorizontal: -20,
     paddingHorizontal: 20,

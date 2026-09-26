@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { Pagination } from '@/components/Pagination';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
@@ -24,6 +25,7 @@ import {
   type StockFilter,
 } from '@/features/inventory/inventoryStatus';
 import { useBranches } from '@/hooks/useBranches';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -94,6 +96,8 @@ export default function ManagerInventoryScreen() {
       }
     });
   }, [query.data, filter, search, sort]);
+
+  const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}`, 10);
 
   const filterOptions = useMemo(() => {
     const base: Array<{ label: string; value: StockFilter }> = [
@@ -189,12 +193,23 @@ export default function ManagerInventoryScreen() {
               {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
             </Text>
             <FlatList
-              data={filtered}
+              data={pagination.pageItems}
               keyExtractor={(item) => item.product.id}
               contentContainerStyle={styles.listContent}
               refreshControl={<RefreshControl refreshing={Boolean(refreshing)} onRefresh={refresh} tintColor={managerColors.royalBlue} />}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
+              }
               renderItem={({ item }) => {
                 const status = getStockStatus(item);
                 return (
@@ -375,6 +390,7 @@ const styles = StyleSheet.create({
   },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
+  pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   footer: {
     marginHorizontal: -20,
     paddingHorizontal: 20,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
@@ -13,6 +14,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
 import { useBranches } from '@/hooks/useBranches';
 import { useBranchProducts } from '@/hooks/useBranchProducts';
+import { useClientPagination } from '@/hooks/useClientPagination';
 import { useProducts } from '@/hooks/useProducts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
@@ -71,6 +73,8 @@ export default function BranchCatalogScreen() {
       }
     });
   }, [catalog.data, products.data, search, sort]);
+
+  const pagination = useClientPagination(visibleRows, `${branchId}|${search}|${sort}`, 10);
 
   const loading =
     branches.isLoading || products.isLoading || (Boolean(branchId) && catalog.isLoading);
@@ -136,7 +140,7 @@ export default function BranchCatalogScreen() {
             />
           ) : (
             <FlatList
-              data={visibleRows}
+              data={pagination.pageItems}
               keyExtractor={(row) => row.product.id}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -149,6 +153,17 @@ export default function BranchCatalogScreen() {
                       : 'Send stock or set a branch price from Products to make items available here.'
                   }
                 />
+              }
+              ListFooterComponent={
+                pagination.showPagination ? (
+                  <View style={styles.pager}>
+                    <Pagination
+                      page={pagination.page}
+                      totalPages={pagination.totalPages}
+                      onPageChange={pagination.setPage}
+                    />
+                  </View>
+                ) : null
               }
               renderItem={({ item }) => (
                 <View style={styles.card}>
@@ -220,6 +235,7 @@ const styles = StyleSheet.create({
   summary: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   list: { paddingBottom: 24, flexGrow: 1 },
   separator: { height: 10 },
+  pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   card: {
     borderWidth: 1,
     borderColor: managerColors.cardBorder,

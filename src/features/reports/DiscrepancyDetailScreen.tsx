@@ -118,7 +118,6 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
   const isReturn = kind === 'return';
   const returnRow = isReturn && 'stock_return' in row ? row : null;
   const transferRow = !isReturn && 'stock_transfer' in row ? row : null;
-  const productName = row.product?.name ?? `Product (${row.product_id})`;
   const expected = row.quantity_expected;
   const received = row.quantity_received;
 
@@ -126,7 +125,6 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader
         title={isReturn ? 'Return discrepancy' : 'Transfer discrepancy'}
-        subtitle={productName}
         showBack
       />
       <ConstrainedWidth style={styles.column}>
