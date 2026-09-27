@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { formatCatalogPrice } from '@/lib/format';
 import { cartLineKey } from '@/lib/money';
 import type { Database } from '@/types/database';
-import type { Product, ProductInput, ProductVariant } from '@/types/models';
+import type { InventoryMode, Product, ProductInput, ProductVariant } from '@/types/models';
 
 type ProductInsert = Database['public']['Tables']['products']['Insert'];
 
@@ -60,6 +60,7 @@ export type CreateCompleteProductInput = {
     variants?: Array<{ name: string; selling_price: string }>;
   }>;
   selling_price?: string | null;
+  inventoryMode?: InventoryMode;
 };
 
 export async function listProductSkus(): Promise<string[]> {
@@ -76,6 +77,16 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
     p_variants: input.variants,
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
+    p_inventory_mode: input.inventoryMode ?? 'piece_stock',
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setProductInventoryMode(productId: string, inventoryMode: InventoryMode): Promise<Product> {
+  const { data, error } = await supabase.rpc('set_product_inventory_mode', {
+    p_product_id: productId,
+    p_inventory_mode: inventoryMode,
   });
   if (error) throw error;
   return data;

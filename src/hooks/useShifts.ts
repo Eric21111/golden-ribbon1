@@ -2,14 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
 import {
-  endCashierShift,
+  closeCashierShift,
   getActiveShift,
+  getMyPendingShiftReconciliation,
   getShiftSummary,
+  reconcileClosedShift,
   startCashierShift,
 } from '@/services/shiftService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
-import type { ShiftSummary } from '@/types/models';
+import type { ShiftCloseResult } from '@/types/models';
 
 export function useActiveShift(cashierId: string) {
   return useQuery({
@@ -35,17 +37,21 @@ export function useStartShift(cashierId: string) {
   });
 }
 
-export function useEndShift(cashierId: string) {
+export function useCloseShift(cashierId: string) {
   const client = useQueryClient();
-  return useMutation<ShiftSummary, Error, string>({
-    mutationFn: async (shiftId: string) => {
+  return useMutation<
+    ShiftCloseResult,
+    Error,
+    { shiftId: string; actualCash: string; waste: Array<{ product_id: string }> }
+  >({
+    mutationFn: async ({ shiftId, actualCash, waste }) => {
       if (useCheckoutStore.getState().request || useCheckoutStore.getState().pending) {
         throw new Error('Finish the sale confirmation before ending the shift.');
       }
       if (useCartStore.getState().items.length) {
         throw new Error('Clear the unfinished cart before ending the shift.');
       }
-      return await endCashierShift(shiftId);
+      return await closeCashierShift(shiftId, actualCash, waste);
     },
     onSuccess: async () => {
       await Promise.all([
@@ -59,6 +65,29 @@ export function useEndShift(cashierId: string) {
         client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
       ]);
     },
+  });
+}
+
+export function useReconcileClosedShift(cashierId: string) {
+  const client = useQueryClient();
+  return useMutation<
+    ShiftCloseResult,
+    Error,
+    { shiftId: string; actualCash: string; waste: Array<{ product_id: string }> }
+  >({
+    mutationFn: ({ shiftId, actualCash, waste }) => reconcileClosedShift(shiftId, actualCash, waste),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['shifts', 'pending', cashierId] });
+      await client.invalidateQueries({ queryKey: ['shifts', 'remittances'] });
+    },
+  });
+}
+
+export function usePendingShiftReconciliation(cashierId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['shifts', 'pending', cashierId],
+    queryFn: getMyPendingShiftReconciliation,
+    enabled: Boolean(cashierId) && enabled,
   });
 }
 

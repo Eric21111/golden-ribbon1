@@ -71,7 +71,7 @@ assert.equal(cartTotalCents(refreshedCart.items) / 100, Number(livePriced.total_
 await db.exec(`select set_config('request.jwt.claim.sub','${other}',false);`);
 assert.equal((await db.query('select * from public.sales')).rows.length,0);
 await assert.rejects(confirm('wrong-cashier-shift-1'), /open shift/);
-await db.exec(`select set_config('request.jwt.claim.sub','${user}',false); select public.end_cashier_shift('${shift}');`);
+await db.exec(`select set_config('request.jwt.claim.sub','${user}',false); select public.close_cashier_shift('${shift}', '0', '[]'::jsonb);`);
 await assert.rejects(confirm('closed-shift-attempt-1'), /open shift/);
 await db.exec('reset role');
 assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory')).rows[0].quantity_on_hand),2);

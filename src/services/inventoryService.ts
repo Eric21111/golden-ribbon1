@@ -15,9 +15,10 @@ type CashierPosInventoryRow = {
   product_name: string;
   product_sku: string;
   selling_price: number;
-  quantity_on_hand: number;
+  quantity_on_hand: number | null;
   updated_at: string | null;
   variants: Array<{ id: string; name: string; selling_price: number }> | null;
+  inventory_mode: Product['inventory_mode'];
 };
 
 export async function listInventory(branch: Branch, activeOnly = false): Promise<InventoryItem[]> {
@@ -87,13 +88,16 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       description: null,
       selling_price: Number(row.selling_price),
       is_active: true,
+      inventory_mode: row.inventory_mode ?? 'piece_stock',
       created_at: '',
       updated_at: '',
     };
     return {
       branch,
       product,
-      quantity_on_hand: Number(row.quantity_on_hand),
+      quantity_on_hand: row.inventory_mode === 'kg_meal' || row.quantity_on_hand == null
+        ? 0
+        : Number(row.quantity_on_hand),
       updated_at: row.updated_at,
       branch_product: {
         branch_id: row.branch_id,
@@ -112,7 +116,7 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
 }
 
 export async function initializeMainInventory(
-  items: Array<{ product_id: string; quantity: number }>,
+  items: Array<{ product_id: string; quantity: number | string }>,
   notes: string | null,
 ): Promise<void> {
   const { error } = await supabase.rpc('initialize_main_branch_inventory', { p_items: items, p_notes: notes });

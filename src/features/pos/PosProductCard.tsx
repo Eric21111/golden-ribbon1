@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, isKgMeal } from '@/lib/format';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 interface PosProductCardProps {
@@ -112,11 +112,12 @@ export function PosProductCard({
   onQuantityChange,
   compact = false,
 }: PosProductCardProps) {
-  const outOfStock = item.quantity_on_hand === 0;
+  const kgMeal = isKgMeal(item.product.inventory_mode);
+  const outOfStock = !kgMeal && item.quantity_on_hand === 0;
   const variants = item.variants ?? [];
   const hasVariants = variants.length > 0;
   const totalQuantity = [...quantityByVariant.values()].reduce((sum, qty) => sum + qty, 0);
-  const atProductLimit = totalQuantity >= item.quantity_on_hand;
+  const atProductLimit = !kgMeal && totalQuantity >= item.quantity_on_hand;
   const selected = totalQuantity > 0;
 
   const toggleSelect = (variantId: string | null, quantity: number) => {
@@ -148,7 +149,7 @@ export function PosProductCard({
                 <Text style={styles.sku}>{item.product.sku}</Text>
               </View>
             </View>
-            <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
+            <Text style={styles.stock}>{kgMeal ? 'KG-delivered meal' : `Available: ${item.quantity_on_hand}`}</Text>
             <View style={styles.variantList}>
               {variants.map((variant: PosVariant) => {
                 const quantity = quantityByVariant.get(variant.id) ?? 0;
@@ -206,7 +207,7 @@ export function PosProductCard({
                   {formatMoney(item.product.selling_price)}
                 </Text>
               </View>
-              <Text style={styles.stock}>Available: {item.quantity_on_hand}</Text>
+              <Text style={styles.stock}>{kgMeal ? 'KG-delivered meal' : `Available: ${item.quantity_on_hand}`}</Text>
             </Pressable>
             <View style={styles.controls}>
               <Stepper

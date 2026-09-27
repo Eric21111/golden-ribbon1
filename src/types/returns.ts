@@ -2,6 +2,7 @@ import type {
   DiscrepancyResolutionReason,
   DiscrepancyResolutionStatus,
   DiscrepancyType,
+  InventoryMode,
   Product,
 } from './models';
 
@@ -44,6 +45,7 @@ export type ReturnItem = {
   product_sku: string;
   quantity_returned: number;
   quantity_received: number | null;
+  inventory_mode: InventoryMode;
   created_at: string;
   updated_at: string;
 };

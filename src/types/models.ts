@@ -6,6 +6,8 @@ export type DiscrepancyType = 'missing' | 'excess';
 export type ShiftStatus = 'open' | 'closed';
 export type SaleStatus = 'completed' | 'voided';
 export type EmployeeRole = 'manager' | 'cashier';
+export type InventoryMode = 'piece_stock' | 'kg_meal';
+export type CashReconciliationResult = 'exact' | 'shortage' | 'excess';
 
 export type Branch = {
   id: string;
@@ -92,6 +94,7 @@ export type Product = {
   description: string | null;
   selling_price: number;
   is_active: boolean;
+  inventory_mode: InventoryMode;
   created_at: string;
   updated_at: string;
 };
@@ -207,6 +210,7 @@ export type StockTransferItem = {
   product_id: string;
   quantity_sent: number;
   quantity_received: number | null;
+  inventory_mode: InventoryMode;
   created_at: string;
   updated_at: string;
 };
@@ -262,6 +266,7 @@ export type CashierPendingTransferItem = {
   product_name: string;
   product_sku: string;
   quantity_sent: number;
+  inventory_mode: InventoryMode;
 };
 
 export type CashierPendingTransfer = {
@@ -276,7 +281,7 @@ export type CashierPendingTransfer = {
 
 export type SendTransferInput = {
   destinationBranchId: string;
-  items: Array<{ product_id: string; quantity_sent: number }>;
+  items: Array<{ product_id: string; quantity_sent: number | string }>;
   notes: string | null;
   idempotencyKey: string;
 };
@@ -300,6 +305,40 @@ export type ShiftSummary = {
   completed_transaction_count: number;
   total_sales: number;
   leftover_return_id?: string | null;
+};
+
+export type ShiftCloseResult = {
+  shift_id: string;
+  expected_cash: number;
+  actual_cash: number;
+  difference: number;
+  result: CashReconciliationResult;
+  status: 'reconciled';
+  shift_status?: 'closed';
+};
+
+export type PendingShiftReconciliation = {
+  shift_id: string;
+  started_at: string;
+  ended_at: string | null;
+  expected_cash: number;
+  actual_cash: null;
+  difference: null;
+  result: null;
+  status: 'pending';
+};
+
+export type ShiftRemittanceRow = {
+  shift_id: string;
+  branch_id: string;
+  branch_name: string;
+  cashier_id: string;
+  ended_at: string | null;
+  status: 'pending' | 'reconciled';
+  expected_cash: number;
+  actual_cash: number | null;
+  difference: number | null;
+  result: CashReconciliationResult | null;
 };
 
 export type BranchSalesReportItem = {
@@ -508,7 +547,9 @@ export type InventoryReconciliationItem = {
   product_id: string;
   product_name: string;
   product_sku: string;
+  inventory_mode: InventoryMode;
   opening_stock: number;
+  transfer_out: number;
   transfer_in: number;
   sale: number;
   return_out: number;

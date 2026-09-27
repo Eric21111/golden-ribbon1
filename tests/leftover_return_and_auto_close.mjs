@@ -10,8 +10,10 @@ assert.doesNotMatch(cashierCreate, /stepQuantity|setQuantity|Max/);
 assert.doesNotMatch(cashierCreate, /createReturn\(/);
 
 const dashboard = readFileSync('app/(cashier)/cashier/dashboard.tsx', 'utf8');
-assert.match(dashboard, /Leftover on-hand stock will be returned to Main automatically/);
-assert.match(dashboard, /leftover_return_id/);
+assert.match(dashboard, /useCloseShift/);
+assert.match(dashboard, /Pending reconciliation/);
+assert.doesNotMatch(dashboard, /Leftover on-hand stock will be returned to Main automatically/);
+assert.doesNotMatch(dashboard, /end_cashier_shift/);
 
 const db = new PGlite();
 await db.exec(`
@@ -147,15 +149,16 @@ const shiftSummary = await asUser(cashier, async () => {
     '240.00',
     'leftover-sale-key000001',
   ]);
-  const first = (await db.query('select public.end_cashier_shift($1) result', [shift])).rows[0].result;
-  const retry = (await db.query('select public.end_cashier_shift($1) result', [shift])).rows[0].result;
-  return { shift, first, retry };
+  const first = (await db.query('select public.close_cashier_shift($1, $2, $3::jsonb) result', [shift, '240.00', '[]'])).rows[0].result;
+  await assert.rejects(
+    db.query('select public.close_cashier_shift($1, $2, $3::jsonb)', [shift, '240.00', '[]']),
+    /already closed/,
+  );
+  return { shift, first };
 });
 
-assert.equal(shiftSummary.first.status, 'closed');
-assert.ok(shiftSummary.first.leftover_return_id);
-assert.equal(shiftSummary.retry.leftover_return_id, shiftSummary.first.leftover_return_id);
-assert.equal(shiftSummary.retry.ended_at, shiftSummary.first.ended_at);
+assert.equal(shiftSummary.first.shift_status, 'closed');
+assert.equal(Number(shiftSummary.first.expected_cash), 240);
 assert.equal(
   Number(
     (await db.query('select quantity_on_hand from public.branch_inventory where branch_id=$1 and product_id=$2', [
@@ -163,18 +166,11 @@ assert.equal(
       p1,
     ])).rows[0].quantity_on_hand,
   ),
-  0,
+  5,
 );
 assert.equal(
-  Number(
-    (
-      await db.query(
-        'select quantity_returned from public.stock_return_items where stock_return_id=$1 and product_id=$2',
-        [shiftSummary.first.leftover_return_id, p1],
-      )
-    ).rows[0].quantity_returned,
-  ),
-  5,
+  Number((await db.query('select count(*)::int as n from public.stock_returns')).rows[0].n),
+  1,
 );
 
 await db.exec(`
@@ -207,7 +203,7 @@ await db.exec(`
 
 const overdue = (await db.query('select public.close_overdue_shifts() result')).rows[0].result;
 assert.equal(Number(overdue.closed_count), 1);
-assert.equal(Number(overdue.leftover_return_count), 1);
+assert.equal(Number(overdue.leftover_return_count), 0);
 assert.equal(
   (await db.query('select status from public.shifts where id=$1', [currentNight])).rows[0].status,
   'closed',
@@ -219,7 +215,7 @@ assert.equal(
       p1,
     ])).rows[0].quantity_on_hand,
   ),
-  0,
+  6,
 );
 
 await db.exec(`

@@ -54,8 +54,9 @@ type BranchInsert = Omit<Branch, 'id' | 'created_at' | 'updated_at'> & {
   created_at?: string;
   updated_at?: string;
 };
-type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at'> & {
+type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'inventory_mode'> & {
   id?: string;
+  inventory_mode?: Product['inventory_mode'];
   created_at?: string;
   updated_at?: string;
 };
@@ -280,7 +281,12 @@ export type Database = {
             variants?: Array<{ name: string; selling_price: string }>;
           }>;
           p_selling_price?: string | null;
+          p_inventory_mode?: string | null;
         };
+        Returns: Product;
+      };
+      set_product_inventory_mode: {
+        Args: { p_product_id: string; p_inventory_mode: string };
         Returns: Product;
       };
       update_complete_product: {
@@ -325,9 +331,10 @@ export type Database = {
           product_name: string;
           product_sku: string;
           selling_price: number;
-          quantity_on_hand: number;
+          quantity_on_hand: number | null;
           updated_at: string | null;
           variants: Array<{ id: string; name: string; selling_price: number }>;
+          inventory_mode: Product['inventory_mode'];
         }>;
       };
       create_stock_return: { Args: ReturnRequest; Returns: string };
@@ -354,6 +361,22 @@ export type Database = {
       update_own_name: { Args: { p_full_name: string }; Returns: Profile };
       start_cashier_shift: { Args: Record<string, never>; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
+      close_cashier_shift: {
+        Args: { p_shift_id: string; p_actual_cash: string; p_waste: Array<{ product_id: string; note?: string | null }> };
+        Returns: import('./models').ShiftCloseResult;
+      };
+      reconcile_closed_shift: {
+        Args: { p_shift_id: string; p_actual_cash: string; p_waste: Array<{ product_id: string; note?: string | null }> };
+        Returns: import('./models').ShiftCloseResult;
+      };
+      get_my_pending_shift_reconciliation: {
+        Args: Record<string, never>;
+        Returns: import('./models').PendingShiftReconciliation | null;
+      };
+      report_branch_shift_remittances: {
+        Args: { p_branch_id?: string | null };
+        Returns: import('./models').ShiftRemittanceRow[];
+      };
       get_shift_summary: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       report_sales_by_branch: {
         Args: { p_range_type?: string; p_start_date?: string | null; p_end_date?: string | null };
@@ -382,13 +405,13 @@ export type Database = {
         Returns: undefined;
       };
       initialize_main_branch_inventory: {
-        Args: { p_items: Array<{ product_id: string; quantity: number }>; p_notes?: string | null };
+        Args: { p_items: Array<{ product_id: string; quantity: number | string }>; p_notes?: string | null };
         Returns: undefined;
       };
       send_stock_transfer: {
         Args: {
           p_to_branch_id: string;
-          p_items: Array<{ product_id: string; quantity_sent: number }>;
+          p_items: Array<{ product_id: string; quantity_sent: number | string }>;
           p_notes: string | null;
           p_idempotency_key: string;
         };

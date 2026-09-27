@@ -161,7 +161,7 @@ await userAs(sellMgr, async () => {
 });
 await userAs(cashier1, async () => {
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
 });
 
 await db.close();

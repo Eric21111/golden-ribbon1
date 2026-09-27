@@ -153,12 +153,21 @@ assert.equal(await productCount(), baselineProductCount, 'configuring default pr
 await asUser(mainManager, async () => {
   await assert.rejects(
     db.exec(`insert into public.products(name,sku,selling_price) values ('Longsilog','LONGSILOG126-DUPE',80)`),
-    /products_name_unique_ci|duplicate key/i,
-    'a second base product with the same name (case/whitespace-insensitive) is rejected',
+    /permission denied/,
+    'a normal authenticated client cannot bypass create_complete_product with a direct insert',
   );
   await assert.rejects(
-    db.exec(`insert into public.products(name,sku,selling_price) values ('  longsilog  ','LONGSILOG126-DUPE2',80)`),
-    /products_name_unique_ci|duplicate key/i,
+    db.query(
+      `select public.create_complete_product('Longsilog','LONGSILOG126-DUPE',null,'[]'::jsonb,'[]'::jsonb,'80.00')`,
+    ),
+    /products_name_unique_ci|duplicate key|already exists|same name/i,
+    'create_complete_product still rejects a second product with the same name',
+  );
+  await assert.rejects(
+    db.query(
+      `select public.create_complete_product('  longsilog  ','LONGSILOG126-DUPE2',null,'[]'::jsonb,'[]'::jsonb,'80.00')`,
+    ),
+    /products_name_unique_ci|duplicate key|already exists|same name/i,
     'the name check is case- and whitespace-insensitive',
   );
 });

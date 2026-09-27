@@ -1,4 +1,11 @@
+import { isKgMeal } from '@/lib/format';
 import type { InventoryItem, ProfileWithBranch, Shift } from '@/types/models';
+
+/**
+ * Generic POS meal-count safety bound. It is not derived from KG delivered,
+ * Main KG balance, or any KG-to-meal conversion.
+ */
+export const MAX_POS_MEAL_QUANTITY = 999999;
 
 /** Shift branch wins. Profile branch is only a fallback before a shift exists. */
 export function authoritativePosBranchId(
@@ -29,6 +36,7 @@ export function mergeCatalogWithBalances(
 }
 
 export function isOutOfStock(item: InventoryItem): boolean {
+  if (isKgMeal(item.product.inventory_mode)) return false;
   return item.quantity_on_hand <= 0;
 }
 

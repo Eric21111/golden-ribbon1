@@ -133,7 +133,16 @@ await asUser(mainMgr, async () => {
     db.query(`select public.create_employee_profile_from_server('${owner}','${createdMainMgr}','Main Manager Test','manager','${main}',true)`),
     /permission denied|Owner access/,
   );
-  await db.exec(`insert into public.products(name,sku,selling_price) values ('Main Created','MC-01',12)`);
+  await assert.rejects(
+    db.exec(`insert into public.products(name,sku,selling_price,inventory_mode) values ('Main Created','MC-01',12,'piece_stock')`),
+    /permission denied/,
+  );
+  const createdProduct = (
+    await db.query(
+      `select * from public.create_complete_product('Main Created','MC-01',null,'[]'::jsonb,'[]'::jsonb,'12.00')`,
+    )
+  ).rows[0];
+  assert.ok(createdProduct.id);
   await db.exec(`insert into public.branches(name,code,is_main_branch,is_active) values ('Branch 3','BR-03',false,true)`);
   await assert.rejects(
     db.exec(`update public.branches set is_active = false where id = '${main}'`),
@@ -150,9 +159,12 @@ const t2Item = (await db.query('select id from public.stock_transfer_items where
 await asUser(mgr1, async () => {
   assert.equal((await db.query('select public.can_change_own_email() flag')).rows[0].flag, false);
   await assert.rejects(db.query('select public.assert_can_change_own_email()'), /Owner and Main Branch Manager/);
-  await db.query(
-    `select public.receive_stock_transfer($1,$2::jsonb,null,'recv-branch1-key0001')`,
-    [t1, JSON.stringify([{ stock_transfer_item_id: t1Item, quantity_received: 80 }])],
+  await assert.rejects(
+    db.query(
+      `select public.receive_stock_transfer($1,$2::jsonb,null,'recv-branch1-key0001')`,
+      [t1, JSON.stringify([{ stock_transfer_item_id: t1Item, quantity_received: 80 }])],
+    ),
+    /cashier confirmation/,
   );
   await assert.rejects(
     db.query(`select public.send_stock_transfer('${branch2}','[{"product_id":"${chicken}","quantity_sent":1}]'::jsonb,null,'selling-cannot-send001')`),
@@ -177,14 +189,25 @@ await asUser(mgr1, async () => {
   assert.equal(ownTransfers[0].id, t1);
 });
 
+await asUser(cashier1, async () => {
+  await db.query(`select public.confirm_shipment_arrival($1,'recv-branch1-key0001')`, [t1]);
+});
+
 await asUser(mgr2, async () => {
-  await db.query(
-    `select public.receive_stock_transfer($1,$2::jsonb,null,'recv-branch2-key0001')`,
-    [t2, JSON.stringify([{ stock_transfer_item_id: t2Item, quantity_received: 50 }])],
+  await assert.rejects(
+    db.query(
+      `select public.receive_stock_transfer($1,$2::jsonb,null,'recv-branch2-key0001')`,
+      [t2, JSON.stringify([{ stock_transfer_item_id: t2Item, quantity_received: 50 }])],
+    ),
+    /cashier confirmation/,
   );
   const ownTransfers = (await db.query('select id from public.stock_transfers')).rows;
   assert.equal(ownTransfers.length, 1);
   assert.equal(ownTransfers[0].id, t2);
+});
+
+await asUser(cashier2, async () => {
+  await db.query(`select public.confirm_shipment_arrival($1,'recv-branch2-key0001')`, [t2]);
 });
 
 const sell = async (cashierId, quantity, key, paid) => asUser(cashierId, async () => {
@@ -193,7 +216,7 @@ const sell = async (cashierId, quantity, key, paid) => asUser(cashierId, async (
     'select (public.confirm_sale($1,$2::jsonb,$3,$4)).*',
     [shift, JSON.stringify([{ product_id: chicken, quantity }]), paid, key],
   )).rows[0];
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
   return sale;
 });
 
@@ -221,13 +244,13 @@ await asUser(owner, async () => {
   assert.ok(performance);
 });
 
-await asUser(mgr1, async () => {
+await asUser(cashier1, async () => {
   const returnId = (await db.query(
     `select public.create_stock_return('[{"product_id":"${chicken}","quantity_returned":30}]'::jsonb,null,'return-branch1-key001') id`,
   )).rows[0].id;
   assert.ok(returnId);
 });
-await asUser(mgr2, async () => {
+await asUser(cashier2, async () => {
   const returnId = (await db.query(
     `select public.create_stock_return('[{"product_id":"${chicken}","quantity_returned":20}]'::jsonb,null,'return-branch2-key001') id`,
   )).rows[0].id;
@@ -331,7 +354,7 @@ await asUser(cashier1, async () => {
     [shift, JSON.stringify([{ product_id: chicken, quantity: 1 }]), '999.00', 'cashier-regression-key01'],
   )).rows[0];
   assert.equal(Number(sale.total_amount), 999);
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
 });
 
 await db.exec(`
@@ -351,7 +374,10 @@ await assert.rejects(
   /Manager or Cashier/,
 );
 await db.query(`select public.create_employee_profile_from_server('${owner}','${createdMainMgr}','Main Manager Test','manager','${main}',true)`);
-await db.query(`select public.create_employee_profile_from_server('${owner}','${createdSellMgr}','Selling Manager Created','manager','${branch1}',true)`);
+await assert.rejects(
+  db.query(`select public.create_employee_profile_from_server('${owner}','${createdSellMgr}','Selling Manager Created','manager','${branch1}',true)`),
+  /active branch/,
+);
 await db.query(`select public.create_employee_profile_from_server('${owner}','${createdCashier}','Cashier Created','cashier','${branch1}',true)`);
 
 const createdMain = (await db.query(`select role, branch_id, is_active from public.profiles where id='${createdMainMgr}'`)).rows[0];
@@ -368,7 +394,16 @@ await asUser(createdMainMgr, async () => {
     /Owner access/,
   );
   await assert.rejects(db.query('select public.get_owner_daily_product_summary()'), /Owner access required/);
-  await db.exec(`insert into public.products(name,sku,selling_price) values ('Created Main Product','CMP-01',15)`);
+  await assert.rejects(
+    db.exec(`insert into public.products(name,sku,selling_price) values ('Created Main Product','CMP-01',15)`),
+    /permission denied/,
+  );
+  const createdMainProduct = (
+    await db.query(
+      `select * from public.create_complete_product('Created Main Product','CMP-01',null,'[]'::jsonb,'[]'::jsonb,'15.00')`,
+    )
+  ).rows[0];
+  assert.ok(createdMainProduct.id);
   extraSend = (await db.query(
     `select public.send_stock_transfer('${branch1}','[{"product_id":"${chicken}","quantity_sent":2}]'::jsonb,null,'created-main-send-key01') id`,
   )).rows[0].id;
@@ -381,7 +416,7 @@ const createdTransferItem = (await db.query(
   [createdTransfer],
 )).rows[0].id;
 
-await asUser(createdSellMgr, async () => {
+await asUser(mgr1, async () => {
   assert.equal((await db.query('select public.is_main_branch_manager() flag')).rows[0].flag, false);
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
   await assert.rejects(db.query('select public.get_owner_daily_product_summary()'), /Owner access required/);
@@ -401,25 +436,37 @@ await asUser(createdSellMgr, async () => {
     `select quantity_on_hand from public.branch_inventory where branch_id='${main}' and product_id='${chicken}'`,
   )).rows;
   assert.equal(mainInv.length, 0, 'Selling Branch Manager cannot read Main Branch inventory');
-  await db.query(
-    `select public.receive_stock_transfer($1,$2::jsonb,null,'created-sell-recv-key01')`,
-    [createdTransfer, JSON.stringify([{ stock_transfer_item_id: createdTransferItem, quantity_received: 2 }])],
+  await assert.rejects(
+    db.query(
+      `select public.receive_stock_transfer($1,$2::jsonb,null,'created-sell-recv-key01')`,
+      [createdTransfer, JSON.stringify([{ stock_transfer_item_id: createdTransferItem, quantity_received: 2 }])],
+    ),
+    /cashier confirmation/,
   );
-  const returnId = (await db.query(
-    `select public.create_stock_return('[{"product_id":"${chicken}","quantity_returned":1}]'::jsonb,null,'created-sell-return-001') id`,
-  )).rows[0].id;
-  assert.ok(returnId);
+  await assert.rejects(
+    db.query(
+      `select public.create_stock_return('[{"product_id":"${chicken}","quantity_returned":1}]'::jsonb,null,'created-sell-return-001')`,
+    ),
+    /cashiers/,
+  );
 });
 
 await asUser(createdCashier, async () => {
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
+  await db.query(`select public.confirm_shipment_arrival($1,'created-sell-recv-key01')`, [createdTransfer]);
+  const returnId = (
+    await db.query(
+      `select public.create_stock_return('[{"product_id":"${chicken}","quantity_returned":1}]'::jsonb,null,'created-sell-return-001') id`,
+    )
+  ).rows[0].id;
+  assert.ok(returnId);
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
   const sale = (await db.query(
     'select (public.confirm_sale($1,$2::jsonb,$3,$4)).*',
     [shift, JSON.stringify([{ product_id: chicken, quantity: 1 }]), '999.00', 'created-cashier-sale-001'],
   )).rows[0];
   assert.equal(Number(sale.total_amount), 999);
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
 });
 
 await asUser(cashier1, async () => {
@@ -439,12 +486,16 @@ await asUser(cashier1, async () => {
   const openShift = (await db.query(
     `select id from public.shifts where cashier_id='${cashier1}' and status='open'`,
   )).rows[0].id;
-  await db.query('select public.end_cashier_shift($1)', [openShift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [openShift]);
 });
 await asUser(owner, async () => {
-  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','manager','${branch2}',true)`);
-  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','manager','${branch2}',false)`);
-  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','manager','${branch2}',true)`);
+  await assert.rejects(
+    db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','manager','${branch2}',true)`),
+    /active branch/,
+  );
+  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','cashier','${branch2}',true)`);
+  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','cashier','${branch2}',false)`);
+  await db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','cashier','${branch2}',true)`);
 });
 
 const recon = await asUser(owner, async () => {

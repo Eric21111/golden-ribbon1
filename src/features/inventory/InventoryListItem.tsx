@@ -3,7 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney } from '@/lib/format';
+import { formatLiveStock, formatMoney, isKgMeal } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 import { getStockStatus, stockStatusLabel, type StockStatus } from './inventoryStatus';
@@ -36,7 +36,11 @@ export function InventoryListItem({ item, showBranch = false, onPress }: Invento
       onPress={onPress}
       trailing={
         <>
-          <Text style={[styles.stock, status === 'out' && styles.stockMuted]}>{item.quantity_on_hand}</Text>
+          <Text style={[styles.stock, status === 'out' && styles.stockMuted]}>
+            {isKgMeal(item.product.inventory_mode) && !item.branch.is_main_branch
+              ? 'Not tracked'
+              : formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}
+          </Text>
           <ManagerBadge label={stockStatusLabel(status)} tone={badgeTone(status)} />
         </>
       }

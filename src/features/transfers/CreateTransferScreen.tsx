@@ -25,7 +25,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatMoney, makeIdempotencyKey } from '@/lib/format';
+import { formatLiveStock, formatMoney, isKgMeal, isValidInventoryQuantity, makeIdempotencyKey } from '@/lib/format';
 
 type StockFilter = 'in_stock' | 'all';
 type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
@@ -48,7 +48,7 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^\d*$/, 'Enter a whole number.'),
+        quantity: z.string().regex(/^(\d{1,6}(\.\d{1,3})?)?$/, 'Enter a quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -139,8 +139,9 @@ export function CreateTransferScreen() {
         const quantity = Number(item.quantity);
         const inventoryItem = inventory.data?.find((candidate) => candidate.product.id === item.product_id);
         if (quantity <= 0 || !inventoryItem) return [];
+        if (!isValidInventoryQuantity(item.quantity, inventoryItem.product.inventory_mode)) return [];
         const isNew = !catalogByProductId.has(item.product_id);
-        return [{ ...inventoryItem, quantity, isNew }];
+        return [{ ...inventoryItem, quantity, quantityText: item.quantity.trim(), isNew }];
       }) ?? [],
     [catalogByProductId, inventory.data, review],
   );
@@ -154,7 +155,15 @@ export function CreateTransferScreen() {
     });
   };
 
-  const onReview = handleSubmit((values) => setReview(values));
+  const onReview = handleSubmit((values) => {
+    const invalid = values.items.some((item) => {
+      if (!item.quantity.trim()) return false;
+      const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
+      return !product || !isValidInventoryQuantity(item.quantity, product.inventory_mode);
+    });
+    if (invalid) return;
+    setReview(values);
+  });
 
   if (branches.isLoading || inventory.isLoading) {
     return <LoadingState label="Preparing stock transfer…" />;
@@ -197,12 +206,14 @@ export function CreateTransferScreen() {
                       <Text style={styles.sku}>{item.product.sku}</Text>
                     </View>
                     <View style={[styles.sendPill, insufficient && styles.sendPillWarning]}>
-                      <Text style={[styles.sendValue, insufficient && styles.sendValueWarning]}>{item.quantity}</Text>
+                      <Text style={[styles.sendValue, insufficient && styles.sendValueWarning]}>
+                        {formatLiveStock(item.quantity, item.product.inventory_mode)}
+                      </Text>
                       <Text style={styles.sendLabel}>to send</Text>
                     </View>
                   </View>
                   <View style={styles.reviewFooter}>
-                    <Text style={styles.available}>Available: {item.quantity_on_hand}</Text>
+                    <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}</Text>
                     {insufficient ? <ManagerBadge label="Insufficient stock" tone="danger" /> : null}
                   </View>
                   {item.isNew ? (
@@ -234,7 +245,7 @@ export function CreateTransferScreen() {
                     destinationBranchId: review.destinationBranchId,
                     items: selectedItems.map((item) => ({
                       product_id: item.product.id,
-                      quantity_sent: item.quantity,
+                      quantity_sent: item.quantityText,
                     })),
                     notes: review.notes?.trim() || null,
                     idempotencyKey: requestKey.current,
@@ -368,7 +379,10 @@ export function CreateTransferScreen() {
                 control={control}
                 name={`items.${index}.quantity`}
                 render={({ field: quantity }) => {
-                  const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
+                  const kgMeal = isKgMeal(item.product.inventory_mode);
+                  const currentQty = kgMeal
+                    ? Number(quantity.value || '0') || 0
+                    : Number.parseInt(quantity.value || '0', 10) || 0;
                   const isFocused = focusedIndex === index;
                   const atMin = currentQty <= 0;
                   const atMax = currentQty >= item.quantity_on_hand;
@@ -392,7 +406,7 @@ export function CreateTransferScreen() {
                         </View>
                         <View style={styles.availablePill}>
                           <Text style={styles.availableText} numberOfLines={1}>
-                            <Text style={styles.availableValue}>{item.quantity_on_hand}</Text>
+                            <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}</Text>
                             <Text style={styles.availableLabel}> available</Text>
                           </Text>
                         </View>
@@ -421,7 +435,7 @@ export function CreateTransferScreen() {
                             </Pressable>
                             <TextInput
                               accessibilityLabel={`Send quantity for ${item.product.name}`}
-                              keyboardType="number-pad"
+                              keyboardType={kgMeal ? 'decimal-pad' : 'number-pad'}
                               value={quantity.value}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
@@ -430,7 +444,10 @@ export function CreateTransferScreen() {
                               underlineColorAndroid="transparent"
                               onFocus={() => setFocusedIndex(index)}
                               onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
-                              onChangeText={quantity.onChange}
+                              onChangeText={(value) => {
+                                const pattern = kgMeal ? /^(\d{0,6}(\.\d{0,3})?)?$/ : /^\d{0,6}$/;
+                                if (pattern.test(value)) quantity.onChange(value);
+                              }}
                               style={styles.stepperInput}
                             />
                             <Pressable
@@ -451,7 +468,11 @@ export function CreateTransferScreen() {
                             accessibilityRole="button"
                             accessibilityLabel={`Send all ${item.quantity_on_hand} available`}
                             disabled={atMax}
-                            onPress={() => quantity.onChange(String(item.quantity_on_hand))}
+                            onPress={() =>
+                              quantity.onChange(
+                                kgMeal ? Number(item.quantity_on_hand).toFixed(3) : String(item.quantity_on_hand),
+                              )
+                            }
                             style={({ pressed }) => [
                               styles.maxButton,
                               atMax && styles.maxButtonDisabled,

@@ -1,7 +1,52 @@
-import type { InventoryMovementType, TransferStatus } from '@/types/models';
+import type { CashReconciliationResult, InventoryMode, InventoryMovementType, TransferStatus } from '@/types/models';
 import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
+
+export function inventoryModeLabel(mode: InventoryMode | null | undefined): string {
+  return mode === 'kg_meal' ? 'KG-delivered meal' : 'Piece-based stock';
+}
+
+export function formatLiveStock(quantity: number, mode: InventoryMode | null | undefined): string {
+  if (mode === 'kg_meal') return `${Number(quantity).toFixed(3)} kg`;
+  return `${quantity} pcs`;
+}
+
+/** Null KG received weight is unmeasured. It is never shown as 0 kg. */
+export function formatSnapshottedQuantity(
+  quantity: number | null | undefined,
+  mode: InventoryMode | null | undefined,
+): string {
+  if (mode === 'kg_meal') {
+    if (quantity == null) return 'Unmeasured';
+    return `${Number(quantity).toFixed(3)} kg`;
+  }
+  return `${quantity ?? 0} pcs`;
+}
+
+export function isKgMeal(mode: InventoryMode | null | undefined): boolean {
+  return mode === 'kg_meal';
+}
+
+const PIECE_QTY = /^\d{1,6}$/;
+const KG_QTY = /^\d{1,6}(\.\d{1,3})?$/;
+
+export function isValidInventoryQuantity(raw: string, mode: InventoryMode | null | undefined): boolean {
+  const text = raw.trim();
+  if (!text || Number(text) <= 0) return false;
+  return mode === 'kg_meal' ? KG_QTY.test(text) : PIECE_QTY.test(text);
+}
+
+export function previewCashResult(expected: number, actualRaw: string): CashReconciliationResult | null {
+  const text = actualRaw.trim();
+  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(text)) return null;
+  const actual = Number(text);
+  if (!Number.isFinite(actual) || actual > 9999999999.99) return null;
+  const difference = Math.round((expected - actual) * 100) / 100;
+  if (difference === 0) return 'exact';
+  if (difference > 0) return 'shortage';
+  return 'excess';
+}
 
 /** Catalog RPC prices must be plain decimal text with at most two places. */
 export function formatCatalogPrice(value: number): string {

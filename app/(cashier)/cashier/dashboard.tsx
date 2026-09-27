@@ -21,11 +21,19 @@ import {
   hasSellableStock,
   outOfStockProductNames,
 } from '@/features/pos/posInventory';
+import { CashierShiftCloseForm } from '@/features/shifts/CashierShiftCloseForm';
 import { useCashierPosInventory } from '@/hooks/useInventory';
-import { useActiveShift, useEndShift, useShiftSummary, useStartShift } from '@/hooks/useShifts';
+import {
+  useActiveShift,
+  useCloseShift,
+  usePendingShiftReconciliation,
+  useReconcileClosedShift,
+  useShiftSummary,
+  useStartShift,
+} from '@/hooks/useShifts';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney, isKgMeal } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { listCashierPosInventory } from '@/services/inventoryService';
 import { useCartStore } from '@/stores/cartStore';
@@ -42,9 +50,12 @@ export default function CashierDashboard() {
   const shiftQuery = useActiveShift(cashierId);
   const summaryQuery = useShiftSummary(shiftQuery.data?.id ?? '');
   const startMutation = useStartShift(cashierId);
-  const endMutation = useEndShift(cashierId);
+  const closeMutation = useCloseShift(cashierId);
+  const reconcileMutation = useReconcileClosedShift(cashierId);
+  const [closing, setClosing] = useState(false);
   const posBranchId = authoritativePosBranchId(shiftQuery.data, profile);
   const inventory = useCashierPosInventory(posBranchId);
+  const pendingShift = usePendingShiftReconciliation(cashierId, !shiftQuery.data);
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const [checkingStock, setCheckingStock] = useState(false);
@@ -113,32 +124,34 @@ export default function CashierDashboard() {
     />
   ) : null;
 
+  const kgMeals = (inventory.data ?? [])
+    .filter((row) => isKgMeal(row.product.inventory_mode))
+    .map((row) => ({ id: row.product.id, name: row.product.name }));
+
   const requestEndShift = () => {
-    const shiftId = shiftQuery.data?.id;
-    if (!shiftId) return;
+    if (!shiftQuery.data?.id) return;
     if (cartItems.length > 0) {
       alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.');
       return;
     }
-    confirmAction(
-      'End shift?',
-      'Leftover on-hand stock will be returned to Main automatically. Main will count it later. This shift cannot be reopened.',
-      () =>
-        endMutation.mutate(shiftId, {
-          onSuccess: (summary) => {
-            clearCart();
-            alertNotice(
-              'Shift Ended',
-              [
-                `Completed Orders: ${summary.completed_transaction_count}`,
-                `Total Sales: ${formatMoney(summary.total_sales)}`,
-                summary.leftover_return_id
-                  ? 'Leftover stock was returned to Main.'
-                  : 'No leftover stock was on hand.',
-              ].join('\n'),
-            );
-          },
-        }),
+    setClosing(true);
+  };
+
+  const submitClose = (actualCash: string, waste: Array<{ product_id: string }>) => {
+    const shiftId = shiftQuery.data?.id;
+    if (!shiftId) return;
+    closeMutation.mutate(
+      { shiftId, actualCash, waste },
+      {
+        onSuccess: (result) => {
+          clearCart();
+          setClosing(false);
+          alertNotice(
+            'Shift closed',
+            `Sales ${formatMoney(Number(result.expected_cash))}. Actual cash ${formatMoney(Number(result.actual_cash))}. Result: ${result.result}.`,
+          );
+        },
+      },
     );
   };
 
@@ -197,8 +210,32 @@ export default function CashierDashboard() {
           <View style={styles.noticeCard}>
             <Text style={styles.noticeTitle}>No Active Shift</Text>
             <Text style={styles.noticeText}>
-              Start a shift to sell. You can confirm incoming shipments anytime.
+              Start a shift to sell. You can confirm incoming shipments anytime. Piece stock stays on hand. KG-delivered meal waste is recorded when you close.
             </Text>
+            {pendingShift.data?.status === 'pending' ? (
+              <CashierShiftCloseForm
+                title="Pending reconciliation"
+                expectedCash={Number(pendingShift.data.expected_cash)}
+                meals={kgMeals}
+                submitLabel="Save reconciliation"
+                loading={reconcileMutation.isPending}
+                onSubmit={(actualCash, waste) =>
+                  reconcileMutation.mutate(
+                    { shiftId: pendingShift.data!.shift_id, actualCash, waste },
+                    {
+                      onSuccess: (result) =>
+                        alertNotice(
+                          'Reconciliation saved',
+                          `Sales ${formatMoney(Number(result.expected_cash))}. Actual cash ${formatMoney(Number(result.actual_cash))}. Result: ${result.result}. This shift stays closed.`,
+                        ),
+                    },
+                  )
+                }
+              />
+            ) : null}
+            {reconcileMutation.error ? (
+              <Text style={styles.error}>{getShiftErrorMessage(reconcileMutation.error)}</Text>
+            ) : null}
             {startMutation.error ? (
               <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
             ) : null}
@@ -248,15 +285,26 @@ export default function CashierDashboard() {
               </View>
             </View>
 
-            <View style={styles.endShiftSection}>
-              <ManagerActionButton
-                label="End shift"
-                icon="stop-circle-outline"
-                variant="secondary"
-                loading={endMutation.isPending}
-                onPress={requestEndShift}
+            {closing ? (
+              <CashierShiftCloseForm
+                title="End shift"
+                expectedCash={Number(salesTotal ?? 0)}
+                meals={kgMeals}
+                submitLabel="Close shift"
+                loading={closeMutation.isPending}
+                onSubmit={submitClose}
+                onCancel={() => setClosing(false)}
               />
-            </View>
+            ) : (
+              <View style={styles.endShiftSection}>
+                <ManagerActionButton
+                  label="End shift"
+                  icon="stop-circle-outline"
+                  variant="secondary"
+                  onPress={requestEndShift}
+                />
+              </View>
+            )}
             {summaryQuery.error ? (
               <Text style={styles.error}>Unable to load shift totals. Pull to refresh.</Text>
             ) : null}
@@ -269,8 +317,8 @@ export default function CashierDashboard() {
                 </Text>
               </View>
             ) : null}
-            {endMutation.error ? (
-              <Text style={styles.error}>{getShiftErrorMessage(endMutation.error)}</Text>
+            {closeMutation.error ? (
+              <Text style={styles.error}>{getShiftErrorMessage(closeMutation.error)}</Text>
             ) : null}
 
             <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>

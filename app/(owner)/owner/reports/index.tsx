@@ -21,6 +21,13 @@ export default function OwnerReportsHub() {
             onPress={() => router.push('/owner/reports/sales-by-branch')}
           />
           <NavTile
+            icon="cash-outline"
+            accent="gold"
+            title="Shift remittances"
+            description="Pending reconciliation versus completed actual cash"
+            onPress={() => router.push('/owner/reports/shift-remittances' as never)}
+          />
+          <NavTile
             icon="pricetag-outline"
             accent="gold"
             title="Product Sales Performance"

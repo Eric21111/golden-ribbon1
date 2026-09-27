@@ -91,7 +91,7 @@ const saleYesterday = await asUser(cashier1, async () => {
       'sales-log-branch1-yesterday',
     ])
   ).rows[0];
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
   return sale;
 });
 
@@ -116,7 +116,7 @@ const saleToday = await asUser(cashier1, async () => {
       'sales-log-branch1-today',
     ])
   ).rows[0];
-  await db.query('select public.end_cashier_shift($1)', [shift]);
+  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
   return sale;
 });
 

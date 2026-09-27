@@ -7,8 +7,11 @@ export type StockFilter = 'all' | 'in_stock' | 'low' | 'out' | 'not_set';
 export type StockStatus = Exclude<StockFilter, 'all'>;
 
 export function getStockStatus(item: InventoryItem): StockStatus {
+  if (item.product.inventory_mode === 'kg_meal' && !item.branch.is_main_branch) return 'not_set';
   if (item.updated_at == null) return 'not_set';
   if (item.quantity_on_hand <= 0) return 'out';
+  // No KG low-stock threshold has been defined. Do not reuse the piece threshold of 5.
+  if (item.product.inventory_mode === 'kg_meal') return 'in_stock';
   if (item.quantity_on_hand <= LOW_STOCK_THRESHOLD) return 'low';
   return 'in_stock';
 }

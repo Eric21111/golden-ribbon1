@@ -7,7 +7,10 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
 
+import type { InventoryMode } from '@/types/models';
+
 import { generateSkuFromName } from './generateSku';
+import { InventoryModeField } from './InventoryModeField';
 import { PRICE_PATTERN } from './productSchema';
 
 export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
@@ -18,6 +21,7 @@ export type CreateProductValues = {
   description: string;
   default_price: string;
   variants: CreateProductVariantDraft[];
+  inventoryMode: InventoryMode;
 };
 
 export type BranchPricingDraft =
@@ -54,6 +58,7 @@ export function CreateProductWizard({
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [description, setDescription] = useState('');
+  const [inventoryMode, setInventoryMode] = useState<InventoryMode>('piece_stock');
   const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
   const skuEditedRef = useRef(false);
 
@@ -255,6 +260,7 @@ export function CreateProductWizard({
         description: description.trim(),
         default_price: topLevelPrice,
         variants: variantValues,
+        inventoryMode,
       },
       pricing,
     );
@@ -268,6 +274,7 @@ export function CreateProductWizard({
 
       {step === 1 ? (
         <View style={styles.stepBody}>
+          <InventoryModeField value={inventoryMode} onChange={setInventoryMode} />
           <FormField
             label="Product name"
             value={name}

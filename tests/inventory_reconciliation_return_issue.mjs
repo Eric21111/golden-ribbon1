@@ -10,6 +10,8 @@ assert.match(source, /auditDiscrepancySummary/);
 assert.match(source, /Return issues/);
 assert.match(source, /after Main receives/);
 assert.match(source, /hasVisibleReconciliationIssue\(item\)/);
+assert.match(source, /formatSnapshottedQuantity/);
+assert.match(source, /item\.inventory_mode/);
 assert.doesNotMatch(source, /has_reconciliation_issue\)\.length/);
 
 const db = new PGlite();

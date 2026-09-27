@@ -193,6 +193,13 @@ export default function ManagerDashboard() {
                       />
                     ))}
                   </Row>
+                  <NavTile
+                    icon="cash-outline"
+                    accent="gold"
+                    title="Shift remittances"
+                    description="Pending reconciliation versus completed actual cash"
+                    onPress={() => router.push('/manager/reports/shift-remittances' as never)}
+                  />
                 </>
               ) : (
                 <Row>

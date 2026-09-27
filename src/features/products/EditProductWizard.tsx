@@ -8,6 +8,9 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
 
+import type { InventoryMode } from '@/types/models';
+
+import { InventoryModeField } from './InventoryModeField';
 import { PRICE_PATTERN } from './productSchema';
 
 type PricingMode = 'same' | 'different';
@@ -24,6 +27,7 @@ export type EditProductValues = {
   default_price: string;
   variants: EditProductVariantValue[];
   deletedVariantIds: string[];
+  inventoryMode: InventoryMode;
 };
 
 export type BranchPricingDraft =
@@ -35,7 +39,7 @@ export type EditProductSourceBranchPrice = { branch_id: string; selling_price: n
 export type EditProductSourceBranchVariantPrice = { branch_id: string; name: string; selling_price: number };
 
 interface EditProductWizardProps {
-  product: { name: string; sku: string; description: string | null; is_active: boolean };
+  product: { name: string; sku: string; description: string | null; is_active: boolean; inventory_mode: InventoryMode };
   sourceVariants: EditProductSourceVariant[];
   sourceBranchPrices: EditProductSourceBranchPrice[];
   sourceBranchVariantPrices: EditProductSourceBranchVariantPrice[];
@@ -82,6 +86,7 @@ export function EditProductWizard({
   const [sku, setSku] = useState(product.sku);
   const [description, setDescription] = useState(product.description ?? '');
   const [isActive, setIsActive] = useState(product.is_active);
+  const [inventoryMode, setInventoryMode] = useState<InventoryMode>(product.inventory_mode);
   const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
 
   // Step 2 — variants (pre-filled), with hard-delete tracking
@@ -337,6 +342,7 @@ export function EditProductWizard({
         default_price: topLevelPrice,
         variants: variantValues,
         deletedVariantIds,
+        inventoryMode,
       },
       pricing,
     );
@@ -350,6 +356,11 @@ export function EditProductWizard({
 
       {step === 1 ? (
         <View style={styles.stepBody}>
+          <InventoryModeField
+            value={inventoryMode}
+            onChange={setInventoryMode}
+            note="Changing inventory type is saved separately. Every current balance, including Main Branch, must already be zero, and no transfer or return for this product can be open. Quantities are not converted. After a change, enter a new Main opening stock in the new unit."
+          />
           <FormField
             label="Product name"
             value={name}

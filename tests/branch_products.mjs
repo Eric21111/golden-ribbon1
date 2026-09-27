@@ -463,6 +463,19 @@ await asUser(manager1, async () => {
     ),
     'disabled catalog products with stock remain returnable',
   );
+  await assert.rejects(
+    db.query(
+      `select public.create_stock_return(
+        '[{"product_id":"${chicken}","quantity_returned":1}]'::jsonb,
+        'disabled catalog return',
+        'disabled-product-return01'
+      ) id`,
+    ),
+    /cashiers/,
+  );
+});
+
+await asUser(cashier1, async () => {
   const returnId = (
     await db.query(
       `select public.create_stock_return(

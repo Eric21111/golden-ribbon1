@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/constants/theme';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity, isKgMeal } from '@/lib/format';
 import type { StockTransferDetails } from '@/types/models';
 import { TransferStatusBadge } from './TransferStatusBadge';
 
@@ -28,14 +28,23 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
       </View>
       <Text style={styles.sectionTitle}>Products</Text>
       {transfer.items.map((item) => {
-        const difference = item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+        const kgMeal = isKgMeal(item.inventory_mode);
+        const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+        const receivedLabel = kgMeal
+          ? 'Unmeasured'
+          : item.quantity_received === null
+            ? 'Pending'
+            : formatSnapshottedQuantity(item.quantity_received, item.inventory_mode);
         return (
           <View key={item.id} style={styles.card}>
             <Text style={styles.product}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
-            <AuditDetail label="Sent" value={String(item.quantity_sent)} />
-            <AuditDetail label="Received" value={item.quantity_received === null ? 'Pending' : String(item.quantity_received)} />
-            <AuditDetail label="Difference" value={difference === null ? 'Pending' : String(difference)} />
-            {difference !== null && difference !== 0 ? (
+            <AuditDetail label="Sent" value={formatSnapshottedQuantity(item.quantity_sent, item.inventory_mode)} />
+            <AuditDetail label="Received" value={receivedLabel} />
+            <AuditDetail
+              label="Difference"
+              value={kgMeal ? 'Unmeasured' : difference === null ? 'Pending' : formatSnapshottedQuantity(difference, item.inventory_mode)}
+            />
+            {!kgMeal && difference !== null && difference !== 0 ? (
               <Text style={styles.warning}>{difference > 0 ? `${difference} missing` : `${Math.abs(difference)} excess`}</Text>
             ) : null}
           </View>

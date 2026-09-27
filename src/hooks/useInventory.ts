@@ -24,7 +24,7 @@ export function useCashierPosInventory(branchId: string | null | undefined) {
 export function useInitializeMainInventory() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ items, notes }: { items: Array<{ product_id: string; quantity: number }>; notes: string | null }) => initializeMainInventory(items, notes),
+    mutationFn: ({ items, notes }: { items: Array<{ product_id: string; quantity: number | string }>; notes: string | null }) => initializeMainInventory(items, notes),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['inventory'] }),

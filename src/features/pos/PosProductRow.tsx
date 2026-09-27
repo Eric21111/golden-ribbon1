@@ -2,7 +2,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, isKgMeal } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 interface PosProductRowProps {
@@ -22,7 +22,8 @@ function priceLabel(item: InventoryItem): string {
 }
 
 export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProps) {
-  const outOfStock = item.quantity_on_hand === 0;
+  const kgMeal = isKgMeal(item.product.inventory_mode);
+  const outOfStock = !kgMeal && item.quantity_on_hand === 0;
 
   const content = (
     <View style={styles.row}>
@@ -44,7 +45,7 @@ export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProp
           </View>
         </View>
         <Text style={[styles.stock, outOfStock && styles.stockOut]}>
-          {outOfStock ? 'Out of stock' : `Available: ${item.quantity_on_hand}`}
+          {kgMeal ? 'KG-delivered meal' : outOfStock ? 'Out of stock' : `Available: ${item.quantity_on_hand}`}
         </Text>
       </View>
       {outOfStock ? null : (

@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity } from '@/lib/format';
 import { getReturn } from '@/services/returnService';
 
 import { returnStyles } from './returnStyles';
@@ -113,12 +113,14 @@ export function ReturnDetailsBody({ returnId }: ReturnDetailsBodyProps) {
             <Text style={returnStyles.meta}>SKU: {item.product_sku}</Text>
             <View style={returnStyles.auditRow}>
               <Text style={returnStyles.auditLabel}>Returned (expected):</Text>
-              <Text style={returnStyles.auditValue}>{item.quantity_returned}</Text>
+              <Text style={returnStyles.auditValue}>{formatSnapshottedQuantity(item.quantity_returned, item.inventory_mode)}</Text>
             </View>
             <View style={returnStyles.auditRow}>
               <Text style={returnStyles.auditLabel}>Actual received:</Text>
               <Text style={returnStyles.auditValue}>
-                {isReceived ? item.quantity_received : 'Pending physical count'}
+                {isReceived
+                  ? formatSnapshottedQuantity(item.quantity_received, item.inventory_mode)
+                  : 'Pending physical count'}
               </Text>
             </View>
 

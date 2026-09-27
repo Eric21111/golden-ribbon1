@@ -80,6 +80,16 @@ export function getProductErrorMessage(error: unknown): string {
   if (message.includes('incomplete_branch_pricing') && message.includes('every enabled variant')) {
     return 'Enter a price for every enabled variant.';
   }
+  if (message.includes('clear every current balance')) {
+    return 'Clear every current balance, including Main Branch, before changing inventory type.';
+  }
+  if (message.includes('open transfers')) {
+    return 'Finish or cancel open transfers for this product before changing inventory type.';
+  }
+  if (message.includes('open returns')) {
+    return 'Finish or cancel open returns for this product before changing inventory type.';
+  }
+  if (message.includes('inventory type')) return 'Inventory type must be piece stock or a KG-delivered meal.';
   return getErrorMessage(error);
 }
 
@@ -351,7 +361,18 @@ export function getShiftErrorMessage(error: unknown): string {
   if (message.includes('sale confirmation')) return 'Finish the sale confirmation before ending the shift.';
   if (message.includes('cashier access') || message.includes('unable to access')) return 'You are not authorized to use this shift.';
   if (message.includes('assigned branch') || message.includes('inactive or invalid')) return 'Your assigned branch is unavailable. Contact the owner.';
-  if (message.includes('closed shift')) return 'This shift is already closed.';
+  if (message.includes('already closed')) return 'This shift is already closed.';
+  if (message.includes('already been reconciled')) return 'This shift has already been reconciled.';
+  if (
+    message.includes('actual cash')
+    || message.includes('cash amount')
+    || message.includes('blank')
+    || message.includes('malformed')
+  ) {
+    return 'Enter actual cash with at most two decimals. Zero is allowed. Leave nothing blank.';
+  }
+  if (message.includes('waste')) return 'Waste can only be recorded once for each KG-delivered meal on this shift.';
+  if (message.includes('only a closed shift')) return 'Only a closed shift can be reconciled later.';
   if (message.includes('fetch') || message.includes('network')) return 'Network unavailable. Check your connection and try again.';
   return 'The shift could not be updated. Please try again.';
 }

@@ -15,8 +15,13 @@ import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventoryReconciliation } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
+import { formatSnapshottedQuantity } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
 import type { InventoryReconciliationItem } from '@/types/models';
+
+function formatReconQty(quantity: number, item: InventoryReconciliationItem): string {
+  return formatSnapshottedQuantity(quantity, item.inventory_mode);
+}
 
 function qtyPart(missing: number, excess: number): string {
   const parts = [];
@@ -128,7 +133,9 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
   const badge = reconciliationIssueBadge(item);
   const auditSummary = auditDiscrepancySummary(item);
   const varianceTone = ledgerIssue ? styles.varianceIssue : styles.varianceOk;
-  const varianceLabel = item.variance > 0 ? `+${item.variance}` : String(item.variance);
+  const varianceLabel = item.variance > 0
+    ? `+${formatReconQty(item.variance, item)}`
+    : formatReconQty(item.variance, item);
   const branchChip = statChipColors[accentForName(item.branch_name)];
 
   return (
@@ -163,11 +170,11 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
       <View style={styles.summaryRow}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Calculated</Text>
-          <Text style={styles.summaryValue}>{item.calculated_stock}</Text>
+          <Text style={styles.summaryValue}>{formatReconQty(item.calculated_stock, item)}</Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Current</Text>
-          <Text style={styles.summaryValue}>{item.current_stock}</Text>
+          <Text style={styles.summaryValue}>{formatReconQty(item.current_stock, item)}</Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Variance</Text>
@@ -180,24 +187,32 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
         <View style={styles.ledger}>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>+ Opening stock</Text>
-            <Text style={styles.ledgerValue}>{item.opening_stock}</Text>
+            <Text style={styles.ledgerValue}>{formatReconQty(item.opening_stock, item)}</Text>
           </View>
+          {Number(item.transfer_out) !== 0 ? (
+            <View style={styles.ledgerRow}>
+              <Text style={styles.ledgerLabel}>− Transfers out</Text>
+              <Text style={styles.ledgerValue}>{formatReconQty(item.transfer_out, item)}</Text>
+            </View>
+          ) : null}
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>+ Transfers in (received)</Text>
-            <Text style={styles.ledgerValue}>{item.transfer_in}</Text>
+            <Text style={styles.ledgerValue}>{formatReconQty(item.transfer_in, item)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>− Sales (deducted)</Text>
-            <Text style={styles.ledgerValue}>{item.sale}</Text>
+            <Text style={styles.ledgerValue}>{formatReconQty(item.sale, item)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>− Returns out (sent)</Text>
-            <Text style={styles.ledgerValue}>{item.return_out}</Text>
+            <Text style={styles.ledgerValue}>{formatReconQty(item.return_out, item)}</Text>
           </View>
-          {item.adjustment !== 0 ? (
+          {Number(item.adjustment) !== 0 ? (
             <View style={styles.ledgerRow}>
               <Text style={styles.ledgerLabel}>± Adjustments</Text>
-              <Text style={styles.ledgerValue}>{item.adjustment > 0 ? `+${item.adjustment}` : item.adjustment}</Text>
+              <Text style={styles.ledgerValue}>
+                {item.adjustment > 0 ? `+${formatReconQty(item.adjustment, item)}` : formatReconQty(item.adjustment, item)}
+              </Text>
             </View>
           ) : null}
 

@@ -21,13 +21,14 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
+import { formatLiveStock, isKgMeal, isValidInventoryQuantity } from '@/lib/format';
 
 const schema = z
   .object({
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^\d*$/, 'Enter a whole number.'),
+        quantity: z.string().regex(/^(\d{1,6}(\.\d{1,3})?)?$/, 'Enter a quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -138,11 +139,18 @@ export function InventorySetupScreen() {
   }
 
   const submit = (values: Values) => {
-    const selected = values.items.flatMap((item) =>
-      Number(item.quantity) > 0
-        ? [{ product_id: item.product_id, quantity: Number(item.quantity) }]
-        : [],
-    );
+    const selected = values.items.flatMap((item) => {
+      const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
+      if (!item.quantity.trim() || !product) return [];
+      if (!isValidInventoryQuantity(item.quantity, product.inventory_mode)) return [];
+      return [{ product_id: item.product_id, quantity: item.quantity.trim() }];
+    });
+    const invalid = values.items.some((item) => {
+      if (!item.quantity.trim()) return false;
+      const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
+      return !product || !isValidInventoryQuantity(item.quantity, product.inventory_mode);
+    });
+    if (invalid || selected.length === 0) return;
     confirmAction(
       'Confirm opening stock',
       'This adds the entered quantities to Main Branch inventory, activates new products, and cannot be edited later. You can open this screen again to add more units.',
@@ -219,7 +227,9 @@ export function InventorySetupScreen() {
                     <Text style={styles.meta} numberOfLines={1}>
                       {item.product.sku}
                       {'  ·  '}
-                      {initialized ? `Current: ${item.quantity_on_hand}` : 'No stock yet'}
+                      {initialized
+                        ? `Current: ${formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}`
+                        : 'No stock yet'}
                     </Text>
                   </View>
                   <Controller
@@ -229,8 +239,11 @@ export function InventorySetupScreen() {
                       <TextInput
                         accessibilityLabel={`${initialized ? 'Add quantity' : 'Opening quantity'} for ${item.product.name}`}
                         value={quantity.value}
-                        onChangeText={quantity.onChange}
-                        keyboardType="number-pad"
+                        onChangeText={(value) => {
+                          const pattern = isKgMeal(item.product.inventory_mode) ? /^(\d{0,6}(\.\d{0,3})?)?$/ : /^\d{0,6}$/;
+                          if (pattern.test(value)) quantity.onChange(value);
+                        }}
+                        keyboardType={isKgMeal(item.product.inventory_mode) ? 'decimal-pad' : 'number-pad'}
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
                         maxLength={6}

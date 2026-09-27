@@ -90,10 +90,12 @@ assert.doesNotMatch(
 );
 
 await db.exec(`select set_config('request.jwt.claim.sub','${cashier}',false);`);
-const firstClose = (await db.query(`select public.end_cashier_shift('${shift}') result`)).rows[0].result;
-const retryClose = (await db.query(`select public.end_cashier_shift('${shift}') result`)).rows[0].result;
-assert.equal(firstClose.status, 'closed');
-assert.equal(retryClose.ended_at, firstClose.ended_at, 'End Shift retry is idempotent');
+const firstClose = (await db.query(`select public.close_cashier_shift('${shift}', '0', '[]'::jsonb) result`)).rows[0].result;
+await assert.rejects(
+  db.query(`select public.close_cashier_shift('${shift}', '0', '[]'::jsonb)`),
+  /already closed/,
+);
+assert.equal(firstClose.shift_status, 'closed');
 
 await db.exec('reset role;');
 await assert.rejects(db.exec(`update public.sales set amount_paid=999 where id='${sale}'`), /immutable/);
@@ -116,4 +118,4 @@ await db.exec(`update public.stock_return_items set quantity_received=2 where id
 await assert.rejects(db.exec(`update public.stock_return_items set quantity_received=1 where id='${returnItem}'`), /one-time received quantity/);
 
 await db.close();
-console.log('Milestone 10 database hardening tests passed: RLS coverage, SECURITY DEFINER search paths, report aggregation, end-shift idempotency, immutable sales, and return transitions.');
+console.log('Milestone 10 database hardening tests passed: RLS coverage, SECURITY DEFINER search paths, report aggregation, shift close, immutable sales, and return transitions.');

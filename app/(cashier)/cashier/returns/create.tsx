@@ -103,7 +103,7 @@ export default function CreateReturnScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         <Text style={styles.body}>
-          Every leftover unit on hand is returned automatically. Confirm only. Main Branch will count the arrival and
+          Piece-based stock only. KG-delivered meals are not listed here. Every leftover unit on hand is returned automatically. Confirm only. Main Branch will count the arrival and
           record any difference.
         </Text>
         {error ? <ErrorState message={error} /> : null}

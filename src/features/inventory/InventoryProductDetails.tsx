@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors, spacing } from '@/constants/theme';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatLiveStock, formatMoney, isKgMeal } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 import { getStockStatus, stockStatusLabel } from './inventoryStatus';
@@ -22,7 +22,11 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
       <View style={styles.statRow}>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>On hand</Text>
-          <Text style={styles.statValue}>{item.quantity_on_hand}</Text>
+          <Text style={styles.statValue}>
+            {isKgMeal(item.product.inventory_mode) && !item.branch.is_main_branch
+              ? 'Not tracked'
+              : formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}
+          </Text>
         </View>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>Status</Text>

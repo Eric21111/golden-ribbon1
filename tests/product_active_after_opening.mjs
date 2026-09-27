@@ -91,11 +91,11 @@ assert.equal(
   true,
 );
 
+await db.exec(
+  `insert into public.products(id,name,sku,selling_price,is_active)
+   values ('${created}','Buffalo','BUF',70,false)`,
+);
 await asUser(mainMgr, async () => {
-  await db.exec(
-    `insert into public.products(id,name,sku,selling_price,is_active)
-     values ('${created}','Buffalo','BUF',70,false)`,
-  );
   await db.query(`select public.configure_product_variants($1, $2::jsonb)`, [
     created,
     JSON.stringify([

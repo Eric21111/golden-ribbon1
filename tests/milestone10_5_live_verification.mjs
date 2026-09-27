@@ -387,7 +387,7 @@ try {
 async function closeOpenShift(supabase) {
   const { data } = await supabase.from('shifts').select('id,status').eq('status', 'open');
   for (const shift of data ?? []) {
-    try { await rpc(supabase, 'end_cashier_shift', { p_shift_id: shift.id }); } catch { /* already closed or unauthorized */ }
+    try { await rpc(supabase, 'close_cashier_shift', { p_shift_id: shift.id, p_actual_cash: '0', p_waste: [] }); } catch { /* already closed or unauthorized */ }
   }
 }
 await closeOpenShift(sessions.cash1);
@@ -617,7 +617,7 @@ const shiftId = await expectOk('Cashier 1 starts shift', 'Full E2E', () => rpc(s
 const shiftRetry = await rpc(sessions.cash1, 'start_cashier_shift');
 record('Duplicate Protection', 'Start shift retry returns same open shift', shiftRetry === shiftId, `${shiftRetry}`);
 
-await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () => rpc(sessions.cash2, 'end_cashier_shift', { p_shift_id: shiftId }));
+await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () => rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '0', p_waste: [] }));
 
 {
   const { data, error } = await sessions.cash1.from('branch_inventory').select('quantity_on_hand,branch_id').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id);
@@ -651,10 +651,11 @@ record('Duplicate Protection', 'Confirm sale retry returns same sale', saleRetry
 const { data: b1AfterSale } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
 record('Full E2E', 'Branch remaining after sale is 28', Number(b1AfterSale?.quantity_on_hand) === 28, String(b1AfterSale?.quantity_on_hand));
 
-const shiftSummary = await expectOk('Cashier ends shift', 'Full E2E', () => rpc(sessions.cash1, 'end_cashier_shift', { p_shift_id: shiftId }));
+const closeResult = await expectOk('Cashier ends shift', 'Full E2E', () => rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '2400.00', p_waste: [] }));
+const shiftSummary = await expectOk('Shift summary after close', 'Full E2E', () => rpc(sessions.cash1, 'get_shift_summary', { p_shift_id: shiftId }));
 record('Full E2E', 'Shift totals 1 tx / 2400', Number(shiftSummary.completed_transaction_count) === 1 && Number(shiftSummary.total_sales) === 2400, JSON.stringify(shiftSummary));
-const endRetry = await rpc(sessions.cash1, 'end_cashier_shift', { p_shift_id: shiftId });
-record('Duplicate Protection', 'End shift retry is idempotent', endRetry.ended_at === shiftSummary.ended_at && endRetry.status === 'closed', `${endRetry.status}`);
+record('Full E2E', 'Expected cash matches the completed sale', Number(closeResult.expected_cash) === 2400, JSON.stringify(closeResult));
+await expectDenied('End shift retry is rejected', 'Duplicate Protection', () => rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '2400.00', p_waste: [] }));
 
 const returnKey = idem('e2e-return');
 const returnId = await expectOk('Manager returns remaining 28', 'Full E2E', () => rpc(sessions.mgr1, 'create_stock_return', {
@@ -756,7 +757,7 @@ record('Concurrency', 'Sale concurrency leftover is 1', Number(concBal?.quantity
   record('Sale Integrity', 'Winning concurrent sale persisted with items', (concSales?.length ?? 0) === 1 && (concItems?.length ?? 0) === 1);
   void failedIds;
 }
-await rpc(sessions.cash1, 'end_cashier_shift', { p_shift_id: concShift });
+await rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: concShift, p_actual_cash: '0', p_waste: [] });
 
 console.log('\n-- Transfer concurrency --');
 let xferA;
@@ -944,7 +945,7 @@ await expectDenied('Main Branch Manager cannot reassign employee', 'Employee Sec
   p_branch_id: branch2.id,
   p_is_active: true,
 }));
-await rpc(sessions.cash2, 'end_cashier_shift', { p_shift_id: openForProtect });
+await rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: openForProtect, p_actual_cash: '0', p_waste: [] });
 record('Employee Security', 'Historical Cashier 1 sale remains Branch 1', sale.branch_id === branch1.id);
 
 await expectOk('Owner reassigns Cashier 2 to Branch 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
@@ -964,7 +965,7 @@ const newShift = await rpc(sessions.cash2, 'start_cashier_shift');
   const { data: nextShift } = await admin.from('shifts').select('branch_id').eq('id', newShift).maybeSingle();
   record('Employee Security', 'New shift uses reassigned Branch 2', nextShift?.branch_id === branch2.id, nextShift?.branch_id);
 }
-await rpc(sessions.cash2, 'end_cashier_shift', { p_shift_id: newShift });
+await rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: newShift, p_actual_cash: '0', p_waste: [] });
 await expectOk('Owner deactivates Cashier 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',

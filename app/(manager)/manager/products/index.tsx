@@ -44,6 +44,8 @@ import {
   useUpdateCompleteProduct,
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
+import { inventoryModeLabel } from '@/lib/format';
+import { setProductInventoryMode } from '@/services/productService';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import type { Product } from '@/types/models';
 
@@ -66,6 +68,7 @@ export default function ManagerProductListScreen() {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [modeError, setModeError] = useState('');
   const submittingRef = useRef(false);
   const editSubmittingRef = useRef(false);
   const branches = useBranches();
@@ -134,6 +137,7 @@ export default function ManagerProductListScreen() {
             : { branch_id: draft.branchId, selling_price: draft.selling_price },
         ),
         selling_price: hasVariants ? null : values.default_price,
+        inventoryMode: values.inventoryMode,
       })
       .then(() => setCreateOpen(false))
       .finally(() => {
@@ -147,8 +151,13 @@ export default function ManagerProductListScreen() {
     if (!tryBeginSubmit(editSubmittingRef)) return;
     setIsEditSubmitting(true);
     const hasVariants = values.variants.length > 0;
-    void updateCompleteMutation
-      .mutateAsync({
+    const modeChanged = values.inventoryMode !== editProduct.inventory_mode;
+    setModeError('');
+    void (modeChanged
+      ? setProductInventoryMode(editProduct.id, values.inventoryMode)
+      : Promise.resolve(editProduct))
+      .then(() =>
+        updateCompleteMutation.mutateAsync({
         productId: editProduct.id,
         name: values.name,
         sku: values.sku,
@@ -162,8 +171,10 @@ export default function ManagerProductListScreen() {
             : { branch_id: draft.branchId, selling_price: draft.selling_price },
         ),
         selling_price: hasVariants ? null : values.default_price,
-      })
+      }),
+      )
       .then(() => setEditProduct(null))
+      .catch((error: unknown) => setModeError(getProductErrorMessage(error)))
       .finally(() => {
         endSubmit(editSubmittingRef);
         setIsEditSubmitting(false);
@@ -218,7 +229,11 @@ export default function ManagerProductListScreen() {
               renderItem={({ item }) => (
                 <ListRowCard
                   title={item.name}
-                  meta={item.is_active ? item.sku : `${item.sku} · Inactive until opening stock`}
+                  meta={
+                    item.is_active
+                      ? `${item.sku} · ${inventoryModeLabel(item.inventory_mode)}`
+                      : `${item.sku} · ${inventoryModeLabel(item.inventory_mode)} · Inactive until opening stock`
+                  }
                   trailing={
                     <ManagerBadge
                       label={item.is_active ? 'Active' : 'Inactive'}
@@ -277,6 +292,7 @@ export default function ManagerProductListScreen() {
                 sku: editProduct.sku,
                 description: editProduct.description,
                 is_active: editProduct.is_active,
+                inventory_mode: editProduct.inventory_mode,
               }}
               sourceVariants={(editVariants.data ?? []).map((variant) => ({
                 id: variant.id,
@@ -299,7 +315,10 @@ export default function ManagerProductListScreen() {
                 ),
               )}
               loading={isEditSubmitting}
-              error={updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined}
+              error={
+                modeError
+                || (updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined)
+              }
               onSubmit={submitEdit}
             />
           ) : null}
