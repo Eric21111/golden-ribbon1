@@ -1,5 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import type { PendingShiftReconciliation, Shift, ShiftCloseResult, ShiftRemittanceRow, ShiftSummary } from '@/types/models';
+import type {
+  PendingShiftReconciliation,
+  Shift,
+  ShiftCloseResult,
+  ShiftRemittanceReport,
+  ShiftSummary,
+  ShiftWasteReport,
+} from '@/types/models';
 
 export async function getActiveShift(): Promise<Shift | null> {
   const { data, error } = await supabase
@@ -57,10 +64,34 @@ export async function getShiftSummary(shiftId: string): Promise<ShiftSummary> {
   return data as unknown as ShiftSummary;
 }
 
-export async function listShiftRemittances(branchId?: string | null): Promise<ShiftRemittanceRow[]> {
+export async function listShiftRemittances(
+  branchId: string | null | undefined,
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string,
+): Promise<ShiftRemittanceReport> {
   const { data, error } = await supabase.rpc('report_branch_shift_remittances', {
     p_branch_id: branchId ?? null,
+    p_range_type: rangeType,
+    p_start_date: startDate ?? null,
+    p_end_date: endDate ?? null,
   });
   if (error) throw error;
-  return (data ?? []) as ShiftRemittanceRow[];
+  return (data ?? { days: [] }) as ShiftRemittanceReport;
+}
+
+export async function listShiftWaste(
+  branchId: string | null | undefined,
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string,
+): Promise<ShiftWasteReport> {
+  const { data, error } = await supabase.rpc('report_branch_shift_waste', {
+    p_branch_id: branchId ?? null,
+    p_range_type: rangeType,
+    p_start_date: startDate ?? null,
+    p_end_date: endDate ?? null,
+  });
+  if (error) throw error;
+  return (data ?? { days: [] }) as ShiftWasteReport;
 }

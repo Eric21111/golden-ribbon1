@@ -45,7 +45,6 @@ import {
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { inventoryModeLabel } from '@/lib/format';
-import { setProductInventoryMode } from '@/services/productService';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import type { Product } from '@/types/models';
 
@@ -151,18 +150,15 @@ export default function ManagerProductListScreen() {
     if (!tryBeginSubmit(editSubmittingRef)) return;
     setIsEditSubmitting(true);
     const hasVariants = values.variants.length > 0;
-    const modeChanged = values.inventoryMode !== editProduct.inventory_mode;
     setModeError('');
-    void (modeChanged
-      ? setProductInventoryMode(editProduct.id, values.inventoryMode)
-      : Promise.resolve(editProduct))
-      .then(() =>
-        updateCompleteMutation.mutateAsync({
+    void updateCompleteMutation
+      .mutateAsync({
         productId: editProduct.id,
         name: values.name,
         sku: values.sku,
         description: values.description ? values.description : null,
         isActive: values.isActive,
+        inventoryMode: values.inventoryMode,
         variants: values.variants,
         deletedVariantIds: values.deletedVariantIds,
         branches: catalogDrafts.map((draft) =>
@@ -171,8 +167,7 @@ export default function ManagerProductListScreen() {
             : { branch_id: draft.branchId, selling_price: draft.selling_price },
         ),
         selling_price: hasVariants ? null : values.default_price,
-      }),
-      )
+      })
       .then(() => setEditProduct(null))
       .catch((error: unknown) => setModeError(getProductErrorMessage(error)))
       .finally(() => {

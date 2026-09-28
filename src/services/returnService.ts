@@ -3,7 +3,6 @@ import type {
   LeftoverReturnRequest,
   ReceiveReturnInput,
   ReturnDiscrepancy,
-  ReturnRequest,
   ReturnStatus,
   StockReturn,
   StockReturnDetails,
@@ -70,12 +69,6 @@ export async function getReturn(id: string): Promise<StockReturnDetails> {
     items: itemsRes.data ?? [],
     discrepancies: (discrepanciesRes.data as unknown as ReturnDiscrepancy[]) ?? [],
   };
-}
-
-export async function createReturn(request: ReturnRequest): Promise<string> {
-  const { data, error } = await supabase.rpc('create_stock_return', request);
-  if (error) throw error;
-  return data;
 }
 
 export async function returnLeftoverStock(request: LeftoverReturnRequest): Promise<string> {

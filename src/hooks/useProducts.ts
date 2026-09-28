@@ -4,19 +4,16 @@ import { queryKeys } from '@/lib/queryKeys';
 import {
   configureProductVariants,
   createCompleteProduct,
-  createProduct,
   getProduct,
   listProductSkus,
   listProductVariants,
   listProducts,
   updateBranchProductVariantPrice,
   updateCompleteProduct,
-  updateProduct,
   updateProductVariant,
   type CreateCompleteProductInput,
   type UpdateCompleteProductInput,
 } from '@/services/productService';
-import type { ProductInput } from '@/types/models';
 
 export function useProducts(search = '', activeOnly = false) {
   return useQuery({
@@ -34,27 +31,6 @@ export function useProductSkus() {
 
 export function useProduct(id: string) {
   return useQuery({ queryKey: queryKeys.product(id), queryFn: () => getProduct(id), enabled: Boolean(id) });
-}
-
-export function useCreateProduct() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: createProduct,
-    onSuccess: () => client.invalidateQueries({ queryKey: ['products'] }),
-  });
-}
-
-export function useUpdateProduct(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: ProductInput) => updateProduct(id, input),
-    onSuccess: async () => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['products'] }),
-        client.invalidateQueries({ queryKey: queryKeys.product(id) }),
-      ]);
-    },
-  });
 }
 
 export function useProductVariants(productId: string) {

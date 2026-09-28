@@ -273,7 +273,7 @@ await asUser(owner, async () => {
   assert.equal((await db.query('select count(*)::int as n from public.inventory_movements')).rows[0].n, beforeMovements);
   assert.equal((await db.query('select count(*)::int as n from public.stock_transfers')).rows[0].n, beforeTransfers);
   assert.equal((await db.query('select count(*)::int as n from public.products')).rows[0].n, 1);
-  assert.equal((await db.query(`select quantity_on_hand from public.branch_inventory where product_id='${chicken}'`)).rows[0].quantity_on_hand, 90);
+  assert.equal(Number((await db.query(`select quantity_on_hand from public.branch_inventory where product_id='${chicken}'`)).rows[0].quantity_on_hand), 90);
 
   const recon = (await db.query('select public.report_inventory_reconciliation(null) result')).rows[0].result;
   const chickenRow = recon.find((row) => row.product_id === chicken && row.branch_id === branch1);

@@ -200,6 +200,13 @@ export default function ManagerDashboard() {
                     description="Pending reconciliation versus completed actual cash"
                     onPress={() => router.push('/manager/reports/shift-remittances' as never)}
                   />
+                  <NavTile
+                    icon="leaf-outline"
+                    accent="green"
+                    title="Waste History"
+                    description="KG-meal waste occurrences by selling-shift business date"
+                    onPress={() => router.push('/manager/reports/waste-history' as never)}
+                  />
                 </>
               ) : (
                 <Row>

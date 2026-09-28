@@ -68,6 +68,7 @@
     "test:return-integrity": "node tests/return_inventory_integrity.mjs",
     "test:discrepancy-resolution": "node tests/discrepancy_resolution.mjs",
     "test:kg-meal": "node tests/kg_meal_shift_reconciliation.mjs",
+    "test:atomic-product-edit": "node tests/atomic_product_edit.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

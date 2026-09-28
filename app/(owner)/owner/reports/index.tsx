@@ -28,6 +28,13 @@ export default function OwnerReportsHub() {
             onPress={() => router.push('/owner/reports/shift-remittances' as never)}
           />
           <NavTile
+            icon="leaf-outline"
+            accent="green"
+            title="Waste History"
+            description="KG-meal waste occurrences by selling-shift business date"
+            onPress={() => router.push('/owner/reports/waste-history' as never)}
+          />
+          <NavTile
             icon="pricetag-outline"
             accent="gold"
             title="Product Sales Performance"

@@ -359,7 +359,7 @@ export function EditProductWizard({
           <InventoryModeField
             value={inventoryMode}
             onChange={setInventoryMode}
-            note="Changing inventory type is saved separately. Every current balance, including Main Branch, must already be zero, and no transfer or return for this product can be open. Quantities are not converted. After a change, enter a new Main opening stock in the new unit."
+            note="Every current balance, including Main Branch, must already be zero, and no transfer or return for this product can be open. Quantities are not converted. After a change, enter a new Main opening stock in the new unit."
           />
           <FormField
             label="Product name"

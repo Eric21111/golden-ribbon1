@@ -61,5 +61,9 @@ export const queryKeys = {
   inventoryReconciliation: (branchId = '') =>
     ['reports', 'inventory-reconciliation', { branchId }] as const,
   archiveStatus: ['archive', 'status'] as const,
+  shiftRemittances: (rangeType = 'today', startDate = '', endDate = '', branchId = '') =>
+    ['reports', 'shift-remittances', { rangeType, startDate, endDate, branchId }] as const,
+  shiftWaste: (rangeType = 'today', startDate = '', endDate = '', branchId = '') =>
+    ['reports', 'shift-waste', { rangeType, startDate, endDate, branchId }] as const,
 } as const;
 

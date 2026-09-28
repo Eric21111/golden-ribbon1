@@ -40,4 +40,4 @@ Both save **atomically** in a single database transaction — `create_complete_p
 
 ## Related
 
-`ProductForm` (`src/features/products/ProductForm.tsx`) is no longer used by either flow — kept only because a regression test pins specific strings in it. `src/features/products/productSchema.ts` / `generateSku.ts` are shared helpers.
+`src/features/products/productSchema.ts` / `generateSku.ts` are shared helpers used by the Create/Edit wizards.

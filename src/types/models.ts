@@ -45,6 +45,7 @@ export type Shift = {
   ended_at: string | null;
   created_at: string;
   updated_at: string;
+  reconciliation_required?: boolean;
 };
 
 export type CartItem = {
@@ -102,11 +103,6 @@ export type Product = {
 export type BranchInput = Pick<
   Branch,
   'name' | 'code' | 'address' | 'is_main_branch' | 'is_active' | 'receiving_mode'
->;
-
-export type ProductInput = Pick<
-  Product,
-  'name' | 'sku' | 'description' | 'selling_price' | 'is_active'
 >;
 
 export type BranchInventory = {
@@ -329,16 +325,70 @@ export type PendingShiftReconciliation = {
 };
 
 export type ShiftRemittanceRow = {
+  business_date: string;
   shift_id: string;
   branch_id: string;
   branch_name: string;
   cashier_id: string;
+  cashier_name: string;
+  started_at: string;
   ended_at: string | null;
   status: 'pending' | 'reconciled';
   expected_cash: number;
   actual_cash: number | null;
   difference: number | null;
   result: CashReconciliationResult | null;
+  reconciled_at: string | null;
+};
+
+export type ShiftRemittanceDay = {
+  business_date: string;
+  expected_cash: number;
+  actual_remitted: number | null;
+  total_shortage: number;
+  total_excess: number;
+  reconciled_shift_count: number;
+  pending_shift_count: number;
+  pending_expected_cash: number;
+  shifts: ShiftRemittanceRow[];
+};
+
+export type ShiftRemittanceReport = {
+  days: ShiftRemittanceDay[];
+};
+
+export type ShiftWasteStatus = 'waste_recorded' | 'no_waste' | 'pending';
+
+export type ShiftWasteOccurrenceRow = {
+  product_id: string;
+  product_name: string;
+  recorded_at: string;
+  recorded_by: string;
+  note: string | null;
+};
+
+export type ShiftWasteShiftRow = {
+  shift_id: string;
+  business_date: string;
+  branch_id: string;
+  branch_name: string;
+  cashier_id: string;
+  cashier_name: string;
+  started_at: string;
+  ended_at: string | null;
+  waste_status: ShiftWasteStatus;
+  occurrences: ShiftWasteOccurrenceRow[];
+};
+
+export type ShiftWasteDay = {
+  business_date: string;
+  occurrence_count: number;
+  distinct_product_count: number;
+  shifts: ShiftWasteShiftRow[];
+};
+
+export type ShiftWasteReport = {
+  days: ShiftWasteDay[];
 };
 
 export type BranchSalesReportItem = {

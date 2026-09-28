@@ -42,7 +42,7 @@ export function filterEmptyMessage(filter: StockFilter, hasSearch: boolean): { t
     case 'in_stock':
       return { title: 'No items in stock', message: 'Nothing currently has quantity on hand.' };
     case 'low':
-      return { title: 'No low-stock items', message: `Nothing is at or below ${LOW_STOCK_THRESHOLD} units.` };
+      return { title: 'No low-stock items', message: `Nothing is at or below ${LOW_STOCK_THRESHOLD} pcs.` };
     case 'out':
       return { title: 'No out-of-stock items', message: 'Nothing is at zero quantity.' };
     case 'not_set':

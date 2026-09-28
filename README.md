@@ -109,7 +109,7 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 - `send_stock_transfer`: owner-only validation, deterministic row locking, server-side transfer numbering, Main Branch deduction, transfer items, and `transfer_out` movements in one transaction.
 - `receive_stock_transfer`: manager/owner authorization, destination-branch enforcement, pending-status lock, actual quantity addition, `transfer_in` movements, discrepancy creation, and final status in one transaction.
 - `start_cashier_shift`: cashier-only branch validation and concurrency-safe creation or recovery of one active shift.
-- `end_cashier_shift`: cashier-only locked closure of the caller's active shift with a server-recorded end time.
+- `close_cashier_shift`: cashier-only close of the caller's active shift. `end_cashier_shift` remains as a reject/compatibility guard and is not the valid close path.
 - `list_employees`: owner-only employee directory joined to Auth email and branch name.
 - `owner_update_employee`: owner-only profile edits with active selling-branch and open-shift enforcement.
 - `create_employee_profile_from_server`: server-only profile pairing used after secure Auth user creation.

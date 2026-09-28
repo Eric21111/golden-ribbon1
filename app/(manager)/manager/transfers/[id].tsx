@@ -13,7 +13,7 @@ import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashb
 import { managerColors } from '@/components/dashboard/theme';
 import { useTransfer } from '@/hooks/useTransfers';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatTransferLineSummary, isKgMeal } from '@/lib/format';
 
 export default function ManagerTransferDetailsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -67,9 +67,15 @@ export default function ManagerTransferDetailsScreen() {
 
         <Text style={styles.sectionTitle}>PRODUCTS</Text>
         {transfer.items.map((item) => {
-          const difference = item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+          const kgMeal = isKgMeal(item.inventory_mode);
+          const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
           const note = notesByItemId.get(item.id);
-          const baseSubtitle = `Sent ${item.quantity_sent} · Received ${item.quantity_received === null ? 'Pending' : item.quantity_received}`;
+          const baseSubtitle = formatTransferLineSummary(
+            transfer.status,
+            item.quantity_sent,
+            item.quantity_received,
+            item.inventory_mode,
+          );
           return (
             <ListRowCard
               key={item.id}

@@ -46,6 +46,7 @@ function ManagerStack() {
         <Stack.Screen name="manager/branches/[id]" />
         <Stack.Screen name="manager/reports/product-sales" />
         <Stack.Screen name="manager/reports/shift-remittances" />
+        <Stack.Screen name="manager/reports/waste-history" />
         <Stack.Screen name="manager/reports/transfer-discrepancies" />
         <Stack.Screen name="manager/reports/return-discrepancies" />
         <Stack.Screen name="manager/discrepancies/[kind]/[id]" />

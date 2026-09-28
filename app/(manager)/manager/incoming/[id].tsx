@@ -19,7 +19,7 @@ import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashb
 import { managerColors } from '@/components/dashboard/theme';
 import { useReceiveTransfer, useTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, makeIdempotencyKey } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity, formatTransferLineSummary, isKgMeal, makeIdempotencyKey } from '@/lib/format';
 
 const schema = z.object({
   items: z
@@ -144,13 +144,19 @@ export default function ReceiveTransferScreen() {
 
           <Text style={styles.sectionTitle}>PRODUCTS</Text>
           {transfer.items.map((item) => {
-            const difference = item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+            const kgMeal = isKgMeal(item.inventory_mode);
+            const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
             const note = notesByItemId.get(item.id);
             return (
               <ListRowCard
                 key={item.id}
                 title={item.product?.name ?? `Unavailable product (${item.product_id})`}
-                subtitle={`Sent ${item.quantity_sent} · Received ${item.quantity_received === null ? 'Pending' : item.quantity_received}`}
+                subtitle={formatTransferLineSummary(
+                  transfer.status,
+                  item.quantity_sent,
+                  item.quantity_received,
+                  item.inventory_mode,
+                )}
                 meta={note ? `Note: ${note}` : undefined}
                 trailing={
                   difference === null ? undefined : (
@@ -187,7 +193,7 @@ export default function ReceiveTransferScreen() {
             <ListRowCard
               key={item.id}
               title={item.product?.name ?? `Unavailable product (${item.product_id})`}
-              subtitle={`Expected ${item.quantity_sent} · Received ${item.received}`}
+              subtitle={`Expected ${formatSnapshottedQuantity(item.quantity_sent, item.inventory_mode)} · Received ${formatSnapshottedQuantity(item.received, item.inventory_mode)}`}
               trailing={
                 <ManagerBadge
                   label={
@@ -283,7 +289,9 @@ export default function ReceiveTransferScreen() {
                       </View>
                       <View style={styles.expectedPill}>
                         <Text style={styles.expectedText} numberOfLines={1}>
-                          <Text style={styles.expectedValue}>{item.quantity_sent}</Text>
+                          <Text style={styles.expectedValue}>
+                            {formatSnapshottedQuantity(item.quantity_sent, item.inventory_mode)}
+                          </Text>
                           <Text style={styles.expectedLabel}> expected</Text>
                         </Text>
                       </View>

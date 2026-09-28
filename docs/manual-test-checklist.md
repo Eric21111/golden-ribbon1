@@ -24,8 +24,7 @@ Mark items with `[x]` when done. Leave `[ ]` if not tested / failed.
 
 - [ x] Login lands on Owner Home
 - [ x] Account shows role Owner / all branches
-- [ x] Create Main Branch Manager (Main Branch)
-- [ x] Create Selling Manager (Branch 1)
+- [ x] Create Main Branch Manager (Main Branch only; selling branches not selectable for Manager)
 - [ x] Create Cashier (Branch 1 only; Main not selectable)
 - [ x] Employee list shows correct roles / emails / Active
 - [ x] Owner cannot access POS / send transfer / opening stock
@@ -49,17 +48,13 @@ Mark items with `[x]` when done. Leave `[ ]` if not tested / failed.
 
 ---
 
-## 3. Selling Branch Manager (Branch 1)
+## 3. Selling Branch Manager leftover account (if one still exists)
 
-- [ ] Login lands on Manager Home (no ops drawer)
-- [ ] Home shows pending incoming
-- [ ] Incoming: open pending transfer
-- [ ] Receive with matching quantities → Confirm
-- [ ] Transfer becomes Received
-- [ ] Branch 1 inventory increases by received qty
-- [ ] Same transfer cannot be received twice
-- [ ] Cannot open Products / Opening stock / Send transfer / Catalog
-- [ ] *(Optional)* Short receive creates discrepancy status
+Selling-branch manager accounts are no longer used. New Manager employees can only be assigned to Main Branch. Cashiers receive incoming transfers.
+
+- [ ] Login shows the lock screen: selling-branch manager accounts are no longer used
+- [ ] Sign out is available; manager ops screens are not
+- [ ] Owner can reassign the account as a Cashier or Main Branch Manager
 
 ---
 

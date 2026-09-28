@@ -1,10 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { formatCatalogPrice } from '@/lib/format';
 import { cartLineKey } from '@/lib/money';
-import type { Database } from '@/types/database';
-import type { InventoryMode, Product, ProductInput, ProductVariant } from '@/types/models';
-
-type ProductInsert = Database['public']['Tables']['products']['Insert'];
+import type { InventoryMode, Product, ProductVariant } from '@/types/models';
 
 interface ProductFilters {
   search?: string;
@@ -83,21 +80,13 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
   return data;
 }
 
-export async function setProductInventoryMode(productId: string, inventoryMode: InventoryMode): Promise<Product> {
-  const { data, error } = await supabase.rpc('set_product_inventory_mode', {
-    p_product_id: productId,
-    p_inventory_mode: inventoryMode,
-  });
-  if (error) throw error;
-  return data;
-}
-
 export type UpdateCompleteProductInput = {
   productId: string;
   name: string;
   sku: string;
   description: string | null;
   isActive: boolean;
+  inventoryMode: InventoryMode;
   variants: Array<{ id: string | null; name: string; default_price: string }>;
   deletedVariantIds: string[];
   branches: Array<{
@@ -119,6 +108,7 @@ export async function updateCompleteProduct(input: UpdateCompleteProductInput): 
     p_deleted_variant_ids: input.deletedVariantIds,
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
+    p_inventory_mode: input.inventoryMode,
   });
   if (error) throw error;
   return data;
@@ -147,29 +137,6 @@ export async function updateBranchProductVariantPrice(
     p_selling_price: sellingPrice,
   });
   if (error) throw error;
-}
-
-export async function createProduct(input: ProductInput): Promise<Product> {
-  const values: ProductInsert = { ...input, sku: input.sku.trim().toUpperCase() };
-  const { data, error } = await supabase
-    .from('products')
-    .insert(values)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateProduct(id: string, input: ProductInput): Promise<Product> {
-  const values: Partial<ProductInsert> = { ...input, sku: input.sku.trim().toUpperCase() };
-  const { data, error } = await supabase
-    .from('products')
-    .update(values)
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
 }
 
 export async function listProductVariants(productId: string): Promise<ProductVariant[]> {

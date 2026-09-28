@@ -290,6 +290,9 @@ export function getInventoryErrorMessage(error: unknown): string {
     return 'This shipment could not be finalized. Pull to refresh and try again.';
   }
   if (message.includes('insufficient stock')) return 'There is not enough stock to complete this operation.';
+  if (message.includes('inventory type changed while this shipment was in transit')) {
+    return 'Product inventory type changed while this shipment was in transit.';
+  }
   if (message.includes('already been received') || message.includes('not pending receipt')) {
     return 'This transfer has already been received.';
   }
@@ -363,6 +366,9 @@ export function getShiftErrorMessage(error: unknown): string {
   if (message.includes('assigned branch') || message.includes('inactive or invalid')) return 'Your assigned branch is unavailable. Contact the owner.';
   if (message.includes('already closed')) return 'This shift is already closed.';
   if (message.includes('already been reconciled')) return 'This shift has already been reconciled.';
+  if (message.includes('does not require reconciliation')) {
+    return 'This historical shift does not require reconciliation.';
+  }
   if (
     message.includes('actual cash')
     || message.includes('cash amount')

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/constants/theme';
-import { formatDate, formatSnapshottedQuantity, isKgMeal } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity, formatTransferDifference, formatTransferReceivedQuantity, isKgMeal } from '@/lib/format';
 import type { StockTransferDetails } from '@/types/models';
 import { TransferStatusBadge } from './TransferStatusBadge';
 
@@ -30,11 +30,11 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
       {transfer.items.map((item) => {
         const kgMeal = isKgMeal(item.inventory_mode);
         const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
-        const receivedLabel = kgMeal
-          ? 'Unmeasured'
-          : item.quantity_received === null
-            ? 'Pending'
-            : formatSnapshottedQuantity(item.quantity_received, item.inventory_mode);
+        const receivedLabel = formatTransferReceivedQuantity(
+          transfer.status,
+          item.quantity_received,
+          item.inventory_mode,
+        );
         return (
           <View key={item.id} style={styles.card}>
             <Text style={styles.product}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
@@ -42,7 +42,12 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
             <AuditDetail label="Received" value={receivedLabel} />
             <AuditDetail
               label="Difference"
-              value={kgMeal ? 'Unmeasured' : difference === null ? 'Pending' : formatSnapshottedQuantity(difference, item.inventory_mode)}
+              value={formatTransferDifference(
+                transfer.status,
+                item.quantity_sent,
+                item.quantity_received,
+                item.inventory_mode,
+              )}
             />
             {!kgMeal && difference !== null && difference !== 0 ? (
               <Text style={styles.warning}>{difference > 0 ? `${difference} missing` : `${Math.abs(difference)} excess`}</Text>
@@ -52,13 +57,20 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
       })}
       <Text style={styles.sectionTitle}>Discrepancies</Text>
       {transfer.discrepancies.length === 0 ? <Text style={styles.empty}>No discrepancies found.</Text> : null}
-      {transfer.discrepancies.map((item) => (
+      {transfer.discrepancies.map((item) => {
+        const mode = transfer.items.find((line) => line.id === item.stock_transfer_item_id)?.inventory_mode
+          ?? item.product?.inventory_mode;
+        return (
         <View key={item.id} style={[styles.card, styles.discrepancy]}>
           <Text style={styles.product}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
           <Text style={styles.warning}>{item.discrepancy_type === 'missing' ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}</Text>
-          <Text style={styles.empty}>Expected {item.quantity_expected} · Received {item.quantity_received}</Text>
+          <Text style={styles.empty}>
+            Expected {formatSnapshottedQuantity(item.quantity_expected, mode)} · Received{' '}
+            {formatSnapshottedQuantity(item.quantity_received, mode)}
+          </Text>
         </View>
-      ))}
+        );
+      })}
     </>
   );
 }

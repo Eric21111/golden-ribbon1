@@ -3,25 +3,109 @@ import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
 
+export const INVALID_QUANTITY_LABEL = 'Invalid quantity';
+/** Fits 999999.999, matching parse_inventory_quantity. Do not use 6. */
+export const KG_QUANTITY_MAX_LENGTH = 10;
+export const PIECE_QUANTITY_MAX_LENGTH = 6;
+
 export function inventoryModeLabel(mode: InventoryMode | null | undefined): string {
   return mode === 'kg_meal' ? 'KG-delivered meal' : 'Piece-based stock';
 }
 
-export function formatLiveStock(quantity: number, mode: InventoryMode | null | undefined): string {
-  if (mode === 'kg_meal') return `${Number(quantity).toFixed(3)} kg`;
-  return `${quantity} pcs`;
+function formatPieceQuantity(quantity: number | string | null | undefined): string {
+  if (quantity == null || quantity === '') return INVALID_QUANTITY_LABEL;
+  const n = Number(quantity);
+  // Integer-equivalent only: 24, "24", "24.000" → 24 pcs. Do not trunc/round 24.500.
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return INVALID_QUANTITY_LABEL;
+  return `${n} pcs`;
+}
+
+/** Selling branches do not track KG on-hand. Live KG there is never 0 kg / Out of stock. */
+export function formatSellingBranchOnHand(
+  quantity: number | string,
+  mode: InventoryMode | null | undefined,
+): string {
+  if (isKgMeal(mode)) return 'Not tracked';
+  return formatLiveStock(quantity, mode);
+}
+
+export function formatInventoryQuantity(
+  value: number | string | null | undefined,
+  mode: InventoryMode | null | undefined,
+): string {
+  if (mode === 'kg_meal') {
+    if (value == null || value === '') return 'Unmeasured';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
+    return `${n.toFixed(3)} kg`;
+  }
+  return formatPieceQuantity(value);
+}
+
+export function formatLiveStock(quantity: number | string, mode: InventoryMode | null | undefined): string {
+  if (mode === 'kg_meal') {
+    const n = Number(quantity);
+    if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
+    return `${n.toFixed(3)} kg`;
+  }
+  return formatPieceQuantity(quantity);
 }
 
 /** Null KG received weight is unmeasured. It is never shown as 0 kg. */
 export function formatSnapshottedQuantity(
-  quantity: number | null | undefined,
+  quantity: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
 ): string {
   if (mode === 'kg_meal') {
-    if (quantity == null) return 'Unmeasured';
-    return `${Number(quantity).toFixed(3)} kg`;
+    if (quantity == null || quantity === '') return 'Unmeasured';
+    const n = Number(quantity);
+    if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
+    return `${n.toFixed(3)} kg`;
   }
-  return `${quantity ?? 0} pcs`;
+  if (quantity == null || quantity === '') return formatPieceQuantity(0);
+  return formatPieceQuantity(quantity);
+}
+
+export function formatTransferReceivedQuantity(
+  status: TransferStatus,
+  quantityReceived: number | string | null | undefined,
+  mode: InventoryMode | null | undefined,
+): string {
+  if (status === 'cancelled') return formatTransferStatus(status);
+  if (status === 'draft' || status === 'pending_receipt') return 'Pending';
+  if (status === 'received' || status === 'received_with_discrepancy') {
+    if (isKgMeal(mode) && (quantityReceived == null || quantityReceived === '')) return 'Unmeasured';
+    return formatSnapshottedQuantity(quantityReceived, mode);
+  }
+  return 'Pending';
+}
+
+export function formatTransferLineSummary(
+  status: TransferStatus,
+  quantitySent: number | string,
+  quantityReceived: number | string | null | undefined,
+  mode: InventoryMode | null | undefined,
+): string {
+  return `Sent ${formatSnapshottedQuantity(quantitySent, mode)} · Received ${formatTransferReceivedQuantity(status, quantityReceived, mode)}`;
+}
+
+export function formatTransferDifference(
+  status: TransferStatus,
+  quantitySent: number | string,
+  quantityReceived: number | string | null | undefined,
+  mode: InventoryMode | null | undefined,
+): string {
+  if (status === 'cancelled') return formatTransferStatus(status);
+  if (status === 'draft' || status === 'pending_receipt') return 'Pending';
+  if (status === 'received' || status === 'received_with_discrepancy') {
+    if (isKgMeal(mode)) return 'Unmeasured';
+    if (quantityReceived == null || quantityReceived === '') return 'Pending';
+    const sent = Number(quantitySent);
+    const received = Number(quantityReceived);
+    if (!Number.isFinite(sent) || !Number.isFinite(received)) return INVALID_QUANTITY_LABEL;
+    return formatSnapshottedQuantity(sent - received, mode);
+  }
+  return 'Pending';
 }
 
 export function isKgMeal(mode: InventoryMode | null | undefined): boolean {

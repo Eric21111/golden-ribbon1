@@ -28,7 +28,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatLiveStock, formatMoney, formatSellingBranchOnHand, isKgMeal } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 const badgeToneForStatus: Record<ReturnType<typeof getStockStatus>, ManagerBadgeTone> = {
@@ -38,18 +38,21 @@ const badgeToneForStatus: Record<ReturnType<typeof getStockStatus>, ManagerBadge
   not_set: 'neutral',
 };
 
-/** One pill communicates both quantity and urgency, instead of two stacked signals. */
-function stockPillLabel(status: ReturnType<typeof getStockStatus>, quantity: number): string {
-  switch (status) {
-    case 'in_stock':
-      return `${quantity} in stock`;
-    case 'low':
-      return `${quantity} left`;
-    case 'out':
-      return 'Out of stock';
-    case 'not_set':
-      return 'Not set';
+function stockPillLabel(item: InventoryItem): string {
+  const status = getStockStatus(item);
+  if (!item.branch.is_main_branch && isKgMeal(item.product.inventory_mode)) {
+    return formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode);
   }
+  if (status === 'out') return 'Out of stock';
+  if (status === 'not_set') return 'Not set';
+  return formatLiveStock(item.quantity_on_hand, item.product.inventory_mode);
+}
+
+function onHandLabel(item: InventoryItem): string {
+  if (!item.branch.is_main_branch) {
+    return formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode);
+  }
+  return formatLiveStock(item.quantity_on_hand, item.product.inventory_mode);
 }
 
 type SortOption = 'name-asc' | 'name-desc' | 'qty-desc' | 'qty-asc';
@@ -222,7 +225,7 @@ export default function ManagerInventoryScreen() {
                     }`}
                     subtitleTag
                     trailing={
-                      <ManagerBadge label={stockPillLabel(status, item.quantity_on_hand)} tone={badgeToneForStatus[status]} size="md" />
+                      <ManagerBadge label={stockPillLabel(item)} tone={badgeToneForStatus[status]} size="md" />
                     }
                     onPress={() => setSelected(item)}
                   />
@@ -273,7 +276,7 @@ export default function ManagerInventoryScreen() {
               subtitleTag
               trailing={
                 <ManagerBadge
-                  label={stockPillLabel(getStockStatus(selected), selected.quantity_on_hand)}
+                  label={stockPillLabel(selected)}
                   tone={badgeToneForStatus[getStockStatus(selected)]}
                   size="md"
                 />
@@ -281,7 +284,7 @@ export default function ManagerInventoryScreen() {
             />
             <SummaryCard
               rows={[
-                { label: 'On hand', value: `${selected.quantity_on_hand} units`, emphasis: true },
+                { label: 'On hand', value: onHandLabel(selected), emphasis: true },
                 {
                   label: isMain ? 'Base price' : 'Branch price',
                   value: selected.branch_product

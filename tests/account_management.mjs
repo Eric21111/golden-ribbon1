@@ -81,6 +81,16 @@ assert.equal(canChangeOwnEmail({ role: 'cashier', branch_id: 'b1' }), false);
 assert.equal(isMainBranchManager({ role: 'manager', branch: { is_main_branch: true } }), true);
 assert.equal(isSellingBranchManager({ role: 'manager', branch_id: 'b1', branch: { is_main_branch: false } }), true);
 
+const managerLayout = readFileSync('app/(manager)/_layout.tsx', 'utf8');
+assert.match(managerLayout, /SellingManagerLocked/);
+assert.match(managerLayout, /Selling-branch manager accounts are no longer used/);
+assert.match(managerLayout, /isSellingBranchManager\(profile\)/);
+
+const createEmployeeForm = readFileSync('src/features/employees/CreateEmployeeForm.tsx', 'utf8');
+assert.match(createEmployeeForm, /selectedRole === 'cashier'/);
+assert.match(createEmployeeForm, /branches.filter\(\(branch\) => branch.is_main_branch\)/);
+assert.match(createEmployeeForm, /branches.filter\(\(branch\) => !branch.is_main_branch\)/);
+
 const db = new PGlite();
 await db.exec(`
   create role anon;
@@ -140,7 +150,10 @@ await asUser(owner, async () => {
 });
 
 await db.query(`select public.create_employee_profile_from_server('${owner}','${createdMain}','Main Manager Test','manager','${main}',true)`);
-await db.query(`select public.create_employee_profile_from_server('${owner}','${createdSell}','Selling Manager Created','manager','${branch1}',true)`);
+await assert.rejects(
+  db.query(`select public.create_employee_profile_from_server('${owner}','${createdSell}','Selling Manager Created','manager','${branch1}',true)`),
+  /Select an active branch/,
+);
 await db.query(`select public.create_employee_profile_from_server('${owner}','${createdCash}','Cashier Created','cashier','${branch1}',true)`);
 
 await assert.rejects(
@@ -165,12 +178,8 @@ await asUser(createdMain, async () => {
   assert.equal((await db.query('select public.is_main_branch_manager() flag')).rows[0].flag, true);
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
 });
-await asUser(createdSell, async () => {
-  assert.equal((await db.query('select public.is_main_branch_manager() flag')).rows[0].flag, false);
-  await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
-  await assert.rejects(db.query('select public.assert_can_change_own_email()'), /Owner and Main Branch Manager/);
-});
 await asUser(sellMgr, async () => {
+  assert.equal((await db.query('select public.is_main_branch_manager() flag')).rows[0].flag, false);
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
   await assert.rejects(db.query('select public.assert_can_change_own_email()'), /Owner and Main Branch Manager/);
 });
@@ -183,4 +192,4 @@ await asUser(owner, async () => {
 });
 
 await db.close();
-console.log('Account management tests passed: owner creation, denials, email normalize, and duplicate profile protection.');
+console.log('Account management tests passed: owner creation, selling-manager assignment rejected, leftover selling-manager denials, email normalize, and duplicate profile protection.');

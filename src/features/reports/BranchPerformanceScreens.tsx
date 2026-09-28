@@ -15,9 +15,10 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { accentForRank } from '@/features/reports/reportAccents';
+import { useProducts } from '@/hooks/useProducts';
 import { useBranchPerformance, useBranchPerformanceDetails } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney, formatSellingBranchOnHand } from '@/lib/format';
 import type { BranchPerformanceItem } from '@/types/models';
 
 function discrepancySummary(missing: number, excess: number): { label: string; tone: ManagerBadgeTone } {
@@ -184,6 +185,11 @@ export function BranchPerformanceDetailScreen() {
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useBranchPerformanceDetails(id, rpcRangeType, startIso, endIso);
+  const products = useProducts();
+  const inventoryModeByProductId = useMemo(
+    () => new Map((products.data ?? []).map((product) => [product.id, product.inventory_mode])),
+    [products.data],
+  );
 
   const data = query.data;
 
@@ -243,7 +249,14 @@ export function BranchPerformanceDetailScreen() {
                   title={inv.product_name}
                   subtitle={inv.product_sku}
                   subtitleTag
-                  trailing={<Text style={styles.highlight}>{inv.quantity_on_hand} in stock</Text>}
+                  trailing={
+                    <Text style={styles.highlight}>
+                      {formatSellingBranchOnHand(
+                        inv.quantity_on_hand,
+                        inventoryModeByProductId.get(inv.product_id),
+                      )}
+                    </Text>
+                  }
                 />
               ))
             )}

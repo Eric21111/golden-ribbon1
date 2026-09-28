@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const form = readFileSync('src/features/products/ProductForm.tsx', 'utf8');
-assert.doesNotMatch(form, /Default\/base price|Pricing type|Single price/);
-assert.match(form, /Selling branch price/);
-assert.match(form, /canActivate/);
-assert.match(form, /Variant price \(PHP\)/);
-assert.match(form, /branchPriceDrafts/);
-assert.match(form, /Switching branches keeps the price/);
-assert.match(form, /catalogDrafts/);
+const createWizard = readFileSync('src/features/products/CreateProductWizard.tsx', 'utf8');
+const editWizard = readFileSync('src/features/products/EditProductWizard.tsx', 'utf8');
+assert.doesNotMatch(createWizard, /Default\/base price|Pricing type|Single price/);
+assert.doesNotMatch(editWizard, /Default\/base price|Pricing type|Single price/);
+assert.match(editWizard, /canActivate/);
+assert.match(createWizard, /priceDrafts/);
+assert.match(editWizard, /priceDrafts/);
+assert.doesNotMatch(createWizard, /ProductForm/);
+assert.doesNotMatch(editWizard, /ProductForm/);
 
 const products = readFileSync('app/(manager)/manager/products/index.tsx', 'utf8');
 assert.match(products, /Inactive until opening stock/);

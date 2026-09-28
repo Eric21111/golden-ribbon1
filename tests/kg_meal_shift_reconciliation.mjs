@@ -9,8 +9,9 @@ assert.doesNotMatch(dashboard, /end_cashier_shift/);
 assert.doesNotMatch(dashboard, /Leftover on-hand stock will be returned to Main automatically/);
 
 const incoming = readFileSync('app/(cashier)/cashier/incoming.tsx', 'utf8');
-assert.match(incoming, /Unmeasured/);
+assert.match(incoming, /unmeasured/i);
 assert.match(incoming, /isKgMeal/);
+assert.match(incoming, /formatTransferReceivedQuantity/);
 
 const inventoryStatus = readFileSync('src/features/inventory/inventoryStatus.ts', 'utf8');
 assert.match(inventoryStatus, /No KG low-stock threshold has been defined/);
@@ -501,7 +502,9 @@ await asUser(mainMgr, () =>
 const report = await asUser(owner, () =>
   db.query('select public.report_branch_shift_remittances(null) rows'),
 );
-const pendingRow = report.rows[0].rows.find((row) => row.shift_id === nightId);
+const pendingRow = (report.rows[0].rows?.days ?? [])
+  .flatMap((day) => day.shifts)
+  .find((row) => row.shift_id === nightId);
 assert.equal(pendingRow.status, 'pending');
 assert.equal(pendingRow.actual_cash, null);
 assert.equal(pendingRow.result, null);

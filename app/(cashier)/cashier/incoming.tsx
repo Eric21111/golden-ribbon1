@@ -16,7 +16,7 @@ import {
 } from '@/hooks/useTransfers';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, formatSnapshottedQuantity, isKgMeal, makeIdempotencyKey } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity, formatTransferReceivedQuantity, isKgMeal, makeIdempotencyKey } from '@/lib/format';
 import type { CashierPendingTransfer } from '@/types/models';
 
 export default function CashierIncomingShipments() {
@@ -189,7 +189,7 @@ export default function CashierIncomingShipments() {
                       <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
                       <Text style={styles.itemSku}>
                         Sent {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
-                        {kgMeal ? ' · Confirmed, not weighed' : ''}
+                        {kgMeal ? ' · Pending' : ''}
                       </Text>
                     </View>
                     {reporting && !kgMeal ? (
@@ -212,7 +212,9 @@ export default function CashierIncomingShipments() {
                       />
                     ) : (
                       <Text style={styles.itemQty}>
-                        {kgMeal ? 'Unmeasured' : formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
+                        {kgMeal
+                          ? formatTransferReceivedQuantity('pending_receipt', null, line.inventory_mode)
+                          : formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
                       </Text>
                     )}
                   </View>

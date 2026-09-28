@@ -51,4 +51,4 @@ Legacy stack routes `/owner/employees/create`, `/[id]`, `/[id]/reset-password` r
 | Tab | Create CTA |
 |-----|------------|
 | Branches | Bottom sheet `BranchForm` |
-| Products | Bottom sheet `ProductForm` |
+| Products | 3-step Create/Edit wizard (`CreateProductWizard` / `EditProductWizard`) |

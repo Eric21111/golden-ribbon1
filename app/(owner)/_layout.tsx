@@ -18,6 +18,7 @@ function OwnerStack() {
         <Stack.Screen name="owner/reports/index" />
         <Stack.Screen name="owner/reports/sales-by-branch" />
         <Stack.Screen name="owner/reports/shift-remittances" />
+        <Stack.Screen name="owner/reports/waste-history" />
         <Stack.Screen name="owner/reports/product-sales" />
         <Stack.Screen name="owner/reports/branch-performance/index" />
         <Stack.Screen name="owner/reports/branch-performance/[id]" />

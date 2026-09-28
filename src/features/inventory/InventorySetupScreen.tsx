@@ -21,7 +21,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, isKgMeal, isValidInventoryQuantity } from '@/lib/format';
+import { formatLiveStock, isKgMeal, isValidInventoryQuantity, KG_QUANTITY_MAX_LENGTH, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
 
 const schema = z
   .object({
@@ -153,7 +153,7 @@ export function InventorySetupScreen() {
     if (invalid || selected.length === 0) return;
     confirmAction(
       'Confirm opening stock',
-      'This adds the entered quantities to Main Branch inventory, activates new products, and cannot be edited later. You can open this screen again to add more units.',
+      'This adds the entered quantities to Main Branch inventory, activates new products, and cannot be edited later. You can open this screen again to add more stock.',
       () =>
         mutation.mutate(
           { items: selected, notes: values.notes?.trim() || null },
@@ -246,7 +246,7 @@ export function InventorySetupScreen() {
                         keyboardType={isKgMeal(item.product.inventory_mode) ? 'decimal-pad' : 'number-pad'}
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
-                        maxLength={6}
+                        maxLength={isKgMeal(item.product.inventory_mode) ? KG_QUANTITY_MAX_LENGTH : PIECE_QUANTITY_MAX_LENGTH}
                         style={[styles.input, fieldState.error && styles.inputError]}
                       />
                     )}

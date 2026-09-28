@@ -304,6 +304,7 @@ export type Database = {
             variants?: Array<{ name: string; selling_price: string }>;
           }>;
           p_selling_price?: string | null;
+          p_inventory_mode?: string | null;
         };
         Returns: Product;
       };
@@ -374,8 +375,22 @@ export type Database = {
         Returns: import('./models').PendingShiftReconciliation | null;
       };
       report_branch_shift_remittances: {
-        Args: { p_branch_id?: string | null };
-        Returns: import('./models').ShiftRemittanceRow[];
+        Args: {
+          p_branch_id?: string | null;
+          p_range_type?: string;
+          p_start_date?: string | null;
+          p_end_date?: string | null;
+        };
+        Returns: import('./models').ShiftRemittanceReport;
+      };
+      report_branch_shift_waste: {
+        Args: {
+          p_branch_id?: string | null;
+          p_range_type?: string;
+          p_start_date?: string | null;
+          p_end_date?: string | null;
+        };
+        Returns: import('./models').ShiftWasteReport;
       };
       get_shift_summary: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       report_sales_by_branch: {

@@ -25,7 +25,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, formatMoney, isKgMeal, isValidInventoryQuantity, makeIdempotencyKey } from '@/lib/format';
+import { formatLiveStock, formatMoney, isKgMeal, isValidInventoryQuantity, KG_QUANTITY_MAX_LENGTH, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
 
 type StockFilter = 'in_stock' | 'all';
 type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
@@ -439,7 +439,7 @@ export function CreateTransferScreen() {
                               value={quantity.value}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
-                              maxLength={6}
+                              maxLength={kgMeal ? KG_QUANTITY_MAX_LENGTH : PIECE_QUANTITY_MAX_LENGTH}
                               selectTextOnFocus
                               underlineColorAndroid="transparent"
                               onFocus={() => setFocusedIndex(index)}
