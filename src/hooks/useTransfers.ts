@@ -6,7 +6,6 @@ import {
   getTransfer,
   listCashierPendingTransfers,
   listTransfers,
-  receiveTransfer,
   reportShipmentIssue,
   sendTransfer,
 } from '@/services/transferService';
@@ -38,14 +37,6 @@ export function useSendTransfer() {
   return useMutation({
     mutationFn: (input: SendTransferInput) => sendTransfer(input),
     onSuccess: (id) => invalidateInventoryFlow(client, id),
-  });
-}
-
-export function useReceiveTransfer() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: ReceiveTransferInput) => receiveTransfer(input),
-    onSuccess: (_status, input) => invalidateInventoryFlow(client, input.transferId),
   });
 }
 

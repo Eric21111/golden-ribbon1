@@ -38,7 +38,7 @@ export default function OwnerReportsHub() {
             icon="pricetag-outline"
             accent="gold"
             title="Product Sales Performance"
-            description="Units sold and historical revenue by product"
+            description="Items sold and historical revenue by product"
             onPress={() => router.push('/owner/reports/product-sales')}
           />
           <NavTile

@@ -29,6 +29,18 @@ export function formatSellingBranchOnHand(
   return formatLiveStock(quantity, mode);
 }
 
+/** Report/live on-hand. Unknown mode must not fall through to piece formatting. */
+export function formatReportLiveOnHand(
+  quantity: number | string,
+  mode: InventoryMode | null | undefined,
+  isMainBranch: boolean | null | undefined,
+): string {
+  if (mode !== 'piece_stock' && mode !== 'kg_meal') return '—';
+  if (mode === 'kg_meal' && isMainBranch == null) return '—';
+  if (!isMainBranch) return formatSellingBranchOnHand(quantity, mode);
+  return formatLiveStock(quantity, mode);
+}
+
 export function formatInventoryQuantity(
   value: number | string | null | undefined,
   mode: InventoryMode | null | undefined,

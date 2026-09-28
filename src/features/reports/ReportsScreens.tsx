@@ -277,7 +277,7 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
         ) : null}
 
         <View style={styles.statsRow}>
-          <StatTile style={styles.statHalf} icon="cube-outline" label="Total units sold" value={totalUnitsSold} />
+          <StatTile style={styles.statHalf} icon="cube-outline" label="Total items sold" value={totalUnitsSold} />
           <StatTile
             style={styles.statHalf}
             emphasis

@@ -156,7 +156,7 @@ export default function OwnerDashboard() {
                 <StatTile
                   style={styles.half}
                   icon="cube-outline"
-                  label="Units sold"
+                  label="Items sold"
                   value={metrics?.today_units_sold ?? '—'}
                   onPress={() => router.push('/owner/reports/product-sales')}
                 />

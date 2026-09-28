@@ -40,4 +40,4 @@ Both save **atomically** in a single database transaction — `create_complete_p
 
 ## Related
 
-`src/features/products/productSchema.ts` / `generateSku.ts` are shared helpers used by the Create/Edit wizards.
+`PRICE_PATTERN` in `src/features/products/productSchema.ts` and `generateSku.ts` are shared helpers used by the Create/Edit wizards.

@@ -22,13 +22,15 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
 
-const STATUS_OPTIONS: Array<{ label: string; value: StockFilter }> = [
-  { label: 'All', value: 'all' },
-  { label: 'In Stock', value: 'in_stock' },
-  { label: 'Low', value: 'low' },
-  { label: 'Out', value: 'out' },
-  { label: 'Not Set', value: 'not_set' },
-];
+function statusOptions(isMainBranch: boolean): Array<{ label: string; value: StockFilter }> {
+  return [
+    { label: 'All', value: 'all' },
+    { label: 'In Stock', value: 'in_stock' },
+    { label: 'Low', value: 'low' },
+    { label: 'Out', value: 'out' },
+    { label: isMainBranch ? 'Not set' : 'Not tracked', value: 'not_set' },
+  ];
+}
 
 function StockCountTile({
   icon,
@@ -94,8 +96,9 @@ export default function AllBranchInventoryScreen() {
 
   const pagination = useClientPagination(filtered, `${branchId}|${statusFilter}|${search}`);
   const hasSearch = search.trim().length > 0;
-  const empty = filterEmptyMessage(statusFilter, hasSearch);
+  const empty = filterEmptyMessage(statusFilter, hasSearch, { sellingBranch: selected ? !selected.is_main_branch : false });
   const branchOptions = (branches.data ?? []).map((branch) => ({ label: branch.name, value: branch.id }));
+  const statusFilterOptions = statusOptions(selected?.is_main_branch !== false);
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
@@ -116,7 +119,7 @@ export default function AllBranchInventoryScreen() {
               <FilterDropdown label="Branch" options={branchOptions} value={branchId} onChange={setBranchId} />
             </View>
             <View style={styles.filterItem}>
-              <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+              <FilterDropdown label="Status" options={statusFilterOptions} value={statusFilter} onChange={setStatusFilter} />
             </View>
           </View>
 

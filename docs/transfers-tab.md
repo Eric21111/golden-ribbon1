@@ -1,6 +1,6 @@
 # Transfers Tab
 
-Shared **Transfer hub** for Owner Transfers and Manager Incoming. Matches Inventory hub patterns (search, chips, sticky CTA, overflow, pull-to-refresh).
+Owner Transfers and Manager Incoming lists. Cashiers confirm shipment arrival. Manager Incoming is read-only.
 
 | Role | Bottom tab | Route | Screen |
 |------|------------|-------|--------|
@@ -9,7 +9,7 @@ Shared **Transfer hub** for Owner Transfers and Manager Incoming. Matches Invent
 
 Shared: `src/features/transfers/TransferHub.tsx`
 
-**Tablet:** Manager Incoming uses master–detail + Count & receive when pending. Owner Transfers use centered list only (`enableMasterDetail={false}`).
+**Tablet:** Owner Transfers use a centered list. Manager Incoming is a read-only list and detail.
 
 ---
 
@@ -54,11 +54,11 @@ Sticky primary CTA (Owner only)
 
 **Context:** Assigned branch name  
 **Default status:** Pending (`pending_receipt`) — action queue first  
-**No sticky CTA** (managers receive, they don’t send)
+**No sticky CTA** (cashiers confirm arrival; managers do not receive)
 
 **Status chip order:** Pending · All · Received · Discrepancy
 
-**Row →** `/manager/incoming/[id]` (receive flow if pending, else read-only)
+**Row →** `/manager/incoming/[id]` (read-only; pending shipments are confirmed by the assigned cashier)
 
 ---
 
@@ -68,6 +68,6 @@ Sticky primary CTA (Owner only)
 |------|-------|
 | Create / review / send | `/owner/transfers/create` |
 | Owner detail | `/owner/transfers/[id]` |
-| Manager receive / detail | `/manager/incoming/[id]` |
+| Manager incoming detail | `/manager/incoming/[id]` (read-only) |
 
 Phase 2 (not in this pass): product search on create, confirm alerts on send/receive.

@@ -80,7 +80,7 @@ export default function ManagerProductSalesScreen() {
         <SummaryCard
           title="Totals"
           rows={[
-            { label: 'Total units sold', value: String(totalUnitsSold) },
+            { label: 'Total items sold', value: String(totalUnitsSold) },
             { label: 'Total revenue', value: formatMoney(totalProductRevenue), emphasis: true },
           ]}
         />

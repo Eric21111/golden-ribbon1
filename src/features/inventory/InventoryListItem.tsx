@@ -6,7 +6,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import { formatLiveStock, formatMoney, formatSellingBranchOnHand } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
-import { getStockStatus, stockStatusLabel, type StockStatus } from './inventoryStatus';
+import { getStockStatus, stockStatusLabelForItem, type StockStatus } from './inventoryStatus';
 
 type InventoryListItemProps = {
   item: InventoryItem;
@@ -41,7 +41,7 @@ export function InventoryListItem({ item, showBranch = false, onPress }: Invento
               ? formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)
               : formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode)}
           </Text>
-          <ManagerBadge label={stockStatusLabel(status)} tone={badgeTone(status)} />
+          <ManagerBadge label={stockStatusLabelForItem(item)} tone={badgeTone(status)} />
         </>
       }
     />

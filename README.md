@@ -118,6 +118,17 @@ Transfers and receipts use idempotency keys. Unique movement indexes and locked 
 
 Frontend route guards improve navigation, but the database policies are the authority. No delete policy exists.
 
+## Packaging a copy
+
+When zipping or sharing the project, exclude:
+
+- `.git/`
+- `node_modules/`
+- `.expo/`
+- `.env`
+
+Those paths are already ignored by Git (except `.git/` itself). Do not delete them from a working checkout just to make an archive.
+
 ## Project structure
 
 ```text

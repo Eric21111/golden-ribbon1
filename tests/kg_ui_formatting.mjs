@@ -20,6 +20,7 @@ const {
   PIECE_QUANTITY_MAX_LENGTH,
   formatInventoryQuantity,
   formatLiveStock,
+  formatReportLiveOnHand,
   formatSellingBranchOnHand,
   formatSnapshottedQuantity,
   formatTransferDifference,
@@ -28,7 +29,7 @@ const {
   isValidInventoryQuantity,
 } = loadTs('src/lib/format.ts');
 
-const { getStockStatus } = loadTs('src/features/inventory/inventoryStatus.ts');
+const { getStockStatus, stockStatusLabelForItem } = loadTs('src/features/inventory/inventoryStatus.ts');
 
 const setupSource = readFileSync('src/features/inventory/InventorySetupScreen.tsx', 'utf8');
 const createTransferSource = readFileSync('src/features/transfers/CreateTransferScreen.tsx', 'utf8');
@@ -41,6 +42,8 @@ const branchPerf = readFileSync('src/features/reports/BranchPerformanceScreens.t
 const managerInventory = readFileSync('app/(manager)/manager/inventory/index.tsx', 'utf8');
 const managerTransfer = readFileSync('app/(manager)/manager/transfers/[id].tsx', 'utf8');
 const cashierIncoming = readFileSync('app/(cashier)/cashier/incoming.tsx', 'utf8');
+const managerIncomingDetail = readFileSync('app/(manager)/manager/incoming/[id].tsx', 'utf8');
+const ownerInventory = readFileSync('app/(owner)/owner/inventory-by-branch.tsx', 'utf8');
 
 function inventoryItem({ mode, main, qty, updatedAt = '2026-09-01T00:00:00+08:00' }) {
   return {
@@ -83,10 +86,23 @@ assert.doesNotMatch(createTransferSource, /maxLength=\{6\}/);
 assert.equal(formatSellingBranchOnHand(0, 'kg_meal'), 'Not tracked');
 assert.equal(formatSellingBranchOnHand(10.5, 'kg_meal'), 'Not tracked');
 assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'not_set');
+assert.equal(stockStatusLabelForItem(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'Not tracked');
+assert.equal(stockStatusLabelForItem(inventoryItem({ mode: 'kg_meal', main: true, qty: 10.5 })), 'In stock');
 assert.notEqual(getStockStatus(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'out');
-assert.match(branchPerf, /formatSellingBranchOnHand/);
+assert.equal(formatReportLiveOnHand(0, undefined, false), '—');
+assert.equal(formatReportLiveOnHand(0, 'kg_meal', undefined), '—');
+assert.equal(formatReportLiveOnHand(0, 'kg_meal', false), 'Not tracked');
+assert.equal(formatReportLiveOnHand(10.5, 'kg_meal', true), '10.500 kg');
+assert.equal(formatReportLiveOnHand(24, 'piece_stock', true), '24 pcs');
+assert.match(branchPerf, /formatReportLiveOnHand/);
 assert.match(branchPerf, /useProducts/);
+assert.match(branchPerf, /modeLookupReady/);
 assert.doesNotMatch(branchPerf, /quantity_on_hand\} in stock/);
+assert.match(ownerInventory, /Not tracked/);
+assert.match(managerIncomingDetail, /Cashiers confirm arrival/);
+assert.doesNotMatch(managerIncomingDetail, /useReceiveTransfer|receiveTransfer\(/);
+assert.doesNotMatch(readFileSync('src/services/transferService.ts', 'utf8'), /receive_stock_transfer/);
+assert.doesNotMatch(readFileSync('src/hooks/useTransfers.ts', 'utf8'), /receiveTransfer/);
 
 // E. Main KG — in stock, no piece low-stock threshold of 5
 assert.equal(formatLiveStock(10.5, 'kg_meal'), '10.500 kg');

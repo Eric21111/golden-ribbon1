@@ -47,17 +47,6 @@ export async function sendTransfer(input: SendTransferInput): Promise<string> {
   return data;
 }
 
-export async function receiveTransfer(input: ReceiveTransferInput): Promise<TransferStatus> {
-  const { data, error } = await supabase.rpc('receive_stock_transfer', {
-    p_transfer_id: input.transferId,
-    p_items: input.items,
-    p_notes: input.notes,
-    p_idempotency_key: input.idempotencyKey,
-  });
-  if (error) throw error;
-  return data;
-}
-
 export async function listCashierPendingTransfers(): Promise<CashierPendingTransfer[]> {
   const { data, error } = await supabase.rpc('list_cashier_pending_transfers');
   if (error) throw error;

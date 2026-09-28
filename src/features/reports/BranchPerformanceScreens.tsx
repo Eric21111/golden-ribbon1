@@ -15,10 +15,11 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { accentForRank } from '@/features/reports/reportAccents';
+import { useBranches } from '@/hooks/useBranches';
 import { useProducts } from '@/hooks/useProducts';
 import { useBranchPerformance, useBranchPerformanceDetails } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney, formatSellingBranchOnHand } from '@/lib/format';
+import { formatDate, formatMoney, formatReportLiveOnHand } from '@/lib/format';
 import type { BranchPerformanceItem } from '@/types/models';
 
 function discrepancySummary(missing: number, excess: number): { label: string; tone: ManagerBadgeTone } {
@@ -186,10 +187,14 @@ export function BranchPerformanceDetailScreen() {
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useBranchPerformanceDetails(id, rpcRangeType, startIso, endIso);
   const products = useProducts();
+  const branches = useBranches();
   const inventoryModeByProductId = useMemo(
     () => new Map((products.data ?? []).map((product) => [product.id, product.inventory_mode])),
     [products.data],
   );
+  const isMainBranch = branches.data?.find((branch) => branch.id === query.data?.branch.id)?.is_main_branch;
+  const modeLookupReady = products.isFetched && !products.isLoading;
+  const reportModeError = Boolean(products.error);
 
   const data = query.data;
 
@@ -213,6 +218,9 @@ export function BranchPerformanceDetailScreen() {
         {query.isLoading ? <LoadingState label="Loading branch details…" /> : null}
         {query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
+        ) : null}
+        {reportModeError ? (
+          <ErrorState message={getErrorMessage(products.error)} onRetry={() => void products.refetch()} />
         ) : null}
         {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
@@ -251,9 +259,10 @@ export function BranchPerformanceDetailScreen() {
                   subtitleTag
                   trailing={
                     <Text style={styles.highlight}>
-                      {formatSellingBranchOnHand(
+                      {formatReportLiveOnHand(
                         inv.quantity_on_hand,
-                        inventoryModeByProductId.get(inv.product_id),
+                        modeLookupReady ? inventoryModeByProductId.get(inv.product_id) : undefined,
+                        isMainBranch,
                       )}
                     </Text>
                   }
