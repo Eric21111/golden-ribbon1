@@ -91,7 +91,7 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 
 ### Row-level security
 
-- Owners can select all branches and products, and insert/update branch and product master data.
+- Owners can select all branches and products. Product master create/edit is Main Branch Manager authority (Owner may view/report; branch create/update remains Owner where granted).
 - Managers and cashiers can select their own profile and assigned branch. Managers can also resolve the names of users recorded on transfers addressed to their branch, so audit screens remain readable without exposing unrelated profiles.
 - Active authenticated staff can select product master data. The manager screen additionally filters to active products.
 - No role can update its own role or branch through the mobile client.
@@ -220,7 +220,7 @@ Manual acceptance: sell Chicken ×2 at 80 and Beef ×1 at 100 with 500 paid; ver
 
 Cashiers (selling branch): open Returns / leftover return while a booth session allows stock mutation. Confirm whole PCS quantities; the confirmation key survives navigation and reloads. Draft edits are local; only confirmed In Transit returns are stored.
 
-Owners / Main Branch Manager: receive leftover returns for accountability (counted leftover does not restock Main usable inventory). Owners can view returns across branches; selling managers see their branch history. Return details keep server-recorded branch, employee, and product names.
+Main Branch Manager: `receive_stock_return` for leftover accountability (counted leftover does not restock Main usable inventory). Owners can view/report returns across branches but do not perform Main operational receive; selling managers see their branch history. Return details keep server-recorded branch, employee, and product names.
 
 `create_stock_return` is the authenticated selling-branch return writer (cashier). It derives the source from the active cashier branch, locks inventory in product order, validates quantities, and writes the header/items, source deduction, and negative `return_out` movements in one transaction. Main Branch stock is untouched on create. Main receive is waste/accountability only.
 

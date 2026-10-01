@@ -1,5 +1,5 @@
 Golden Ribbon Source Audit Bundle
-Generated from commit: c7c0e11ad8ed9d2a072a27ab49302a009d8c7698
+Generated from commit: 57297f6c9d9ab2aa6ec9dc7a9f2444fefab794bb
 
 
 ================================================================================
@@ -8399,6 +8399,63 @@ select
 from public.pcs_cutover_product_snapshots s
 left join public.products p on p.id = s.product_id
 order by s.sku_snapshot, s.product_id;
+
+
+================================================================================
+FILE: docs/pcs-pending-remittance-stranded-cashiers.sql
+================================================================================
+
+-- Read-only preflight: stranded pending remittances
+-- Run before production migration / cutover. Do NOT auto-fix.
+--
+-- Lists closed shifts that still require cash or inventory reconciliation
+-- where the recorded cashier can no longer finalize because:
+--   - profile is missing
+--   - profile is inactive
+--   - role is not cashier
+--   - current profile.branch_id differs from shift.branch_id
+--
+-- Resolve manually (restore cashier assignment / complete remittance under
+-- an authorized recovery path) before relying on PCS selling sessions.
+
+select
+  s.id as shift_id,
+  s.branch_id as shift_branch_id,
+  b.name as shift_branch_name,
+  b.code as shift_branch_code,
+  s.cashier_id,
+  s.started_at,
+  s.ended_at,
+  s.sales_cutoff_at,
+  s.reconciliation_required,
+  s.inventory_reconciliation_required,
+  p.id as profile_id,
+  p.full_name as profile_name,
+  p.role::text as profile_role,
+  p.is_active as profile_is_active,
+  p.branch_id as profile_branch_id,
+  case
+    when p.id is null then 'PROFILE_MISSING'
+    when not p.is_active then 'PROFILE_INACTIVE'
+    when p.role is distinct from 'cashier' then 'ROLE_NOT_CASHIER'
+    when p.branch_id is distinct from s.branch_id then 'BRANCH_MISMATCH'
+    else 'UNKNOWN'
+  end as strand_reason
+from public.shifts s
+join public.branches b on b.id = s.branch_id
+left join public.profiles p on p.id = s.cashier_id
+where s.status = 'closed'
+  and (
+    s.reconciliation_required
+    or s.inventory_reconciliation_required
+  )
+  and (
+    p.id is null
+    or not p.is_active
+    or p.role is distinct from 'cashier'
+    or p.branch_id is distinct from s.branch_id
+  )
+order by s.ended_at nulls last, s.id;
 
 
 ================================================================================
@@ -19524,6 +19581,231 @@ Return:
 STOP afterward.
 
 DO NOT db push or deploy.
+
+================================================================================
+FILE: plan/part7final2.md
+================================================================================
+
+REVISION 7 FINAL HARDENING — PATCH 2
+
+Independent re-audit of commit
+c7c0e11ad8ed9d2a072a27ab49302a009d8c7698 found the core application
+hardening fixes are correct.
+
+Do NOT redesign Revision 7.
+
+Fix ONLY the remaining release blockers below.
+
+No db push.
+No deployment.
+
+==================================================
+1. AUTO-CLOSE MUST NOT SWALLOW UNEXPECTED ERRORS
+==================================================
+
+Current final migration still has in close_overdue_shifts():
+
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+
+This violates the approved requirement not to swallow deadlocks and can make
+the safety auto-close silently fail.
+
+Use a NEW forward migration after:
+
+20260928150200_revision_7_final_audit_hardening.sql
+
+Suggested:
+
+20260928150300_revision_7_final_hardening_patch2.sql
+
+Rewrite close_overdue_shifts.
+
+Requirements:
+
+- Candidate discovery remains WITHOUT shift FOR UPDATE.
+- begin_shift_close_core remains the canonical owner of:
+    branch
+    → exact target shift
+    → inventory
+    → writes.
+- Do not silently swallow SQLSTATE 40P01 deadlock_detected.
+- Do not silently swallow serialization failures.
+- Do not silently swallow unexpected integrity/programming errors.
+- Prefer propagating unexpected failures so the scheduler/operator knows
+  auto-close did not complete.
+- Candidate races that are already safely handled by the idempotent
+  begin_shift_close_core do not need generic exception suppression.
+
+Add regression/static coverage ensuring there is no:
+  EXCEPTION WHEN OTHERS THEN NULL
+in the final close_overdue_shifts definition.
+
+==================================================
+2. FIX TRUE POSTGRES RUNNER FIXTURE RESET
+==================================================
+
+tests/revision_7e_concurrency_postgres.mjs currently deletes rows from:
+
+- sale_items
+- sales
+- inventory_movements
+
+inside resetBranchState().
+
+Those tables have immutable DELETE triggers.
+
+The true PostgreSQL runner will therefore fail when moving from a scenario that
+created a sale/movement into the next reset.
+
+Do NOT weaken or disable production immutability just for this test.
+
+Preferred fix:
+
+- Give each concurrency scenario its own isolated fixture IDs:
+  branch/product/cashier/shift/transfer as needed.
+- Do not delete immutable business history between scenarios.
+- Use unique runtime IDs so the disposable runner can be re-run safely.
+- Since DATABASE_URL must be disposable/local, leftover test rows are fine.
+
+Alternatively use another isolation strategy that does not alter production
+triggers.
+
+==================================================
+3. TEST A REAL CONFLICTING FINALIZE RACE
+==================================================
+
+Current runner performs identical simultaneous finalize first, completing the
+shift, and only afterward submits two different actual-cash amounts.
+
+That tests conflicting RETRIES, not conflicting simultaneous FIRST finalize.
+
+Add a separate fresh pending shift.
+
+Run concurrently:
+
+Finalize A:
+  pending shift + payload A
+
+Finalize B:
+  same pending shift + conflicting cash and/or inventory payload B
+
+Expected:
+
+- exactly ONE finalize commits
+- exactly ONE conflicts/rejects
+- no deadlock
+- exactly one shift_reconciliations row
+- exactly one reconciliation row per product
+- no duplicated adjustment/waste/unsold movements
+- ending branch stock matches the winning payload only
+
+Retain the identical simultaneous-finalize test separately.
+
+==================================================
+4. STRENGTHEN SALE/CLOSE AND RECEIPT/CLOSE ASSERTIONS
+==================================================
+
+For real PostgreSQL tests, do more than "at least one succeeds".
+
+Because branch locking serializes the operations:
+
+sale vs begin-close:
+- begin-close must eventually produce a valid cutoff
+- if sale committed before cutoff, preview/reconciliation must include it
+- if close obtained the lock first, sale must be rejected after cutoff
+- no deadlock / no post-cutoff sale
+
+receipt vs begin-close:
+- if receipt committed first, close baseline/system balance must include it
+- if close won first, receipt must be rejected/frozen
+- no deadlock / no post-cutoff stock mutation
+
+==================================================
+5. FIX milestone10_5 CLOSED-SHIFT BACKDATE
+==================================================
+
+Do NOT backdate a finalized production shift using:
+
+admin.from('shifts').update({
+  started_at,
+  ended_at,
+  sales_cutoff_at
+})
+
+The lifecycle trigger correctly rejects that mutation.
+
+Do NOT disable the lifecycle trigger in production for the test.
+
+Restructure the live verifier instead.
+
+Preferred:
+- use another dedicated selling branch/cashier for the later sale concurrency
+  scenario
+
+OR:
+- run that concurrency scenario before the first branch is finalized and make
+  the expected cash calculation account for it.
+
+Preserve the same-day final-close rule. Do not bypass it.
+
+Every Supabase admin update used by this test must check its returned error.
+
+==================================================
+6. ADD DEPLOYMENT READ-ONLY PREFLIGHT
+==================================================
+
+Document a read-only SQL query for closed pending reconciliations where the
+recorded cashier can no longer finalize because:
+
+- profile is missing
+- profile is inactive
+- role is not cashier
+- current profile.branch_id differs from shift.branch_id
+
+Do not auto-fix anything.
+
+If rows exist, report them for manual resolution before production migration.
+
+==================================================
+7. DOC CLEANUP
+==================================================
+
+README still contains old walkthrough wording such as a Branch Manager entering
+selling-branch receipt counts.
+
+Update remaining active walkthroughs to cashier:
+confirm_shipment_arrival / report_shipment_issue.
+
+Also correct any remaining statement that initialize_main_branch_inventory is
+Owner-only if the final authority is Main Branch Manager.
+
+Do not rewrite historical migration documentation where historical wording is
+intentional.
+
+==================================================
+8. TESTS
+==================================================
+
+Run all existing tests plus the Patch-2 regression.
+
+Run typecheck.
+
+If a disposable/local real PostgreSQL DATABASE_URL is available, run the true
+concurrency runner.
+
+Report separately:
+
+PGlite = PASS/FAIL
+Typecheck = PASS/FAIL
+True PostgreSQL = EXECUTED PASS / EXECUTED FAIL / NOT EXECUTED
+
+Do not report true concurrency as passing if it was not actually executed.
+
+STOP after implementation report.
+
+NO DB PUSH.
+NO DEPLOYMENT.
 
 ================================================================================
 FILE: plan/revision.md
@@ -66099,6 +66381,67 @@ $$;
 
 revoke all on function public.start_cashier_shift() from public, anon;
 grant execute on function public.start_cashier_shift() to authenticated;
+
+commit;
+
+
+================================================================================
+FILE: supabase/migrations/20260928150300_revision_7_final_hardening_patch2.sql
+================================================================================
+
+-- Revision 7 Final Hardening Patch 2
+-- Forward-only. Do not edit 7A/7B/7C or 20260928150200.
+-- close_overdue_shifts: never swallow unexpected errors (including deadlocks).
+begin;
+
+create or replace function public.close_overdue_shifts()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_now_manila          timestamp;
+  v_cutoff_manila_date  date;
+  v_cutoff              timestamptz;
+  v_rec                 record;
+  v_closed_count        integer := 0;
+begin
+  v_now_manila := timezone('Asia/Manila', now());
+  if v_now_manila < (v_now_manila::date + time '21:00') then
+    v_cutoff_manila_date := v_now_manila::date - 1;
+  else
+    v_cutoff_manila_date := v_now_manila::date;
+  end if;
+  v_cutoff := (v_cutoff_manila_date + time '21:00') at time zone 'Asia/Manila';
+
+  -- Discover candidates without locking. begin_shift_close_core owns:
+  -- branch → exact target shift → inventory → writes.
+  for v_rec in
+    select s.id, s.cashier_id
+    from public.shifts s
+    where s.status = 'open'
+      and s.started_at < v_cutoff
+    order by s.started_at, s.id
+  loop
+    -- Propagate unexpected failures (deadlock, serialization, integrity, etc.).
+    -- Idempotent begin_shift_close_core races (already begun/closed) do not raise.
+    perform public.begin_shift_close_core(v_rec.id, v_rec.cashier_id);
+    v_closed_count := v_closed_count + 1;
+  end loop;
+
+  return jsonb_build_object(
+    'closed_count', v_closed_count,
+    'leftover_return_count', 0,
+    'cutoff_at', v_cutoff
+  );
+end;
+$$;
+
+revoke all on function public.close_overdue_shifts() from public, anon, authenticated;
+
+comment on function public.close_overdue_shifts() is
+  'Auto-close overdue open shifts via begin_shift_close_core. Candidate discovery is unlocked; unexpected errors propagate.';
 
 commit;
 

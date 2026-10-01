@@ -1,5 +1,5 @@
 /**
- * Revision 7 Final Patch 2 — true PostgreSQL multi-session concurrency runner.
+ * Revision 7 Final Patch 3 — true PostgreSQL multi-session concurrency runner.
  *
  * PGlite does NOT prove parallel-session locking. This script uses independent
  * postgres.js connections against a disposable/local DATABASE_URL only.
@@ -10,8 +10,9 @@
  *   RUN_7E_PG_CONCURRENCY=1 DATABASE_URL=postgres://... node tests/revision_7e_concurrency_postgres.mjs
  *
  * Optional: APPLY_MIGRATIONS=1 applies supabase/migrations/*.sql (empty disposable DBs).
- * Reruns with APPLY_MIGRATIONS=0 are safe: each scenario uses a runtime-unique prefix
- * for all constrained identifiers; immutable history is never deleted.
+ * Reruns with APPLY_MIGRATIONS=0 are safe: one shared active Main Branch is reused;
+ * each scenario uses a runtime-unique selling branch/product/cashiers/keys;
+ * immutable history is never deleted.
  *
  * Never use production.
  */
@@ -85,19 +86,46 @@ async function applyAllMigrations(sql) {
   }
 }
 
-/** Per-scenario isolated fixture — unique IDs/codes/SKUs/keys; never deletes history. */
-async function seedScenario(sql, tag, { cashiers = 1, branchStock = 5, mainStock = 100 } = {}) {
+/**
+ * Exactly one Main Branch for the whole runner.
+ * Reuse existing active Main; fail clearly if inactive; never create a second Main.
+ */
+async function ensureSharedMain(sql) {
+  const existing = await sql`
+    select id, is_active
+    from public.branches
+    where is_main_branch = true
+    limit 1
+  `;
+  if (existing.length) {
+    if (!existing[0].is_active) {
+      throw new Error(
+        'Existing Main Branch (is_main_branch=true) is inactive. Activate it or use a disposable DB with an active Main. Refusing to create a second Main (branches_one_main_branch).',
+      );
+    }
+    return { id: existing[0].id };
+  }
+  const id = randomUUID();
+  const code = `M${RUN}`.slice(0, 12);
+  await sql`
+    insert into public.branches(id, name, code, is_main_branch, is_active, receiving_mode)
+    values (${id}, ${`Main ${RUN}`}, ${code}, true, true, 'counted')
+  `;
+  return { id };
+}
+
+/** Per-scenario selling-branch fixture — unique IDs/codes/SKUs/keys; never deletes history. */
+async function seedScenario(sql, tag, sharedMain, { cashiers = 1, branchStock = 5, mainStock = 100 } = {}) {
   const prefix = `${RUN}${tag}`.slice(0, 12);
   const owner = randomUUID();
   const mainMgr = randomUUID();
   const cashier = randomUUID();
   const cashier2 = randomUUID();
-  const main = randomUUID();
   const branch = randomUUID();
   const drink = randomUUID();
-  const mainCode = `M${prefix}`.slice(0, 12);
   const branchCode = `B${prefix}`.slice(0, 12);
   const sku = `S${prefix}`.slice(0, 20);
+  const main = sharedMain.id;
 
   await sql`
     insert into auth.users(id, email) values
@@ -107,27 +135,26 @@ async function seedScenario(sql, tag, { cashiers = 1, branchStock = 5, mainStock
       (${cashier2}, ${`c2-${prefix}@conc.test`})
   `;
   await sql`
-    insert into public.branches(id,name,code,is_main_branch,is_active,receiving_mode) values
-      (${main}, ${`Main ${prefix}`}, ${mainCode}, true, true, 'counted'),
+    insert into public.branches(id, name, code, is_main_branch, is_active, receiving_mode) values
       (${branch}, ${`Branch ${prefix}`}, ${branchCode}, false, true, 'cashier_confirm')
   `;
   await sql`
-    insert into public.profiles(id,full_name,role,branch_id,is_active) values
+    insert into public.profiles(id, full_name, role, branch_id, is_active) values
       (${owner}, ${`Owner ${prefix}`}, 'owner', null, true),
       (${mainMgr}, ${`MainMgr ${prefix}`}, 'manager', ${main}, true),
       (${cashier}, ${`Cashier ${prefix}`}, 'cashier', ${branch}, true),
       (${cashier2}, ${`Cashier2 ${prefix}`}, 'cashier', ${branch}, true)
   `;
   await sql`
-    insert into public.products(id,name,sku,selling_price,is_active,inventory_mode,closing_stock_behavior) values
+    insert into public.products(id, name, sku, selling_price, is_active, inventory_mode, closing_stock_behavior) values
       (${drink}, ${`Drink ${prefix}`}, ${sku}, 25, true, 'piece_stock', 'keep_at_branch')
   `;
   await sql`
-    insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+    insert into public.branch_products(branch_id, product_id, selling_price, is_active) values
       (${branch}, ${drink}, 25, true)
   `;
   await sql`
-    insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values
+    insert into public.branch_inventory(branch_id, product_id, quantity_on_hand) values
       (${main}, ${drink}, ${mainStock}),
       (${branch}, ${drink}, ${branchStock})
   `;
@@ -192,10 +219,13 @@ async function main() {
       }
     }
 
+    const sharedMain = await ensureSharedMain(admin);
+    console.log(`Shared Main Branch: ${sharedMain.id}`);
+
     // 1) simultaneous sale vs sale
     {
       console.log('\n-- sale vs sale --');
-      const ctx = await seedScenario(admin, 's1', { branchStock: 5 });
+      const ctx = await seedScenario(admin, 's1', sharedMain, { branchStock: 5 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -222,7 +252,7 @@ async function main() {
     // 2) sale vs begin-close
     {
       console.log('\n-- sale vs begin-close --');
-      const ctx = await seedScenario(admin, 's2', { branchStock: 10 });
+      const ctx = await seedScenario(admin, 's2', sharedMain, { branchStock: 10 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -270,7 +300,7 @@ async function main() {
     // 3) receipt vs begin-close
     {
       console.log('\n-- receipt vs begin-close --');
-      const ctx = await seedScenario(admin, 's3', { branchStock: 3, mainStock: 50 });
+      const ctx = await seedScenario(admin, 's3', sharedMain, { branchStock: 3, mainStock: 50 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -294,10 +324,13 @@ async function main() {
         const prod = (preview.products ?? []).find((p) => p.product_id === ctx.drink);
         const bal = await admin`select quantity_on_hand::float as q from public.branch_inventory where branch_id=${ctx.branch} and product_id=${ctx.drink}`;
         if (settledOk(recvR)) {
+          const baselineOk = Number(prod?.system_balance_before_waste) === 5;
+          const receivedPresent = prod?.received_quantity != null;
+          const receivedOk = !receivedPresent || Number(prod.received_quantity) === 2;
           check(
-            'receipt vs begin-close: receipt reflected in baseline/B',
-            Number(prod?.system_balance_before_waste ?? 0) >= 5 || Number(bal[0].q) >= 5,
-            `B=${prod?.system_balance_before_waste} live=${bal[0].q}`,
+            'receipt vs begin-close: receipt reflected in begin-close baseline',
+            baselineOk && receivedOk,
+            `B=${prod?.system_balance_before_waste} received=${prod?.received_quantity} live=${bal[0].q}`,
           );
         } else {
           check(
@@ -308,7 +341,7 @@ async function main() {
           const xfer = await admin`select status::text as s from public.stock_transfers where id=${xferId}`;
           check(
             'receipt vs begin-close: no post-cutoff receipt credit',
-            xfer[0].s === 'pending_receipt' || Number(bal[0].q) === 3,
+            xfer[0].s === 'pending_receipt' && Number(bal[0].q) === 3,
             `status=${xfer[0].s} live=${bal[0].q}`,
           );
         }
@@ -320,7 +353,7 @@ async function main() {
     // 4) identical simultaneous finalize
     {
       console.log('\n-- identical finalize --');
-      const ctx = await seedScenario(admin, 's4', { branchStock: 5 });
+      const ctx = await seedScenario(admin, 's4', sharedMain, { branchStock: 5 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -349,7 +382,8 @@ async function main() {
     // 5) conflicting simultaneous FIRST finalize (fresh pending shift)
     {
       console.log('\n-- conflicting first finalize --');
-      const ctx = await seedScenario(admin, 's5', { branchStock: 8 });
+      const branchStock = 8;
+      const ctx = await seedScenario(admin, 's5', sharedMain, { branchStock });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -380,21 +414,63 @@ async function main() {
       check('conflicting first finalize: one product recon', Number(prodRecon[0].c) === 1);
       const bal = await admin`select quantity_on_hand::float as q from public.branch_inventory where branch_id=${ctx.branch} and product_id=${ctx.drink}`;
       const winRow = await admin`
-        select actual_remaining::float as a, waste_quantity::float as w
+        select
+          actual_remaining::float as a,
+          waste_quantity::float as w,
+          (
+            opening_quantity + received_quantity - outgoing_quantity
+            - sold_quantity + adjustment_quantity
+          )::float as b
         from public.shift_product_reconciliations where shift_id=${shiftId}
       `;
       const winActual = Number(winRow[0]?.a);
+      const winWaste = Number(winRow[0]?.w);
+      const winBaseline = Number(winRow[0]?.b ?? branchStock);
       check(
         'conflicting first finalize: stock matches winner',
         Number(bal[0].q) === winActual,
         `live=${bal[0].q} winActual=${winActual}`,
       );
-      const moveStorm = await admin`
+
+      const expectedWasteMoves = winWaste > 0 ? 1 : 0;
+      const expectedUnsoldMoves = 0; // keep_at_branch
+      const expectedAdjustQty = winActual + winWaste - winBaseline;
+      const expectedAdjustMoves = expectedAdjustQty !== 0 ? 1 : 0;
+
+      const wasteMoves = await admin`
         select count(*)::int as c from public.inventory_movements
         where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='waste'
           and reference_type='shift_product_reconciliation'
       `;
-      check('conflicting first finalize: recon movements not duplicated wildly', Number(moveStorm[0].c) <= 3, String(moveStorm[0].c));
+      const unsoldMoves = await admin`
+        select count(*)::int as c from public.inventory_movements
+        where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='unsold'
+          and reference_type='shift_product_reconciliation'
+      `;
+      const adjustMoves = await admin`
+        select count(*)::int as c, coalesce(sum(quantity), 0)::float as q
+        from public.inventory_movements
+        where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='adjustment'
+      `;
+      check(
+        'conflicting first finalize: waste movement count matches winner',
+        Number(wasteMoves[0].c) === expectedWasteMoves,
+        `got=${wasteMoves[0].c} expected=${expectedWasteMoves} waste=${winWaste}`,
+      );
+      check(
+        'conflicting first finalize: no unsold movement',
+        Number(unsoldMoves[0].c) === expectedUnsoldMoves,
+        String(unsoldMoves[0].c),
+      );
+      check(
+        'conflicting first finalize: adjustment movement matches winner',
+        Number(adjustMoves[0].c) === expectedAdjustMoves
+          && (expectedAdjustMoves === 0 || Number(adjustMoves[0].q) === expectedAdjustQty),
+        `count=${adjustMoves[0].c} qty=${adjustMoves[0].q} expectedCount=${expectedAdjustMoves} expectedQty=${expectedAdjustQty}`,
+      );
       await sqlA.end({ timeout: 1 });
       await sqlB.end({ timeout: 1 });
     }
@@ -402,7 +478,7 @@ async function main() {
     // 6) two cashiers start same branch
     {
       console.log('\n-- two cashiers start --');
-      const ctx = await seedScenario(admin, 's6', { cashiers: 2, branchStock: 1 });
+      const ctx = await seedScenario(admin, 's6', sharedMain, { cashiers: 2, branchStock: 1 });
       const sqlA = newSql();
       const sqlB = newSql();
       const [s1, s2] = await Promise.allSettled([
