@@ -105,7 +105,7 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 
 ### Transactional inventory operations
 
-- `initialize_main_branch_inventory`: owner-only opening balances plus matching movements; a product can be initialized once.
+- `initialize_main_branch_inventory`: Main Branch Manager opening balances plus matching movements; a product can be initialized once.
 - `send_stock_transfer`: Main Branch send with deterministic row locking, transfer numbering, Main deduction, transfer items, and `transfer_out` movements in one transaction.
 - Selling-branch receipt uses cashier `confirm_shipment_arrival` / `report_shipment_issue` (not manager `receive_stock_transfer`). Manager Incoming remains read-only.
 - `start_cashier_shift`: cashier-only; at most one open selling session per branch (and per cashier). Idempotent for the owning cashier; rejects when another cashier already holds the branch session.
@@ -116,6 +116,8 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 - `create_employee_profile_from_server`: server-only profile pairing used after secure Auth user creation.
 
 Before the first PCS selling session, review every provisional `closing_stock_behavior` mapping (see `docs/pcs-cutover-closing-behavior-review.sql` and Manager Products).
+
+Before production migration, also run the read-only stranded-cashier preflight (`docs/pcs-pending-remittance-stranded-cashiers.sql`) and resolve any closed pending remittances whose recorded cashier can no longer finalize. Do not auto-fix those rows.
 
 Transfers and receipts use idempotency keys. Unique movement indexes and locked status checks provide additional duplicate and concurrency protection. The database rejects negative inventory and invalid status reversals.
 
@@ -158,14 +160,14 @@ Role directories have distinct `/owner`, `/manager`, and `/cashier` URL segments
 
 ## Milestone 2 test walkthrough
 
-1. Log in as Owner and open **Main Branch inventory → Set up opening stock**.
+1. Log in as Main Branch Manager and open **Main Branch inventory → Set up opening stock**.
 2. Enter Chicken `500`, Beef `400`, and Pork `300`; confirm.
 3. Open **Stock transfers → Create transfer**, select Branch 1, and send `100`, `200`, and `50`.
 4. Confirm Main Branch balances are `400`, `200`, and `250`, with negative `transfer_out` movements.
-5. Log in as the Branch 1 Manager and open **Incoming transfers**.
-6. Enter actual receipt counts `100`, `198`, and `50`; review and confirm.
-7. Confirm Branch 1 inventory is `100`, `198`, and `50`; the transfer status is **Received With Discrepancy**; Beef has a `2 missing` discrepancy; and positive `transfer_in` movements use the actual values.
-8. Reopen the transfer and confirm the receipt form is no longer available.
+5. Log in as the Branch 1 Cashier, start a shift, and open **Incoming** pending shipments.
+6. Confirm full arrival with `confirm_shipment_arrival`, or report a short count with `report_shipment_issue` (for example receive Beef as `198` of `200`). Manager Incoming remains read-only.
+7. Confirm Branch 1 inventory matches the counted arrival; a short count ends as **Received With Discrepancy** with a missing discrepancy; positive `transfer_in` movements use the actual credited values.
+8. Confirm the shipment is no longer pending for the cashier.
 
 ## Milestone 3 test walkthrough
 
@@ -186,7 +188,7 @@ Role directories have distinct `/owner`, `/manager`, and `/cashier` URL segments
 4. End the Cashier shift. Reassign the Cashier to Branch 2, sign in again, start a new shift, and confirm POS now shows Branch 2 inventory only.
 5. Deactivate the Cashier and confirm the account cannot use protected app functionality or start another shift. Reactivate it and confirm access returns.
 6. Reset the Cashier's password. Confirm the old password no longer signs in and the new temporary password works.
-7. Create a Manager for Branch 1 and confirm inventory, incoming transfers, receipt operations, and discrepancies are limited to Branch 1.
+7. Create a Manager for Branch 1 and confirm inventory, read-only incoming transfers, and discrepancies are limited to Branch 1 (cashiers confirm shipment arrival).
 8. Confirm direct navigation to `/owner/employees` is rejected for Manager and Cashier accounts.
 9. Confirm prior shifts retain their original branch after reassignment and that no inventory changes occur from employee management.
 
@@ -216,13 +218,11 @@ Manual acceptance: sell Chicken ×2 at 80 and Beef ×1 at 100 with 500 paid; ver
 
 ## Milestone 5 — Unsold stock returns
 
-Managers: open Inventory → Return unsold stock (or Returns in navigation). Enter whole quantities, review, and confirm. Inactive products with remaining stock are included. The saved confirmation key survives navigation and reloads; if the connection drops, retry the unchanged request to recover its result without a second deduction. Draft edits are local; only confirmed In Transit returns are stored. Cancellation/receiving actions are intentionally unavailable.
+Cashiers (selling branch): open Returns / leftover return while a booth session allows stock mutation. Confirm whole PCS quantities; the confirmation key survives navigation and reloads. Draft edits are local; only confirmed In Transit returns are stored.
 
-Owners: open Home → Stock returns to view all branches. Managers see their assigned branch only. Return details keep server-recorded branch, employee, and product names, so restricted joins cannot crash the page or hide historical labels.
+Owners / Main Branch Manager: receive leftover returns for accountability (counted leftover does not restock Main usable inventory). Owners can view returns across branches; selling managers see their branch history. Return details keep server-recorded branch, employee, and product names.
 
-Deploy after reviewing `npx supabase db push --dry-run`, then run `npx supabase db push`. Migrations `20260906120000_return_movement_type.sql` and `20260906120100_milestone_5_returns.sql` must run in order. No Edge Function or new environment value is required. Do not include seed data when updating an existing database unless intentionally reseeding.
-
-`create_stock_return` is the only authenticated return writer. It derives the source from the active manager and finds Main Branch server-side, locks inventory in product order, validates current quantities, and writes the header/items, source deduction, and negative `return_out` movements in one transaction. Main Branch stock is untouched. RLS restricts reads and direct writes are revoked; received fields remain null.
+`create_stock_return` is the authenticated selling-branch return writer (cashier). It derives the source from the active cashier branch, locks inventory in product order, validates quantities, and writes the header/items, source deduction, and negative `return_out` movements in one transaction. Main Branch stock is untouched on create. Main receive is waste/accountability only.
 
 Run `npm run test:returns`, `npm run test:sales`, and `npm run typecheck`. The embedded database tests cover rollback after writes begin, inactive stock, validation, duplicate request/payload checks, role/branch restrictions, source-only deductions, and competing sale/return stock limits. Independent simultaneous database sessions and authenticated browser/device interaction still require testing against a disposable Supabase project.
 

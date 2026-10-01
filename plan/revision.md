@@ -1,82 +1,60 @@
-ONE FINAL PLAN CLARIFICATION — LOCK HELPER
+Revision 7 Final Hardening Patch 2 plan is APPROVED with THREE implementation
+clarifications.
 
-The updated plan is approved, but apply this clarification before implementation.
+1. TRUE POSTGRES FIXTURE UNIQUENESS
 
-Current lock_branch_inventory_gate(branch, enforce_freeze) is NOT a
-branch-only lock.
+Per-scenario isolation must use a runtime-unique prefix not only for UUIDs but
+also for every constrained/user-defined identifier that may collide on rerun,
+including as applicable:
 
-It currently locks:
+- branch IDs
+- branch codes
+- product IDs
+- product SKUs
+- profile/cashier IDs
+- idempotency keys
+- scenario-specific names/keys used by unique constraints
 
-1. branch FOR UPDATE
-2. an automatically selected open or pending-closed shift FOR UPDATE
-3. branch_inventory rows ORDER BY product_id FOR UPDATE
+The runner should be safely rerunnable against the same disposable migrated DB
+with APPLY_MIGRATIONS=0 without deleting immutable business history.
 
-Therefore do NOT implement Begin/Finalize as:
+2. VERIFY FINAL close_overdue_shifts FUNCTION
 
-lock_branch_inventory_gate(branch)
-→ then target shift FOR UPDATE
+In Patch-2 regression coverage, do not only grep the new migration source.
 
-while assuming the helper only obtained the branch lock.
+After applying the full migration chain in PGlite, query pg_get_functiondef()
+for the effective final public.close_overdue_shifts().
 
-That does not guarantee the exact target-shift ordering in every state,
-especially an idempotent finalize retry after pending flags are already clear.
+Assert that the FINAL installed definition:
 
-For Revision-7 close paths, guarantee the exact order:
+- discovers candidates without FOR UPDATE
+- calls begin_shift_close_core
+- contains no generic EXCEPTION WHEN OTHERS THEN NULL swallow
 
-BRANCH
-→ EXACT TARGET SHIFT
-→ INVENTORY ROWS
-→ WRITES
+Older historical migrations may still contain the superseded definition and
+must not be edited.
 
-Preferred approach:
+3. LIVE VERIFIER ADMIN MUTATIONS
 
-- add/refactor an INTERNAL target-aware locking helper for close operations,
-  e.g. conceptually:
-    lock_shift_inventory_gate(branch_id, shift_id, enforce_freeze)
-- it must:
-    1. lock exact branch FOR UPDATE
-    2. lock exact supplied shift FOR UPDATE
-    3. revalidate that shift belongs to that branch
-    4. optionally run freeze validation as appropriate
-    5. lock branch_inventory ORDER BY product_id FOR UPDATE
-- revoke it from public / anon / authenticated
-- SECURITY DEFINER
-- search_path = ''
+Make the rule absolute:
 
-OR equivalently implement those exact locks directly inside the close core.
+EVERY admin.from(...).insert(...)
+EVERY admin.from(...).update(...)
+EVERY admin.from(...).upsert(...)
+EVERY admin.from(...).delete(...)
 
-Do not rely on the existing helper's automatic:
-"prefer open shift, otherwise oldest pending shift"
-selection for Begin/Finalize when the target shift ID is already known.
+used by milestone10_5_live_verification.mjs must inspect the returned error.
 
-Normal sale/receipt/return mutators may continue using the general
-lock_branch_inventory_gate if appropriate.
+Do not silently continue after a rejected admin mutation.
 
-Required ordering:
+Prefer a small helper if useful so this remains consistent.
 
-begin_shift_close_core:
-branch → EXACT target shift → inventory → cutoff/baselines
+All other Patch-2 plan sections are approved.
 
-finalize_cashier_shift_reconciliation:
-branch → EXACT target shift → inventory → validation/writes
+Proceed with local implementation.
 
-idempotent finalized retry:
-branch → EXACT target shift → inventory if needed
-(or if safely determined read-only, branch → exact target shift and no
-inventory mutation/locking)
-but NEVER branch → inventory → target shift.
-
-close_overdue_shifts:
-discover IDs without locks
-→ call begin_shift_close_core
-→ core owns branch → exact shift → inventory.
-
-Add a regression/static assertion proving the close functions do not acquire
-the target shift after inventory locks.
-
-Everything else in the revised hardening plan is approved.
-
-Proceed with implementation.
 No db push.
-No deploy.
-Return implementation report and STOP.
+No deployment.
+
+Run full regression/typecheck and report PGlite and true PostgreSQL separately.
+STOP after the implementation report.

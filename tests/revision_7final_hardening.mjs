@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 const migrationsDir = 'supabase/migrations';
 const allMigrations = readdirSync(migrationsDir).filter((n) => n.endsWith('.sql')).sort();
 const FINAL_MIG = '20260928150200_revision_7_final_audit_hardening.sql';
+const PATCH2_MIG = '20260928150300_revision_7_final_hardening_patch2.sql';
 const stripCrypto = (sql) => sql.replace(/create extension if not exists pgcrypto;/g, '');
 
 async function boot() {
@@ -118,14 +119,19 @@ const ownerUpdate = (db, owner, employeeId, { fullName, role, branchId, isActive
 // ---------------------------------------------------------------------------
 {
   assert.ok(existsSync(`supabase/migrations/${FINAL_MIG}`));
+  assert.ok(existsSync(`supabase/migrations/${PATCH2_MIG}`));
   assert.ok(existsSync('docs/pcs-cutover-closing-behavior-review.sql'));
+  assert.ok(existsSync('docs/pcs-pending-remittance-stranded-cashiers.sql'));
   const mig = readFileSync(`supabase/migrations/${FINAL_MIG}`, 'utf8');
+  const patch2 = readFileSync(`supabase/migrations/${PATCH2_MIG}`, 'utf8');
   assert.match(mig, /shifts_one_open_per_branch_idx/);
   assert.match(mig, /lock_shift_inventory_gate/);
   assert.match(mig, /unfinished shift or remittance/i);
   assert.match(mig, /Another selling session is already active/i);
   assert.match(mig, /shift_close_product_summaries/);
   assert.doesNotMatch(mig, /for update skip locked/i);
+  assert.match(patch2, /begin_shift_close_core/);
+  assert.doesNotMatch(patch2, /exception when others then/i);
 
   // Close cores must not call auto-selecting branch gate for target shift
   const beginBody = mig.slice(mig.indexOf('begin_shift_close_core'), mig.indexOf('finalize_cashier_shift_reconciliation'));
@@ -149,12 +155,33 @@ const ownerUpdate = (db, owner, employeeId, { fullName, role, branchId, isActive
   assert.match(readme, /confirm_shipment_arrival/);
   assert.doesNotMatch(readme, /`receive_stock_transfer`: manager/);
   assert.match(readme, /does \*\*not\*\* restock Main usable inventory|does not restock Main/i);
+  assert.match(readme, /Main Branch Manager opening balances|Main Branch Manager/);
+  assert.match(readme, /pcs-pending-remittance-stranded-cashiers/);
+  assert.doesNotMatch(readme, /Log in as the Branch 1 Manager and open \*\*Incoming transfers\*\*/);
 
   const cutoverSql = readFileSync('docs/pcs-cutover-closing-behavior-review.sql', 'utf8');
   assert.match(cutoverSql, /pcs_cutover_product_snapshots/);
   assert.match(cutoverSql, /assigned_closing_stock_behavior/);
 
+  const strandedSql = readFileSync('docs/pcs-pending-remittance-stranded-cashiers.sql', 'utf8');
+  assert.match(strandedSql, /PROFILE_MISSING|BRANCH_MISMATCH/);
+  assert.match(strandedSql, /reconciliation_required/);
+
   console.log('7final static guards: ok');
+}
+
+// ---------------------------------------------------------------------------
+// Patch 2: FINAL installed close_overdue_shifts via pg_get_functiondef
+// ---------------------------------------------------------------------------
+{
+  const db = await boot();
+  const def = (
+    await db.query(`select pg_get_functiondef('public.close_overdue_shifts()'::regprocedure) as def`)
+  ).rows[0].def;
+  assert.match(def, /begin_shift_close_core/i);
+  assert.doesNotMatch(def, /for update/i);
+  assert.doesNotMatch(def, /exception\s+when\s+others\s+then/i);
+  console.log('7final patch2 installed close_overdue_shifts: ok');
 }
 
 // ---------------------------------------------------------------------------

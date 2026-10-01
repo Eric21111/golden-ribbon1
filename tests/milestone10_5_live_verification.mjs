@@ -124,6 +124,17 @@ function errMsg(error) {
   return String(error.message ?? error.error_description ?? error).slice(0, 300);
 }
 
+/** Every admin insert/update/upsert/delete must check error — never continue silently. */
+async function adminMutate(label, promise) {
+  const result = await promise;
+  if (result?.error) {
+    record('Admin Mutation', label, false, errMsg(result.error));
+    throw result.error;
+  }
+  record('Admin Mutation', label, true);
+  return result;
+}
+
 function isDenied(error) {
   const text = errMsg(error).toLowerCase();
   const code = error?.code ? String(error.code) : '';
@@ -338,34 +349,40 @@ try {
 }
 
 if (!branch2) {
-  const { data, error } = await admin.from('branches').insert({
-    name: 'M105 Branch 2',
-    code: `M105-B2-${RUN_ID.slice(-6)}`,
-    is_main_branch: false,
-    is_active: true,
-  }).select('id,name,code,is_main_branch,is_active').single();
-  if (error) {
+  try {
+    const { data } = await adminMutate(
+      'Create Branch 2',
+      admin.from('branches').insert({
+        name: 'M105 Branch 2',
+        code: `M105-B2-${RUN_ID.slice(-6)}`,
+        is_main_branch: false,
+        is_active: true,
+      }).select('id,name,code,is_main_branch,is_active').single(),
+    );
+    branch2 = data;
+  } catch (error) {
     record('Full E2E', 'Branch 2 available', false, errMsg(error));
     process.exit(1);
   }
-  branch2 = data;
 }
 
+// Cashier 2 is dedicated to Branch 2 so sale concurrency does not need to backdate Branch 1's finalized shift.
 const upsertProfiles = [
   { id: ids.owner, full_name: 'M105 Owner', role: 'owner', branch_id: null, is_active: true },
   { id: ids.mainMgr, full_name: 'M105 Main Manager', role: 'manager', branch_id: main.id, is_active: true },
   { id: ids.mgr1, full_name: 'M105 Manager 1', role: 'manager', branch_id: branch1.id, is_active: true },
   { id: ids.mgr2, full_name: 'M105 Manager 2', role: 'manager', branch_id: branch2.id, is_active: true },
   { id: ids.cash1, full_name: 'M105 Cashier 1', role: 'cashier', branch_id: branch1.id, is_active: true },
-  { id: ids.cash2, full_name: 'M105 Cashier 2', role: 'cashier', branch_id: branch1.id, is_active: true },
+  { id: ids.cash2, full_name: 'M105 Cashier 2', role: 'cashier', branch_id: branch2.id, is_active: true },
 ];
 {
-  const { error } = await admin.from('profiles').upsert(upsertProfiles);
-  if (error) {
+  try {
+    await adminMutate('Upsert test profiles', admin.from('profiles').upsert(upsertProfiles));
+    record('Employee Security', 'Test profiles upserted', true);
+  } catch (error) {
     record('Employee Security', 'Test profiles upserted', false, errMsg(error));
     process.exit(1);
   }
-  record('Employee Security', 'Test profiles upserted', true);
 }
 
 const sessions = {};
@@ -378,6 +395,7 @@ try {
   sessions.cash2 = await signIn(url, anonKey, emails.cash2, PASSWORD);
   sessions.ownerB = await signIn(url, anonKey, emails.owner, PASSWORD);
   sessions.cash1b = await signIn(url, anonKey, emails.cash1, PASSWORD);
+  sessions.cash2b = await signIn(url, anonKey, emails.cash2, PASSWORD);
   record('Employee Security', 'Real Auth sessions established', true, 'owner, mgr1, mgr2, cash1, cash2');
 } catch (error) {
   record('Employee Security', 'Real Auth sessions established', false, errMsg(error));
@@ -494,8 +512,13 @@ await expectOk('Configure Branch 1 catalog', 'Full E2E', () => rpc(sessions.main
   p_branch_id: branch1.id,
   p_items: [
     { product_id: e2eProduct.id, selling_price: 80, is_active: true },
-    { product_id: saleConcProduct.id, selling_price: 50, is_active: true },
     { product_id: xferConcProduct.id, selling_price: 50, is_active: true },
+  ],
+}));
+await expectOk('Configure Branch 2 catalog for sale concurrency', 'Full E2E', () => rpc(sessions.mainMgr, 'configure_branch_products', {
+  p_branch_id: branch2.id,
+  p_items: [
+    { product_id: saleConcProduct.id, selling_price: 50, is_active: true },
   ],
 }));
 
@@ -623,6 +646,7 @@ await expectDenied('Branch 2 cashier cannot confirm Branch 1 shipment', 'RPC Sec
     p_idempotency_key: idem('cash2-arrive'),
   }),
 );
+// cash2 is on branch2; denial is wrong-branch / unable to access.
 await expectDenied('Branch 1 manager cannot confirm shipment arrival', 'RPC Security', () =>
   rpc(sessions.mgr1, 'confirm_shipment_arrival', {
     p_transfer_id: e2eTransferId,
@@ -789,37 +813,33 @@ record('Full E2E', 'Main remaining is 40 (no leftover restock)', Number(mainFina
 variances = await ledgerVariance();
 record('Inventory Reconciliation', 'Ledger variance 0 after E2E', variances.length === 0, variances.length ? JSON.stringify(variances.slice(0, 5)) : 'ok');
 
-console.log('\n-- Sale concurrency --');
-// Same-day finalized close freezes the booth; backdate the E2E shift so a new session can open.
-await admin.from('shifts').update({
-  started_at: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
-  ended_at: new Date(Date.now() - 35 * 3600 * 1000).toISOString(),
-  sales_cutoff_at: new Date(Date.now() - 35 * 3600 * 1000).toISOString(),
-}).eq('id', shiftId);
-
+console.log('\n-- Sale concurrency (dedicated Branch 2 booth; no closed-shift backdate) --');
 const saleConcSend = await rpc(sessions.mainMgr, 'send_stock_transfer', {
-  p_to_branch_id: branch1.id,
+  p_to_branch_id: branch2.id,
   p_items: [{ product_id: saleConcProduct.id, quantity_sent: 5 }],
   p_notes: null,
   p_idempotency_key: idem('saleconc-send'),
 });
-// Sale concurrency needs an open booth session; start before confirming arrival.
-const concShift = await rpc(sessions.cash1, 'start_cashier_shift');
-await rpc(sessions.cash1, 'confirm_shipment_arrival', {
-  p_transfer_id: saleConcSend,
-  p_idempotency_key: idem('saleconc-arrive'),
-});
+const concShift = await expectOk('Cashier 2 starts Branch 2 shift for concurrency', 'Concurrency', () =>
+  rpc(sessions.cash2, 'start_cashier_shift'),
+);
+await expectOk('Cashier 2 confirms sale-concurrency shipment', 'Concurrency', () =>
+  rpc(sessions.cash2, 'confirm_shipment_arrival', {
+    p_transfer_id: saleConcSend,
+    p_idempotency_key: idem('saleconc-arrive'),
+  }),
+);
 let saleA;
 let saleB;
 for (let attempt = 0; attempt < 3; attempt += 1) {
   [saleA, saleB] = await Promise.allSettled([
-    rpc(sessions.cash1, 'confirm_sale', {
+    rpc(sessions.cash2, 'confirm_sale', {
       p_shift_id: concShift,
       p_items: [{ product_id: saleConcProduct.id, quantity: 4 }],
       p_amount_paid: 200,
       p_idempotency_key: idem(`conc-a${attempt}`),
     }),
-    rpc(sessions.cash1b, 'confirm_sale', {
+    rpc(sessions.cash2b, 'confirm_sale', {
       p_shift_id: concShift,
       p_items: [{ product_id: saleConcProduct.id, quantity: 3 }],
       p_amount_paid: 150,
@@ -837,19 +857,15 @@ record('Concurrency', 'Overlapping 4 and 3 against stock 5 cannot both succeed',
 if (saleFails[0]) {
   record('Concurrency', 'Failed concurrent sale is denied for stock', /insufficient stock/i.test(errMsg(saleFails[0].reason)), errMsg(saleFails[0].reason));
 }
-const { data: concBal } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', saleConcProduct.id).maybeSingle();
+const { data: concBal } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch2.id).eq('product_id', saleConcProduct.id).maybeSingle();
 record('Concurrency', 'Sale concurrency stock never negative', Number(concBal?.quantity_on_hand) >= 0, String(concBal?.quantity_on_hand));
 record('Concurrency', 'Sale concurrency leftover is 1', Number(concBal?.quantity_on_hand) === 1, String(concBal?.quantity_on_hand));
 {
   const { data: concSales } = await admin.from('sales').select('id,status').in('id', saleWins.map((r) => r.value.id));
   const { data: concItems } = await admin.from('sale_items').select('id,sale_id').in('sale_id', saleWins.map((r) => r.value.id));
-  const { data: failedIds } = saleFails.length
-    ? await admin.from('sales').select('id').in('idempotency_key', [ /* keys consumed in flight */ ])
-    : { data: [] };
   record('Sale Integrity', 'Winning concurrent sale persisted with items', (concSales?.length ?? 0) === 1 && (concItems?.length ?? 0) === 1);
-  void failedIds;
 }
-await closeShiftRev7(sessions.cash1, concShift, '0');
+// Leave Branch 2 session open for later employee-protection checks (no closed-shift backdate).
 
 console.log('\n-- Transfer concurrency --');
 let xferA;
@@ -1008,61 +1024,78 @@ await expectDenied('Manager cannot change own role via owner_update_employee', '
 }));
 await expectDenied('Cashier cannot update profiles table role', 'Employee Security', () => sessions.cash1.from('profiles').update({ role: 'owner' }).eq('id', ids.cash1).select());
 
+// Cashier 2 already owns an open Branch 2 session from sale concurrency (no backdate needed).
 const openForProtect = await rpc(sessions.cash2, 'start_cashier_shift');
+record('Employee Security', 'Cashier 2 still on open Branch 2 session', openForProtect === concShift, `${openForProtect}`);
 await expectDenied('Owner cannot deactivate cashier with open shift', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch1.id,
+  p_branch_id: branch2.id,
   p_is_active: false,
 }));
-await expectDenied('Owner cannot reassign cashier with open shift', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
+await expectDenied('Owner cannot reassign cashier with open/pending remittance', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch2.id,
+  p_branch_id: branch1.id,
   p_is_active: true,
 }));
 await expectDenied('Main Branch Manager cannot deactivate employee', 'Employee Security', () => rpc(sessions.mainMgr, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch1.id,
+  p_branch_id: branch2.id,
   p_is_active: false,
 }));
 await expectDenied('Main Branch Manager cannot reassign employee', 'Employee Security', () => rpc(sessions.mainMgr, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch2.id,
+  p_branch_id: branch1.id,
   p_is_active: true,
 }));
 await closeShiftRev7(sessions.cash2, openForProtect, '0');
 record('Employee Security', 'Historical Cashier 1 sale remains Branch 1', sale.branch_id === branch1.id);
 
-await expectOk('Owner reassigns Cashier 2 to Branch 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
+let branch3;
+{
+  const { data } = await adminMutate(
+    'Create Branch 3 for reassignment',
+    admin.from('branches').insert({
+      name: 'M105 Branch 3',
+      code: `M105-B3-${RUN_ID.slice(-6)}`,
+      is_main_branch: false,
+      is_active: true,
+      receiving_mode: 'cashier_confirm',
+    }).select('id,name,code,is_main_branch,is_active').single(),
+  );
+  branch3 = data;
+}
+
+await expectOk('Owner reassigns Cashier 2 to Branch 3', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch2.id,
+  p_branch_id: branch3.id,
   p_is_active: true,
 }));
 {
   const { data: oldShift } = await admin.from('shifts').select('branch_id').eq('id', openForProtect).maybeSingle();
-  record('Employee Security', 'Historical shift keeps original branch', oldShift?.branch_id === branch1.id, oldShift?.branch_id);
+  record('Employee Security', 'Historical shift keeps original branch', oldShift?.branch_id === branch2.id, oldShift?.branch_id);
 }
 sessions.cash2 = await signIn(url, anonKey, emails.cash2, PASSWORD);
 const newShift = await rpc(sessions.cash2, 'start_cashier_shift');
 {
   const { data: nextShift } = await admin.from('shifts').select('branch_id').eq('id', newShift).maybeSingle();
-  record('Employee Security', 'New shift uses reassigned Branch 2', nextShift?.branch_id === branch2.id, nextShift?.branch_id);
+  record('Employee Security', 'New shift uses reassigned Branch 3', nextShift?.branch_id === branch3.id, nextShift?.branch_id);
 }
 await closeShiftRev7(sessions.cash2, newShift, '0');
 await expectOk('Owner deactivates Cashier 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
   p_role: 'cashier',
-  p_branch_id: branch2.id,
+  p_branch_id: branch3.id,
   p_is_active: false,
 }));
 sessions.cash2 = await signIn(url, anonKey, emails.cash2, PASSWORD);
@@ -1101,63 +1134,77 @@ const tzSaleA = randomUUID();
 const tzSaleB = randomUUID();
 const tzSaleVoid = randomUUID();
 {
-  const { error: shiftErr } = await admin.from('shifts').insert({
-    id: tzShiftId,
-    branch_id: branch1.id,
-    cashier_id: ids.cash1,
-    status: 'closed',
-    started_at: `${tzDay}T20:00:00+08:00`,
-    ended_at: `${tzNext}T01:00:00+08:00`,
-  });
-  record('Reporting Accuracy', 'Inserted timezone fixture shift', !shiftErr, errMsg(shiftErr));
-  const { error: saleErr } = await admin.from('sales').insert([
-    {
-      id: tzSaleA,
-      sale_number: `SALE-M105-TZA${RUN_ID.slice(-8)}`,
-      branch_id: branch1.id,
-      shift_id: tzShiftId,
-      cashier_id: ids.cash1,
-      subtotal: 80,
-      total_amount: 80,
-      amount_paid: 80,
-      change_amount: 0,
-      status: 'completed',
-      sold_at: `${tzDay}T23:59:00+08:00`,
-      idempotency_key: idem('tz-a'),
-      request_items: [],
-    },
-    {
-      id: tzSaleB,
-      sale_number: `SALE-M105-TZB${RUN_ID.slice(-8)}`,
-      branch_id: branch1.id,
-      shift_id: tzShiftId,
-      cashier_id: ids.cash1,
-      subtotal: 80,
-      total_amount: 80,
-      amount_paid: 80,
-      change_amount: 0,
-      status: 'completed',
-      sold_at: `${tzNext}T00:00:00+08:00`,
-      idempotency_key: idem('tz-b'),
-      request_items: [],
-    },
-    {
-      id: tzSaleVoid,
-      sale_number: `SALE-M105-TZV${RUN_ID.slice(-8)}`,
-      branch_id: branch1.id,
-      shift_id: tzShiftId,
-      cashier_id: ids.cash1,
-      subtotal: 9999,
-      total_amount: 9999,
-      amount_paid: 9999,
-      change_amount: 0,
-      status: 'voided',
-      sold_at: `${tzDay}T12:00:00+08:00`,
-      idempotency_key: idem('tz-void'),
-      request_items: [],
-    },
-  ]);
-  record('Reporting Accuracy', 'Inserted timezone and voided fixture sales', !saleErr, errMsg(saleErr));
+  try {
+    await adminMutate(
+      'Insert timezone fixture shift',
+      admin.from('shifts').insert({
+        id: tzShiftId,
+        branch_id: branch1.id,
+        cashier_id: ids.cash1,
+        status: 'closed',
+        started_at: `${tzDay}T20:00:00+08:00`,
+        ended_at: `${tzNext}T01:00:00+08:00`,
+      }),
+    );
+    record('Reporting Accuracy', 'Inserted timezone fixture shift', true);
+  } catch (error) {
+    record('Reporting Accuracy', 'Inserted timezone fixture shift', false, errMsg(error));
+  }
+  try {
+    await adminMutate(
+      'Insert timezone fixture sales',
+      admin.from('sales').insert([
+        {
+          id: tzSaleA,
+          sale_number: `SALE-M105-TZA${RUN_ID.slice(-8)}`,
+          branch_id: branch1.id,
+          shift_id: tzShiftId,
+          cashier_id: ids.cash1,
+          subtotal: 80,
+          total_amount: 80,
+          amount_paid: 80,
+          change_amount: 0,
+          status: 'completed',
+          sold_at: `${tzDay}T23:59:00+08:00`,
+          idempotency_key: idem('tz-a'),
+          request_items: [],
+        },
+        {
+          id: tzSaleB,
+          sale_number: `SALE-M105-TZB${RUN_ID.slice(-8)}`,
+          branch_id: branch1.id,
+          shift_id: tzShiftId,
+          cashier_id: ids.cash1,
+          subtotal: 80,
+          total_amount: 80,
+          amount_paid: 80,
+          change_amount: 0,
+          status: 'completed',
+          sold_at: `${tzNext}T00:00:00+08:00`,
+          idempotency_key: idem('tz-b'),
+          request_items: [],
+        },
+        {
+          id: tzSaleVoid,
+          sale_number: `SALE-M105-TZV${RUN_ID.slice(-8)}`,
+          branch_id: branch1.id,
+          shift_id: tzShiftId,
+          cashier_id: ids.cash1,
+          subtotal: 9999,
+          total_amount: 9999,
+          amount_paid: 9999,
+          change_amount: 0,
+          status: 'voided',
+          sold_at: `${tzDay}T12:00:00+08:00`,
+          idempotency_key: idem('tz-void'),
+          request_items: [],
+        },
+      ]),
+    );
+    record('Reporting Accuracy', 'Inserted timezone and voided fixture sales', true);
+  } catch (error) {
+    record('Reporting Accuracy', 'Inserted timezone and voided fixture sales', false, errMsg(error));
+  }
 }
 const customDay = await rpc(sessions.owner, 'report_sales_by_branch', {
   p_range_type: 'custom',
