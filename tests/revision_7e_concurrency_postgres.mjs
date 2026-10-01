@@ -233,10 +233,10 @@ async function main() {
       )[0].id;
       const [a, b] = await Promise.allSettled([
         withTx(sqlA, ctx.cashier, (tx) =>
-          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '4' }])}::jsonb, ${100}, ${ctx.key('sa')})`,
+          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '4' }])}::text::jsonb, ${100}, ${ctx.key('sa')})`,
         ),
         withTx(sqlB, ctx.cashier, (tx) =>
-          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '3' }])}::jsonb, ${75}, ${ctx.key('sb')})`,
+          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '3' }])}::text::jsonb, ${75}, ${ctx.key('sb')})`,
         ),
       ]);
       const wins = [a, b].filter(settledOk).length;
@@ -260,7 +260,7 @@ async function main() {
       )[0].id;
       const [saleR, closeR] = await Promise.allSettled([
         withTx(sqlA, ctx.cashier, (tx) =>
-          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '2' }])}::jsonb, ${50}, ${ctx.key('sale')})`,
+          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '2' }])}::text::jsonb, ${50}, ${ctx.key('sale')})`,
         ),
         withTx(sqlB, ctx.cashier, (tx) => tx`select public.begin_cashier_shift_close(${shiftId}) as preview`),
       ]);
@@ -284,7 +284,7 @@ async function main() {
           );
         }
         const postCutoff = await withTx(sqlA, ctx.cashier, (tx) =>
-          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '1' }])}::jsonb, ${25}, ${ctx.key('post')})`.catch((e) => {
+          tx`select * from public.confirm_sale(${shiftId}, ${JSON.stringify([{ product_id: ctx.drink, quantity: '1' }])}::text::jsonb, ${25}, ${ctx.key('post')})`.catch((e) => {
             throw e;
           }),
         ).then(
@@ -308,7 +308,7 @@ async function main() {
       )[0].id;
       const xferId = (
         await withTx(sqlA, ctx.mainMgr, (tx) =>
-          tx`select public.send_stock_transfer(${ctx.branch}, ${JSON.stringify([{ product_id: ctx.drink, quantity_sent: '2' }])}::jsonb, null, ${ctx.key('xfer')}) as id`,
+          tx`select public.send_stock_transfer(${ctx.branch}, ${JSON.stringify([{ product_id: ctx.drink, quantity_sent: '2' }])}::text::jsonb, null, ${ctx.key('xfer')}) as id`,
         )
       )[0].id;
       const [recvR, closeR] = await Promise.allSettled([
@@ -365,10 +365,10 @@ async function main() {
       ]);
       const [f1, f2] = await Promise.allSettled([
         withTx(sqlA, ctx.cashier, (tx) =>
-          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payload}::jsonb) as result`,
+          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payload}::text::jsonb) as result`,
         ),
         withTx(sqlB, ctx.cashier, (tx) =>
-          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payload}::jsonb) as result`,
+          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payload}::text::jsonb) as result`,
         ),
       ]);
       check('identical finalize: no deadlock', ![f1, f2].some(isDeadlock));
@@ -398,10 +398,10 @@ async function main() {
       ]);
       const [c1, c2] = await Promise.allSettled([
         withTx(sqlA, ctx.cashier, (tx) =>
-          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payloadA}::jsonb) as result`,
+          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'0.00'}, ${payloadA}::text::jsonb) as result`,
         ),
         withTx(sqlB, ctx.cashier, (tx) =>
-          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'5.00'}, ${payloadB}::jsonb) as result`,
+          tx`select public.finalize_cashier_shift_reconciliation(${shiftId}, ${'5.00'}, ${payloadB}::text::jsonb) as result`,
         ),
       ]);
       const wins = [c1, c2].filter(settledOk);

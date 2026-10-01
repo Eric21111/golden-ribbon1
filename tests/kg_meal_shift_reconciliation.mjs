@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 // Revision 7B: active KG UX removed; historical snapshot formatters remain.
 const dashboard = readFileSync('app/(cashier)/cashier/dashboard.tsx', 'utf8');
 assert.match(dashboard, /beginCashierShiftClose|useBeginCashierShiftClose|finalizeCashierShiftReconciliation|useFinalizeCashierShiftReconciliation/);
+assert.match(dashboard, /useReconcileClosedShift|reconcileClosedShift/);
 assert.match(dashboard, /Pending remittance|Complete Pending Remittance/);
 assert.doesNotMatch(dashboard, /end_cashier_shift/);
 assert.doesNotMatch(dashboard, /close_cashier_shift/);

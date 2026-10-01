@@ -35,6 +35,7 @@ import {
   useFinalizeCashierShiftReconciliation,
   useMyFinalizedCloseToday,
   usePendingShiftReconciliation,
+  useReconcileClosedShift,
   useShiftSummary,
   useStartShift,
 } from '@/hooks/useShifts';
@@ -48,13 +49,21 @@ import type {
   InventoryItem,
   ShiftCloseFinalizeProduct,
   ShiftClosePreview,
+  ShiftCloseResult,
 } from '@/types/models';
 
-type FinalizeAttempt = {
+type RemittancePath = 'legacy' | 'pcs';
+
+type RemittanceAttempt = {
   shiftId: string;
   actualCash: string;
   products: ShiftCloseFinalizeProduct[];
+  path: RemittancePath;
 };
+
+function isLegacyCashOnlyPreview(preview: ShiftClosePreview): boolean {
+  return preview.mode === 'legacy_cash_only' || !preview.inventory_reconciliation_required;
+}
 
 function Row({ children }: { children: ReactNode }) {
   return <View style={styles.row}>{children}</View>;
@@ -70,9 +79,12 @@ export default function CashierDashboard() {
   const startMutation = useStartShift(cashierId);
   const beginCloseMutation = useBeginCashierShiftClose(cashierId);
   const finalizeMutation = useFinalizeCashierShiftReconciliation(cashierId);
+  const reconcileMutation = useReconcileClosedShift(cashierId);
   const [closePreview, setClosePreview] = useState<ShiftClosePreview | null>(null);
   const [awaitingFinalizeRetry, setAwaitingFinalizeRetry] = useState(false);
-  const lastFinalizeRef = useRef<FinalizeAttempt | null>(null);
+  const lastFinalizeRef = useRef<RemittanceAttempt | null>(null);
+  const remittancePending = finalizeMutation.isPending || reconcileMutation.isPending;
+  const remittanceError = finalizeMutation.error ?? reconcileMutation.error;
   const posBranchId = authoritativePosBranchId(shiftQuery.data, profile);
   const inventory = useCashierPosInventory(posBranchId);
   const pendingShift = usePendingShiftReconciliation(cashierId, !shiftQuery.data);
@@ -190,52 +202,65 @@ export default function CashierDashboard() {
     );
   };
 
-  const runFinalize = (attempt: FinalizeAttempt) => {
-    if (finalizeMutation.isPending) return;
+  const onRemittanceSuccess = (result: ShiftCloseResult) => {
+    lastFinalizeRef.current = null;
+    setAwaitingFinalizeRetry(false);
+    setClosePreview(null);
+    alertNotice('End Shift Complete', formatCloseSuccessSummary(result));
+    void finalizedToday.refetch();
+    void pendingShift.refetch();
+    void shiftQuery.refetch();
+  };
+
+  const onRemittanceError = async (error: Error) => {
+    if (isNetworkishError(error)) {
+      setAwaitingFinalizeRetry(true);
+      const [pendingResult, closedResult] = await Promise.all([
+        pendingShift.refetch(),
+        finalizedToday.refetch(),
+      ]);
+      if (!pendingResult.data && closedResult.data) {
+        lastFinalizeRef.current = null;
+        setAwaitingFinalizeRetry(false);
+        setClosePreview(null);
+        alertNotice(
+          'End Shift Complete',
+          "Connection dropped after save. Today's remittance is already finalized.",
+        );
+        return;
+      }
+      alertNotice(
+        'Connection problem',
+        'Could not confirm the remittance. Retry with the same counts — do not re-enter unless the values need changing.',
+      );
+      return;
+    }
+    setAwaitingFinalizeRetry(false);
+    alertNotice('Remittance not saved', getShiftErrorMessage(error));
+  };
+
+  const runFinalize = (attempt: RemittanceAttempt) => {
+    if (remittancePending) return;
     lastFinalizeRef.current = attempt;
+    const handlers = {
+      onSuccess: onRemittanceSuccess,
+      onError: onRemittanceError,
+    };
+    // Path is sticky on the attempt so network retry cannot switch RPCs.
+    if (attempt.path === 'legacy') {
+      reconcileMutation.mutate(
+        { shiftId: attempt.shiftId, actualCash: attempt.actualCash },
+        handlers,
+      );
+      return;
+    }
     finalizeMutation.mutate(
       {
         shiftId: attempt.shiftId,
         actualCash: attempt.actualCash,
         products: attempt.products,
       },
-      {
-        onSuccess: (result) => {
-          lastFinalizeRef.current = null;
-          setAwaitingFinalizeRetry(false);
-          setClosePreview(null);
-          alertNotice('End Shift Complete', formatCloseSuccessSummary(result));
-          void finalizedToday.refetch();
-          void pendingShift.refetch();
-          void shiftQuery.refetch();
-        },
-        onError: async (error) => {
-          if (isNetworkishError(error)) {
-            setAwaitingFinalizeRetry(true);
-            const [pendingResult, closedResult] = await Promise.all([
-              pendingShift.refetch(),
-              finalizedToday.refetch(),
-            ]);
-            if (!pendingResult.data && closedResult.data) {
-              lastFinalizeRef.current = null;
-              setAwaitingFinalizeRetry(false);
-              setClosePreview(null);
-              alertNotice(
-                'End Shift Complete',
-                "Connection dropped after save. Today's remittance is already finalized.",
-              );
-              return;
-            }
-            alertNotice(
-              'Connection problem',
-              'Could not confirm the remittance. Retry with the same counts — do not re-enter unless the values need changing.',
-            );
-            return;
-          }
-          setAwaitingFinalizeRetry(false);
-          alertNotice('Remittance not saved', getShiftErrorMessage(error));
-        },
-      },
+      handlers,
     );
   };
 
@@ -244,7 +269,8 @@ export default function CashierDashboard() {
     actualCash: string,
     products: ShiftCloseFinalizeProduct[],
   ) => {
-    if (finalizeMutation.isPending) return;
+    if (remittancePending) return;
+    const path: RemittancePath = isLegacyCashOnlyPreview(preview) ? 'legacy' : 'pcs';
     confirmAction(
       'Finalize End Shift?',
       FINALIZE_CONFIRM_MESSAGE,
@@ -252,7 +278,8 @@ export default function CashierDashboard() {
         runFinalize({
           shiftId: preview.shift_id,
           actualCash,
-          products,
+          products: path === 'legacy' ? [] : products,
+          path,
         }),
       { cancel: 'Cancel', confirm: 'Finalize' },
     );
@@ -260,7 +287,7 @@ export default function CashierDashboard() {
 
   const retryLastFinalize = () => {
     const attempt = lastFinalizeRef.current;
-    if (!attempt || finalizeMutation.isPending) return;
+    if (!attempt || remittancePending) return;
     runFinalize(attempt);
   };
 
@@ -272,8 +299,7 @@ export default function CashierDashboard() {
         : null;
 
   const sameDayClosedHint = Boolean(finalizedToday.data) && !pendingPreview && !shiftQuery.data;
-  const busy =
-    beginCloseMutation.isPending || finalizeMutation.isPending;
+  const busy = beginCloseMutation.isPending || remittancePending;
 
   const refreshing =
     shiftQuery.isRefetching ||
@@ -303,19 +329,19 @@ export default function CashierDashboard() {
         branchName={profile?.branch?.name}
         title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
         submitLabel="Complete End Shift"
-        loading={finalizeMutation.isPending}
+        loading={remittancePending}
         onSubmit={(actualCash, products) => requestFinalize(pendingPreview, actualCash, products)}
       />
       {awaitingFinalizeRetry && lastFinalizeRef.current ? (
         <ManagerActionButton
           label="Retry same remittance"
-          loading={finalizeMutation.isPending}
-          disabled={finalizeMutation.isPending}
+          loading={remittancePending}
+          disabled={remittancePending}
           onPress={retryLastFinalize}
         />
       ) : null}
-      {finalizeMutation.error && !isNetworkishError(finalizeMutation.error) ? (
-        <Text style={styles.error}>{getShiftErrorMessage(finalizeMutation.error)}</Text>
+      {remittanceError && !isNetworkishError(remittanceError) ? (
+        <Text style={styles.error}>{getShiftErrorMessage(remittanceError)}</Text>
       ) : null}
     </View>
   ) : null;

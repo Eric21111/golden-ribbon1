@@ -1,3 +1,4 @@
+import { getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import type {
   PendingShiftReconciliation,
@@ -56,6 +57,8 @@ export async function reconcileClosedShift(shiftId: string, actualCash: string):
   const { data, error } = await supabase.rpc('reconcile_closed_shift', {
     p_shift_id: shiftId,
     p_actual_cash: actualCash,
+    // Required on pre-Revision-7 production; optional default after 7C.
+    p_waste: [],
   });
   if (error) throw error;
   return data as ShiftCloseResult;
@@ -68,20 +71,37 @@ export async function getMyPendingShiftReconciliation(): Promise<PendingShiftRec
 }
 
 /**
- * Defensive same-day closed hint from server remittance business dates (Manila).
+ * UI hint only: cashier's own reconciled close for the Manila business day.
+ * Uses authorized shifts + shift_reconciliations SELECT (existing RLS).
+ * Does not call Owner/Main Manager remittance reports.
  * start_cashier_shift remains the final authority if this is stale/unavailable.
  */
 export async function hasMyFinalizedCloseToday(branchId: string, cashierId: string): Promise<boolean> {
   if (!branchId || !cashierId) return false;
-  const report = await listShiftRemittances(branchId, 'today');
-  for (const day of report.days ?? []) {
-    for (const shift of day.shifts ?? []) {
-      if (shift.cashier_id === cashierId && shift.status === 'reconciled') {
-        return true;
-      }
-    }
+  try {
+    const { start, end } = getTodayRangeManila();
+    const { data: shifts, error: shiftError } = await supabase
+      .from('shifts')
+      .select('id')
+      .eq('cashier_id', cashierId)
+      .eq('branch_id', branchId)
+      .eq('status', 'closed')
+      .gte('ended_at', start)
+      .lt('ended_at', end);
+    if (shiftError) return false;
+    const shiftIds = (shifts ?? []).map((row) => row.id).filter(Boolean);
+    if (shiftIds.length === 0) return false;
+
+    const { data: recons, error: reconError } = await supabase
+      .from('shift_reconciliations')
+      .select('shift_id')
+      .in('shift_id', shiftIds)
+      .limit(1);
+    if (reconError) return false;
+    return (recons?.length ?? 0) > 0;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 export async function getShiftSummary(shiftId: string): Promise<ShiftSummary> {

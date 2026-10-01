@@ -187,14 +187,16 @@ assert.match(closeForm, /TABLET_MIN_EDGE/);
 
 // Final confirmation + loading protection
 assert.match(dashboard, /FINALIZE_CONFIRM_MESSAGE/);
-assert.match(dashboard, /finalizeMutation\.isPending/);
+assert.match(dashboard, /remittancePending/);
 assert.match(closeForm, /disabled=\{!canSubmit \|\| loading\}/);
 
-// --- Timeout retry uses identical finalize payload ---
+// --- Timeout retry uses identical remittance path + payload ---
 assert.match(dashboard, /lastFinalizeRef/);
 assert.match(dashboard, /Retry same remittance/);
 assert.match(dashboard, /isNetworkishError/);
 assert.match(dashboard, /runFinalize\(attempt\)/);
+assert.match(dashboard, /path: 'legacy' \| 'pcs'|RemittancePath/);
+assert.match(dashboard, /attempt\.path === 'legacy'/);
 assert.equal(isNetworkishError({ message: 'Network request timed out' }), true);
 assert.equal(isNetworkishError({ message: 'different inventory counts' }), false);
 
@@ -226,24 +228,56 @@ assert.match(dashboard, /sameDayClosedHint/);
 assert.match(dashboard, /Start again next business day/);
 assert.match(dashboard, /server decides whether a new shift can start/i);
 assert.match(shiftService, /hasMyFinalizedCloseToday/);
-assert.match(shiftService, /listShiftRemittances/);
 assert.match(useShifts, /useMyFinalizedCloseToday/);
 assert.match(errorsSource, /Today's shift is already closed/);
 assert.match(errorsSource, /different inventory/);
+
+// Same-day hint: cashier-authorized reads only (no report RPC / no sales_cutoff_at)
+const hintFn = shiftService.match(
+  /export async function hasMyFinalizedCloseToday[\s\S]*?\nexport async function/,
+)?.[0] ?? '';
+assert.match(hintFn, /getTodayRangeManila/);
+assert.match(hintFn, /\.from\('shifts'\)/);
+assert.match(hintFn, /ended_at/);
+assert.match(hintFn, /\.from\('shift_reconciliations'\)/);
+assert.match(hintFn, /\.eq\('status',\s*'closed'\)/);
+assert.doesNotMatch(hintFn, /listShiftRemittances/);
+assert.doesNotMatch(hintFn, /report_branch_shift_remittances/);
+assert.doesNotMatch(hintFn, /sales_cutoff_at/);
+// Owner/Main Manager reporting still uses the remittance report RPC
+assert.match(shiftService, /listShiftRemittances/);
+assert.match(shiftService, /report_branch_shift_remittances/);
+assert.match(useShifts, /listShiftRemittances/);
+// start_cashier_shift remains authoritative
+assert.match(shiftService, /start_cashier_shift/);
+assert.match(dashboard, /startMutation|useStartShift/);
 
 // Auto-close pending reuse / legacy compatibility via preview.mode
 assert.match(closeForm, /legacy_cash_only/);
 assert.match(closeForm, /inventory_reconciliation_required/);
 assert.match(closeForm, /This historical shift only needs cash reconciliation/);
+assert.match(closeForm, /isLegacy|legacy_cash_only/);
+// A) Legacy UI: no inventory count fields when legacy; dashboard routes to reconcile
+assert.match(dashboard, /isLegacyCashOnlyPreview|legacy_cash_only/);
+assert.match(dashboard, /useReconcileClosedShift/);
+assert.match(dashboard, /reconcileMutation/);
+assert.match(dashboard, /path === 'legacy' \? 'legacy' : 'pcs'|isLegacyCashOnlyPreview\(preview\) \? 'legacy'/);
+// B) PCS still uses finalize path
+assert.match(dashboard, /useFinalizeCashierShiftReconciliation/);
+assert.match(dashboard, /finalizeMutation\.mutate/);
+assert.match(useShifts, /finalizeCashierShiftReconciliation/);
 
 // KG closing UI removed from active cashier End Shift surfaces
 assert.doesNotMatch(closeForm, /kg_meal|KG-delivered|meal waste|p_waste|close_cashier_shift/i);
 assert.doesNotMatch(dashboard, /kg_meal|KG-delivered|meal waste|p_waste|close_cashier_shift/i);
 assert.doesNotMatch(closeDisplaySource, /kg_meal|p_waste/i);
 
-// Service still uses 7C RPCs
+// Service RPCs: PCS finalize + legacy reconcile with explicit empty waste
 assert.match(shiftService, /begin_cashier_shift_close/);
 assert.match(shiftService, /finalize_cashier_shift_reconciliation/);
 assert.match(shiftService, /get_my_pending_shift_reconciliation/);
+assert.match(shiftService, /reconcile_closed_shift/);
+// C) Legacy service call explicitly contains p_waste: []
+assert.match(shiftService, /p_waste:\s*\[\s*\]/);
 
 console.log('revision_7d_end_shift_ui: ok');

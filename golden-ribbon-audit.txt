@@ -1,5 +1,5 @@
 Golden Ribbon Source Audit Bundle
-Generated from commit: 57297f6c9d9ab2aa6ec9dc7a9f2444fefab794bb
+Generated from commit: 1e5cd81d7ebc87b37fa22265858ddf244f46434d
 
 
 ================================================================================
@@ -126,7 +126,7 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 
 ### Row-level security
 
-- Owners can select all branches and products, and insert/update branch and product master data.
+- Owners can select all branches and products. Product master create/edit is Main Branch Manager authority (Owner may view/report; branch create/update remains Owner where granted).
 - Managers and cashiers can select their own profile and assigned branch. Managers can also resolve the names of users recorded on transfers addressed to their branch, so audit screens remain readable without exposing unrelated profiles.
 - Active authenticated staff can select product master data. The manager screen additionally filters to active products.
 - No role can update its own role or branch through the mobile client.
@@ -255,7 +255,7 @@ Manual acceptance: sell Chicken ×2 at 80 and Beef ×1 at 100 with 500 paid; ver
 
 Cashiers (selling branch): open Returns / leftover return while a booth session allows stock mutation. Confirm whole PCS quantities; the confirmation key survives navigation and reloads. Draft edits are local; only confirmed In Transit returns are stored.
 
-Owners / Main Branch Manager: receive leftover returns for accountability (counted leftover does not restock Main usable inventory). Owners can view returns across branches; selling managers see their branch history. Return details keep server-recorded branch, employee, and product names.
+Main Branch Manager: `receive_stock_return` for leftover accountability (counted leftover does not restock Main usable inventory). Owners can view/report returns across branches but do not perform Main operational receive; selling managers see their branch history. Return details keep server-recorded branch, employee, and product names.
 
 `create_stock_return` is the authenticated selling-branch return writer (cashier). It derives the source from the active cashier branch, locks inventory in product order, validates quantities, and writes the header/items, source deduction, and negative `return_out` movements in one transaction. Main Branch stock is untouched on create. Main receive is waste/accountability only.
 
@@ -19808,69 +19808,175 @@ NO DB PUSH.
 NO DEPLOYMENT.
 
 ================================================================================
+FILE: plan/part7finalpatch3.md
+================================================================================
+
+FINAL PRE-RELEASE TEST-HARNESS FIX
+
+The Patch-2 application/source audit passes, but the true PostgreSQL
+concurrency runner still has one execution blocker.
+
+NO application architecture changes.
+NO db push.
+NO deployment.
+
+==================================================
+1. USE ONE SHARED MAIN BRANCH IN PG CONCURRENCY RUNNER
+==================================================
+
+tests/revision_7e_concurrency_postgres.mjs currently creates a new branch with:
+
+is_main_branch = true
+
+inside every seedScenario() call.
+
+The schema enforces:
+
+branches_one_main_branch
+
+so Scenario 2 will fail after Scenario 1 already created a Main Branch.
+
+Fix the runner architecture:
+
+- Create exactly ONE runtime-unique shared Main Branch once before scenarios.
+- Do not delete it between scenarios.
+- Each scenario creates:
+  * unique selling branch
+  * unique product
+  * unique cashier(s)
+  * unique profile IDs
+  * unique codes/SKUs/idempotency keys
+- Scenario Main Managers may all point to the same shared Main Branch.
+- Scenario product stock on Main remains isolated because products are unique.
+- Preserve safe rerun behavior with APPLY_MIGRATIONS=0.
+
+Do not weaken branches_one_main_branch.
+
+==================================================
+2. TIGHTEN RECEIPT VS CLOSE ASSERTION
+==================================================
+
+When concurrent receipt succeeds:
+
+Do NOT pass merely because live stock >= expected.
+
+Require the completed begin-close preview/baseline to reflect the received
+quantity.
+
+For the current fixture:
+opening branch stock = 3
+received = 2
+
+If receipt succeeds before close:
+system_balance_before_waste must be 5
+(and/or received_quantity must show 2 where available).
+
+If close wins:
+receipt must reject and no receipt credit may appear after cutoff.
+
+This prevents a post-cutoff receipt from falsely passing via live balance.
+
+==================================================
+3. TIGHTEN CONFLICTING-FIRST-FINALIZE MOVEMENT ASSERTION
+==================================================
+
+Current test uses:
+
+shift_product_reconciliation movement count <= 3
+
+Replace the loose upper bound with an exact expectation derived from the
+winning persisted payload.
+
+For the current keep_at_branch fixture:
+
+Payload A:
+actual=8, waste=0
+→ no waste/unsold reconciliation movement expected
+
+Payload B:
+actual=6, waste=1
+→ exactly one waste reconciliation movement expected
+→ no unsold movement
+
+Also verify adjustment movement count/quantity matches the winning payload
+where applicable.
+
+The losing finalize must contribute zero writes.
+
+Retain:
+- exactly one cash reconciliation
+- exactly one product reconciliation
+- ending usable stock equals winner
+- no deadlock
+
+==================================================
+4. SMALL README CLEANUP
+==================================================
+
+Correct remaining active README authority drift:
+
+- Product master create/edit authority = Main Branch Manager, not Owner.
+- receive_stock_return authority = Main Branch Manager.
+- Owner may view/report where applicable but does not perform Main operational
+  receive.
+
+Do not rewrite intentional historical migration documentation.
+
+==================================================
+5. TEST / REPORT
+==================================================
+
+Run existing PGlite/regression/typecheck.
+
+If no disposable PostgreSQL DATABASE_URL is available, report:
+TRUE POSTGRES = NOT EXECUTED.
+
+Do not claim concurrency PASS until the real runner actually executes all six
+scenarios.
+
+Return implementation report and STOP.
+
+NO DB PUSH.
+NO DEPLOYMENT.
+
+================================================================================
 FILE: plan/revision.md
 ================================================================================
 
-Revision 7 Final Hardening Patch 2 plan is APPROVED with THREE implementation
-clarifications.
+Patch 3 plan is APPROVED.
 
-1. TRUE POSTGRES FIXTURE UNIQUENESS
+Proceed exactly as written.
 
-Per-scenario isolation must use a runtime-unique prefix not only for UUIDs but
-also for every constrained/user-defined identifier that may collide on rerun,
-including as applicable:
+One small implementation note:
 
-- branch IDs
-- branch codes
-- product IDs
-- product SKUs
-- profile/cashier IDs
-- idempotency keys
-- scenario-specific names/keys used by unique constraints
+In ensureSharedMain(), if an existing is_main_branch=true row is reused,
+verify that it is active.
 
-The runner should be safely rerunnable against the same disposable migrated DB
-with APPLY_MIGRATIONS=0 without deleting immutable business history.
+If the existing Main Branch is unexpectedly inactive, fail the runner clearly.
+Do not create a second Main Branch and do not weaken branches_one_main_branch.
 
-2. VERIFY FINAL close_overdue_shifts FUNCTION
+Everything else in the Patch 3 plan is approved.
 
-In Patch-2 regression coverage, do not only grep the new migration source.
+Constraints remain:
 
-After applying the full migration chain in PGlite, query pg_get_functiondef()
-for the effective final public.close_overdue_shifts().
+- test-harness + README only
+- no application architecture changes
+- no new migration
+- no db push
+- no deployment
 
-Assert that the FINAL installed definition:
+Run all regression test:* scripts and typecheck.
 
-- discovers candidates without FOR UPDATE
-- calls begin_shift_close_core
-- contains no generic EXCEPTION WHEN OTHERS THEN NULL swallow
+Report separately:
 
-Older historical migrations may still contain the superseded definition and
-must not be edited.
+PGlite = PASS / FAIL
+Typecheck = PASS / FAIL
+True PostgreSQL = EXECUTED PASS / EXECUTED FAIL / NOT EXECUTED
 
-3. LIVE VERIFIER ADMIN MUTATIONS
+Do not claim true concurrency PASS unless all six real PostgreSQL scenarios
+actually run.
 
-Make the rule absolute:
-
-EVERY admin.from(...).insert(...)
-EVERY admin.from(...).update(...)
-EVERY admin.from(...).upsert(...)
-EVERY admin.from(...).delete(...)
-
-used by milestone10_5_live_verification.mjs must inspect the returned error.
-
-Do not silently continue after a rejected admin mutation.
-
-Prefer a small helper if useful so this remains consistent.
-
-All other Patch-2 plan sections are approved.
-
-Proceed with local implementation.
-
-No db push.
-No deployment.
-
-Run full regression/typecheck and report PGlite and true PostgreSQL separately.
-STOP after the implementation report.
+Return the Patch-3 implementation report and STOP.
 
 ================================================================================
 FILE: scripts/wipe-all-except-owner.sql
@@ -77043,7 +77149,7 @@ FILE: tests/revision_7e_concurrency_postgres.mjs
 ================================================================================
 
 /**
- * Revision 7 Final Patch 2 — true PostgreSQL multi-session concurrency runner.
+ * Revision 7 Final Patch 3 — true PostgreSQL multi-session concurrency runner.
  *
  * PGlite does NOT prove parallel-session locking. This script uses independent
  * postgres.js connections against a disposable/local DATABASE_URL only.
@@ -77054,8 +77160,9 @@ FILE: tests/revision_7e_concurrency_postgres.mjs
  *   RUN_7E_PG_CONCURRENCY=1 DATABASE_URL=postgres://... node tests/revision_7e_concurrency_postgres.mjs
  *
  * Optional: APPLY_MIGRATIONS=1 applies supabase/migrations/*.sql (empty disposable DBs).
- * Reruns with APPLY_MIGRATIONS=0 are safe: each scenario uses a runtime-unique prefix
- * for all constrained identifiers; immutable history is never deleted.
+ * Reruns with APPLY_MIGRATIONS=0 are safe: one shared active Main Branch is reused;
+ * each scenario uses a runtime-unique selling branch/product/cashiers/keys;
+ * immutable history is never deleted.
  *
  * Never use production.
  */
@@ -77129,19 +77236,46 @@ async function applyAllMigrations(sql) {
   }
 }
 
-/** Per-scenario isolated fixture — unique IDs/codes/SKUs/keys; never deletes history. */
-async function seedScenario(sql, tag, { cashiers = 1, branchStock = 5, mainStock = 100 } = {}) {
+/**
+ * Exactly one Main Branch for the whole runner.
+ * Reuse existing active Main; fail clearly if inactive; never create a second Main.
+ */
+async function ensureSharedMain(sql) {
+  const existing = await sql`
+    select id, is_active
+    from public.branches
+    where is_main_branch = true
+    limit 1
+  `;
+  if (existing.length) {
+    if (!existing[0].is_active) {
+      throw new Error(
+        'Existing Main Branch (is_main_branch=true) is inactive. Activate it or use a disposable DB with an active Main. Refusing to create a second Main (branches_one_main_branch).',
+      );
+    }
+    return { id: existing[0].id };
+  }
+  const id = randomUUID();
+  const code = `M${RUN}`.slice(0, 12);
+  await sql`
+    insert into public.branches(id, name, code, is_main_branch, is_active, receiving_mode)
+    values (${id}, ${`Main ${RUN}`}, ${code}, true, true, 'counted')
+  `;
+  return { id };
+}
+
+/** Per-scenario selling-branch fixture — unique IDs/codes/SKUs/keys; never deletes history. */
+async function seedScenario(sql, tag, sharedMain, { cashiers = 1, branchStock = 5, mainStock = 100 } = {}) {
   const prefix = `${RUN}${tag}`.slice(0, 12);
   const owner = randomUUID();
   const mainMgr = randomUUID();
   const cashier = randomUUID();
   const cashier2 = randomUUID();
-  const main = randomUUID();
   const branch = randomUUID();
   const drink = randomUUID();
-  const mainCode = `M${prefix}`.slice(0, 12);
   const branchCode = `B${prefix}`.slice(0, 12);
   const sku = `S${prefix}`.slice(0, 20);
+  const main = sharedMain.id;
 
   await sql`
     insert into auth.users(id, email) values
@@ -77151,27 +77285,26 @@ async function seedScenario(sql, tag, { cashiers = 1, branchStock = 5, mainStock
       (${cashier2}, ${`c2-${prefix}@conc.test`})
   `;
   await sql`
-    insert into public.branches(id,name,code,is_main_branch,is_active,receiving_mode) values
-      (${main}, ${`Main ${prefix}`}, ${mainCode}, true, true, 'counted'),
+    insert into public.branches(id, name, code, is_main_branch, is_active, receiving_mode) values
       (${branch}, ${`Branch ${prefix}`}, ${branchCode}, false, true, 'cashier_confirm')
   `;
   await sql`
-    insert into public.profiles(id,full_name,role,branch_id,is_active) values
+    insert into public.profiles(id, full_name, role, branch_id, is_active) values
       (${owner}, ${`Owner ${prefix}`}, 'owner', null, true),
       (${mainMgr}, ${`MainMgr ${prefix}`}, 'manager', ${main}, true),
       (${cashier}, ${`Cashier ${prefix}`}, 'cashier', ${branch}, true),
       (${cashier2}, ${`Cashier2 ${prefix}`}, 'cashier', ${branch}, true)
   `;
   await sql`
-    insert into public.products(id,name,sku,selling_price,is_active,inventory_mode,closing_stock_behavior) values
+    insert into public.products(id, name, sku, selling_price, is_active, inventory_mode, closing_stock_behavior) values
       (${drink}, ${`Drink ${prefix}`}, ${sku}, 25, true, 'piece_stock', 'keep_at_branch')
   `;
   await sql`
-    insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+    insert into public.branch_products(branch_id, product_id, selling_price, is_active) values
       (${branch}, ${drink}, 25, true)
   `;
   await sql`
-    insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values
+    insert into public.branch_inventory(branch_id, product_id, quantity_on_hand) values
       (${main}, ${drink}, ${mainStock}),
       (${branch}, ${drink}, ${branchStock})
   `;
@@ -77236,10 +77369,13 @@ async function main() {
       }
     }
 
+    const sharedMain = await ensureSharedMain(admin);
+    console.log(`Shared Main Branch: ${sharedMain.id}`);
+
     // 1) simultaneous sale vs sale
     {
       console.log('\n-- sale vs sale --');
-      const ctx = await seedScenario(admin, 's1', { branchStock: 5 });
+      const ctx = await seedScenario(admin, 's1', sharedMain, { branchStock: 5 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -77266,7 +77402,7 @@ async function main() {
     // 2) sale vs begin-close
     {
       console.log('\n-- sale vs begin-close --');
-      const ctx = await seedScenario(admin, 's2', { branchStock: 10 });
+      const ctx = await seedScenario(admin, 's2', sharedMain, { branchStock: 10 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -77314,7 +77450,7 @@ async function main() {
     // 3) receipt vs begin-close
     {
       console.log('\n-- receipt vs begin-close --');
-      const ctx = await seedScenario(admin, 's3', { branchStock: 3, mainStock: 50 });
+      const ctx = await seedScenario(admin, 's3', sharedMain, { branchStock: 3, mainStock: 50 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -77338,10 +77474,13 @@ async function main() {
         const prod = (preview.products ?? []).find((p) => p.product_id === ctx.drink);
         const bal = await admin`select quantity_on_hand::float as q from public.branch_inventory where branch_id=${ctx.branch} and product_id=${ctx.drink}`;
         if (settledOk(recvR)) {
+          const baselineOk = Number(prod?.system_balance_before_waste) === 5;
+          const receivedPresent = prod?.received_quantity != null;
+          const receivedOk = !receivedPresent || Number(prod.received_quantity) === 2;
           check(
-            'receipt vs begin-close: receipt reflected in baseline/B',
-            Number(prod?.system_balance_before_waste ?? 0) >= 5 || Number(bal[0].q) >= 5,
-            `B=${prod?.system_balance_before_waste} live=${bal[0].q}`,
+            'receipt vs begin-close: receipt reflected in begin-close baseline',
+            baselineOk && receivedOk,
+            `B=${prod?.system_balance_before_waste} received=${prod?.received_quantity} live=${bal[0].q}`,
           );
         } else {
           check(
@@ -77352,7 +77491,7 @@ async function main() {
           const xfer = await admin`select status::text as s from public.stock_transfers where id=${xferId}`;
           check(
             'receipt vs begin-close: no post-cutoff receipt credit',
-            xfer[0].s === 'pending_receipt' || Number(bal[0].q) === 3,
+            xfer[0].s === 'pending_receipt' && Number(bal[0].q) === 3,
             `status=${xfer[0].s} live=${bal[0].q}`,
           );
         }
@@ -77364,7 +77503,7 @@ async function main() {
     // 4) identical simultaneous finalize
     {
       console.log('\n-- identical finalize --');
-      const ctx = await seedScenario(admin, 's4', { branchStock: 5 });
+      const ctx = await seedScenario(admin, 's4', sharedMain, { branchStock: 5 });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -77393,7 +77532,8 @@ async function main() {
     // 5) conflicting simultaneous FIRST finalize (fresh pending shift)
     {
       console.log('\n-- conflicting first finalize --');
-      const ctx = await seedScenario(admin, 's5', { branchStock: 8 });
+      const branchStock = 8;
+      const ctx = await seedScenario(admin, 's5', sharedMain, { branchStock });
       const sqlA = newSql();
       const sqlB = newSql();
       const shiftId = (
@@ -77424,21 +77564,63 @@ async function main() {
       check('conflicting first finalize: one product recon', Number(prodRecon[0].c) === 1);
       const bal = await admin`select quantity_on_hand::float as q from public.branch_inventory where branch_id=${ctx.branch} and product_id=${ctx.drink}`;
       const winRow = await admin`
-        select actual_remaining::float as a, waste_quantity::float as w
+        select
+          actual_remaining::float as a,
+          waste_quantity::float as w,
+          (
+            opening_quantity + received_quantity - outgoing_quantity
+            - sold_quantity + adjustment_quantity
+          )::float as b
         from public.shift_product_reconciliations where shift_id=${shiftId}
       `;
       const winActual = Number(winRow[0]?.a);
+      const winWaste = Number(winRow[0]?.w);
+      const winBaseline = Number(winRow[0]?.b ?? branchStock);
       check(
         'conflicting first finalize: stock matches winner',
         Number(bal[0].q) === winActual,
         `live=${bal[0].q} winActual=${winActual}`,
       );
-      const moveStorm = await admin`
+
+      const expectedWasteMoves = winWaste > 0 ? 1 : 0;
+      const expectedUnsoldMoves = 0; // keep_at_branch
+      const expectedAdjustQty = winActual + winWaste - winBaseline;
+      const expectedAdjustMoves = expectedAdjustQty !== 0 ? 1 : 0;
+
+      const wasteMoves = await admin`
         select count(*)::int as c from public.inventory_movements
         where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='waste'
           and reference_type='shift_product_reconciliation'
       `;
-      check('conflicting first finalize: recon movements not duplicated wildly', Number(moveStorm[0].c) <= 3, String(moveStorm[0].c));
+      const unsoldMoves = await admin`
+        select count(*)::int as c from public.inventory_movements
+        where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='unsold'
+          and reference_type='shift_product_reconciliation'
+      `;
+      const adjustMoves = await admin`
+        select count(*)::int as c, coalesce(sum(quantity), 0)::float as q
+        from public.inventory_movements
+        where branch_id=${ctx.branch} and product_id=${ctx.drink}
+          and movement_type='adjustment'
+      `;
+      check(
+        'conflicting first finalize: waste movement count matches winner',
+        Number(wasteMoves[0].c) === expectedWasteMoves,
+        `got=${wasteMoves[0].c} expected=${expectedWasteMoves} waste=${winWaste}`,
+      );
+      check(
+        'conflicting first finalize: no unsold movement',
+        Number(unsoldMoves[0].c) === expectedUnsoldMoves,
+        String(unsoldMoves[0].c),
+      );
+      check(
+        'conflicting first finalize: adjustment movement matches winner',
+        Number(adjustMoves[0].c) === expectedAdjustMoves
+          && (expectedAdjustMoves === 0 || Number(adjustMoves[0].q) === expectedAdjustQty),
+        `count=${adjustMoves[0].c} qty=${adjustMoves[0].q} expectedCount=${expectedAdjustMoves} expectedQty=${expectedAdjustQty}`,
+      );
       await sqlA.end({ timeout: 1 });
       await sqlB.end({ timeout: 1 });
     }
@@ -77446,7 +77628,7 @@ async function main() {
     // 6) two cashiers start same branch
     {
       console.log('\n-- two cashiers start --');
-      const ctx = await seedScenario(admin, 's6', { cashiers: 2, branchStock: 1 });
+      const ctx = await seedScenario(admin, 's6', sharedMain, { cashiers: 2, branchStock: 1 });
       const sqlA = newSql();
       const sqlB = newSql();
       const [s1, s2] = await Promise.allSettled([
