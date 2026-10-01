@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const db = new PGlite();
 await db.exec(`
@@ -90,11 +91,9 @@ assert.doesNotMatch(
 );
 
 await db.exec(`select set_config('request.jwt.claim.sub','${cashier}',false);`);
-const firstClose = (await db.query(`select public.close_cashier_shift('${shift}', '0', '[]'::jsonb) result`)).rows[0].result;
-await assert.rejects(
-  db.query(`select public.close_cashier_shift('${shift}', '0', '[]'::jsonb)`),
-  /already closed/,
-);
+const { result: firstClose } = await closeShiftExact(db, shift, '0');
+const { result: retryClose } = await closeShiftExact(db, shift, '0');
+assert.equal(retryClose.idempotent, true);
 assert.equal(firstClose.shift_status, 'closed');
 
 await db.exec('reset role;');

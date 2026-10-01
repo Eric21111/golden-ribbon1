@@ -44,7 +44,7 @@ import {
   useUpdateCompleteProduct,
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
-import { inventoryModeLabel } from '@/lib/format';
+import { closingStockBehaviorLabel } from '@/lib/format';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import type { Product } from '@/types/models';
 
@@ -136,7 +136,7 @@ export default function ManagerProductListScreen() {
             : { branch_id: draft.branchId, selling_price: draft.selling_price },
         ),
         selling_price: hasVariants ? null : values.default_price,
-        inventoryMode: values.inventoryMode,
+        closingStockBehavior: values.closingStockBehavior,
       })
       .then(() => setCreateOpen(false))
       .finally(() => {
@@ -158,7 +158,7 @@ export default function ManagerProductListScreen() {
         sku: values.sku,
         description: values.description ? values.description : null,
         isActive: values.isActive,
-        inventoryMode: values.inventoryMode,
+        closingStockBehavior: values.closingStockBehavior,
         variants: values.variants,
         deletedVariantIds: values.deletedVariantIds,
         branches: catalogDrafts.map((draft) =>
@@ -226,8 +226,8 @@ export default function ManagerProductListScreen() {
                   title={item.name}
                   meta={
                     item.is_active
-                      ? `${item.sku} · ${inventoryModeLabel(item.inventory_mode)}`
-                      : `${item.sku} · ${inventoryModeLabel(item.inventory_mode)} · Inactive until opening stock`
+                      ? `${item.sku} · ${closingStockBehaviorLabel(item.closing_stock_behavior)}`
+                      : `${item.sku} · ${closingStockBehaviorLabel(item.closing_stock_behavior)} · Inactive until opening stock`
                   }
                   trailing={
                     <ManagerBadge
@@ -287,7 +287,7 @@ export default function ManagerProductListScreen() {
                 sku: editProduct.sku,
                 description: editProduct.description,
                 is_active: editProduct.is_active,
-                inventory_mode: editProduct.inventory_mode,
+                closing_stock_behavior: editProduct.closing_stock_behavior,
               }}
               sourceVariants={(editVariants.data ?? []).map((variant) => ({
                 id: variant.id,

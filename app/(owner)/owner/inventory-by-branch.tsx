@@ -28,7 +28,7 @@ function statusOptions(isMainBranch: boolean): Array<{ label: string; value: Sto
     { label: 'In Stock', value: 'in_stock' },
     { label: 'Low', value: 'low' },
     { label: 'Out', value: 'out' },
-    { label: isMainBranch ? 'Not set' : 'Not tracked', value: 'not_set' },
+    { label: 'Not set', value: 'not_set' },
   ];
 }
 

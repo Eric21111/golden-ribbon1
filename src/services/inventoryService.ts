@@ -89,15 +89,14 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       selling_price: Number(row.selling_price),
       is_active: true,
       inventory_mode: row.inventory_mode ?? 'piece_stock',
+      closing_stock_behavior: 'keep_at_branch',
       created_at: '',
       updated_at: '',
     };
     return {
       branch,
       product,
-      quantity_on_hand: row.inventory_mode === 'kg_meal' || row.quantity_on_hand == null
-        ? 0
-        : Number(row.quantity_on_hand),
+      quantity_on_hand: row.quantity_on_hand == null ? 0 : Number(row.quantity_on_hand),
       updated_at: row.updated_at,
       branch_product: {
         branch_id: row.branch_id,

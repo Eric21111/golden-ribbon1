@@ -25,7 +25,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, formatMoney, isKgMeal, isValidInventoryQuantity, KG_QUANTITY_MAX_LENGTH, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { formatLiveStock, formatMoney, isValidPieceQuantity, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
 
 type StockFilter = 'in_stock' | 'all';
 type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
@@ -139,7 +139,7 @@ export function CreateTransferScreen() {
         const quantity = Number(item.quantity);
         const inventoryItem = inventory.data?.find((candidate) => candidate.product.id === item.product_id);
         if (quantity <= 0 || !inventoryItem) return [];
-        if (!isValidInventoryQuantity(item.quantity, inventoryItem.product.inventory_mode)) return [];
+        if (!isValidPieceQuantity(item.quantity)) return [];
         const isNew = !catalogByProductId.has(item.product_id);
         return [{ ...inventoryItem, quantity, quantityText: item.quantity.trim(), isNew }];
       }) ?? [],
@@ -159,7 +159,7 @@ export function CreateTransferScreen() {
     const invalid = values.items.some((item) => {
       if (!item.quantity.trim()) return false;
       const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
-      return !product || !isValidInventoryQuantity(item.quantity, product.inventory_mode);
+      return !product || !isValidPieceQuantity(item.quantity);
     });
     if (invalid) return;
     setReview(values);
@@ -207,13 +207,13 @@ export function CreateTransferScreen() {
                     </View>
                     <View style={[styles.sendPill, insufficient && styles.sendPillWarning]}>
                       <Text style={[styles.sendValue, insufficient && styles.sendValueWarning]}>
-                        {formatLiveStock(item.quantity, item.product.inventory_mode)}
+                        {formatLiveStock(item.quantity)}
                       </Text>
                       <Text style={styles.sendLabel}>to send</Text>
                     </View>
                   </View>
                   <View style={styles.reviewFooter}>
-                    <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}</Text>
+                    <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand)}</Text>
                     {insufficient ? <ManagerBadge label="Insufficient stock" tone="danger" /> : null}
                   </View>
                   {item.isNew ? (
@@ -379,10 +379,7 @@ export function CreateTransferScreen() {
                 control={control}
                 name={`items.${index}.quantity`}
                 render={({ field: quantity }) => {
-                  const kgMeal = isKgMeal(item.product.inventory_mode);
-                  const currentQty = kgMeal
-                    ? Number(quantity.value || '0') || 0
-                    : Number.parseInt(quantity.value || '0', 10) || 0;
+                  const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
                   const isFocused = focusedIndex === index;
                   const atMin = currentQty <= 0;
                   const atMax = currentQty >= item.quantity_on_hand;
@@ -406,7 +403,7 @@ export function CreateTransferScreen() {
                         </View>
                         <View style={styles.availablePill}>
                           <Text style={styles.availableText} numberOfLines={1}>
-                            <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}</Text>
+                            <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand)}</Text>
                             <Text style={styles.availableLabel}> available</Text>
                           </Text>
                         </View>
@@ -435,18 +432,17 @@ export function CreateTransferScreen() {
                             </Pressable>
                             <TextInput
                               accessibilityLabel={`Send quantity for ${item.product.name}`}
-                              keyboardType={kgMeal ? 'decimal-pad' : 'number-pad'}
+                              keyboardType="number-pad"
                               value={quantity.value}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
-                              maxLength={kgMeal ? KG_QUANTITY_MAX_LENGTH : PIECE_QUANTITY_MAX_LENGTH}
+                              maxLength={PIECE_QUANTITY_MAX_LENGTH}
                               selectTextOnFocus
                               underlineColorAndroid="transparent"
                               onFocus={() => setFocusedIndex(index)}
                               onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
                               onChangeText={(value) => {
-                                const pattern = kgMeal ? /^(\d{0,6}(\.\d{0,3})?)?$/ : /^\d{0,6}$/;
-                                if (pattern.test(value)) quantity.onChange(value);
+                                if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
                               }}
                               style={styles.stepperInput}
                             />
@@ -469,9 +465,7 @@ export function CreateTransferScreen() {
                             accessibilityLabel={`Send all ${item.quantity_on_hand} available`}
                             disabled={atMax}
                             onPress={() =>
-                              quantity.onChange(
-                                kgMeal ? Number(item.quantity_on_hand).toFixed(3) : String(item.quantity_on_hand),
-                              )
+                              quantity.onChange(String(item.quantity_on_hand))
                             }
                             style={({ pressed }) => [
                               styles.maxButton,

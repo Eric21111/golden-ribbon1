@@ -204,7 +204,7 @@ export default function ManagerDashboard() {
                     icon="leaf-outline"
                     accent="green"
                     title="Waste History"
-                    description="KG-meal waste occurrences by selling-shift business date"
+                    description="Quantified PCS waste by selling-shift business date"
                     onPress={() => router.push('/manager/reports/waste-history' as never)}
                   />
                 </>

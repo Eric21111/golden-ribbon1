@@ -28,7 +28,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatLiveStock, formatMoney, formatSellingBranchOnHand, isKgMeal } from '@/lib/format';
+import { formatDate, formatLiveStock, formatMoney } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 const badgeToneForStatus: Record<ReturnType<typeof getStockStatus>, ManagerBadgeTone> = {
@@ -40,19 +40,13 @@ const badgeToneForStatus: Record<ReturnType<typeof getStockStatus>, ManagerBadge
 
 function stockPillLabel(item: InventoryItem): string {
   const status = getStockStatus(item);
-  if (!item.branch.is_main_branch && isKgMeal(item.product.inventory_mode)) {
-    return formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode);
-  }
   if (status === 'out') return 'Out of stock';
   if (status === 'not_set') return 'Not set';
-  return formatLiveStock(item.quantity_on_hand, item.product.inventory_mode);
+  return formatLiveStock(item.quantity_on_hand);
 }
 
 function onHandLabel(item: InventoryItem): string {
-  if (!item.branch.is_main_branch) {
-    return formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode);
-  }
-  return formatLiveStock(item.quantity_on_hand, item.product.inventory_mode);
+  return formatLiveStock(item.quantity_on_hand);
 }
 
 type SortOption = 'name-asc' | 'name-desc' | 'qty-desc' | 'qty-asc';

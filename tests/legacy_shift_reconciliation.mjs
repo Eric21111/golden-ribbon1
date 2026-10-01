@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const db = new PGlite();
 await db.exec(`
@@ -143,50 +144,64 @@ assert.equal(pendingB.status, 'pending');
 assert.equal(pendingB.shift_id, overdueId);
 assert.equal((await reportFor(overdueId)).status, 'pending');
 
+// 7C: cannot start a new shift while inventory reconciliation is pending.
+await asUser(cashierB, async () => {
+  await assert.rejects(
+    () => db.query('select public.start_cashier_shift()'),
+    /pending inventory|Complete pending/i,
+  );
+});
+
+const overdueFinalize = await asUser(cashierB, async () => closeShiftExact(db, overdueId, '0'));
+assert.equal(overdueFinalize.result.status, 'reconciled');
+assert.equal(await flagOf(overdueId), false);
+assert.equal(await remittanceCount(overdueId), 1);
+assert.equal(await pendingOf(cashierB), null);
+assert.equal((await reportFor(overdueId)).status, 'reconciled');
+
+await backdateClosedShiftToYesterday(db, overdueId);
+
 const closedC = await asUser(cashierB, async () => {
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
-  const result = (
-    await db.query('select public.close_cashier_shift($1,$2,$3::jsonb) result', [shift, '0', '[]'])
-  ).rows[0].result;
+  const { result } = await closeShiftExact(db, shift, '0');
   return { shift, result };
 });
-assert.equal(await flagOf(closedC.shift), true);
+assert.equal(await flagOf(closedC.shift), false);
 assert.equal(await remittanceCount(closedC.shift), 1);
 assert.equal(closedC.result.status, 'reconciled');
-assert.equal((await pendingOf(cashierB)).shift_id, overdueId);
+assert.equal(await pendingOf(cashierB), null);
 assert.equal((await reportFor(closedC.shift)).status, 'reconciled');
+await backdateClosedShiftToYesterday(db, closedC.shift);
 
-await db.exec(`
-  insert into public.shifts(
-    id, branch_id, cashier_id, status, started_at, ended_at, reconciliation_required
-  ) values (
-    '${id(40)}','${branch2}','${cashierC}','open', now() - interval '8 hours', null, false
-  );
-`);
-assert.equal(await flagOf(id(40)), false);
-await backdateOpenForOverdue(id(40));
+const startedC = await asUser(cashierC, () => db.query('select public.start_cashier_shift() id'));
+const overdueC = startedC.rows[0].id;
+assert.equal(await flagOf(overdueC), true);
+await backdateOpenForOverdue(overdueC);
 const overdueFalse = (await db.query('select public.close_overdue_shifts() result')).rows[0].result;
 assert.equal(Number(overdueFalse.closed_count), 1);
-assert.equal(await flagOf(id(40)), true);
-assert.equal(await remittanceCount(id(40)), 0);
-assert.equal((await pendingOf(cashierC)).shift_id, id(40));
+assert.equal(await flagOf(overdueC), true);
+assert.equal(await remittanceCount(overdueC), 0);
+assert.equal((await pendingOf(cashierC)).shift_id, overdueC);
 
-await asUser(cashierC, () =>
-  db.query('select public.reconcile_closed_shift($1,$2,$3::jsonb)', [id(40), '0', '[]']),
-);
-await db.exec(`
-  insert into public.shifts(
-    id, branch_id, cashier_id, status, started_at, ended_at, reconciliation_required
-  ) values (
-    '${id(41)}','${branch2}','${cashierC}','open', now(), null, false
+// New auto-close is PCS inventory+cash; reconcile_closed_shift is legacy cash-only only.
+await asUser(cashierC, async () => {
+  await assert.rejects(
+    () => db.query('select public.reconcile_closed_shift($1,$2,$3::jsonb)', [overdueC, '0', '[]']),
+    /finalize cashier shift reconciliation/i,
   );
-`);
-assert.equal(await flagOf(id(41)), false);
-await asUser(cashierC, () =>
-  db.query('select public.close_cashier_shift($1,$2,$3::jsonb)', [id(41), '0', '[]']),
-);
-assert.equal(await flagOf(id(41)), true);
-assert.equal(await remittanceCount(id(41)), 1);
+  await closeShiftExact(db, overdueC, '0');
+});
+assert.equal(await flagOf(overdueC), false);
+assert.equal(await remittanceCount(overdueC), 1);
+await backdateClosedShiftToYesterday(db, overdueC);
+
+const closedD = await asUser(cashierC, async () => {
+  const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
+  const { result } = await closeShiftExact(db, shift, '0');
+  return { shift, result };
+});
+assert.equal(await flagOf(closedD.shift), false);
+assert.equal(await remittanceCount(closedD.shift), 1);
 assert.equal(await pendingOf(cashierC), null);
 
 await db.exec(`

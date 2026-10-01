@@ -1,4 +1,10 @@
-import type { CashReconciliationResult, InventoryMode, InventoryMovementType, TransferStatus } from '@/types/models';
+import type {
+  CashReconciliationResult,
+  ClosingStockBehavior,
+  InventoryMode,
+  InventoryMovementType,
+  TransferStatus,
+} from '@/types/models';
 import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
@@ -12,6 +18,11 @@ export function inventoryModeLabel(mode: InventoryMode | null | undefined): stri
   return mode === 'kg_meal' ? 'KG-delivered meal' : 'Piece-based stock';
 }
 
+export function closingStockBehaviorLabel(behavior: ClosingStockBehavior | null | undefined): string {
+  if (behavior === 'record_as_unsold') return 'Unsold on close';
+  return 'Keep at branch';
+}
+
 function formatPieceQuantity(quantity: number | string | null | undefined): string {
   if (quantity == null || quantity === '') return INVALID_QUANTITY_LABEL;
   const n = Number(quantity);
@@ -20,25 +31,22 @@ function formatPieceQuantity(quantity: number | string | null | undefined): stri
   return `${n} pcs`;
 }
 
-/** Selling branches do not track KG on-hand. Live KG there is never 0 kg / Out of stock. */
+/** Live on-hand at selling branches — operational inventory is always whole PCS. */
 export function formatSellingBranchOnHand(
   quantity: number | string,
-  mode: InventoryMode | null | undefined,
+  _mode?: InventoryMode | null | undefined,
 ): string {
-  if (isKgMeal(mode)) return 'Not tracked';
-  return formatLiveStock(quantity, mode);
+  return formatLiveStock(quantity);
 }
 
-/** Report/live on-hand. Unknown mode must not fall through to piece formatting. */
+/** Report/live on-hand — operational inventory is always whole PCS. */
 export function formatReportLiveOnHand(
   quantity: number | string,
-  mode: InventoryMode | null | undefined,
-  isMainBranch: boolean | null | undefined,
+  mode?: InventoryMode | null | undefined,
+  _isMainBranch?: boolean | null | undefined,
 ): string {
-  if (mode !== 'piece_stock' && mode !== 'kg_meal') return '—';
-  if (mode === 'kg_meal' && isMainBranch == null) return '—';
-  if (!isMainBranch) return formatSellingBranchOnHand(quantity, mode);
-  return formatLiveStock(quantity, mode);
+  if (mode != null && mode !== 'piece_stock' && mode !== 'kg_meal') return '—';
+  return formatLiveStock(quantity);
 }
 
 export function formatInventoryQuantity(
@@ -54,12 +62,10 @@ export function formatInventoryQuantity(
   return formatPieceQuantity(value);
 }
 
-export function formatLiveStock(quantity: number | string, mode: InventoryMode | null | undefined): string {
-  if (mode === 'kg_meal') {
-    const n = Number(quantity);
-    if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
-    return `${n.toFixed(3)} kg`;
-  }
+export function formatLiveStock(
+  quantity: number | string,
+  _mode?: InventoryMode | null | undefined,
+): string {
   return formatPieceQuantity(quantity);
 }
 
@@ -127,10 +133,20 @@ export function isKgMeal(mode: InventoryMode | null | undefined): boolean {
 const PIECE_QTY = /^\d{1,6}$/;
 const KG_QTY = /^\d{1,6}(\.\d{1,3})?$/;
 
-export function isValidInventoryQuantity(raw: string, mode: InventoryMode | null | undefined): boolean {
+export function isValidPieceQuantity(raw: string): boolean {
   const text = raw.trim();
   if (!text || Number(text) <= 0) return false;
-  return mode === 'kg_meal' ? KG_QTY.test(text) : PIECE_QTY.test(text);
+  return PIECE_QTY.test(text);
+}
+
+/** Active operational inputs are whole PCS only. KG pattern remains for historical snapshot validation. */
+export function isValidInventoryQuantity(raw: string, mode: InventoryMode | null | undefined): boolean {
+  if (mode === 'kg_meal') {
+    const text = raw.trim();
+    if (!text || Number(text) <= 0) return false;
+    return KG_QTY.test(text);
+  }
+  return isValidPieceQuantity(raw);
 }
 
 export function previewCashResult(expected: number, actualRaw: string): CashReconciliationResult | null {
@@ -202,13 +218,15 @@ export function formatReturnStatus(status: ReturnStatus): string {
 
 export function formatMovementType(type: InventoryMovementType): string {
   return {
-    opening_stock: 'Opening Stock',
-    transfer_out: 'Transfer Out',
-    transfer_in: 'Transfer In',
+    opening_stock: 'Opening stock',
+    transfer_out: 'Sent transfer',
+    transfer_in: 'Received transfer',
     adjustment: 'Adjustment',
     sale: 'Sale',
-    return_out: 'Return Out',
-    return_in: 'Return In',
+    return_out: 'Returned leftover',
+    return_in: 'Return received',
+    waste: 'Waste',
+    unsold: 'Unsold at close',
   }[type];
 }
 

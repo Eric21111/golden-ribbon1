@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 import ts from 'typescript';
 const moneySource = ts.transpileModule(readFileSync('src/lib/money.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { toCents, centsDecimal, cartTotalCents, applyLiveCartPrices, cartLineKey } = await import(`data:text/javascript;base64,${Buffer.from(moneySource).toString('base64')}`);
@@ -71,8 +72,9 @@ assert.equal(cartTotalCents(refreshedCart.items) / 100, Number(livePriced.total_
 await db.exec(`select set_config('request.jwt.claim.sub','${other}',false);`);
 assert.equal((await db.query('select * from public.sales')).rows.length,0);
 await assert.rejects(confirm('wrong-cashier-shift-1'), /open shift/);
-await db.exec(`select set_config('request.jwt.claim.sub','${user}',false); select public.close_cashier_shift('${shift}', '0', '[]'::jsonb);`);
-await assert.rejects(confirm('closed-shift-attempt-1'), /open shift/);
+await db.exec(`select set_config('request.jwt.claim.sub','${user}',false);`);
+await closeShiftExact(db, shift, '0');
+await assert.rejects(confirm('closed-shift-attempt-1'), /open shift|frozen|final close|business day/i);
 await db.exec('reset role');
 assert.equal(Number((await db.query('select quantity_on_hand from public.branch_inventory')).rows[0].quantity_on_hand),2);
 assert.equal((await db.query('select * from public.sales')).rows.length,2);

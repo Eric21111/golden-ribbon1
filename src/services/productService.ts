@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { formatCatalogPrice } from '@/lib/format';
 import { cartLineKey } from '@/lib/money';
-import type { InventoryMode, Product, ProductVariant } from '@/types/models';
+import type { ClosingStockBehavior, Product, ProductVariant } from '@/types/models';
 
 interface ProductFilters {
   search?: string;
@@ -57,7 +57,7 @@ export type CreateCompleteProductInput = {
     variants?: Array<{ name: string; selling_price: string }>;
   }>;
   selling_price?: string | null;
-  inventoryMode?: InventoryMode;
+  closingStockBehavior?: ClosingStockBehavior;
 };
 
 export async function listProductSkus(): Promise<string[]> {
@@ -74,7 +74,8 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
     p_variants: input.variants,
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
-    p_inventory_mode: input.inventoryMode ?? 'piece_stock',
+    p_inventory_mode: 'piece_stock',
+    p_closing_stock_behavior: input.closingStockBehavior ?? 'keep_at_branch',
   });
   if (error) throw error;
   return data;
@@ -86,7 +87,7 @@ export type UpdateCompleteProductInput = {
   sku: string;
   description: string | null;
   isActive: boolean;
-  inventoryMode: InventoryMode;
+  closingStockBehavior?: ClosingStockBehavior | null;
   variants: Array<{ id: string | null; name: string; default_price: string }>;
   deletedVariantIds: string[];
   branches: Array<{
@@ -108,7 +109,7 @@ export async function updateCompleteProduct(input: UpdateCompleteProductInput): 
     p_deleted_variant_ids: input.deletedVariantIds,
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
-    p_inventory_mode: input.inventoryMode,
+    p_closing_stock_behavior: input.closingStockBehavior ?? null,
   });
   if (error) throw error;
   return data;

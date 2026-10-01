@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact } from './_close_shift_helper.mjs';
 const db = new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
 create schema auth; create table auth.users(id uuid primary key,email text);
@@ -59,7 +60,7 @@ await assert.rejects(send('manager-denied-return'), /cashiers|Manager/);
 await db.exec(`select set_config('request.jwt.claim.sub','${cashier}',false);`);
 const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
 await assert.rejects(db.query('select public.confirm_sale($1,$2::jsonb,1000,$3)',[shift,JSON.stringify([{product_id:p1,quantity:11}]),'sale-after-return-check']), /Insufficient stock/);
-await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+await closeShiftExact(db, shift, '0');
 await db.exec(`select set_config('request.jwt.claim.sub','${owner}',false);`);
 assert.equal((await db.query('select * from public.stock_returns')).rows.length,1);
 assert.equal((await db.query('select * from public.stock_return_items')).rows.length,2);

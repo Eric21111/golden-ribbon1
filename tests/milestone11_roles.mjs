@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const db = new PGlite();
 await db.exec(`
@@ -210,15 +211,19 @@ await asUser(cashier2, async () => {
   await db.query(`select public.confirm_shipment_arrival($1,'recv-branch2-key0001')`, [t2]);
 });
 
-const sell = async (cashierId, quantity, key, paid) => asUser(cashierId, async () => {
-  const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
-  const sale = (await db.query(
-    'select (public.confirm_sale($1,$2::jsonb,$3,$4)).*',
-    [shift, JSON.stringify([{ product_id: chicken, quantity }]), paid, key],
-  )).rows[0];
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
-  return sale;
-});
+const sell = async (cashierId, quantity, key, paid) => {
+  const sale = await asUser(cashierId, async () => {
+    const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
+    const row = (await db.query(
+      'select (public.confirm_sale($1,$2::jsonb,$3,$4)).*',
+      [shift, JSON.stringify([{ product_id: chicken, quantity }]), paid, key],
+    )).rows[0];
+    await closeShiftExact(db, shift, '0');
+    return { row, shift };
+  });
+  await backdateClosedShiftToYesterday(db, sale.shift);
+  return sale.row;
+};
 
 await sell(cashier1, 25, 'sale-branch1-today-key01', '2000.00');
 await sell(cashier2, 15, 'sale-branch2-today-key01', '1200.00');
@@ -344,7 +349,7 @@ await asUser(owner, async () => {
   assert.equal(Number(row.revenue), 3200, 'historical unit prices are used');
 });
 
-await asUser(cashier1, async () => {
+const cashier1CloseShift = await asUser(cashier1, async () => {
   assert.equal((await db.query('select public.can_change_own_email() flag')).rows[0].flag, false);
   await assert.rejects(db.query('select public.assert_can_change_own_email()'), /Owner and Main Branch Manager/);
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
@@ -354,8 +359,10 @@ await asUser(cashier1, async () => {
     [shift, JSON.stringify([{ product_id: chicken, quantity: 1 }]), '999.00', 'cashier-regression-key01'],
   )).rows[0];
   assert.equal(Number(sale.total_amount), 999);
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+  await closeShiftExact(db, shift, '0');
+  return shift;
 });
+await backdateClosedShiftToYesterday(db, cashier1CloseShift);
 
 await db.exec(`
   reset role;
@@ -451,7 +458,7 @@ await asUser(mgr1, async () => {
   );
 });
 
-await asUser(createdCashier, async () => {
+const createdCashierCloseShift = await asUser(createdCashier, async () => {
   await assert.rejects(db.query('select * from public.list_employees()'), /Owner access/);
   await db.query(`select public.confirm_shipment_arrival($1,'created-sell-recv-key01')`, [createdTransfer]);
   const returnId = (
@@ -466,8 +473,10 @@ await asUser(createdCashier, async () => {
     [shift, JSON.stringify([{ product_id: chicken, quantity: 1 }]), '999.00', 'created-cashier-sale-001'],
   )).rows[0];
   assert.equal(Number(sale.total_amount), 999);
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+  await closeShiftExact(db, shift, '0');
+  return shift;
 });
+await backdateClosedShiftToYesterday(db, createdCashierCloseShift);
 
 await asUser(cashier1, async () => {
   await db.query('select public.start_cashier_shift()');
@@ -482,12 +491,14 @@ await asUser(owner, async () => {
     /active shift/,
   );
 });
-await asUser(cashier1, async () => {
+const openShiftClosed = await asUser(cashier1, async () => {
   const openShift = (await db.query(
     `select id from public.shifts where cashier_id='${cashier1}' and status='open'`,
   )).rows[0].id;
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [openShift]);
+  await closeShiftExact(db, openShift, '0');
+  return openShift;
 });
+await backdateClosedShiftToYesterday(db, openShiftClosed);
 await asUser(owner, async () => {
   await assert.rejects(
     db.query(`select public.owner_update_employee('${mgr2}','Selling Manager 2 Updated','manager','${branch2}',true)`),

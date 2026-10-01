@@ -7,11 +7,8 @@ export type StockFilter = 'all' | 'in_stock' | 'low' | 'out' | 'not_set';
 export type StockStatus = Exclude<StockFilter, 'all'>;
 
 export function getStockStatus(item: InventoryItem): StockStatus {
-  if (item.product.inventory_mode === 'kg_meal' && !item.branch.is_main_branch) return 'not_set';
   if (item.updated_at == null) return 'not_set';
   if (item.quantity_on_hand <= 0) return 'out';
-  // No KG low-stock threshold has been defined. Do not reuse the piece threshold of 5.
-  if (item.product.inventory_mode === 'kg_meal') return 'in_stock';
   if (item.quantity_on_hand <= LOW_STOCK_THRESHOLD) return 'low';
   return 'in_stock';
 }
@@ -35,7 +32,6 @@ export function stockStatusLabel(status: StockStatus): string {
 }
 
 export function stockStatusLabelForItem(item: InventoryItem): string {
-  if (item.product.inventory_mode === 'kg_meal' && !item.branch.is_main_branch) return 'Not tracked';
   return stockStatusLabel(getStockStatus(item));
 }
 
@@ -55,12 +51,6 @@ export function filterEmptyMessage(
     case 'out':
       return { title: 'No out-of-stock items', message: 'Nothing is at zero quantity.' };
     case 'not_set':
-      if (options.sellingBranch) {
-        return {
-          title: 'No not-tracked items',
-          message: 'KG-delivered meals at selling branches are not tracked on hand.',
-        };
-      }
       return { title: 'All products initialized', message: 'Every product already has opening stock.' };
     default:
       return { title: 'No inventory found', message: 'Create active products, then initialize opening stock.' };

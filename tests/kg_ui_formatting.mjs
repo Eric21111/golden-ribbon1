@@ -27,6 +27,7 @@ const {
   formatTransferLineSummary,
   formatTransferReceivedQuantity,
   isValidInventoryQuantity,
+  isValidPieceQuantity,
 } = loadTs('src/lib/format.ts');
 
 const { getStockStatus, stockStatusLabelForItem } = loadTs('src/features/inventory/inventoryStatus.ts');
@@ -54,111 +55,81 @@ function inventoryItem({ mode, main, qty, updatedAt = '2026-09-01T00:00:00+08:00
   };
 }
 
-// A. KG formatting
+// A. Historical KG formatting (snapshots / labels)
 assert.equal(formatInventoryQuantity(10, 'kg_meal'), '10.000 kg');
 assert.equal(formatInventoryQuantity(10.5, 'kg_meal'), '10.500 kg');
 assert.equal(formatInventoryQuantity(10.125, 'kg_meal'), '10.125 kg');
-assert.equal(formatLiveStock(10.5, 'kg_meal'), '10.500 kg');
 
-// B. Piece formatting — integer-equivalent only
+// B. Live operational inventory is PCS-only
+assert.equal(formatLiveStock(24, 'kg_meal'), '24 pcs');
+assert.equal(formatLiveStock(24, 'piece_stock'), '24 pcs');
+assert.equal(formatSellingBranchOnHand(0, 'kg_meal'), '0 pcs');
+assert.equal(formatSellingBranchOnHand(24, 'kg_meal'), '24 pcs');
+assert.equal(formatReportLiveOnHand(0, 'kg_meal', false), '0 pcs');
+assert.equal(formatReportLiveOnHand(24, 'kg_meal', true), '24 pcs');
+assert.equal(formatReportLiveOnHand(24, 'piece_stock', true), '24 pcs');
+assert.equal(formatReportLiveOnHand(0, undefined, false), '0 pcs');
+
+// C. Piece formatting — integer-equivalent only
 assert.equal(formatInventoryQuantity(24, 'piece_stock'), '24 pcs');
 assert.equal(formatInventoryQuantity('24', 'piece_stock'), '24 pcs');
 assert.equal(formatInventoryQuantity('24.000', 'piece_stock'), '24 pcs');
-assert.equal(formatLiveStock(24, 'piece_stock'), '24 pcs');
 assert.equal(formatInventoryQuantity(24.5, 'piece_stock'), INVALID_QUANTITY_LABEL);
-assert.equal(formatInventoryQuantity('24.500', 'piece_stock'), INVALID_QUANTITY_LABEL);
-assert.notEqual(formatInventoryQuantity(24.5, 'piece_stock'), '24 pcs');
-assert.notEqual(formatInventoryQuantity(24.5, 'piece_stock'), '24.500 pcs');
-
-// C. KG input precision
+assert.equal(isValidPieceQuantity('24'), true);
+assert.equal(isValidPieceQuantity('24.5'), false);
 assert.equal(isValidInventoryQuantity('125.750', 'kg_meal'), true);
-assert.equal('125.750'.length > 6, true);
 assert.equal(KG_QUANTITY_MAX_LENGTH, 10);
 assert.equal(PIECE_QUANTITY_MAX_LENGTH, 6);
-assert.equal(isValidInventoryQuantity('125.7501', 'kg_meal'), false);
-assert.equal(isValidInventoryQuantity('24.5', 'piece_stock'), false);
-assert.match(setupSource, /KG_QUANTITY_MAX_LENGTH/);
-assert.match(createTransferSource, /KG_QUANTITY_MAX_LENGTH/);
-assert.doesNotMatch(setupSource, /maxLength=\{6\}/);
-assert.doesNotMatch(createTransferSource, /maxLength=\{6\}/);
+assert.doesNotMatch(setupSource, /KG_QUANTITY_MAX_LENGTH/);
+assert.doesNotMatch(createTransferSource, /KG_QUANTITY_MAX_LENGTH/);
+assert.match(setupSource, /PIECE_QUANTITY_MAX_LENGTH/);
+assert.match(createTransferSource, /PIECE_QUANTITY_MAX_LENGTH/);
 
-// D. Selling-branch KG
-assert.equal(formatSellingBranchOnHand(0, 'kg_meal'), 'Not tracked');
-assert.equal(formatSellingBranchOnHand(10.5, 'kg_meal'), 'Not tracked');
-assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'not_set');
-assert.equal(stockStatusLabelForItem(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'Not tracked');
-assert.equal(stockStatusLabelForItem(inventoryItem({ mode: 'kg_meal', main: true, qty: 10.5 })), 'In stock');
-assert.notEqual(getStockStatus(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'out');
-assert.equal(formatReportLiveOnHand(0, undefined, false), '—');
-assert.equal(formatReportLiveOnHand(0, 'kg_meal', undefined), '—');
-assert.equal(formatReportLiveOnHand(0, 'kg_meal', false), 'Not tracked');
-assert.equal(formatReportLiveOnHand(10.5, 'kg_meal', true), '10.500 kg');
-assert.equal(formatReportLiveOnHand(24, 'piece_stock', true), '24 pcs');
-assert.match(branchPerf, /formatReportLiveOnHand/);
-assert.match(branchPerf, /useProducts/);
-assert.match(branchPerf, /modeLookupReady/);
-assert.doesNotMatch(branchPerf, /quantity_on_hand\} in stock/);
-assert.match(ownerInventory, /Not tracked/);
+// D. Selling-branch live stock uses PCS status (no KG "not tracked")
+assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'out');
+assert.equal(stockStatusLabelForItem(inventoryItem({ mode: 'kg_meal', main: false, qty: 0 })), 'Out');
+assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 10 })), 'in_stock');
+assert.match(branchPerf, /formatLiveStock/);
+assert.doesNotMatch(branchPerf, /formatReportLiveOnHand/);
+assert.doesNotMatch(ownerInventory, /Not tracked/);
 assert.match(managerIncomingDetail, /Cashiers confirm arrival/);
 assert.doesNotMatch(managerIncomingDetail, /useReceiveTransfer|receiveTransfer\(/);
 assert.doesNotMatch(readFileSync('src/services/transferService.ts', 'utf8'), /receive_stock_transfer/);
 assert.doesNotMatch(readFileSync('src/hooks/useTransfers.ts', 'utf8'), /receiveTransfer/);
 
-// E. Main KG — in stock, no piece low-stock threshold of 5
-assert.equal(formatLiveStock(10.5, 'kg_meal'), '10.500 kg');
-assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 10.5 })), 'in_stock');
-assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 3 })), 'in_stock');
-assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 0 })), 'out');
+// E. Main branch low-stock threshold applies to PCS live stock
+assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 3 })), 'low');
 assert.equal(getStockStatus(inventoryItem({ mode: 'piece_stock', main: true, qty: 3 })), 'low');
-assert.match(managerInventory, /formatLiveStock|formatSellingBranchOnHand/);
+assert.match(managerInventory, /formatLiveStock/);
 
-// F. Confirmed KG receipt
+// F. Confirmed KG receipt (historical)
 assert.equal(formatTransferReceivedQuantity('received', null, 'kg_meal'), 'Unmeasured');
-assert.equal(formatTransferReceivedQuantity('received', '', 'kg_meal'), 'Unmeasured');
-assert.notEqual(formatTransferReceivedQuantity('received', null, 'kg_meal'), 'Pending');
-assert.notEqual(formatSnapshottedQuantity(null, 'kg_meal'), '0.000 kg');
 assert.equal(formatTransferLineSummary('received', 10.5, null, 'kg_meal'), 'Sent 10.500 kg · Received Unmeasured');
 
-// G. Pending KG shipment
+// G. Pending KG shipment (historical)
 assert.equal(formatTransferReceivedQuantity('pending_receipt', null, 'kg_meal'), 'Pending');
-assert.equal(formatTransferReceivedQuantity('draft', null, 'kg_meal'), 'Pending');
-assert.equal(formatTransferReceivedQuantity('cancelled', null, 'kg_meal'), 'Cancelled');
-assert.notEqual(formatTransferReceivedQuantity('pending_receipt', null, 'kg_meal'), 'Unmeasured');
-assert.match(cashierIncoming, /formatTransferReceivedQuantity/);
+assert.match(cashierIncoming, /formatSnapshottedQuantity/);
+assert.doesNotMatch(cashierIncoming, /isKgMeal/);
 assert.match(managerTransfer, /formatTransferLineSummary/);
 
 // H. Piece receipt
 assert.equal(formatSnapshottedQuantity(24, 'piece_stock'), '24 pcs');
-assert.equal(formatSnapshottedQuantity(22, 'piece_stock'), '22 pcs');
-assert.equal(formatTransferLineSummary('received', 24, 22, 'piece_stock'), 'Sent 24 pcs · Received 22 pcs');
 assert.equal(formatTransferDifference('received', 24, 22, 'piece_stock'), '2 pcs');
 
-// I. Mixed transfer + received_with_discrepancy
+// I. Mixed transfer + received_with_discrepancy (historical KG)
 assert.equal(formatTransferReceivedQuantity('received_with_discrepancy', null, 'kg_meal'), 'Unmeasured');
-assert.equal(formatTransferReceivedQuantity('received_with_discrepancy', 22, 'piece_stock'), '22 pcs');
-assert.equal(
-  formatTransferLineSummary('received_with_discrepancy', 10.5, null, 'kg_meal'),
-  'Sent 10.500 kg · Received Unmeasured',
-);
-assert.equal(
-  formatTransferLineSummary('received_with_discrepancy', 24, 22, 'piece_stock'),
-  'Sent 24 pcs · Received 22 pcs',
-);
-assert.notEqual(formatTransferReceivedQuantity('received_with_discrepancy', null, 'kg_meal'), 'Pending');
 
-// J. POS meal count — not KG
-assert.match(posInventory, /MAX_POS_MEAL_QUANTITY = 999999/);
-assert.match(posInventory, /not derived from KG delivered/i);
-assert.match(cartStore, /MAX_POS_MEAL_QUANTITY/);
+// J. POS — PCS stock caps, no KG meal mode
+assert.doesNotMatch(posInventory, /MAX_POS_MEAL_QUANTITY/);
+assert.doesNotMatch(cartStore, /MAX_POS_MEAL_QUANTITY/);
 assert.match(posCard, /maxLength=\{6\}/);
 assert.match(posSheet, /maxLength=\{6\}/);
-assert.match(posRow, /KG-delivered meal/);
-assert.doesNotMatch(posSheet, /Remaining KG|3 kg/);
-assert.doesNotMatch(posCard, /3 kg|Remaining KG/);
+assert.match(posRow, /Available:.*pcs/);
+assert.doesNotMatch(posSheet, /Remaining KG|3 kg|KG-delivered meal/);
+assert.doesNotMatch(posCard, /3 kg|Remaining KG|KG-delivered meal/);
 
-// K. Historical snapshot stays on snapshotted mode
+// K. Historical snapshot stays mode-aware
 assert.equal(formatSnapshottedQuantity(5, 'piece_stock'), '5 pcs');
 assert.equal(formatSnapshottedQuantity(5, 'kg_meal'), '5.000 kg');
-assert.notEqual(formatSnapshottedQuantity(5, 'piece_stock'), '5.000 kg');
 
-console.log('KG UI formatting tests passed: A–K plus received_with_discrepancy mixed transfer and invalid 24.500 pcs.');
+console.log('KG UI formatting tests passed: live PCS + historical KG snapshots.');

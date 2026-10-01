@@ -1,12 +1,22 @@
 export type UserRole = 'owner' | 'manager' | 'cashier';
 export type BranchReceivingMode = 'counted' | 'cashier_confirm';
-export type InventoryMovementType = 'opening_stock' | 'transfer_out' | 'transfer_in' | 'adjustment' | 'sale' | 'return_out' | 'return_in';
+export type InventoryMovementType =
+  | 'opening_stock'
+  | 'transfer_out'
+  | 'transfer_in'
+  | 'adjustment'
+  | 'sale'
+  | 'return_out'
+  | 'return_in'
+  | 'waste'
+  | 'unsold';
 export type TransferStatus = 'draft' | 'pending_receipt' | 'received' | 'received_with_discrepancy' | 'cancelled';
 export type DiscrepancyType = 'missing' | 'excess';
 export type ShiftStatus = 'open' | 'closed';
 export type SaleStatus = 'completed' | 'voided';
 export type EmployeeRole = 'manager' | 'cashier';
 export type InventoryMode = 'piece_stock' | 'kg_meal';
+export type ClosingStockBehavior = 'keep_at_branch' | 'record_as_unsold';
 export type CashReconciliationResult = 'exact' | 'shortage' | 'excess';
 
 export type Branch = {
@@ -43,9 +53,11 @@ export type Shift = {
   status: ShiftStatus;
   started_at: string;
   ended_at: string | null;
+  sales_cutoff_at?: string | null;
   created_at: string;
   updated_at: string;
   reconciliation_required?: boolean;
+  inventory_reconciliation_required?: boolean;
 };
 
 export type CartItem = {
@@ -96,6 +108,7 @@ export type Product = {
   selling_price: number;
   is_active: boolean;
   inventory_mode: InventoryMode;
+  closing_stock_behavior: ClosingStockBehavior;
   created_at: string;
   updated_at: string;
 };
@@ -303,25 +316,64 @@ export type ShiftSummary = {
   leftover_return_id?: string | null;
 };
 
+export type ShiftProductReconResult = 'exact' | 'shortage' | 'excess';
+
+export type ShiftCloseProductPreview = {
+  product_id: string;
+  product_name_snapshot: string;
+  sku_snapshot: string | null;
+  closing_stock_behavior: ClosingStockBehavior;
+  opening_quantity: number;
+  received_quantity: number;
+  outgoing_quantity: number;
+  sold_quantity: number;
+  adjustment_quantity: number;
+  system_balance_before_waste: number;
+};
+
+export type ShiftClosePreview = {
+  shift_id: string;
+  branch_id: string;
+  started_at: string;
+  ended_at: string | null;
+  sales_cutoff_at: string | null;
+  inventory_reconciliation_required: boolean;
+  reconciliation_required: boolean;
+  mode: 'pcs_inventory_cash' | 'legacy_cash_only';
+  expected_cash: number;
+  products: ShiftCloseProductPreview[];
+  status: 'pending';
+};
+
+export type PendingShiftReconciliation = ShiftClosePreview;
+
+export type ShiftCloseProductSummary = {
+  product_id: string;
+  expected_remaining: number;
+  actual_remaining: number;
+  waste_quantity: number;
+  discrepancy: number;
+  result: ShiftProductReconResult;
+  unsold_quantity: number;
+  carried_quantity: number;
+};
+
+export type ShiftCloseFinalizeProduct = {
+  product_id: string;
+  actual_remaining: string | number;
+  waste_quantity?: string | number;
+};
+
 export type ShiftCloseResult = {
   shift_id: string;
   expected_cash: number;
   actual_cash: number;
   difference: number;
   result: CashReconciliationResult;
+  products?: ShiftCloseProductSummary[];
   status: 'reconciled';
+  idempotent?: boolean;
   shift_status?: 'closed';
-};
-
-export type PendingShiftReconciliation = {
-  shift_id: string;
-  started_at: string;
-  ended_at: string | null;
-  expected_cash: number;
-  actual_cash: null;
-  difference: null;
-  result: null;
-  status: 'pending';
 };
 
 export type ShiftRemittanceRow = {
@@ -360,11 +412,57 @@ export type ShiftRemittanceReport = {
 export type ShiftWasteStatus = 'waste_recorded' | 'no_waste' | 'pending';
 
 export type ShiftWasteOccurrenceRow = {
+  /** Present when enriched from shift_waste_occurrences; null/omitted for RPC-only legacy rows. */
+  occurrence_id?: string | null;
   product_id: string;
   product_name: string;
   recorded_at: string;
   recorded_by: string;
   note: string | null;
+  /** Quantified PCS from 7C; null for legacy occurrence-only rows. */
+  quantity?: number | null;
+};
+
+export type ShiftCloseReportProduct = {
+  id: string;
+  shift_id: string;
+  product_id: string;
+  product_name_snapshot: string;
+  sku_snapshot: string | null;
+  closing_stock_behavior: ClosingStockBehavior;
+  opening_quantity: number;
+  received_quantity: number;
+  outgoing_quantity: number;
+  sold_quantity: number;
+  waste_quantity: number;
+  adjustment_quantity: number;
+  expected_remaining: number;
+  actual_remaining: number;
+  discrepancy: number;
+  unsold_quantity: number;
+  carried_quantity: number;
+  result: ShiftProductReconResult;
+  reconciled_at: string;
+};
+
+export type ShiftCloseReportDetail = {
+  shift_id: string;
+  branch_id: string;
+  branch_name: string;
+  cashier_id: string;
+  cashier_name: string;
+  started_at: string;
+  ended_at: string | null;
+  sales_cutoff_at: string | null;
+  inventory_reconciliation_required: boolean;
+  reconciliation_required: boolean;
+  cash_status: 'pending' | 'reconciled';
+  expected_cash: number;
+  actual_cash: number | null;
+  difference: number | null;
+  cash_result: CashReconciliationResult | null;
+  reconciled_at: string | null;
+  products: ShiftCloseReportProduct[];
 };
 
 export type ShiftWasteShiftRow = {

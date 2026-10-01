@@ -21,7 +21,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, isKgMeal, isValidInventoryQuantity, KG_QUANTITY_MAX_LENGTH, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { formatLiveStock, isValidPieceQuantity, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
 
 const schema = z
   .object({
@@ -142,13 +142,13 @@ export function InventorySetupScreen() {
     const selected = values.items.flatMap((item) => {
       const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
       if (!item.quantity.trim() || !product) return [];
-      if (!isValidInventoryQuantity(item.quantity, product.inventory_mode)) return [];
+      if (!isValidPieceQuantity(item.quantity)) return [];
       return [{ product_id: item.product_id, quantity: item.quantity.trim() }];
     });
     const invalid = values.items.some((item) => {
       if (!item.quantity.trim()) return false;
       const product = inventory.data?.find((row) => row.product.id === item.product_id)?.product;
-      return !product || !isValidInventoryQuantity(item.quantity, product.inventory_mode);
+      return !product || !isValidPieceQuantity(item.quantity);
     });
     if (invalid || selected.length === 0) return;
     confirmAction(
@@ -228,7 +228,7 @@ export function InventorySetupScreen() {
                       {item.product.sku}
                       {'  ·  '}
                       {initialized
-                        ? `Current: ${formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)}`
+                        ? `Current: ${formatLiveStock(item.quantity_on_hand)}`
                         : 'No stock yet'}
                     </Text>
                   </View>
@@ -240,13 +240,12 @@ export function InventorySetupScreen() {
                         accessibilityLabel={`${initialized ? 'Add quantity' : 'Opening quantity'} for ${item.product.name}`}
                         value={quantity.value}
                         onChangeText={(value) => {
-                          const pattern = isKgMeal(item.product.inventory_mode) ? /^(\d{0,6}(\.\d{0,3})?)?$/ : /^\d{0,6}$/;
-                          if (pattern.test(value)) quantity.onChange(value);
+                          if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
                         }}
-                        keyboardType={isKgMeal(item.product.inventory_mode) ? 'decimal-pad' : 'number-pad'}
+                        keyboardType="number-pad"
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
-                        maxLength={isKgMeal(item.product.inventory_mode) ? KG_QUANTITY_MAX_LENGTH : PIECE_QUANTITY_MAX_LENGTH}
+                        maxLength={PIECE_QUANTITY_MAX_LENGTH}
                         style={[styles.input, fieldState.error && styles.inputError]}
                       />
                     )}

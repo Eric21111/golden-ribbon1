@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors, spacing } from '@/constants/theme';
-import { formatDate, formatLiveStock, formatMoney, formatSellingBranchOnHand } from '@/lib/format';
+import { formatDate, formatLiveStock, formatMoney } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 import { getStockStatus, stockStatusLabel } from './inventoryStatus';
@@ -23,9 +23,7 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
         <View style={styles.stat}>
           <Text style={styles.statLabel}>On hand</Text>
           <Text style={styles.statValue}>
-            {item.branch.is_main_branch
-              ? formatLiveStock(item.quantity_on_hand, item.product.inventory_mode)
-              : formatSellingBranchOnHand(item.quantity_on_hand, item.product.inventory_mode)}
+            {formatLiveStock(item.quantity_on_hand)}
           </Text>
         </View>
         <View style={styles.stat}>

@@ -209,7 +209,7 @@ const transferA = await send(pieceA, 4, '4a-send-piece-a-0001');
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select public.set_product_inventory_mode($1,$2)', [pieceA, 'kg_meal']),
-    /open transfers/,
+    /retired|piece stock|open transfers/i,
   ),
 );
 await forceMode(pieceA, 'kg_meal');
@@ -257,38 +257,13 @@ assert.equal(
   0,
 );
 
-await db.exec(`update public.branch_inventory set quantity_on_hand = 0 where product_id='${kgMeal}'`);
-await asUser(mainMgr, () => db.query('select public.set_product_inventory_mode($1,$2)', [kgMeal, 'kg_meal']));
-await stockMain(kgMeal, '12.500');
-const transferKgA = await send(kgMeal, '4.500', '4a-send-kg-a-0000001');
-await forceMode(kgMeal, 'piece_stock');
-const destKgBefore = await qty(branch, kgMeal);
-await asUser(cashier, () =>
+// Revision 7A: active kg_meal create/send paths are retired (RPC gate).
+await asUser(mainMgr, () =>
   assert.rejects(
-    db.query('select public.confirm_shipment_arrival($1,$2)', [transferKgA, '4a-arrive-mismatch-kg01']),
-    mismatch,
+    db.query('select public.set_product_inventory_mode($1,$2)', [kgMeal, 'kg_meal']),
+    /retired|piece stock/i,
   ),
 );
-assert.equal(await transferStatus(transferKgA), 'pending_receipt');
-assert.equal(await qty(branch, kgMeal), destKgBefore);
-
-await db.exec(`update public.branch_inventory set quantity_on_hand = 0 where product_id='${kgIssue}'`);
-await asUser(mainMgr, () => db.query('select public.set_product_inventory_mode($1,$2)', [kgIssue, 'kg_meal']));
-await stockMain(kgIssue, '8.000');
-const transferKgB = await send(kgIssue, '2.000', '4a-send-kg-b-0000001');
-await forceMode(kgIssue, 'piece_stock');
-await asUser(cashier, () =>
-  assert.rejects(
-    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
-      transferKgB,
-      JSON.stringify([]),
-      'kg mismatch issue',
-      '4a-issue-mismatch-kg0001',
-    ]),
-    mismatch,
-  ),
-);
-assert.equal(await transferStatus(transferKgB), 'pending_receipt');
 
 const destC = await qty(branch, pieceIssue);
 const transferC = await send(pieceIssue, 6, '4a-send-piece-c-0001');
@@ -329,53 +304,6 @@ const issued = await asUser(cashier, () =>
 assert.equal(issued.rows[0].status, 'received_with_discrepancy');
 assert.equal(await qty(branch, extraPiece), destIssueOk + 5);
 
-const kgOk = id(28);
-await db.exec(`
-  insert into public.products(id,name,sku,selling_price,is_active)
-  values ('${kgOk}','KG Arrival OK','KAO',80,true);
-`);
-await db.exec(`update public.branch_inventory set quantity_on_hand = 0 where product_id='${kgOk}'`);
-await asUser(mainMgr, () => db.query('select public.set_product_inventory_mode($1,$2)', [kgOk, 'kg_meal']));
-await stockMain(kgOk, '9.000');
-const destKgOk = await qty(branch, kgOk);
-const transferKgOk = await send(kgOk, '3.250', '4a-send-kg-ok-0000001');
-const arrivedKg = await asUser(cashier, () =>
-  db.query('select public.confirm_shipment_arrival($1,$2) status', [transferKgOk, '4a-arrive-match-kg0001']),
-);
-assert.equal(arrivedKg.rows[0].status, 'received');
-assert.equal(
-  (
-    await db.query(
-      'select quantity_received from public.stock_transfer_items where stock_transfer_id=$1',
-      [transferKgOk],
-    )
-  ).rows[0].quantity_received,
-  null,
-);
-assert.equal(await qty(branch, kgOk), destKgOk);
-
-const kgIssueOk = id(29);
-await db.exec(`
-  insert into public.products(id,name,sku,selling_price,is_active)
-  values ('${kgIssueOk}','KG Issue Unmeasured','KIU',80,true);
-`);
-await db.exec(`update public.branch_inventory set quantity_on_hand = 0 where product_id='${kgIssueOk}'`);
-await asUser(mainMgr, () => db.query('select public.set_product_inventory_mode($1,$2)', [kgIssueOk, 'kg_meal']));
-await stockMain(kgIssueOk, '6.000');
-const transferKgIssue = await send(kgIssueOk, '1.000', '4a-send-kg-issue-ok01');
-await asUser(cashier, () =>
-  assert.rejects(
-    db.query('select public.report_shipment_issue($1,$2::jsonb,$3,$4)', [
-      transferKgIssue,
-      JSON.stringify([]),
-      'no piece lines',
-      '4a-issue-kg-unmeasured01',
-    ]),
-    /different quantity than sent/,
-  ),
-);
-assert.equal(await transferStatus(transferKgIssue), 'pending_receipt');
-
 const destWin = await qty(branch, pieceWin);
 const transferWin = await send(pieceWin, 8, '4a-send-arrival-win-01');
 const timeoutMs = 8000;
@@ -396,7 +324,7 @@ const arrivalWins = (async () => {
     await asUser(mainMgr, () =>
       assert.rejects(
         db.query('select public.set_product_inventory_mode($1,$2)', [pieceWin, 'kg_meal']),
-        /Clear every current balance/,
+        /retired|piece stock|Clear every current balance/i,
       ),
     );
   })();
@@ -416,11 +344,21 @@ const pendingBlock = await send(pieceBlock, 2, '4a-send-pending-block01');
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select public.set_product_inventory_mode($1,$2)', [pieceBlock, 'kg_meal']),
-    /open transfers/,
+    /retired|piece stock|open transfers/i,
   ),
 );
 assert.equal(await transferStatus(pendingBlock), 'pending_receipt');
 
+// 7A lock gate is wired into confirm_shipment_arrival
+const confirmDef = (
+  await db.query(`
+    select pg_get_functiondef(p.oid) as def
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname='public' and p.proname='confirm_shipment_arrival'
+  `)
+).rows[0].def;
+assert.match(confirmDef, /lock_branch_inventory_gate/);
+
 console.log(
-  'Part 4A shipment inventory mode concurrency tests passed: mismatch reject, matching receipt, arrival-wins, pending transfer still blocks mode.',
+  'Part 4A/7A shipment concurrency tests passed: piece mismatch reject, matching receipt, arrival-wins, kg retired.',
 );

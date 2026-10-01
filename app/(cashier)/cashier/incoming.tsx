@@ -16,7 +16,7 @@ import {
 } from '@/hooks/useTransfers';
 import { confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, formatSnapshottedQuantity, formatTransferReceivedQuantity, isKgMeal, makeIdempotencyKey } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity, makeIdempotencyKey } from '@/lib/format';
 import type { CashierPendingTransfer } from '@/types/models';
 
 export default function CashierIncomingShipments() {
@@ -41,11 +41,7 @@ export default function CashierIncomingShipments() {
     setReportingId(transfer.id);
     setIssueNotes('');
     setReceivedByItem(
-      Object.fromEntries(
-        transfer.items
-          .filter((line) => !isKgMeal(line.inventory_mode))
-          .map((line) => [line.stock_transfer_item_id, '']),
-      ),
+      Object.fromEntries(transfer.items.map((line) => [line.stock_transfer_item_id, ''])),
     );
     arrival.reset();
     issue.reset();
@@ -62,7 +58,7 @@ export default function CashierIncomingShipments() {
     const idempotencyKey = keyFor(transferId);
     confirmAction(
       'Shipment arrived?',
-      `Confirm delivery from ${transfer.from_branch_name}. Piece lines are received as sent. KG-delivered meals are confirmed and unmeasured, with no counted weight.`,
+      `Confirm delivery from ${transfer.from_branch_name}. All lines are received as sent.`,
       () => {
         arrival.reset();
         arrival.mutate(
@@ -79,15 +75,22 @@ export default function CashierIncomingShipments() {
   };
 
   const confirmIssue = (transfer: CashierPendingTransfer) => {
-    const pieceLines = transfer.items.filter((line) => !isKgMeal(line.inventory_mode));
-    const items = pieceLines.map((line) => ({
+    const items = transfer.items.map((line) => ({
       stock_transfer_item_id: line.stock_transfer_item_id,
       quantity_received: Number(receivedByItem[line.stock_transfer_item_id] ?? ''),
     }));
     if (items.some((item) => !Number.isInteger(item.quantity_received) || item.quantity_received < 0)) {
       return;
     }
-    if (!items.some((item) => item.quantity_received !== Number(pieceLines.find((line) => line.stock_transfer_item_id === item.stock_transfer_item_id)!.quantity_sent))) {
+    if (
+      !items.some(
+        (item) =>
+          item.quantity_received
+          !== Number(
+            transfer.items.find((line) => line.stock_transfer_item_id === item.stock_transfer_item_id)!.quantity_sent,
+          ),
+      )
+    ) {
       return;
     }
     if (issueNotes.trim().length < 3) {
@@ -97,7 +100,7 @@ export default function CashierIncomingShipments() {
     const idempotencyKey = keyFor(transferId);
     confirmAction(
       'Report shipment issue?',
-      'Piece shortages are recorded. KG-delivered meals stay confirmed and unmeasured and do not create a weight discrepancy.',
+      'Enter the actual PCS counted for each line that differs from what was sent.',
       () => {
         issue.reset();
         issue.mutate(
@@ -155,9 +158,10 @@ export default function CashierIncomingShipments() {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           renderItem={({ item }) => {
             const reporting = reportingId === item.id;
-            const pieceLines = item.items.filter((line) => !isKgMeal(line.inventory_mode));
-            const countsReady = pieceLines.every((line) => /^\d+$/.test(receivedByItem[line.stock_transfer_item_id] ?? ''));
-            const hasDifference = pieceLines.some(
+            const countsReady = item.items.every((line) =>
+              /^\d+$/.test(receivedByItem[line.stock_transfer_item_id] ?? ''),
+            );
+            const hasDifference = item.items.some(
               (line) => Number(receivedByItem[line.stock_transfer_item_id] ?? '') !== Number(line.quantity_sent),
             );
             const notesReady = issueNotes.trim().length >= 3;
@@ -181,18 +185,15 @@ export default function CashierIncomingShipments() {
                   <Text style={styles.transferNumber}>{item.transfer_number}</Text>
                   <Text style={styles.meta}>From {item.from_branch_name} · Sent {formatDate(item.sent_at)}</Text>
                 </View>
-                {item.items.map((line) => {
-                  const kgMeal = isKgMeal(line.inventory_mode);
-                  return (
+                {item.items.map((line) => (
                   <View key={line.stock_transfer_item_id} style={styles.itemRow}>
                     <View style={styles.itemCopy}>
                       <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
                       <Text style={styles.itemSku}>
                         Sent {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
-                        {kgMeal ? ' · Pending' : ''}
                       </Text>
                     </View>
-                    {reporting && !kgMeal ? (
+                    {reporting ? (
                       <TextInput
                         accessibilityLabel={`Actual received quantity for ${line.product_name}`}
                         keyboardType="number-pad"
@@ -212,14 +213,11 @@ export default function CashierIncomingShipments() {
                       />
                     ) : (
                       <Text style={styles.itemQty}>
-                        {kgMeal
-                          ? formatTransferReceivedQuantity('pending_receipt', null, line.inventory_mode)
-                          : formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
+                        {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
                       </Text>
                     )}
                   </View>
-                  );
-                })}
+                ))}
                 {reporting ? (
                   <FormField
                     label="What is wrong"

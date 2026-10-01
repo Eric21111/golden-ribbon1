@@ -1,8 +1,8 @@
-/**
- * Milestone 10.5 — Live production-readiness verification.
+﻿/**
+ * Milestone 10.5 â€” Live production-readiness verification.
  * Writes real auth users, products, sales, transfers, and shifts against
  * whichever Supabase project is linked (there is no separate staging
- * project for this app — the linked project IS production). Not imported
+ * project for this app â€” the linked project IS production). Not imported
  * by the mobile app.
  *
  * SAFETY GUARD: refuses to run unless RUN_LIVE_PROD_TESTS is set to the
@@ -109,14 +109,14 @@ function record(area, name, ok, detail = '') {
   const status = ok ? 'PASS' : 'FAIL';
   if (!ok) failed += 1;
   checks.push({ area, name, status, detail });
-  const mark = ok ? '✓' : '✗';
-  console.log(`  ${mark} [${area}] ${name}${detail ? ` — ${detail}` : ''}`);
+  const mark = ok ? 'âœ“' : 'âœ—';
+  console.log(`  ${mark} [${area}] ${name}${detail ? ` â€” ${detail}` : ''}`);
 }
 
 function warn(area, name, detail) {
   checks.push({ area, name, status: 'WARN', detail });
   findings.push({ area, issue: name, evidence: detail, severity: 'warning' });
-  console.log(`  ! [${area}] ${name} — ${detail}`);
+  console.log(`  ! [${area}] ${name} â€” ${detail}`);
 }
 
 function errMsg(error) {
@@ -384,10 +384,53 @@ try {
   process.exit(1);
 }
 
+async function productsForFinalize(supabase, shiftId) {
+  const pending = await rpc(supabase, 'get_my_pending_shift_reconciliation').catch(() => null);
+  if (pending?.shift_id === shiftId && Array.isArray(pending.products)) {
+    return pending.products.map((p) => ({
+      product_id: p.product_id,
+      actual_remaining: String(p.system_balance_before_waste ?? 0),
+      waste_quantity: '0',
+    }));
+  }
+  const { data } = await supabase
+    .from('shift_product_reconciliations')
+    .select('product_id, actual_remaining, waste_quantity')
+    .eq('shift_id', shiftId);
+  return (data ?? []).map((p) => ({
+    product_id: p.product_id,
+    actual_remaining: String(p.actual_remaining ?? 0),
+    waste_quantity: String(p.waste_quantity ?? 0),
+  }));
+}
+
+async function finalizeShiftRev7(supabase, shiftId, actualCash = '0') {
+  const payload = await productsForFinalize(supabase, shiftId);
+  return rpc(supabase, 'finalize_cashier_shift_reconciliation', {
+    p_shift_id: shiftId,
+    p_actual_cash: actualCash,
+    p_products: payload,
+  });
+}
+
+async function closeShiftRev7(supabase, shiftId, actualCash = '0') {
+  const preview = await rpc(supabase, 'begin_cashier_shift_close', { p_shift_id: shiftId });
+  const payload = (preview?.products ?? []).map((p) => ({
+    product_id: p.product_id,
+    actual_remaining: String(p.system_balance_before_waste ?? 0),
+    waste_quantity: '0',
+  }));
+  return rpc(supabase, 'finalize_cashier_shift_reconciliation', {
+    p_shift_id: shiftId,
+    p_actual_cash: actualCash,
+    p_products: payload,
+  });
+}
+
 async function closeOpenShift(supabase) {
   const { data } = await supabase.from('shifts').select('id,status').eq('status', 'open');
   for (const shift of data ?? []) {
-    try { await rpc(supabase, 'close_cashier_shift', { p_shift_id: shift.id, p_actual_cash: '0', p_waste: [] }); } catch { /* already closed or unauthorized */ }
+    try { await closeShiftRev7(supabase, shift.id, '0'); } catch { /* already closed or unauthorized */ }
   }
 }
 await closeOpenShift(sessions.cash1);
@@ -617,7 +660,7 @@ const shiftId = await expectOk('Cashier 1 starts shift', 'Full E2E', () => rpc(s
 const shiftRetry = await rpc(sessions.cash1, 'start_cashier_shift');
 record('Duplicate Protection', 'Start shift retry returns same open shift', shiftRetry === shiftId, `${shiftRetry}`);
 
-await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () => rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '0', p_waste: [] }));
+await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () => rpc(sessions.cash2, 'begin_cashier_shift_close', { p_shift_id: shiftId }));
 
 {
   const { data, error } = await sessions.cash1.from('branch_inventory').select('quantity_on_hand,branch_id').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id);
@@ -625,7 +668,7 @@ await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () =>
 }
 
 const saleKey = idem('e2e-sale');
-const sale = await expectOk('Cashier sells 30 at ₱80', 'Full E2E', () => rpc(sessions.cash1, 'confirm_sale', {
+const sale = await expectOk('Cashier sells 30 at â‚±80', 'Full E2E', () => rpc(sessions.cash1, 'confirm_sale', {
   p_shift_id: shiftId,
   p_items: [{ product_id: e2eProduct.id, quantity: 30 }],
   p_amount_paid: 2400,
@@ -651,11 +694,12 @@ record('Duplicate Protection', 'Confirm sale retry returns same sale', saleRetry
 const { data: b1AfterSale } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
 record('Full E2E', 'Branch remaining after sale is 28', Number(b1AfterSale?.quantity_on_hand) === 28, String(b1AfterSale?.quantity_on_hand));
 
-const closeResult = await expectOk('Cashier ends shift', 'Full E2E', () => rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '2400.00', p_waste: [] }));
+const closeResult = await expectOk('Cashier ends shift', 'Full E2E', () => closeShiftRev7(sessions.cash1, shiftId, '2400.00'));
 const shiftSummary = await expectOk('Shift summary after close', 'Full E2E', () => rpc(sessions.cash1, 'get_shift_summary', { p_shift_id: shiftId }));
 record('Full E2E', 'Shift totals 1 tx / 2400', Number(shiftSummary.completed_transaction_count) === 1 && Number(shiftSummary.total_sales) === 2400, JSON.stringify(shiftSummary));
 record('Full E2E', 'Expected cash matches the completed sale', Number(closeResult.expected_cash) === 2400, JSON.stringify(closeResult));
-await expectDenied('End shift retry is rejected', 'Duplicate Protection', () => rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: shiftId, p_actual_cash: '2400.00', p_waste: [] }));
+const closeRetry = await expectOk('End shift identical finalize is idempotent', 'Duplicate Protection', () => finalizeShiftRev7(sessions.cash1, shiftId, '2400.00'));
+record('Duplicate Protection', 'Idempotent finalize returns reconciled', closeRetry?.status === 'reconciled' || closeRetry?.idempotent === true, JSON.stringify(closeRetry));
 
 const returnKey = idem('e2e-return');
 const returnId = await expectOk('Manager returns remaining 28', 'Full E2E', () => rpc(sessions.mgr1, 'create_stock_return', {
@@ -757,7 +801,7 @@ record('Concurrency', 'Sale concurrency leftover is 1', Number(concBal?.quantity
   record('Sale Integrity', 'Winning concurrent sale persisted with items', (concSales?.length ?? 0) === 1 && (concItems?.length ?? 0) === 1);
   void failedIds;
 }
-await rpc(sessions.cash1, 'close_cashier_shift', { p_shift_id: concShift, p_actual_cash: '0', p_waste: [] });
+await closeShiftRev7(sessions.cash1, concShift, '0');
 
 console.log('\n-- Transfer concurrency --');
 let xferA;
@@ -945,7 +989,7 @@ await expectDenied('Main Branch Manager cannot reassign employee', 'Employee Sec
   p_branch_id: branch2.id,
   p_is_active: true,
 }));
-await rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: openForProtect, p_actual_cash: '0', p_waste: [] });
+await closeShiftRev7(sessions.cash2, openForProtect, '0');
 record('Employee Security', 'Historical Cashier 1 sale remains Branch 1', sale.branch_id === branch1.id);
 
 await expectOk('Owner reassigns Cashier 2 to Branch 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
@@ -965,7 +1009,7 @@ const newShift = await rpc(sessions.cash2, 'start_cashier_shift');
   const { data: nextShift } = await admin.from('shifts').select('branch_id').eq('id', newShift).maybeSingle();
   record('Employee Security', 'New shift uses reassigned Branch 2', nextShift?.branch_id === branch2.id, nextShift?.branch_id);
 }
-await rpc(sessions.cash2, 'close_cashier_shift', { p_shift_id: newShift, p_actual_cash: '0', p_waste: [] });
+await closeShiftRev7(sessions.cash2, newShift, '0');
 await expectOk('Owner deactivates Cashier 2', 'Employee Security', () => rpc(sessions.owner, 'owner_update_employee', {
   p_employee_id: ids.cash2,
   p_full_name: 'M105 Cashier 2',
@@ -1188,3 +1232,4 @@ if (!ready) {
   }
 }
 process.exit(failed > 0 ? 1 : 0);
+

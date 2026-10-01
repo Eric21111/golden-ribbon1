@@ -9,7 +9,8 @@ assert.match(source, /Return discrepancies appear after Main counts/);
 assert.match(source, /showOlderReturnHint/);
 assert.match(source, /None in this range/);
 assert.match(source, /does not create a/);
-assert.match(source, /formatReportLiveOnHand/);
+assert.match(source, /formatLiveStock/);
+assert.doesNotMatch(source, /formatReportLiveOnHand/);
 assert.match(source, /modeLookupReady/);
 
 console.log('Branch Performance return-badge tests passed: All Time default and older-issue hint.');

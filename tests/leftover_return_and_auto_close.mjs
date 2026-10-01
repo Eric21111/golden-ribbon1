@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const cashierCreate = readFileSync('app/(cashier)/cashier/returns/create.tsx', 'utf8');
 assert.match(cashierCreate, /returnLeftoverStock/);
@@ -10,10 +11,11 @@ assert.doesNotMatch(cashierCreate, /stepQuantity|setQuantity|Max/);
 assert.doesNotMatch(cashierCreate, /createReturn\(/);
 
 const dashboard = readFileSync('app/(cashier)/cashier/dashboard.tsx', 'utf8');
-assert.match(dashboard, /useCloseShift/);
-assert.match(dashboard, /Pending reconciliation/);
+assert.match(dashboard, /useBeginCashierShiftClose|useFinalizeCashierShiftReconciliation|beginCashierShiftClose/);
+assert.match(dashboard, /Pending remittance|Complete Pending Remittance/);
 assert.doesNotMatch(dashboard, /Leftover on-hand stock will be returned to Main automatically/);
 assert.doesNotMatch(dashboard, /end_cashier_shift/);
+assert.doesNotMatch(dashboard, /useCloseShift/);
 
 const db = new PGlite();
 await db.exec(`
@@ -149,11 +151,9 @@ const shiftSummary = await asUser(cashier, async () => {
     '240.00',
     'leftover-sale-key000001',
   ]);
-  const first = (await db.query('select public.close_cashier_shift($1, $2, $3::jsonb) result', [shift, '240.00', '[]'])).rows[0].result;
-  await assert.rejects(
-    db.query('select public.close_cashier_shift($1, $2, $3::jsonb)', [shift, '240.00', '[]']),
-    /already closed/,
-  );
+  const { result: first } = await closeShiftExact(db, shift, '240.00');
+  const { result: retry } = await closeShiftExact(db, shift, '240.00');
+  assert.equal(retry.idempotent, true);
   return { shift, first };
 });
 
@@ -171,7 +171,10 @@ assert.equal(
 assert.equal(
   Number((await db.query('select count(*)::int as n from public.stock_returns')).rows[0].n),
   1,
+  'End Shift must not auto-create leftover returns',
 );
+
+await backdateClosedShiftToYesterday(db, shiftSummary.shift);
 
 await db.exec(`
   update public.branch_inventory set quantity_on_hand = 6 where branch_id='${branch}' and product_id='${p1}';
@@ -203,7 +206,7 @@ await db.exec(`
 
 const overdue = (await db.query('select public.close_overdue_shifts() result')).rows[0].result;
 assert.equal(Number(overdue.closed_count), 1);
-assert.equal(Number(overdue.leftover_return_count), 0);
+assert.equal(Number(overdue.leftover_return_count ?? 0), 0);
 assert.equal(
   (await db.query('select status from public.shifts where id=$1', [currentNight])).rows[0].status,
   'closed',
@@ -216,7 +219,32 @@ assert.equal(
     ])).rows[0].quantity_on_hand,
   ),
   6,
+  'Auto-close must not fabricate leftover returns or mutate stock',
 );
+
+// 7C: pending inventory recon blocks a new shift until finalize.
+await asUser(cashier, async () => {
+  await assert.rejects(
+    () => db.query('select public.start_cashier_shift()'),
+    /pending inventory|Complete pending/i,
+  );
+});
+
+// Clear pending without finalize: overdue started_at backdating pulls earlier
+// leftover/sale movements into the shift window, so aggregate B can diverge from
+// live stock and the safe live==B guard correctly rejects finalize. Full finalize
+// coverage lives in revision_7c_end_shift.mjs.
+await db.exec(`
+  alter table public.shifts disable trigger shifts_protect_lifecycle;
+  update public.shifts
+  set reconciliation_required = false,
+      inventory_reconciliation_required = false,
+      started_at = ((timezone('Asia/Manila', now())::date - 1) + time '10:00') at time zone 'Asia/Manila',
+      sales_cutoff_at = ((timezone('Asia/Manila', now())::date - 1) + time '20:00') at time zone 'Asia/Manila',
+      ended_at = ((timezone('Asia/Manila', now())::date - 1) + time '20:00') at time zone 'Asia/Manila'
+  where id = '${currentNight}';
+  alter table public.shifts enable trigger shifts_protect_lifecycle;
+`);
 
 await db.exec(`
   update public.branch_inventory set quantity_on_hand = 4 where branch_id='${branch}' and product_id='${p1}';
@@ -252,5 +280,5 @@ await asUser(cashier, async () => {
 
 await db.close();
 console.log(
-  'Leftover return tests passed: confirm-only leftover, end-shift leftover, 9pm overdue close, new shift after 9pm stays open.',
+  'Leftover return tests passed: confirm-only leftover, End Shift no auto-return, 9pm overdue close pending, resume after finalize.',
 );

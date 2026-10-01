@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -9,31 +10,27 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { formatRemittanceCashResult } from '@/features/reports/reportDisplay';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useShiftRemittances } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate, formatManilaDate, formatMoney } from '@/lib/format';
-import type { CashReconciliationResult } from '@/types/models';
 
 function formatKnownMoney(value: number | null | undefined) {
   if (value == null) return '—';
   return formatMoney(value);
 }
 
-function resultLabel(result: CashReconciliationResult | null, status: 'pending' | 'reconciled') {
-  if (status === 'pending') return 'Pending reconciliation';
-  if (result === 'shortage') return 'Shortage';
-  if (result === 'excess') return 'Excess';
-  if (result === 'exact') return 'Exact';
-  return 'Reconciled';
-}
-
 export function ShiftRemittanceScreen() {
+  const { profile } = useAuth();
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftRemittances(rpcRangeType, startIso, endIso);
   const days = query.data?.days ?? [];
+  const detailBase =
+    profile?.role === 'manager' ? '/manager/reports/shift-remittances' : '/owner/reports/shift-remittances';
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
@@ -80,7 +77,8 @@ export function ShiftRemittanceScreen() {
               <ListRowCard
                 key={row.shift_id}
                 title={`${row.branch_name} — ${row.cashier_name}`}
-                meta={`${formatDate(row.started_at)} – ${formatDate(row.ended_at)} · ${resultLabel(row.result, row.status)}`}
+                meta={`${formatDate(row.started_at)} – ${formatDate(row.ended_at)} · ${formatRemittanceCashResult(row.status, row.result, row.difference)}`}
+                onPress={() => router.push(`${detailBase}/${row.shift_id}` as never)}
                 trailing={
                   <Text style={styles.amount}>
                     {row.status === 'pending'
@@ -98,11 +96,11 @@ export function ShiftRemittanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 12 },
-  dayBlock: { gap: 12 },
-  stats: { flexDirection: 'row', gap: 12 },
+  screen: { flexGrow: 1 },
+  column: { gap: 12, paddingBottom: 24 },
+  dayBlock: { gap: 10 },
+  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  stats: { flexDirection: 'row', gap: 8 },
   half: { flex: 1 },
-  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16, marginTop: 8 },
   amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
 });

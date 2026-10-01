@@ -15,24 +15,30 @@ const appSrc = [
   .map((file) => readFileSync(file, 'utf8'))
   .join('\n');
 
-assert.match(productsIndex, /inventoryMode:\s*values\.inventoryMode/);
+assert.match(productsIndex, /closingStockBehavior:\s*values\.closingStockBehavior/);
+assert.doesNotMatch(productsIndex, /inventoryMode:\s*values\.inventoryMode/);
 assert.doesNotMatch(productsIndex, /setProductInventoryMode/);
+assert.doesNotMatch(productsIndex, /InventoryModeField/);
+assert.match(productsIndex, /closingStockBehaviorLabel|ClosingStockBehavior/);
 const updateRpc = productService.slice(
   productService.indexOf("rpc('update_complete_product'"),
   productService.indexOf('export async function updateProductVariant'),
 );
-assert.match(updateRpc, /p_inventory_mode:\s*input\.inventoryMode,/);
-assert.doesNotMatch(updateRpc, /p_inventory_mode:[^\n]*\?\?/);
+assert.match(updateRpc, /p_closing_stock_behavior:\s*input\.closingStockBehavior/);
+assert.doesNotMatch(updateRpc, /p_inventory_mode:\s*input\.inventoryMode/);
+assert.match(productService, /p_inventory_mode:\s*'piece_stock'/);
 assert.doesNotMatch(productService, /from\('products'\)[\s\S]{0,80}\.insert/);
 assert.doesNotMatch(productService, /export async function createProduct\(/);
 assert.doesNotMatch(productService, /export async function updateProduct\(/);
 assert.doesNotMatch(productService, /export async function setProductInventoryMode\(/);
 assert.doesNotMatch(hooks, /function useCreateProduct\(|function useUpdateProduct\(/);
 assert.doesNotMatch(wizard, /saved separately/);
-assert.match(wizard, /Every current balance, including Main Branch/);
+assert.match(wizard, /ClosingStockBehaviorField/);
+assert.doesNotMatch(wizard, /InventoryModeField|KG-delivered meal/);
 assert.doesNotMatch(appSrc, /from\('products'\)[\s\S]{0,120}\.insert\(/);
-assert.match(shiftService, /close_cashier_shift/);
+assert.match(shiftService, /begin_cashier_shift_close|finalize_cashier_shift_reconciliation/);
 assert.doesNotMatch(shiftService, /end_cashier_shift/);
+assert.doesNotMatch(shiftService, /close_cashier_shift/);
 
 const db = new PGlite();
 await db.exec(`
@@ -165,16 +171,21 @@ assert.equal(Number(afterA.selling_price), 85);
 assert.equal(afterA.mode, 'piece_stock');
 
 const productB = await createSimple('Atomic Bravo', 'ATOM-B', '70');
-await edit10(productB.id, {
-  name: 'Atomic Bravo Meal',
-  sku: 'ATOM-B',
-  sellingPrice: '75',
-  mode: 'kg_meal',
-});
+await asUser(mainMgr, () =>
+  assert.rejects(
+    () =>
+      edit10(productB.id, {
+        name: 'Atomic Bravo Meal',
+        sku: 'ATOM-B',
+        sellingPrice: '75',
+        mode: 'kg_meal',
+      }),
+    /retired|piece stock/i,
+  ),
+);
 const afterB = await snapshot(productB.id);
-assert.equal(afterB.name, 'Atomic Bravo Meal');
-assert.equal(Number(afterB.selling_price), 75);
-assert.equal(afterB.mode, 'kg_meal');
+assert.equal(afterB.name, 'Atomic Bravo');
+assert.equal(afterB.mode, 'piece_stock');
 
 const productC = await createSimple('Atomic Charlie', 'ATOM-C', '60');
 const taken = await createSimple('Taken Name', 'ATOM-TAKEN', '50');
@@ -186,7 +197,7 @@ await asUser(mainMgr, () =>
         name: taken.name,
         sku: 'ATOM-C',
         sellingPrice: '60',
-        mode: 'kg_meal',
+        mode: 'piece_stock',
       }),
     /already exists|unique/i,
   ),
@@ -196,20 +207,13 @@ assert.deepEqual(afterC, beforeC);
 
 const productD = await createSimple('Atomic Delta', 'ATOM-D', '40');
 await stockMain(productD.id, 5);
-const beforeD = await snapshot(productD.id);
-await asUser(mainMgr, () =>
-  assert.rejects(
-    () =>
-      edit10(productD.id, {
-        name: 'Atomic Delta KG',
-        sku: 'ATOM-D',
-        sellingPrice: '41',
-        mode: 'kg_meal',
-      }),
-    /Clear every current balance/,
-  ),
-);
-assert.deepEqual(await snapshot(productD.id), beforeD);
+await edit10(productD.id, {
+  name: 'Atomic Delta PCS',
+  sku: 'ATOM-D',
+  sellingPrice: '41',
+  mode: 'piece_stock',
+});
+assert.equal((await snapshot(productD.id)).name, 'Atomic Delta PCS');
 
 const productE = await createSimple('Atomic Echo', 'ATOM-E', '30');
 await stockMain(productE.id, 8);
@@ -224,7 +228,6 @@ const sentE = await asUser(mainMgr, () =>
 await asUser(cashier, () =>
   db.query('select public.confirm_shipment_arrival($1,$2)', [sentE.rows[0].id, '4b-arrive-echo-000001']),
 );
-const beforeE = await snapshot(productE.id);
 await asUser(mainMgr, () =>
   assert.rejects(
     () =>
@@ -234,10 +237,10 @@ await asUser(mainMgr, () =>
         sellingPrice: '31',
         mode: 'kg_meal',
       }),
-    /Clear every current balance/,
+    /retired|piece stock/i,
   ),
 );
-assert.deepEqual(await snapshot(productE.id), beforeE);
+assert.equal((await snapshot(productE.id)).mode, 'piece_stock');
 
 const productF = await createSimple('Atomic Foxtrot', 'ATOM-F', '20');
 await stockMain(productF.id, 4);
@@ -249,7 +252,6 @@ await asUser(mainMgr, () =>
     '4b-send-fox-000000001',
   ]),
 );
-const beforeF = await snapshot(productF.id);
 await asUser(mainMgr, () =>
   assert.rejects(
     () =>
@@ -259,10 +261,10 @@ await asUser(mainMgr, () =>
         sellingPrice: '21',
         mode: 'kg_meal',
       }),
-    /open transfers/,
+    /retired|piece stock/i,
   ),
 );
-assert.deepEqual(await snapshot(productF.id), beforeF);
+assert.equal((await snapshot(productF.id)).mode, 'piece_stock');
 
 const productG = await createSimple('Atomic Golf', 'ATOM-G', '25');
 await stockMain(productG.id, 6);
@@ -284,7 +286,6 @@ await asUser(cashier, () =>
     '4b-return-golf-0000001',
   ]),
 );
-const beforeG = await snapshot(productG.id);
 await asUser(mainMgr, () =>
   assert.rejects(
     () =>
@@ -294,10 +295,10 @@ await asUser(mainMgr, () =>
         sellingPrice: '26',
         mode: 'kg_meal',
       }),
-    /open returns/,
+    /retired|piece stock/i,
   ),
 );
-assert.deepEqual(await snapshot(productG.id), beforeG);
+assert.equal((await snapshot(productG.id)).mode, 'piece_stock');
 
 const productH = await createSimple('Atomic Hotel', 'ATOM-H', '15');
 const beforeH = await snapshot(productH.id);
@@ -308,7 +309,7 @@ await asUser(mainMgr, () =>
         name: 'Atomic Hotel',
         sku: 'ATOM-H',
         sellingPrice: '15',
-        mode: 'kg_meal',
+        mode: 'piece_stock',
         variants: [
           { id: null, name: 'Regular', default_price: '15' },
           { id: null, name: 'regular', default_price: '16' },
@@ -328,7 +329,7 @@ await asUser(mainMgr, () =>
         name: 'Atomic India',
         sku: 'ATOM-I',
         sellingPrice: 'not-a-price',
-        mode: 'kg_meal',
+        mode: 'piece_stock',
       }),
     /invalid_product_price|selling price is required/i,
   ),
@@ -340,19 +341,22 @@ await edit10(productJ.id, {
   name: 'Atomic Juliet',
   sku: 'ATOM-J',
   sellingPrice: '22',
-  mode: 'kg_meal',
+  mode: 'piece_stock',
 });
-assert.equal((await snapshot(productJ.id)).mode, 'kg_meal');
+assert.equal((await snapshot(productJ.id)).mode, 'piece_stock');
 
 await assert.rejects(
-  db.exec(`update public.products set inventory_mode = 'piece_stock' where id = '${productJ.id}'`),
+  db.exec(`update public.products set inventory_mode = 'kg_meal' where id = '${productJ.id}'`),
   /Inventory type can only be changed/,
 );
-assert.equal((await snapshot(productJ.id)).mode, 'kg_meal');
+assert.equal((await snapshot(productJ.id)).mode, 'piece_stock');
 
-const createdKg = await createSimple('Atomic Kilo Create', 'ATOM-K', '90', 'kg_meal');
-assert.equal(createdKg.inventory_mode, 'kg_meal');
-assert.equal(createdKg.is_active, false);
+await asUser(mainMgr, () =>
+  assert.rejects(
+    () => createSimple('Atomic Kilo Create', 'ATOM-K', '90', 'kg_meal'),
+    /retired|piece stock/i,
+  ),
+);
 
 const productP = await createSimple('Atomic Papa', 'ATOM-P', '33');
 await stockMain(productP.id, 9);

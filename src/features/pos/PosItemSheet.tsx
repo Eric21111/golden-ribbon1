@@ -5,8 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
-import { MAX_POS_MEAL_QUANTITY } from '@/features/pos/posInventory';
-import { formatMoney, isKgMeal } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
@@ -41,8 +40,7 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
     () => [...quantityByVariant.values()].reduce((sum, qty) => sum + qty, 0),
     [quantityByVariant],
   );
-  const kgMeal = isKgMeal(item?.product.inventory_mode);
-  const remaining = !item ? 0 : kgMeal ? MAX_POS_MEAL_QUANTITY : Math.max(0, item.quantity_on_hand - totalInCart);
+  const remaining = !item ? 0 : Math.max(0, item.quantity_on_hand - totalInCart);
   const atLimit = quantity >= remaining;
   const canAdd = remaining > 0 && quantity > 0;
 
@@ -83,7 +81,7 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
             </View>
           </View>
           <Text style={styles.stock}>
-            {item.product.sku}{kgMeal ? ' · KG-delivered meal' : ` · Available: ${remaining}`}
+            {item.product.sku}{remaining <= 0 ? ' · Out of stock' : ` · Available: ${remaining} pcs`}
           </Text>
 
           {hasVariants ? (

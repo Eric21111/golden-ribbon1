@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const db = new PGlite();
 await db.exec(`
@@ -77,7 +78,7 @@ const sale = (await db.query(
   [shift, JSON.stringify([{ product_id: product, quantity: 1 }]), '85.00', 'audit-gone-sale-key001'],
 )).rows[0];
 assert.equal(Number(sale.total_amount), 85);
-await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+await closeShiftExact(db, shift, '0');
 
 await db.exec('reset role');
 assert.equal((await db.query('select * from public.sales')).rows.length, 1);

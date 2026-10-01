@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const MIGRATION_FILES = readdirSync('supabase/migrations').filter((file) => file.endsWith('.sql')).sort();
 const THIS_MIGRATION = '20260921090000_milestone_12_1_self_name_main_branch.sql';
@@ -161,7 +162,7 @@ await userAs(sellMgr, async () => {
 });
 await userAs(cashier1, async () => {
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+  await closeShiftExact(db, shift, '0');
 });
 
 await db.close();

@@ -9,15 +9,38 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { formatPcsQty } from '@/features/reports/reportDisplay';
 import { useShiftWaste } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate, formatManilaDate } from '@/lib/format';
-import type { ShiftWasteStatus } from '@/types/models';
+import type { ShiftWasteOccurrenceRow, ShiftWasteStatus } from '@/types/models';
 
 function wasteStatusLabel(status: ShiftWasteStatus) {
   if (status === 'waste_recorded') return 'Waste recorded';
   if (status === 'no_waste') return 'No waste recorded';
   return 'Waste pending';
+}
+
+function occurrenceMeta(item: ShiftWasteOccurrenceRow): string {
+  const qty =
+    item.quantity == null || !Number.isFinite(Number(item.quantity))
+      ? 'Waste recorded'
+      : `${formatPcsQty(item.quantity)} waste`;
+  return item.note ? `${qty} · ${item.note}` : qty;
+}
+
+function dayTotalPcs(day: { shifts: Array<{ occurrences: ShiftWasteOccurrenceRow[] }> }): number | null {
+  let total = 0;
+  let any = false;
+  for (const shift of day.shifts) {
+    for (const item of shift.occurrences) {
+      if (item.quantity != null && Number.isFinite(Number(item.quantity))) {
+        total += Number(item.quantity);
+        any = true;
+      }
+    }
+  }
+  return any ? total : null;
 }
 
 export function WasteHistoryScreen() {
@@ -48,43 +71,59 @@ export function WasteHistoryScreen() {
         {!query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
           <EmptyState title="No waste history" message="No reconciliation-aware closed shifts in this range." />
         ) : null}
-        {days.map((day) => (
-          <View key={day.business_date} style={styles.dayBlock}>
-            <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
-            <View style={styles.stats}>
-              <StatTile style={styles.half} icon="alert-circle-outline" label="Waste occurrences" value={String(day.occurrence_count)} />
-              <StatTile style={styles.half} icon="nutrition-outline" label="Distinct products with waste" value={String(day.distinct_product_count)} />
-            </View>
-            {day.shifts.map((shift) => (
-              <View key={shift.shift_id} style={styles.shiftBlock}>
-                <ListRowCard
-                  title={`${shift.branch_name} — ${shift.cashier_name}`}
-                  meta={`${formatDate(shift.started_at)} – ${formatDate(shift.ended_at)} · ${wasteStatusLabel(shift.waste_status)}`}
+        {days.map((day) => {
+          const totalPcs = dayTotalPcs(day);
+          return (
+            <View key={day.business_date} style={styles.dayBlock}>
+              <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
+              <View style={styles.stats}>
+                <StatTile
+                  style={styles.half}
+                  icon="alert-circle-outline"
+                  label="Waste occurrences"
+                  value={String(day.occurrence_count)}
                 />
-                {shift.waste_status === 'waste_recorded'
-                  ? shift.occurrences.map((item) => (
-                      <ListRowCard
-                        key={`${shift.shift_id}-${item.product_id}`}
-                        title={item.product_name}
-                        meta={item.note ? `Waste recorded · ${item.note}` : 'Waste recorded'}
-                      />
-                    ))
-                  : null}
+                <StatTile
+                  style={styles.half}
+                  icon="cube-outline"
+                  label="Distinct products with waste"
+                  value={String(day.distinct_product_count)}
+                />
               </View>
-            ))}
-          </View>
-        ))}
+              {totalPcs != null ? (
+                <StatTile icon="trash-outline" label="Total waste (PCS)" value={formatPcsQty(totalPcs)} />
+              ) : null}
+              {day.shifts.map((shift) => (
+                <View key={shift.shift_id} style={styles.shiftBlock}>
+                  <ListRowCard
+                    title={`${shift.branch_name} — ${shift.cashier_name}`}
+                    meta={`${formatDate(shift.started_at)} – ${formatDate(shift.ended_at)} · ${wasteStatusLabel(shift.waste_status)}`}
+                  />
+                  {shift.waste_status === 'waste_recorded'
+                    ? shift.occurrences.map((item) => (
+                        <ListRowCard
+                          key={item.occurrence_id ?? `${shift.shift_id}-${item.product_id}`}
+                          title={item.product_name}
+                          meta={occurrenceMeta(item)}
+                        />
+                      ))
+                    : null}
+                </View>
+              ))}
+            </View>
+          );
+        })}
       </ConstrainedWidth>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 12 },
-  dayBlock: { gap: 12 },
-  shiftBlock: { gap: 8 },
-  stats: { flexDirection: 'row', gap: 12 },
+  screen: { flexGrow: 1 },
+  column: { gap: 12, paddingBottom: 24 },
+  dayBlock: { gap: 10 },
+  shiftBlock: { gap: 6 },
+  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  stats: { flexDirection: 'row', gap: 8 },
   half: { flex: 1 },
-  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16, marginTop: 8 },
 });

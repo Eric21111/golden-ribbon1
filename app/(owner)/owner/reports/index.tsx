@@ -31,7 +31,7 @@ export default function OwnerReportsHub() {
             icon="leaf-outline"
             accent="green"
             title="Waste History"
-            description="KG-meal waste occurrences by selling-shift business date"
+            description="Quantified PCS waste by selling-shift business date"
             onPress={() => router.push('/owner/reports/waste-history' as never)}
           />
           <NavTile

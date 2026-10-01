@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { MAX_POS_MEAL_QUANTITY } from '@/features/pos/posInventory';
-import { isKgMeal } from '@/lib/format';
+const MAX_POS_QUANTITY = 999999;
 import { applyLiveCartPrices, cartTotalCents, toCents } from '@/lib/money';
 import { useCheckoutStore } from './checkoutStore';
 
@@ -34,7 +33,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     const totalForProduct = state.items
       .filter((item) => item.product_id === product.id)
       .reduce((sum, item) => sum + item.quantity, 0);
-    if (!isKgMeal(product.inventory_mode) && totalForProduct + 1 > quantity_on_hand) return state;
+    if (totalForProduct + 1 > quantity_on_hand) return state;
     const existing = state.items.find(
       (item) => item.product_id === product.id && item.variant_id === variantId,
     );
@@ -81,13 +80,11 @@ export const useCartStore = create<CartState>((set, get) => ({
     if (useCheckoutStore.getState().request) return state;
     if (!Number.isFinite(quantity)) return state;
     const variantId = variant?.id ?? null;
-    const nextQuantity = Math.max(0, Math.min(Math.floor(quantity), MAX_POS_MEAL_QUANTITY));
+    const nextQuantity = Math.max(0, Math.min(Math.floor(quantity), MAX_POS_QUANTITY));
     const otherQuantity = state.items
       .filter((item) => item.product_id === product.id && item.variant_id !== variantId)
       .reduce((sum, item) => sum + item.quantity, 0);
-    const capped = isKgMeal(product.inventory_mode)
-      ? nextQuantity
-      : Math.min(nextQuantity, Math.max(0, quantity_on_hand - otherQuantity));
+    const capped = Math.min(nextQuantity, Math.max(0, quantity_on_hand - otherQuantity));
     const existing = state.items.find(
       (item) => item.product_id === product.id && item.variant_id === variantId,
     );

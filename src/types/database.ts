@@ -22,6 +22,8 @@ import type {
   TransferStatus,
   UserRole,
   ShiftSummary,
+  ShiftCloseReportProduct,
+  CashReconciliationResult,
   BranchDailySalesItem,
   BranchSalesReportItem,
   ProductSalesReportItem,
@@ -54,9 +56,10 @@ type BranchInsert = Omit<Branch, 'id' | 'created_at' | 'updated_at'> & {
   created_at?: string;
   updated_at?: string;
 };
-type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'inventory_mode'> & {
+type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'inventory_mode' | 'closing_stock_behavior'> & {
   id?: string;
   inventory_mode?: Product['inventory_mode'];
+  closing_stock_behavior?: Product['closing_stock_behavior'];
   created_at?: string;
   updated_at?: string;
 };
@@ -158,6 +161,47 @@ export type Database = {
           { foreignKeyName: 'shifts_branch_id_fkey'; columns: ['branch_id']; isOneToOne: false; referencedRelation: 'branches'; referencedColumns: ['id'] },
           { foreignKeyName: 'shifts_cashier_id_fkey'; columns: ['cashier_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ];
+      };
+      shift_reconciliations: {
+        Row: {
+          id: string;
+          shift_id: string;
+          branch_id: string;
+          expected_cash: number;
+          actual_cash: number;
+          difference: number;
+          result: CashReconciliationResult;
+          reconciled_at: string;
+          recorded_by: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      shift_waste_occurrences: {
+        Row: {
+          id: string;
+          shift_id: string;
+          branch_id: string;
+          product_id: string;
+          recorded_by: string;
+          note: string | null;
+          quantity: number | null;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      shift_product_reconciliations: {
+        Row: ShiftCloseReportProduct & {
+          branch_id: string;
+          recorded_by: string;
+          net_other_movement_quantity?: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
       };
       branch_inventory: {
         Row: BranchInventory;
@@ -282,6 +326,7 @@ export type Database = {
           }>;
           p_selling_price?: string | null;
           p_inventory_mode?: string | null;
+          p_closing_stock_behavior?: string | null;
         };
         Returns: Product;
       };
@@ -305,6 +350,7 @@ export type Database = {
           }>;
           p_selling_price?: string | null;
           p_inventory_mode?: string | null;
+          p_closing_stock_behavior?: string | null;
         };
         Returns: Product;
       };
@@ -362,12 +408,20 @@ export type Database = {
       update_own_name: { Args: { p_full_name: string }; Returns: Profile };
       start_cashier_shift: { Args: Record<string, never>; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
-      close_cashier_shift: {
-        Args: { p_shift_id: string; p_actual_cash: string; p_waste: Array<{ product_id: string; note?: string | null }> };
+      begin_cashier_shift_close: {
+        Args: { p_shift_id: string };
+        Returns: import('./models').ShiftClosePreview;
+      };
+      finalize_cashier_shift_reconciliation: {
+        Args: {
+          p_shift_id: string;
+          p_actual_cash: string;
+          p_products?: import('./models').ShiftCloseFinalizeProduct[];
+        };
         Returns: import('./models').ShiftCloseResult;
       };
       reconcile_closed_shift: {
-        Args: { p_shift_id: string; p_actual_cash: string; p_waste: Array<{ product_id: string; note?: string | null }> };
+        Args: { p_shift_id: string; p_actual_cash: string; p_waste?: unknown };
         Returns: import('./models').ShiftCloseResult;
       };
       get_my_pending_shift_reconciliation: {

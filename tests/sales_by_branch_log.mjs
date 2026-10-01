@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
@@ -81,7 +82,7 @@ const asUser = async (userId, work) => {
   }
 };
 
-const saleYesterday = await asUser(cashier1, async () => {
+const saleYesterdayBundle = await asUser(cashier1, async () => {
   const shift = (await db.query('select public.start_cashier_shift() id')).rows[0].id;
   const sale = (
     await db.query('select (public.confirm_sale($1,$2::jsonb,$3,$4)).*', [
@@ -91,9 +92,11 @@ const saleYesterday = await asUser(cashier1, async () => {
       'sales-log-branch1-yesterday',
     ])
   ).rows[0];
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
-  return sale;
+  await closeShiftExact(db, shift, '0');
+  return { sale, shift };
 });
+await backdateClosedShiftToYesterday(db, saleYesterdayBundle.shift);
+const saleYesterday = saleYesterdayBundle.sale;
 
 await db.exec(`
   alter table public.sales disable trigger sales_immutable;
@@ -116,7 +119,7 @@ const saleToday = await asUser(cashier1, async () => {
       'sales-log-branch1-today',
     ])
   ).rows[0];
-  await db.query("select public.close_cashier_shift($1, '0', '[]'::jsonb)", [shift]);
+  await closeShiftExact(db, shift, '0');
   return sale;
 });
 

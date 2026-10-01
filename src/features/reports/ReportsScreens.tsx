@@ -137,7 +137,7 @@ function ProductSalesRow({ rank, item, share }: { rank: number; item: ProductSal
         </View>
         <Text style={styles.rankRowAmount}>{formatMoney(item.total_revenue)}</Text>
       </View>
-      <Text style={styles.rankRowMeta}>Quantity sold: {item.quantity_sold}</Text>
+      <Text style={styles.rankRowMeta}>Items sold: {item.quantity_sold} pcs</Text>
       <View style={styles.barRow}>
         <View style={styles.barTrack}>
           <LinearGradient

@@ -1,161 +1,165 @@
-The Part 5 MD still contains the four items that were supposed to be revised.
-Do not start implementation yet.
+Revision 7C plan is nearly approved.
 
-Please update the MD with these corrections exactly.
-
-==================================================
-1. PRODUCTFORM — REINSPECT, DO NOT AUTOMATICALLY KEEP
-==================================================
-
-Current MD still says:
-
-Keep ProductForm because product_active_after_opening.mjs pins copy in it.
-
-That is not enough.
-
-Reinspect ProductForm and every test assertion that references it.
-
-For each assertion, classify it as:
-
-A. current architectural invariant
-B. obsolete UI copy
-C. test-only legacy behavior
-
-If it protects a current invariant:
-retarget the assertion to the CURRENT Create/Edit wizard or active product UI
-that owns the behavior.
-
-Then re-check ProductForm.
-
-If ProductForm is:
-
-- unrouted
-- unimported
-- unused by active production code
-- no longer needed by a legitimate current test
-
-remove it.
-
-If there is a genuine runtime/compatibility reason to keep it:
-document that concrete reason.
-
-Do not keep dead production code solely because a stale test references it.
+Before implementation, add these five technical hardening requirements.
 
 ==================================================
-2. SELLING BRANCH MANAGER ROLE — VERIFY ACTUAL CURRENT USAGE
+1. POST-FINALIZATION SAME-DAY BRANCH FREEZE
 ==================================================
 
-Current MD still says the account_management selling-manager asserts are valid
-because roles.ts contains "Selling Branch Manager".
+The selling branch must not become mutable again immediately after successful
+reconciliation on the same Manila business date.
 
-That is insufficient.
+State model:
 
-Inspect:
+before final daily close
+→ existing valid operations
 
-- role type/schema
-- employee/account-management UI
-- route guards
-- Selling Branch Manager routes
-- RPC authorization
-- any branch-role restrictions
-- tests that use the role
+begin close
+→ freeze
 
-Then classify the role as:
+closed + pending inventory reconciliation
+→ freeze
 
-A. active current role
-B. compatibility/account-record role with limited current behavior
-C. stale role architecture
+finalized close on the SAME Manila business date
+→ remain frozen
 
-If A:
-keep tests, but make sure they assert CURRENT permissions.
+next Manila business day
+→ operations may resume according to normal shift/workflow rules
 
-If B:
-keep only the compatibility behavior that is actually required.
+Therefore every selling-branch mutator must also reject when the branch has a
+FINALIZED daily close for the current Manila business date.
 
-If C:
-update stale source/tests.
+This applies to:
+- confirm_sale
+- confirm_shipment_arrival
+- report_shipment_issue
+- create_stock_return
+- apply_leftover_return
+- any other selling-branch stock mutation
 
-Do not change production role rules if the intended behavior is ambiguous;
-report the ambiguity first.
+Do not cancel pending transfers.
+They remain pending until a valid later business/session state allows receipt.
+
+Do not simply require an open shift for every mutation if that would break the
+existing first-stock / pre-session receiving workflow. Use the finalized-close
+business-date guard explicitly.
 
 ==================================================
-3. DO NOT ADD A SEMICOLON-BASED NPM REGRESSION SCRIPT
+2. CASH DISCREPANCY SIGN CONVENTION
 ==================================================
 
-Remove the current proposal:
+Inspect the actual current shift_reconciliations schema and cash writer.
 
-PowerShell-safe `;`, not `&&`
+Document exactly whether persisted cash difference is:
 
-from the MD.
-
-Do not rely on shell-specific command separators in package.json.
-
-Preferred options:
-
-A. Do not add test:regression at all; run the suites from the audit.
+expected_cash - actual_cash
 
 OR
 
-B. Add a small Node-based regression runner that:
-- sequentially executes the approved ACTIVE tests
-- excludes destructive/live tests
-- records PASS/FAIL
-- exits non-zero if an active test fails
-- works cross-platform
+actual_cash - expected_cash.
 
-This runner is optional.
+Then define exact result mapping:
 
-==================================================
-4. LOCAL VS REMOTE DATABASE AUDIT MUST BE EXPLICIT
-==================================================
+exact
+shortage
+excess
 
-Add a separate section:
+Do not assume cash uses the same sign convention as
+shift_product_reconciliations.
 
-LOCAL / RECONSTRUCTED VERIFICATION
+Preserve the existing schema where practical, but return semantic result fields
+so the future 7D UI does not have to infer shortage/excess from an undocumented
+sign.
 
-Examples:
-- migration order in repository
-- PGlite schema reconstruction
-- function definitions reconstructed from migrations
-- source-level grants/search_path assertions
-
-REMOTE / LINKED SUPABASE VERIFICATION
-
-Examples, if safely available:
-- applied migration history
-- actual deployed pg_proc signatures
-- actual deployed SECURITY DEFINER/search_path
-- current grants
-
-Do NOT run destructive live tests.
-
-If remote read-only catalog inspection is not available or not performed,
-state this explicitly in the final report.
-
-Do not claim the deployed database catalog was verified based only on PGlite
-or migration source.
+Add exact/shortage/excess tests for cash.
 
 ==================================================
-KEEP THE REST
+3. AUDIT 7A CONSTRAINTS FOR WASTE > SYSTEM BALANCE
 ==================================================
 
-Keep the existing:
+Before implementing the 7C engine, inspect the actual constraints on:
 
-- dead CreateReturnScreen/createReturn inspection
-- milestone11_3 numeric test fix
-- end_cashier_shift reject guard
-- RPC/security audit
-- direct-write audit
-- snapshot/unit/null-state audit
-- docs cleanup
-- classification of all tests
-- destructive live test exclusions
-- typecheck
-- 18-point final report
-- no migration without review
-- no db push
+shift_product_reconciliations.expected_remaining
+discrepancy
+actual_remaining
+waste_quantity
+result
 
-Update the Part 5 MD first.
+Required edge case:
 
-Do not begin cleanup/testing until these four changes are reflected in the
-plan.
+B = system balance before waste = 5
+W = waste = 10
+A = actual usable remaining = 0
+
+The approved reconciliation must represent the 5-piece physical excess and
+must not fail merely because waste exceeds the pre-close system balance.
+
+Safe ledger order remains:
+
+adjustment = (A + W) - B
+then waste -W
+then optional unsold -A.
+
+If the existing 7A schema prevents storing the mathematically required
+reconciliation (for example expected_remaining cannot be negative):
+
+STOP and report the concrete 7A constraint conflict.
+
+Do NOT edit the 7A migration.
+Design the correction as a NEW forward 7C migration after approval.
+
+Do not clamp expected values to zero or otherwise hide the discrepancy.
+
+==================================================
+4. CANONICAL FINALIZE IDEMPOTENCY
+==================================================
+
+Define duplicate-finalize comparison using normalized business values, not raw
+JSON equality.
+
+Normalize:
+- product rows by product_id
+- omitted waste_quantity as 0
+- whole PCS numeric representations
+- actual cash through parse_actual_cash
+
+A retry after successful finalize with the same normalized:
+- actual cash
+- product IDs
+- actual remaining
+- waste
+
+may safely return the existing finalized summary.
+
+A conflicting normalized payload after success must return a clear
+already-finalized/conflicting-payload error.
+
+Never duplicate movements or reconciliation rows.
+
+==================================================
+5. BEGIN CLOSE IS IRREVERSIBLE
+==================================================
+
+Once begin_cashier_shift_close successfully commits:
+
+- sales cutoff is final
+- shift remains closed
+- no cancel-close RPC
+- no reopen-current-shift RPC
+- cashier must complete pending reconciliation
+
+7D may ask for confirmation BEFORE invoking begin-close, but after the server
+accepts it the daily selling session cannot be resumed.
+
+Ensure protect_shift_lifecycle and all close RPCs preserve this invariant.
+
+Update the Revision 7C PLAN only.
+
+If item 3 discovers an actual 7A schema conflict, explicitly report it instead
+of proceeding to implementation.
+
+Otherwise return the revised 7C plan for final implementation approval.
+
+Do not implement yet.
+Do not db push.
+Do not start 7D.

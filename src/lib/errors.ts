@@ -364,10 +364,31 @@ export function getShiftErrorMessage(error: unknown): string {
   if (message.includes('sale confirmation')) return 'Finish the sale confirmation before ending the shift.';
   if (message.includes('cashier access') || message.includes('unable to access')) return 'You are not authorized to use this shift.';
   if (message.includes('assigned branch') || message.includes('inactive or invalid')) return 'Your assigned branch is unavailable. Contact the owner.';
+  if (message.includes('pending inventory') || message.includes('complete pending inventory')) {
+    return 'Complete pending remittance before starting a new shift.';
+  }
+  if (message.includes('final close already completed') || message.includes('start again next business day')) {
+    return "Today's shift is already closed. Start again next business day.";
+  }
+  if (message.includes('frozen until pending') || message.includes('frozen after final close')) {
+    return 'Booth stock is frozen for today until remittance is finished or the next business day.';
+  }
   if (message.includes('already closed')) return 'This shift is already closed.';
+  if (message.includes('different cash') || message.includes('different inventory')) {
+    return 'This shift was already finalized with different counts. Refresh and review the saved remittance.';
+  }
   if (message.includes('already been reconciled')) return 'This shift has already been reconciled.';
   if (message.includes('does not require reconciliation')) {
     return 'This historical shift does not require reconciliation.';
+  }
+  if (message.includes('actual remaining is required') || message.includes('every close product')) {
+    return 'Enter the physical remaining quantity for every product.';
+  }
+  if (message.includes('whole') || message.includes('piece') || message.includes('pcs')) {
+    return 'Use whole pieces only for stock counts and waste.';
+  }
+  if (message.includes('changed unexpectedly') || message.includes('system stock')) {
+    return 'Stock changed during close. Refresh the remittance and review your counts before trying again.';
   }
   if (
     message.includes('actual cash')
@@ -377,9 +398,13 @@ export function getShiftErrorMessage(error: unknown): string {
   ) {
     return 'Enter actual cash with at most two decimals. Zero is allowed. Leave nothing blank.';
   }
-  if (message.includes('waste')) return 'Waste can only be recorded once for each KG-delivered meal on this shift.';
+  if (message.includes('finalize cashier shift') || message.includes('use finalize')) {
+    return 'Finish inventory and cash remittance using Complete End Shift.';
+  }
   if (message.includes('only a closed shift')) return 'Only a closed shift can be reconciled later.';
-  if (message.includes('fetch') || message.includes('network')) return 'Network unavailable. Check your connection and try again.';
+  if (message.includes('fetch') || message.includes('network') || message.includes('timeout')) {
+    return 'Network unavailable. Check your connection and try again.';
+  }
   return 'The shift could not be updated. Please try again.';
 }
 
