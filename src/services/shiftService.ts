@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import type {
   PendingShiftReconciliation,
   Shift,
+  ShiftCloseBeginResult,
   ShiftCloseFinalizeProduct,
   ShiftClosePreview,
   ShiftCloseReportDetail,
@@ -28,12 +29,12 @@ export async function startCashierShift(): Promise<string> {
   return data;
 }
 
-export async function beginCashierShiftClose(shiftId: string): Promise<ShiftClosePreview> {
+export async function beginCashierShiftClose(shiftId: string): Promise<ShiftCloseBeginResult> {
   const { data, error } = await supabase.rpc('begin_cashier_shift_close', {
     p_shift_id: shiftId,
   });
   if (error) throw error;
-  return data as ShiftClosePreview;
+  return data as ShiftCloseBeginResult;
 }
 
 export async function finalizeCashierShiftReconciliation(

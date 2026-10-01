@@ -74,6 +74,7 @@
     "test:7c": "node tests/revision_7c_end_shift.mjs",
     "test:7d": "node tests/revision_7d_end_shift_ui.mjs",
     "test:7e": "node tests/revision_7e_reports_history.mjs && node tests/revision_7e_concurrency_postgres.mjs",
+    "test:7final": "node tests/revision_7final_hardening.mjs && node tests/revision_7e_concurrency_postgres.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

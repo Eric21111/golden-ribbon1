@@ -367,8 +367,14 @@ export function getShiftErrorMessage(error: unknown): string {
   if (message.includes('pending inventory') || message.includes('complete pending inventory')) {
     return 'Complete pending remittance before starting a new shift.';
   }
+  if (message.includes('another selling session')) {
+    return 'Another selling session is already active for this branch.';
+  }
   if (message.includes('final close already completed') || message.includes('start again next business day')) {
     return "Today's shift is already closed. Start again next business day.";
+  }
+  if (message.includes('remittance is already complete') || message.includes('already complete')) {
+    return "This shift remittance is already complete.";
   }
   if (message.includes('frozen until pending') || message.includes('frozen after final close')) {
     return 'Booth stock is frozen for today until remittance is finished or the next business day.';
@@ -431,7 +437,13 @@ export function getCheckoutFailure(error: unknown): CheckoutFailure {
 export function getEmployeeErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
   if (message.includes('already registered') || message.includes('already been registered') || message.includes('unique')) return 'That email is already registered.';
-  if (message.includes('active shift')) return 'Employee has an active shift. End the shift before changing branch, role, or active status.';
+  if (
+    message.includes('unfinished shift')
+    || message.includes('remittance')
+    || message.includes('active shift')
+  ) {
+    return 'Employee has an unfinished shift or remittance. Complete reconciliation before changing branch, role, or active status.';
+  }
   if (message.includes('selling branch') || message.includes('assigned branch')) return 'Select an active selling branch.';
   if (message.includes('password')) return 'Temporary password must contain 8 to 72 characters.';
   if (message.includes('owner access') || message.includes('unauthorized') || message.includes('permission')) return 'Only an active Owner can manage employees.';

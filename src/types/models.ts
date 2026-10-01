@@ -181,7 +181,13 @@ export type InventoryMovement = {
   product_id: string;
   movement_type: InventoryMovementType;
   quantity: number;
-  reference_type: 'opening_stock' | 'stock_transfer' | 'adjustment' | 'sale' | 'stock_return';
+  reference_type:
+    | 'opening_stock'
+    | 'stock_transfer'
+    | 'adjustment'
+    | 'sale'
+    | 'stock_return'
+    | 'shift_product_reconciliation';
   reference_id: string | null;
   created_by: string;
   notes: string | null;
@@ -344,6 +350,27 @@ export type ShiftClosePreview = {
   products: ShiftCloseProductPreview[];
   status: 'pending';
 };
+
+/** Returned by begin_cashier_shift_close when remittance is already complete. */
+export type ShiftCloseAlreadyFinalized = {
+  shift_id: string;
+  branch_id: string;
+  started_at: string;
+  ended_at: string | null;
+  sales_cutoff_at: string | null;
+  inventory_reconciliation_required: false;
+  reconciliation_required: false;
+  mode: 'pcs_inventory_cash' | 'legacy_cash_only';
+  expected_cash: number;
+  actual_cash: number;
+  difference: number;
+  result: CashReconciliationResult;
+  products: ShiftCloseProductSummary[];
+  status: 'reconciled';
+  message?: string;
+};
+
+export type ShiftCloseBeginResult = ShiftClosePreview | ShiftCloseAlreadyFinalized;
 
 export type PendingShiftReconciliation = ShiftClosePreview;
 

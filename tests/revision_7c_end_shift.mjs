@@ -235,6 +235,8 @@ const finalize = (db, cashier, shiftId, actualCash, products) =>
     { product_id: ctx.meal, actual_remaining: 5 },
   ]);
   assert.equal(again.idempotent, true);
+  assert.ok(Array.isArray(again.products));
+  assert.equal(again.products.length, 2);
 
   // Conflicting retry
   await asUser(db, ctx.cashier, () =>

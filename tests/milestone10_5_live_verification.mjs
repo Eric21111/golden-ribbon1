@@ -588,10 +588,10 @@ await expectDenied('Main Branch Manager denied list_employees', 'RPC Security', 
 await expectOk('Owner can list employees', 'RPC Security', () => rpc(sessions.owner, 'list_employees'));
 await expectDenied('Cashier denied list_audit_logs', 'RPC Security', () => rpc(sessions.cash1, 'list_audit_logs'));
 await expectDenied('Manager denied list_audit_logs', 'RPC Security', () => rpc(sessions.mgr1, 'list_audit_logs'));
-await expectDenied('Cashier denied create_stock_return', 'RPC Security', () => rpc(sessions.cash1, 'create_stock_return', {
+await expectDenied('Selling manager denied create_stock_return', 'RPC Security', () => rpc(sessions.mgr1, 'create_stock_return', {
   p_items: [{ product_id: e2eProduct.id, quantity_returned: 1 }],
   p_notes: null,
-  p_idempotency_key: idem('cash-ret'),
+  p_idempotency_key: idem('mgr-ret'),
 }));
 await expectDenied('Cashier denied start of another identity via owner RPC', 'RPC Security', () => rpc(sessions.cash1, 'owner_update_employee', {
   p_employee_id: ids.cash1,
@@ -617,54 +617,84 @@ const retrySend = await rpc(sessions.mainMgr, 'send_stock_transfer', {
 });
 record('Duplicate Protection', 'Send transfer retry is idempotent', retrySend === e2eTransferId, `${retrySend} vs ${e2eTransferId}`);
 
-await expectDenied('Branch 2 manager cannot receive Branch 1 transfer', 'RPC Security', async () => {
-  const { data: items } = await admin.from('stock_transfer_items').select('id').eq('stock_transfer_id', e2eTransferId);
-  return rpc(sessions.mgr2, 'receive_stock_transfer', {
+await expectDenied('Branch 2 cashier cannot confirm Branch 1 shipment', 'RPC Security', () =>
+  rpc(sessions.cash2, 'confirm_shipment_arrival', {
     p_transfer_id: e2eTransferId,
-    p_items: (items ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 58 })),
-    p_notes: null,
-    p_idempotency_key: idem('mgr2-recv'),
-  });
-});
-
-const { data: e2eItems } = await admin.from('stock_transfer_items').select('id,product_id,quantity_sent').eq('stock_transfer_id', e2eTransferId);
-const e2eRecvKey = idem('e2e-recv');
-const e2eRecvStatus = await expectOk('Branch 1 manager receives 58 / 60', 'Full E2E', () => rpc(sessions.mgr1, 'receive_stock_transfer', {
-  p_transfer_id: e2eTransferId,
-  p_items: (e2eItems ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 58 })),
-  p_notes: 'm105 e2e receive',
-  p_idempotency_key: e2eRecvKey,
-}));
-record('Full E2E', 'Transfer received with discrepancy', String(e2eRecvStatus).includes('discrepancy'), String(e2eRecvStatus));
-const retryRecv = await rpc(sessions.mgr1, 'receive_stock_transfer', {
-  p_transfer_id: e2eTransferId,
-  p_items: (e2eItems ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 58 })),
-  p_notes: 'm105 e2e receive',
-  p_idempotency_key: e2eRecvKey,
-});
-record('Duplicate Protection', 'Receive transfer retry is idempotent', retryRecv === e2eRecvStatus, `${retryRecv}`);
-await expectDenied('Receive already-received transfer with new key fails', 'State Transitions', () => rpc(sessions.mgr1, 'receive_stock_transfer', {
-  p_transfer_id: e2eTransferId,
-  p_items: (e2eItems ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 58 })),
-  p_notes: null,
-  p_idempotency_key: idem('e2e-recv-dup'),
-}));
-
-const { data: disc } = await admin.from('transfer_discrepancies').select('difference,discrepancy_type').eq('stock_transfer_id', e2eTransferId);
-record('Full E2E', 'Transfer missing qty is 2', Number(disc?.[0]?.difference) === 2 && disc?.[0]?.discrepancy_type === 'missing', JSON.stringify(disc));
-
-const { data: b1AfterRecv } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
-record('Full E2E', 'Branch 1 stock after receive is 58', Number(b1AfterRecv?.quantity_on_hand) === 58, String(b1AfterRecv?.quantity_on_hand));
+    p_idempotency_key: idem('cash2-arrive'),
+  }),
+);
+await expectDenied('Branch 1 manager cannot confirm shipment arrival', 'RPC Security', () =>
+  rpc(sessions.mgr1, 'confirm_shipment_arrival', {
+    p_transfer_id: e2eTransferId,
+    p_idempotency_key: idem('mgr1-arrive'),
+  }),
+);
 
 const shiftId = await expectOk('Cashier 1 starts shift', 'Full E2E', () => rpc(sessions.cash1, 'start_cashier_shift'));
 const shiftRetry = await rpc(sessions.cash1, 'start_cashier_shift');
 record('Duplicate Protection', 'Start shift retry returns same open shift', shiftRetry === shiftId, `${shiftRetry}`);
 
+const e2eArriveKey = idem('e2e-arrive');
+const e2eRecvStatus = await expectOk('Cashier 1 confirms shipment arrival (60 PCS)', 'Full E2E', () =>
+  rpc(sessions.cash1, 'confirm_shipment_arrival', {
+    p_transfer_id: e2eTransferId,
+    p_idempotency_key: e2eArriveKey,
+  }),
+);
+record('Full E2E', 'Transfer received via cashier confirm', String(e2eRecvStatus).includes('received') || e2eRecvStatus === 'received', String(e2eRecvStatus));
+const retryRecv = await rpc(sessions.cash1, 'confirm_shipment_arrival', {
+  p_transfer_id: e2eTransferId,
+  p_idempotency_key: e2eArriveKey,
+});
+record('Duplicate Protection', 'Confirm arrival retry is idempotent', retryRecv === e2eRecvStatus, `${retryRecv}`);
+await expectDenied('Confirm already-received transfer with new key fails', 'State Transitions', () =>
+  rpc(sessions.cash1, 'confirm_shipment_arrival', {
+    p_transfer_id: e2eTransferId,
+    p_idempotency_key: idem('e2e-arrive-dup'),
+  }),
+);
+
+const { data: b1AfterRecv } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
+record('Full E2E', 'Branch 1 stock after cashier confirm is 60', Number(b1AfterRecv?.quantity_on_hand) === 60, String(b1AfterRecv?.quantity_on_hand));
+
+// Discrepancy path on a separate product via report_shipment_issue
+const issueProduct = await expectOk('Create issue-path product', 'Full E2E', () => createProduct('M105 Issue Path', sku('ISSUE'), 50));
+await expectOk('Configure issue product on Branch 1', 'Full E2E', () => rpc(sessions.mainMgr, 'configure_branch_products', {
+  p_branch_id: branch1.id,
+  p_items: [{ product_id: issueProduct.id, selling_price: 50, is_active: true }],
+}));
+await expectOk('Initialize issue product opening stock', 'Full E2E', () => rpc(sessions.mainMgr, 'initialize_main_branch_inventory', {
+  p_items: [{ product_id: issueProduct.id, quantity: 20 }],
+  p_notes: 'm105 issue product opening',
+}));
+const shortSendKey = idem('e2e-short-send');
+const shortTransferId = await expectOk('Owner sends short-count shipment 10', 'Full E2E', () =>
+  rpc(sessions.mainMgr, 'send_stock_transfer', {
+    p_to_branch_id: branch1.id,
+    p_items: [{ product_id: issueProduct.id, quantity_sent: 10 }],
+    p_notes: 'm105 short issue path',
+    p_idempotency_key: shortSendKey,
+  }),
+);
+const { data: shortItems } = await admin.from('stock_transfer_items').select('id').eq('stock_transfer_id', shortTransferId);
+const issueKey = idem('e2e-issue');
+const issueStatus = await expectOk('Cashier reports shipment issue 8 / 10', 'Full E2E', () =>
+  rpc(sessions.cash1, 'report_shipment_issue', {
+    p_transfer_id: shortTransferId,
+    p_items: (shortItems ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 8 })),
+    p_notes: 'Box arrived short by two pieces',
+    p_idempotency_key: issueKey,
+  }),
+);
+record('Full E2E', 'Shipment issue recorded with discrepancy', String(issueStatus).includes('discrepancy'), String(issueStatus));
+const { data: disc } = await admin.from('transfer_discrepancies').select('difference,discrepancy_type').eq('stock_transfer_id', shortTransferId);
+record('Full E2E', 'Transfer missing qty is 2', Number(disc?.[0]?.difference) === 2 && disc?.[0]?.discrepancy_type === 'missing', JSON.stringify(disc));
+
 await expectDenied('Cashier 2 cannot end Cashier 1 shift', 'RPC Security', () => rpc(sessions.cash2, 'begin_cashier_shift_close', { p_shift_id: shiftId }));
 
 {
   const { data, error } = await sessions.cash1.from('branch_inventory').select('quantity_on_hand,branch_id').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id);
-  record('RLS', 'Cashier can read assigned-branch POS stock during open shift', !error && Number(data?.[0]?.quantity_on_hand) === 58, error ? errMsg(error) : String(data?.[0]?.quantity_on_hand));
+  record('RLS', 'Cashier can read assigned-branch POS stock during open shift', !error && Number(data?.[0]?.quantity_on_hand) === 60, error ? errMsg(error) : String(data?.[0]?.quantity_on_hand));
 }
 
 const saleKey = idem('e2e-sale');
@@ -692,7 +722,21 @@ record('Duplicate Protection', 'Confirm sale retry returns same sale', saleRetry
 }
 
 const { data: b1AfterSale } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
-record('Full E2E', 'Branch remaining after sale is 28', Number(b1AfterSale?.quantity_on_hand) === 28, String(b1AfterSale?.quantity_on_hand));
+record('Full E2E', 'Branch remaining after sale is 30', Number(b1AfterSale?.quantity_on_hand) === 30, String(b1AfterSale?.quantity_on_hand));
+
+// Leftover return must be created while the booth is still open (same-day finalize freezes mutators).
+const returnKey = idem('e2e-return');
+const returnId = await expectOk('Cashier returns 28 leftover before End Shift', 'Full E2E', () => rpc(sessions.cash1, 'create_stock_return', {
+  p_items: [{ product_id: e2eProduct.id, quantity_returned: 28 }],
+  p_notes: 'm105 e2e return',
+  p_idempotency_key: returnKey,
+}));
+const returnRetry = await rpc(sessions.cash1, 'create_stock_return', {
+  p_items: [{ product_id: e2eProduct.id, quantity_returned: 28 }],
+  p_notes: 'm105 e2e return',
+  p_idempotency_key: returnKey,
+});
+record('Duplicate Protection', 'Create return retry is idempotent', returnRetry === returnId, `${returnRetry}`);
 
 const closeResult = await expectOk('Cashier ends shift', 'Full E2E', () => closeShiftRev7(sessions.cash1, shiftId, '2400.00'));
 const shiftSummary = await expectOk('Shift summary after close', 'Full E2E', () => rpc(sessions.cash1, 'get_shift_summary', { p_shift_id: shiftId }));
@@ -700,23 +744,11 @@ record('Full E2E', 'Shift totals 1 tx / 2400', Number(shiftSummary.completed_tra
 record('Full E2E', 'Expected cash matches the completed sale', Number(closeResult.expected_cash) === 2400, JSON.stringify(closeResult));
 const closeRetry = await expectOk('End shift identical finalize is idempotent', 'Duplicate Protection', () => finalizeShiftRev7(sessions.cash1, shiftId, '2400.00'));
 record('Duplicate Protection', 'Idempotent finalize returns reconciled', closeRetry?.status === 'reconciled' || closeRetry?.idempotent === true, JSON.stringify(closeRetry));
-
-const returnKey = idem('e2e-return');
-const returnId = await expectOk('Manager returns remaining 28', 'Full E2E', () => rpc(sessions.mgr1, 'create_stock_return', {
-  p_items: [{ product_id: e2eProduct.id, quantity_returned: 28 }],
-  p_notes: 'm105 e2e return',
-  p_idempotency_key: returnKey,
-}));
-const returnRetry = await rpc(sessions.mgr1, 'create_stock_return', {
-  p_items: [{ product_id: e2eProduct.id, quantity_returned: 28 }],
-  p_notes: 'm105 e2e return',
-  p_idempotency_key: returnKey,
-});
-record('Duplicate Protection', 'Create return retry is idempotent', returnRetry === returnId, `${returnRetry}`);
+record('Duplicate Protection', 'Idempotent finalize includes products', Array.isArray(closeRetry?.products), JSON.stringify(closeRetry?.products?.length));
 
 const { data: returnItems } = await admin.from('stock_return_items').select('id,quantity_returned').eq('stock_return_id', returnId);
 const returnRecvKey = idem('e2e-return-recv');
-const returnStatus = await expectOk('Owner receives 27 of 28', 'Full E2E', () => rpc(sessions.mainMgr, 'receive_stock_return', {
+const returnStatus = await expectOk('Main receives 27 of 28 leftover for accountability', 'Full E2E', () => rpc(sessions.mainMgr, 'receive_stock_return', {
   p_return_id: returnId,
   p_items: (returnItems ?? []).map((item) => ({ stock_return_item_id: item.id, quantity_received: 27 })),
   p_notes: 'm105 e2e return receive',
@@ -740,27 +772,43 @@ record('Full E2E', 'Return missing qty is 1', Number(rdisc?.[0]?.difference) ===
 
 const { data: b1Final } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', branch1.id).eq('product_id', e2eProduct.id).maybeSingle();
 const { data: mainFinal } = await admin.from('branch_inventory').select('quantity_on_hand').eq('branch_id', main.id).eq('product_id', e2eProduct.id).maybeSingle();
-record('Full E2E', 'Branch 1 remaining is 0', Number(b1Final?.quantity_on_hand ?? 0) === 0, String(b1Final?.quantity_on_hand));
-record('Full E2E', 'Main remaining is 67 (100-60+27)', Number(mainFinal?.quantity_on_hand) === 67, String(mainFinal?.quantity_on_hand));
+// 60 confirmed − 30 sold − 28 returned = 2 kept at branch after close (keep_at_branch on remaining 2)
+record('Full E2E', 'Branch 1 remaining is 2 after leftover return + close', Number(b1Final?.quantity_on_hand ?? 0) === 2, String(b1Final?.quantity_on_hand));
+// Main started 100, sent 60 → 40. Leftover receive must NOT restock Main to 67.
+record('Full E2E', 'Main remaining is 40 (no leftover restock)', Number(mainFinal?.quantity_on_hand) === 40, String(mainFinal?.quantity_on_hand));
+{
+  const { count: returnInCount } = await admin
+    .from('inventory_movements')
+    .select('id', { count: 'exact', head: true })
+    .eq('branch_id', main.id)
+    .eq('product_id', e2eProduct.id)
+    .eq('movement_type', 'return_in');
+  record('Full E2E', 'No return_in movements on Main for leftover', (returnInCount ?? 0) === 0, String(returnInCount));
+}
 
 variances = await ledgerVariance();
 record('Inventory Reconciliation', 'Ledger variance 0 after E2E', variances.length === 0, variances.length ? JSON.stringify(variances.slice(0, 5)) : 'ok');
 
 console.log('\n-- Sale concurrency --');
+// Same-day finalized close freezes the booth; backdate the E2E shift so a new session can open.
+await admin.from('shifts').update({
+  started_at: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
+  ended_at: new Date(Date.now() - 35 * 3600 * 1000).toISOString(),
+  sales_cutoff_at: new Date(Date.now() - 35 * 3600 * 1000).toISOString(),
+}).eq('id', shiftId);
+
 const saleConcSend = await rpc(sessions.mainMgr, 'send_stock_transfer', {
   p_to_branch_id: branch1.id,
   p_items: [{ product_id: saleConcProduct.id, quantity_sent: 5 }],
   p_notes: null,
   p_idempotency_key: idem('saleconc-send'),
 });
-const { data: saleConcItems } = await admin.from('stock_transfer_items').select('id').eq('stock_transfer_id', saleConcSend);
-await rpc(sessions.mgr1, 'receive_stock_transfer', {
-  p_transfer_id: saleConcSend,
-  p_items: (saleConcItems ?? []).map((item) => ({ stock_transfer_item_id: item.id, quantity_received: 5 })),
-  p_notes: null,
-  p_idempotency_key: idem('saleconc-recv'),
-});
+// Sale concurrency needs an open booth session; start before confirming arrival.
 const concShift = await rpc(sessions.cash1, 'start_cashier_shift');
+await rpc(sessions.cash1, 'confirm_shipment_arrival', {
+  p_transfer_id: saleConcSend,
+  p_idempotency_key: idem('saleconc-arrive'),
+});
 let saleA;
 let saleB;
 for (let attempt = 0; attempt < 3; attempt += 1) {

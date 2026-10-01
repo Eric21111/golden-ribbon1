@@ -101,18 +101,21 @@ All tables maintain `created_at` and `updated_at`. Hard-delete permissions are n
 - Cashiers can read inventory only for their assigned branch while they have an open shift. They cannot mutate inventory, transfers, products, or another cashier's shift.
 - Only an active Owner can list or update employees through restricted database functions. Manager and Cashier clients cannot execute employee administration operations.
 - Employee Auth creation and password reset run in the server-side `employee-admin` Edge Function. It validates the caller's Auth token and active Owner profile before using server-only credentials; unauthenticated requests are rejected in the function.
-- Branch, role, or deactivation changes are rejected while the employee has an open shift. Branch reassignment changes future access without rewriting historical branch references.
+- Branch, role, or deactivation changes are rejected while the employee has an open shift **or a pending remittance** (closed shift still requiring cash/inventory reconciliation). Branch reassignment changes future access without rewriting historical branch references.
 
 ### Transactional inventory operations
 
 - `initialize_main_branch_inventory`: owner-only opening balances plus matching movements; a product can be initialized once.
-- `send_stock_transfer`: owner-only validation, deterministic row locking, server-side transfer numbering, Main Branch deduction, transfer items, and `transfer_out` movements in one transaction.
-- `receive_stock_transfer`: manager/owner authorization, destination-branch enforcement, pending-status lock, actual quantity addition, `transfer_in` movements, discrepancy creation, and final status in one transaction.
-- `start_cashier_shift`: cashier-only branch validation and concurrency-safe creation or recovery of one active shift.
-- `begin_cashier_shift_close` then `finalize_cashier_shift_reconciliation`: cashier two-phase End Shift (sales cutoff + PCS inventory/cash remittance). `end_cashier_shift` remains a reject/compatibility guard. Legacy `close_cashier_shift` is removed.
+- `send_stock_transfer`: Main Branch send with deterministic row locking, transfer numbering, Main deduction, transfer items, and `transfer_out` movements in one transaction.
+- Selling-branch receipt uses cashier `confirm_shipment_arrival` / `report_shipment_issue` (not manager `receive_stock_transfer`). Manager Incoming remains read-only.
+- `start_cashier_shift`: cashier-only; at most one open selling session per branch (and per cashier). Idempotent for the owning cashier; rejects when another cashier already holds the branch session.
+- `begin_cashier_shift_close` then `finalize_cashier_shift_reconciliation`: cashier two-phase End Shift (sales cutoff + PCS inventory/cash remittance). Close paths lock **branch → exact target shift → inventory**. `end_cashier_shift` remains a reject/compatibility guard. Legacy `close_cashier_shift` is removed.
+- Leftover / stock return receive is accountability/waste only: counted leftover at Main does **not** restock Main usable inventory.
 - `list_employees`: owner-only employee directory joined to Auth email and branch name.
-- `owner_update_employee`: owner-only profile edits with active selling-branch and open-shift enforcement.
+- `owner_update_employee`: owner-only profile edits with active selling-branch and unfinished-shift/remittance enforcement.
 - `create_employee_profile_from_server`: server-only profile pairing used after secure Auth user creation.
+
+Before the first PCS selling session, review every provisional `closing_stock_behavior` mapping (see `docs/pcs-cutover-closing-behavior-review.sql` and Manager Products).
 
 Transfers and receipts use idempotency keys. Unique movement indexes and locked status checks provide additional duplicate and concurrency protection. The database rejects negative inventory and invalid status reversals.
 

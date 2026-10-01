@@ -162,9 +162,22 @@ export default function CashierDashboard() {
       BEGIN_CLOSE_CONFIRM_MESSAGE,
       () => {
         beginCloseMutation.mutate(shiftId, {
-          onSuccess: (preview) => {
+          onSuccess: (result) => {
             clearCart();
-            setClosePreview(preview);
+            if (result.status === 'reconciled') {
+              setClosePreview(null);
+              setAwaitingFinalizeRetry(false);
+              lastFinalizeRef.current = null;
+              alertNotice(
+                'End Shift Complete',
+                result.message ?? "This shift remittance is already complete.",
+              );
+              void finalizedToday.refetch();
+              void pendingShift.refetch();
+              void shiftQuery.refetch();
+              return;
+            }
+            setClosePreview(result);
             setAwaitingFinalizeRetry(false);
             lastFinalizeRef.current = null;
           },

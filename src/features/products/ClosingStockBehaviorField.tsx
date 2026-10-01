@@ -26,6 +26,11 @@ export function ClosingStockBehaviorField({
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>Closing stock behavior</Text>
+      <Text style={styles.hint}>
+        Review every product before the first PCS selling session. Cutover mappings were provisional:
+        former piece stock → keep at branch; former kg meal → record as unsold. Correct any product that
+        does not match how the booth actually handles remaining stock.
+      </Text>
       <View style={styles.options}>
         {OPTIONS.map((option) => {
           const selected = value === option.value;
@@ -55,6 +60,7 @@ export function ClosingStockBehaviorField({
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
   label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
   options: { gap: 8 },
   option: {
     borderWidth: 1.5,

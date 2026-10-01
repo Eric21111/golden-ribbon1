@@ -410,7 +410,7 @@ export type Database = {
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       begin_cashier_shift_close: {
         Args: { p_shift_id: string };
-        Returns: import('./models').ShiftClosePreview;
+        Returns: import('./models').ShiftCloseBeginResult;
       };
       finalize_cashier_shift_reconciliation: {
         Args: {

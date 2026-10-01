@@ -3,25 +3,30 @@
  * Prefer importing this over resurrecting close_cashier_shift.
  */
 
+function productsFromBegin(preview) {
+  return (preview?.products ?? []).map((p) => {
+    const remaining =
+      p.system_balance_before_waste ?? p.actual_remaining ?? p.expected_remaining ?? 0;
+    return {
+      product_id: p.product_id,
+      actual_remaining: String(remaining),
+      waste_quantity: String(p.waste_quantity ?? 0),
+    };
+  });
+}
+
 export async function closeShiftExact(db, shiftId, actualCash = '0') {
   const preview = (
     await db.query('select public.begin_cashier_shift_close($1) preview', [shiftId])
   ).rows[0].preview;
 
-  let products = (preview?.products ?? []).map((p) => ({
-    product_id: p.product_id,
-    actual_remaining: String(p.system_balance_before_waste),
-    waste_quantity: '0',
-  }));
+  // Already finalized begin response — still run identical finalize for idempotency coverage.
+  let products = productsFromBegin(preview);
 
   // Fallback if begin preview omitted products (should not happen for PCS closes).
   if (products.length === 0 && preview?.inventory_reconciliation_required) {
     const pending = (await db.query('select public.get_my_pending_shift_reconciliation() p')).rows[0].p;
-    products = (pending?.products ?? []).map((p) => ({
-      product_id: p.product_id,
-      actual_remaining: String(p.system_balance_before_waste),
-      waste_quantity: '0',
-    }));
+    products = productsFromBegin(pending);
   }
 
   const result = (

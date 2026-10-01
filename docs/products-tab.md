@@ -36,6 +36,23 @@ Flow: **Product Information → Variants → Branch Pricing → Create/Save**, w
 
 Both save **atomically** in a single database transaction — `create_complete_product` for Create, `update_complete_product` for Edit — so a failed save never leaves the product half-updated. New products are always created **inactive**; a Main Manager must set opening stock before a product can activate.
 
+Closing stock behavior is required on create/edit: **Keep remaining stock at branch** or **Record remaining stock as unsold**.
+
+---
+
+## Cutover review (mandatory before first PCS selling session)
+
+PCS cutover assigned provisional closing behaviors from former inventory modes:
+
+| Former mode | Provisional closing behavior |
+|-------------|------------------------------|
+| `piece_stock` | `keep_at_branch` |
+| `kg_meal` | `record_as_unsold` |
+
+Owner / Main Manager must review **every** cutover snapshot product (not only currently active ones), correct any mapping that does not match real booth handling, and only then initialize / reactivate / run PCS selling sessions.
+
+Read-only audit query: `docs/pcs-cutover-closing-behavior-review.sql` (joins `pcs_cutover_product_snapshots` to live `products`).
+
 ---
 
 ## Related

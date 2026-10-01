@@ -17,7 +17,7 @@ import {
 } from '@/services/shiftService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
-import type { ShiftCloseFinalizeProduct, ShiftClosePreview, ShiftCloseResult } from '@/types/models';
+import type { ShiftCloseBeginResult, ShiftCloseFinalizeProduct, ShiftCloseResult } from '@/types/models';
 
 function assertShiftCloseAllowed() {
   if (useCheckoutStore.getState().request || useCheckoutStore.getState().pending) {
@@ -71,7 +71,7 @@ export function useStartShift(cashierId: string) {
 
 export function useBeginCashierShiftClose(cashierId: string) {
   const client = useQueryClient();
-  return useMutation<ShiftClosePreview, Error, string>({
+  return useMutation<ShiftCloseBeginResult, Error, string>({
     mutationFn: async (shiftId) => {
       assertShiftCloseAllowed();
       return beginCashierShiftClose(shiftId);

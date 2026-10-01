@@ -57,3 +57,5 @@ Sticky CTA (Manager create only)
 |------|-------|
 | Create return | `/manager/returns/create` |
 | Owner receive | `/owner/returns/receive/[id]` |
+
+Leftover / stock return receive at Main is accountability and waste tracking only. Counted leftover does **not** increase Main usable inventory (`return_in` restock is not used for leftover returns).
