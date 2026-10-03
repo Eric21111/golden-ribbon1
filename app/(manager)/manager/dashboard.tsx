@@ -193,20 +193,6 @@ export default function ManagerDashboard() {
                       />
                     ))}
                   </Row>
-                  <NavTile
-                    icon="cash-outline"
-                    accent="gold"
-                    title="Shift remittances"
-                    description="Pending reconciliation versus completed actual cash"
-                    onPress={() => router.push('/manager/reports/shift-remittances' as never)}
-                  />
-                  <NavTile
-                    icon="leaf-outline"
-                    accent="green"
-                    title="Waste History"
-                    description="Quantified PCS waste by selling-shift business date"
-                    onPress={() => router.push('/manager/reports/waste-history' as never)}
-                  />
                 </>
               ) : (
                 <Row>
@@ -223,6 +209,27 @@ export default function ManagerDashboard() {
                 </Row>
               )}
             </Section>
+
+            {isMain ? (
+              <Section title="REPORTS">
+                <Row>
+                  <NavTile
+                    layout="tile"
+                    icon="cash-outline"
+                    accent="pink"
+                    title="Shift remittances"
+                    onPress={() => router.push('/manager/reports/shift-remittances' as never)}
+                  />
+                  <NavTile
+                    layout="tile"
+                    icon="leaf-outline"
+                    accent="green"
+                    title="Waste History"
+                    onPress={() => router.push('/manager/reports/waste-history' as never)}
+                  />
+                </Row>
+              </Section>
+            ) : null}
           </View>
         )}
       </ConstrainedWidth>

@@ -8,7 +8,15 @@ interface SummaryCardRow {
   value: string;
   emphasis?: boolean;
   icon?: IoniconsIconName;
+  /** Colors the value text for an at-a-glance signal (e.g. a shortage in red, an excess in green). */
+  tone?: 'danger' | 'success' | 'warning';
 }
+
+const toneColors: Record<NonNullable<SummaryCardRow['tone']>, string> = {
+  danger: '#B91C1C',
+  success: managerColors.green,
+  warning: managerColors.goldMuted,
+};
 
 interface SummaryCardProps {
   title?: string;
@@ -30,7 +38,14 @@ export function SummaryCard({ title, rows }: SummaryCardProps) {
               {row.label}
             </Text>
           </View>
-          <Text style={[styles.value, row.emphasis && styles.valueEmphasis]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.value,
+              row.emphasis && styles.valueEmphasis,
+              row.tone && { color: toneColors[row.tone] },
+            ]}
+            numberOfLines={1}
+          >
             {row.value}
           </Text>
         </View>

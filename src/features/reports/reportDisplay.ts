@@ -1,9 +1,24 @@
-import { formatLiveStock, formatMoney } from '@/lib/format';
+import { formatDateShort, formatLiveStock, formatMoney } from '@/lib/format';
 import type {
   CashReconciliationResult,
   ShiftCloseReportProduct,
   ShiftProductReconResult,
 } from '@/types/models';
+
+const timeFormatter = new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' });
+
+/** A shift's day is already the section header above every row, so repeating the full date on
+ * both ends of a same-day shift (as formatDateShort would) just makes the row wrap. Time-only
+ * here, falling back to a dated label only when the shift actually spans into another day. */
+export function formatShiftTimeRange(startedAt: string, endedAt: string | null) {
+  const start = new Date(startedAt);
+  const end = endedAt ? new Date(endedAt) : null;
+  const sameDay = !end || start.toDateString() === end.toDateString();
+  if (sameDay) {
+    return `${timeFormatter.format(start)} – ${end ? timeFormatter.format(end) : 'In progress'}`;
+  }
+  return `${formatDateShort(startedAt)} – ${endedAt ? formatDateShort(endedAt) : 'In progress'}`;
+}
 
 /** Cash semantics from server: difference = expected - actual. */
 export function formatRemittanceCashResult(

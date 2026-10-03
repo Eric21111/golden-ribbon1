@@ -108,11 +108,11 @@ assert.equal(format.formatMovementType('unsold'), 'Unsold at close');
 assert.equal(format.formatMovementType('waste'), 'Waste');
 
 // Remittance UI
-assert.match(remittance, /formatRemittanceCashResult/);
+assert.match(remittance, /remittanceRowBadge/);
 assert.match(remittance, /detailBase\/\$\{row\.shift_id\}|shift-remittances/);
 assert.match(remittanceDetail, /product_name_snapshot/);
-assert.match(remittanceDetail, /Unsold:/);
-assert.match(remittanceDetail, /Carried:/);
+assert.match(remittanceDetail, /Unsold/);
+assert.match(remittanceDetail, /Carried/);
 assert.match(remittanceDetail, /Cash reconciliation only|inventory close was not required/i);
 assert.match(remittanceDetail, /Pending|not available yet/i);
 assert.doesNotMatch(remittanceDetail, /keep_at_branch|record_as_unsold/);

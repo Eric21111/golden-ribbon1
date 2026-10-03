@@ -20,14 +20,6 @@ interface ManagerScreenHeaderProps {
   hideMenu?: boolean;
 }
 
-function goBack() {
-  if (router.canGoBack()) {
-    router.back();
-  } else {
-    router.replace('/manager/dashboard');
-  }
-}
-
 export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, hideMenu = false }: ManagerScreenHeaderProps) {
   const { profile } = useAuth();
   // Selling-branch managers have no drawer to open (see app/(manager)/_layout.tsx) — the
@@ -36,6 +28,21 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, 
   // existing Owner route is reachable, since the bottom tabs are trimmed to 4.
   const hasDrawer = (profile?.role === 'manager' && isMainBranchManager(profile)) || profile?.role === 'owner';
   const showHamburger = !hideMenu && hasDrawer;
+  // Fallback when there's no back history (e.g. a role's Home tab) — route to that role's own
+  // dashboard, not a hardcoded Manager route another role can't even access.
+  const roleHome =
+    profile?.role === 'owner'
+      ? '/owner/dashboard'
+      : profile?.role === 'cashier'
+        ? '/cashier/dashboard'
+        : '/manager/dashboard';
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(roleHome as never);
+    }
+  };
 
   if (showBack) {
     return (

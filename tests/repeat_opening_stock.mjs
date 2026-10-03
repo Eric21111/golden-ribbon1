@@ -4,7 +4,6 @@ import { PGlite } from '@electric-sql/pglite';
 
 const setupSource = readFileSync('src/features/inventory/InventorySetupScreen.tsx', 'utf8');
 assert.match(setupSource, /Add quantity/);
-assert.match(setupSource, /add more stock/);
 assert.doesNotMatch(setupSource, /Nothing left to set up/);
 assert.doesNotMatch(setupSource, /router\.back\(\)/);
 

@@ -123,8 +123,9 @@ assert.match(closeForm, /placeholder="—"/);
 assert.match(ACTUAL_REMAINING_HELPER, /usable items/i);
 assert.match(ACTUAL_REMAINING_HELPER, /Do not include waste/i);
 assert.match(WASTE_HELPER, /unusable/i);
-assert.match(closeForm, /ACTUAL_REMAINING_HELPER/);
-assert.match(closeForm, /WASTE_HELPER/);
+// Shortened inline copy (not the long closeDisplay constants) still distinguishes the two fields.
+assert.match(closeForm, /usable items left at the booth, not including waste/i);
+assert.match(closeForm, /unusable pieces/i);
 assert.doesNotMatch(ACTUAL_REMAINING_HELPER, /plus waste|including waste|and waste/i);
 
 // --- Waste defaults / validation ---

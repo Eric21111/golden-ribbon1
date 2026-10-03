@@ -121,6 +121,7 @@ export function CreateTransferScreen() {
 
   const watchedItems = watch('items');
   const selectedQuantityCount = watchedItems.filter((item) => Number(item.quantity) > 0).length;
+  const totalSelectedQuantity = watchedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
   useEffect(() => {
     if (inventory.data && !formInitialized.current) {
@@ -388,7 +389,7 @@ export function CreateTransferScreen() {
                     quantity.onChange(String(next));
                   };
                   return (
-                    <View style={styles.card}>
+                    <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
                       <View style={styles.cardTop}>
                         <View style={styles.cardInfo}>
                           <Text style={styles.name} numberOfLines={2}>
@@ -442,7 +443,18 @@ export function CreateTransferScreen() {
                               onFocus={() => setFocusedIndex(index)}
                               onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
                               onChangeText={(value) => {
-                                if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
+                                if (value === '') {
+                                  quantity.onChange(value);
+                                  return;
+                                }
+                                if (!/^\d{0,6}$/.test(value)) return;
+                                // Clamp to available stock as the user types, not just via the
+                                // stepper/Max button — typing "999" past what's on hand should
+                                // settle at the real ceiling instead of staying invalid until review.
+                                const numeric = Number(value);
+                                quantity.onChange(
+                                  numeric > item.quantity_on_hand ? String(item.quantity_on_hand) : value,
+                                );
                               }}
                               style={styles.stepperInput}
                             />
@@ -496,6 +508,21 @@ export function CreateTransferScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
+          {selectedQuantityCount > 0 ? (
+            <View style={styles.stickySummary}>
+              <View style={styles.stickySummaryItem}>
+                <Text style={styles.stickySummaryValue}>{selectedQuantityCount}</Text>
+                <Text style={styles.stickySummaryLabel}>
+                  {selectedQuantityCount === 1 ? 'product' : 'products'}
+                </Text>
+              </View>
+              <View style={styles.stickySummaryDivider} />
+              <View style={styles.stickySummaryItem}>
+                <Text style={styles.stickySummaryValue}>{formatLiveStock(totalSelectedQuantity)}</Text>
+                <Text style={styles.stickySummaryLabel}>total pcs</Text>
+              </View>
+            </View>
+          ) : null}
           <Controller
             control={control}
             name="notes"
@@ -645,6 +672,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
+  cardSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F8FAFE' },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardInfo: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
@@ -695,10 +723,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: managerColors.cardBorder,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
     color: managerColors.ink,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
     textAlign: 'center',
     paddingVertical: 0,
   },
@@ -765,4 +793,15 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 10,
   },
+  stickySummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EAF0FB',
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  stickySummaryItem: { flex: 1, alignItems: 'center', gap: 1 },
+  stickySummaryValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  stickySummaryLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
+  stickySummaryDivider: { width: 1, height: 28, backgroundColor: '#C7D6F2' },
 });

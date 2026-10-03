@@ -8,6 +8,7 @@ import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
@@ -141,7 +142,7 @@ export default function CashierDashboard() {
 
   const startShift = () =>
     startMutation.mutate(undefined, {
-      onSuccess: () => router.replace('/cashier/pos'),
+      onSuccess: () => router.replace('/cashier/incoming' as never),
       onError: (error) => {
         alertNotice('Cannot start shift', getShiftErrorMessage(error));
       },
@@ -321,6 +322,8 @@ export default function CashierDashboard() {
   const orders = summaryQuery.data?.completed_transaction_count;
   const salesTotal = summaryQuery.data?.total_sales;
   const cashierName = profile?.full_name ?? 'Cashier';
+  // No shift to greet into when a remittance is blocking everything else — the page is the task.
+  const showPendingHeader = !shiftQuery.data && Boolean(pendingPreview);
 
   const remittanceForm = pendingPreview ? (
     <View style={styles.remittanceBlock}>
@@ -354,23 +357,27 @@ export default function CashierDashboard() {
       onRefresh={onRefresh}
       contentContainerStyle={styles.screenContent}
     >
-      <View style={styles.header}>
-        <Text style={styles.greeting} numberOfLines={1}>
-          Hi, {cashierName}
-        </Text>
-        <View style={styles.pillRow}>
-          <View style={styles.rolePill}>
-            <View style={styles.roleDot} />
-            <Text style={styles.rolePillText}>CASHIER</Text>
-          </View>
-          <View style={styles.branchPill}>
-            <Ionicons name="storefront-outline" size={12} color={managerColors.subtext} />
-            <Text style={styles.branchPillText} numberOfLines={1}>
-              {profile?.branch?.name ?? 'Unassigned'}
-            </Text>
+      {showPendingHeader ? (
+        <ManagerScreenHeader title="Pending Remittance" showBack hideMenu />
+      ) : (
+        <View style={styles.header}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            Hi, {cashierName}
+          </Text>
+          <View style={styles.pillRow}>
+            <View style={styles.rolePill}>
+              <View style={styles.roleDot} />
+              <Text style={styles.rolePillText}>CASHIER</Text>
+            </View>
+            <View style={styles.branchPill}>
+              <Ionicons name="storefront-outline" size={12} color={managerColors.subtext} />
+              <Text style={styles.branchPillText} numberOfLines={1}>
+                {profile?.branch?.name ?? 'Unassigned'}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       <ConstrainedWidth style={styles.column}>
         {shiftQuery.isLoading && !shiftQuery.data ? (
@@ -381,51 +388,54 @@ export default function CashierDashboard() {
             onRetry={() => void shiftQuery.refetch()}
           />
         ) : !shiftQuery.data ? (
-          <View style={styles.noticeCard}>
-            {pendingPreview ? (
-              <>
-                <Text style={styles.noticeTitle}>Pending remittance</Text>
-                <Text style={styles.noticeText}>
-                  Sales are closed for this booth. Finish the stock and cash count to complete End Shift.
-                </Text>
-                {remittanceForm}
-              </>
-            ) : sameDayClosedHint ? (
-              <>
-                <Text style={styles.noticeTitle}>Shift closed for today</Text>
-                <Text style={styles.noticeText}>
-                  Today&apos;s End Shift is complete. Start again next business day.
-                </Text>
-                <Text style={styles.note}>
-                  If this looks wrong, pull to refresh. The server decides whether a new shift can start.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.noticeTitle}>No Active Shift</Text>
-                <Text style={styles.noticeText}>
-                  Start a shift to sell. You can confirm incoming shipments anytime. Ending a shift stops sales
-                  and stock transactions for today, then you count remaining stock and cash.
-                </Text>
-                {startMutation.error ? (
-                  <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
-                ) : null}
-                <ManagerActionButton
-                  label="Start shift"
-                  icon="play-outline"
-                  loading={startMutation.isPending}
-                  disabled={startMutation.isPending}
-                  onPress={startShift}
-                />
-              </>
-            )}
-            {showIncomingTile ? (
-              <>
-                <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
-                <Row>{incomingTile}</Row>
-              </>
-            ) : null}
-          </View>
+          pendingPreview ? (
+            <>
+              {remittanceForm}
+              {showIncomingTile ? (
+                <>
+                  <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
+                  <Row>{incomingTile}</Row>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.noticeCard}>
+              {sameDayClosedHint ? (
+                <>
+                  <Text style={styles.noticeTitle}>Shift closed for today</Text>
+                  <Text style={styles.noticeText}>
+                    Today&apos;s End Shift is complete. Start again next business day.
+                  </Text>
+                  <Text style={styles.note}>
+                    If this looks wrong, pull to refresh. The server decides whether a new shift can start.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.noticeTitle}>No Active Shift</Text>
+                  <Text style={styles.noticeText}>
+                    Start a shift to begin selling and receiving stock.
+                  </Text>
+                  {startMutation.error ? (
+                    <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
+                  ) : null}
+                  <ManagerActionButton
+                    label="Start shift"
+                    icon="play-outline"
+                    loading={startMutation.isPending}
+                    disabled={startMutation.isPending}
+                    onPress={startShift}
+                  />
+                </>
+              )}
+              {showIncomingTile ? (
+                <>
+                  <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
+                  <Row>{incomingTile}</Row>
+                </>
+              ) : null}
+            </View>
+          )
         ) : (
           <View style={styles.content}>
             <View style={styles.row}>

@@ -1,3 +1,4 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -7,7 +8,6 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
-import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
   useCashierPendingTransfers,
@@ -40,8 +40,12 @@ export default function CashierIncomingShipments() {
   const beginReport = (transfer: CashierPendingTransfer) => {
     setReportingId(transfer.id);
     setIssueNotes('');
+    // Prefill with what was sent — most lines match, so the cashier only has to edit the ones
+    // that differ instead of retyping every quantity from scratch.
     setReceivedByItem(
-      Object.fromEntries(transfer.items.map((line) => [line.stock_transfer_item_id, ''])),
+      Object.fromEntries(
+        transfer.items.map((line) => [line.stock_transfer_item_id, String(line.quantity_sent)]),
+      ),
     );
     arrival.reset();
     issue.reset();
@@ -139,7 +143,7 @@ export default function CashierIncomingShipments() {
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <View style={styles.layout}>
-        <ManagerScreenHeader title="Incoming Shipments" hideMenu />
+        <ManagerScreenHeader title="Incoming Shipments" showBack />
         <FlatList
           data={pending.data ?? []}
           keyExtractor={(item) => item.id}
@@ -180,19 +184,19 @@ export default function CashierIncomingShipments() {
                 : null);
 
             return (
-              <View style={styles.card}>
+              <View style={[styles.card, reporting && styles.cardReporting]}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.transferNumber}>{item.transfer_number}</Text>
-                  <Text style={styles.meta}>From {item.from_branch_name} · Sent {formatDate(item.sent_at)}</Text>
+                  <View style={styles.cardTopIconChip}>
+                    <Ionicons name="cube-outline" size={18} color={managerColors.royalBlue} />
+                  </View>
+                  <View style={styles.cardTopCopy}>
+                    <Text style={styles.transferNumber}>{item.transfer_number}</Text>
+                    <Text style={styles.meta}>From {item.from_branch_name} · Sent {formatDate(item.sent_at)}</Text>
+                  </View>
                 </View>
                 {item.items.map((line) => (
                   <View key={line.stock_transfer_item_id} style={styles.itemRow}>
-                    <View style={styles.itemCopy}>
-                      <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
-                      <Text style={styles.itemSku}>
-                        Sent {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
-                      </Text>
-                    </View>
+                    <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
                     {reporting ? (
                       <TextInput
                         accessibilityLabel={`Actual received quantity for ${line.product_name}`}
@@ -209,10 +213,11 @@ export default function CashierIncomingShipments() {
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
                         maxLength={6}
+                        selectTextOnFocus
                         style={styles.qtyInput}
                       />
                     ) : (
-                      <Text style={styles.itemQty}>
+                      <Text style={styles.itemQty} numberOfLines={1}>
                         {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
                       </Text>
                     )}
@@ -233,37 +238,45 @@ export default function CashierIncomingShipments() {
                 ) : null}
                 {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
                 {reporting ? (
-                  <>
-                    <ManagerActionButton
-                      label="Confirm issue"
-                      icon="alert-circle-outline"
-                      loading={issue.isPending && issue.variables?.transferId === item.id}
-                      disabled={!countsReady || !hasDifference || !notesReady || otherBusy}
-                      onPress={() => confirmIssue(item)}
-                    />
-                    <ManagerActionButton
-                      label="Cancel"
-                      variant="secondary"
-                      disabled={busy}
-                      onPress={cancelReport}
-                    />
-                  </>
+                  <View style={styles.buttonRow}>
+                    <View style={styles.buttonHalf}>
+                      <ManagerActionButton
+                        label="Cancel"
+                        variant="secondary"
+                        disabled={busy}
+                        onPress={cancelReport}
+                      />
+                    </View>
+                    <View style={styles.buttonHalf}>
+                      <ManagerActionButton
+                        label="Confirm issue"
+                        icon="alert-circle-outline"
+                        loading={issue.isPending && issue.variables?.transferId === item.id}
+                        disabled={!countsReady || !hasDifference || !notesReady || otherBusy}
+                        onPress={() => confirmIssue(item)}
+                      />
+                    </View>
+                  </View>
                 ) : (
-                  <>
-                    <ManagerActionButton
-                      label="Shipment Arrived"
-                      icon="checkmark-circle-outline"
-                      loading={arrival.isPending && arrival.variables?.transferId === item.id}
-                      disabled={otherBusy || reportingId != null}
-                      onPress={() => confirmArrival(item)}
-                    />
-                    <ManagerActionButton
-                      label="Report issue"
-                      variant="secondary"
-                      disabled={busy || otherBusy || reportingId != null}
-                      onPress={() => beginReport(item)}
-                    />
-                  </>
+                  <View style={styles.buttonRow}>
+                    <View style={styles.buttonHalf}>
+                      <ManagerActionButton
+                        label="Report issue"
+                        variant="secondary"
+                        disabled={busy || otherBusy || reportingId != null}
+                        onPress={() => beginReport(item)}
+                      />
+                    </View>
+                    <View style={styles.buttonHalf}>
+                      <ManagerActionButton
+                        label="Arrived"
+                        icon="checkmark-circle-outline"
+                        loading={arrival.isPending && arrival.variables?.transferId === item.id}
+                        disabled={otherBusy || reportingId != null}
+                        onPress={() => confirmArrival(item)}
+                      />
+                    </View>
+                  </View>
                 )}
               </View>
             );
@@ -278,22 +291,32 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
   list: { flex: 1, minHeight: 0 },
-  listContent: { paddingHorizontal: 20, paddingVertical: spacing.sm, flexGrow: 1 },
-  separator: { height: spacing.sm },
+  listContent: { paddingHorizontal: 20, paddingVertical: 16, flexGrow: 1 },
+  separator: { height: 12 },
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
-    padding: 14,
-    gap: 10,
+    padding: 16,
+    gap: 14,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  cardTop: { gap: 2 },
+  cardReporting: { borderColor: managerColors.royalBlue, backgroundColor: '#F8FAFE' },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardTopIconChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DCE8FC',
+  },
+  cardTopCopy: { flex: 1, minWidth: 0, gap: 2 },
   transferNumber: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
   itemRow: {
@@ -303,12 +326,13 @@ const styles = StyleSheet.create({
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
-  itemCopy: { flex: 1, minWidth: 0 },
-  itemName: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
-  itemSku: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
-  itemQty: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  itemName: { flex: 1, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
+  itemQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  buttonRow: { flexDirection: 'row', gap: 10 },
+  buttonHalf: { flex: 1 },
   qtyInput: {
     width: 64,
     height: 40,

@@ -12,6 +12,10 @@ interface ListRowCardProps {
   /** Renders subtitle as a small code-style chip instead of plain text (good for SKUs/IDs). */
   subtitleTag?: boolean;
   meta?: ReactNode;
+  /** For icon + text pairs (e.g. a clock icon next to a time, a person icon next to a name) —
+   * `meta` renders inside a single Text, which can't hold inline icons/Views. Renders as its
+   * own wrapping row below subtitle/meta. */
+  metaRow?: ReactNode;
   trailing?: ReactNode;
   onPress?: () => void;
 }
@@ -23,6 +27,7 @@ export function ListRowCard({
   subtitle,
   subtitleTag = false,
   meta,
+  metaRow,
   trailing,
   onPress,
 }: ListRowCardProps) {
@@ -53,6 +58,7 @@ export function ListRowCard({
           )
         ) : null}
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+        {metaRow ? <View style={styles.metaRow}>{metaRow}</View> : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
       {onPress ? <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} style={styles.chevron} /> : null}
@@ -113,6 +119,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
   trailing: { alignItems: 'flex-end', gap: 6 },
   chevron: { marginLeft: -2 },
 });
