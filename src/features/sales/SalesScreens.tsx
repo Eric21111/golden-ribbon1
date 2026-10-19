@@ -7,6 +7,7 @@ import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
+import { pricingProgramLabel } from '@/features/pos/pricingPrograms';
 import { useSale } from '@/hooks/useSales';
 import { formatDate, formatMoney } from '@/lib/format';
 
@@ -67,6 +68,12 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
               label={isCompleted ? 'Completed' : 'Voided'}
               tone={isCompleted ? 'success' : 'danger'}
             />
+            {sale.pricing_program && sale.pricing_program !== 'standard' ? (
+              <ManagerBadge
+                label={pricingProgramLabel(sale.pricing_program)}
+                tone={sale.pricing_program === 'employee_meal' ? 'warning' : 'info'}
+              />
+            ) : null}
           </View>
         </View>
       </View>
@@ -81,6 +88,11 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
             icon: 'time-outline',
           },
           { label: 'Date / time', value: formatDate(sale.sold_at), icon: 'calendar-outline' },
+          {
+            label: 'Pricing',
+            value: pricingProgramLabel(sale.pricing_program ?? 'standard'),
+            icon: 'pricetag-outline',
+          },
         ]}
       />
 
@@ -110,8 +122,13 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
       <Text style={styles.sectionTitle}>PAYMENT SUMMARY</Text>
       <SummaryCard
         rows={[
-          { label: 'Subtotal', value: formatMoney(sale.subtotal) },
-          { label: 'Total amount', value: formatMoney(sale.total_amount), emphasis: true },
+          ...(sale.catalog_subtotal != null && Number(sale.catalog_subtotal) !== Number(sale.total_amount)
+            ? [{ label: 'Catalog', value: formatMoney(sale.catalog_subtotal) }]
+            : []),
+          ...(Number(sale.discount_amount ?? 0) > 0
+            ? [{ label: 'Discount', value: `−${formatMoney(sale.discount_amount ?? 0)}` }]
+            : []),
+          { label: 'Charged total', value: formatMoney(sale.total_amount), emphasis: true },
         ]}
       />
     </View>

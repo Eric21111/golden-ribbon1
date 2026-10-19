@@ -61,6 +61,8 @@ export function useStartShift(cashierId: string) {
       await Promise.all([
         client.invalidateQueries({ queryKey: queryKeys.profile(cashierId) }),
         client.invalidateQueries({ queryKey: queryKeys.activeShift(cashierId) }),
+        client.invalidateQueries({ queryKey: ['shifts', 'pending', cashierId] }),
+        client.invalidateQueries({ queryKey: ['shifts', 'finalized-today', cashierId] }),
         client.invalidateQueries({ queryKey: ['inventory'] }),
         client.invalidateQueries({ queryKey: ['inventory', 'cashier-pos'] }),
         client.invalidateQueries({ queryKey: ['shifts'] }),

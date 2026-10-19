@@ -48,7 +48,7 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6}(\.\d{1,3})?)?$/, 'Enter a quantity.'),
+        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole PCS quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),

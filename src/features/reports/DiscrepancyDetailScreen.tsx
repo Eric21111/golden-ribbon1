@@ -17,6 +17,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   getReturnDiscrepancy,
   getTransferDiscrepancy,
@@ -75,6 +76,9 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
       await Promise.all([
         query.refetch(),
         client.invalidateQueries({ queryKey: ['reports'] }),
+        client.invalidateQueries({ queryKey: ['return-discrepancies'] }),
+        client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
+        client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
         client.invalidateQueries({ queryKey: ['stock-returns'] }),
         client.invalidateQueries({ queryKey: ['stock-transfers'] }),
       ]);

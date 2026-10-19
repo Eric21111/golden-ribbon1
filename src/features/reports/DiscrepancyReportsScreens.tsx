@@ -56,7 +56,7 @@ export function TransferDiscrepanciesReportScreen({
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
+  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [search, setSearch] = useState('');
@@ -260,7 +260,7 @@ export function ReturnDiscrepanciesReportScreen({
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
+  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [search, setSearch] = useState('');

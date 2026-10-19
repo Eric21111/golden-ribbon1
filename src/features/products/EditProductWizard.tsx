@@ -11,6 +11,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import type { ClosingStockBehavior } from '@/types/models';
 
 import { ClosingStockBehaviorField } from './ClosingStockBehaviorField';
+import { NonReturnableField } from './NonReturnableField';
 import { PRICE_PATTERN } from './productSchema';
 
 type PricingMode = 'same' | 'different';
@@ -28,6 +29,7 @@ export type EditProductValues = {
   variants: EditProductVariantValue[];
   deletedVariantIds: string[];
   closingStockBehavior: ClosingStockBehavior;
+  isNonReturnable: boolean;
 };
 
 export type BranchPricingDraft =
@@ -45,6 +47,7 @@ interface EditProductWizardProps {
     description: string | null;
     is_active: boolean;
     closing_stock_behavior: ClosingStockBehavior;
+    is_non_returnable?: boolean;
   };
   sourceVariants: EditProductSourceVariant[];
   sourceBranchPrices: EditProductSourceBranchPrice[];
@@ -95,7 +98,13 @@ export function EditProductWizard({
   const [closingStockBehavior, setClosingStockBehavior] = useState<ClosingStockBehavior>(
     product.closing_stock_behavior,
   );
+  const [isNonReturnable, setIsNonReturnable] = useState(Boolean(product.is_non_returnable));
   const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
+
+  const onNonReturnableChange = (value: boolean) => {
+    setIsNonReturnable(value);
+    if (value) setClosingStockBehavior('keep_at_branch');
+  };
 
   // Step 2 — variants (pre-filled), with hard-delete tracking
   const [variants, setVariants] = useState<EditVariantDraft[]>(() =>
@@ -350,7 +359,8 @@ export function EditProductWizard({
         default_price: topLevelPrice,
         variants: variantValues,
         deletedVariantIds,
-        closingStockBehavior,
+        closingStockBehavior: isNonReturnable ? 'keep_at_branch' : closingStockBehavior,
+        isNonReturnable,
       },
       pricing,
     );
@@ -364,7 +374,11 @@ export function EditProductWizard({
 
       {step === 1 ? (
         <View style={styles.stepBody}>
-          <ClosingStockBehaviorField value={closingStockBehavior} onChange={setClosingStockBehavior} />
+          <ClosingStockBehaviorField
+            value={isNonReturnable ? 'keep_at_branch' : closingStockBehavior}
+            onChange={setClosingStockBehavior}
+          />
+          <NonReturnableField value={isNonReturnable} onChange={onNonReturnableChange} />
           <FormField
             label="Product name"
             value={name}

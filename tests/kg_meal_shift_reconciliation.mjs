@@ -83,26 +83,41 @@ const asUser = async (userId, work) => {
   }
 };
 
-// Revision 7A: active kg_meal ops are retired
+// Phase 3: kg_meal may be set when balances are clear (no auto PCS conversion).
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select public.set_product_inventory_mode($1,$2)', [buttered, 'kg_meal']),
-    /retired|piece stock/i,
+    /Clear every current balance/i,
   ),
 );
 
+const kgProduct = id(22);
+await db.exec(`
+  insert into public.products(id,name,sku,selling_price,is_active,inventory_mode,closing_stock_behavior)
+  values ('${kgProduct}','Phase3 Pares','P3PARES',90,false,'piece_stock','record_as_unsold');
+  insert into public.branch_inventory(branch_id,product_id,quantity_on_hand)
+  values ('${main}','${kgProduct}',0);
+`);
+await asUser(mainMgr, () =>
+  db.query('select public.set_product_inventory_mode($1,$2)', [kgProduct, 'kg_meal']),
+);
+const kgMode = (
+  await db.query(`select inventory_mode::text m from public.products where id=$1`, [kgProduct])
+).rows[0].m;
+assert.equal(kgMode, 'kg_meal');
+// create_complete_product still defaults to PCS (use set_product_inventory_mode for KG).
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select * from public.create_complete_product($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7)', [
-      'New KG',
-      'NEWKG',
+      'Another KG',
+      'ANOTHERKG',
       null,
       '[]',
       '[]',
       '10',
       'kg_meal',
     ]),
-    /retired|piece stock/i,
+    /retired|piece stock|kg meal/i,
   ),
 );
 

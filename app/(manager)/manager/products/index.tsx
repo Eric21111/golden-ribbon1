@@ -46,6 +46,7 @@ import {
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { closingStockBehaviorLabel } from '@/lib/format';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
+import { setProductNonReturnable } from '@/services/productService';
 import type { Product } from '@/types/models';
 
 type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
@@ -138,7 +139,12 @@ export default function ManagerProductListScreen() {
         selling_price: hasVariants ? null : values.default_price,
         closingStockBehavior: values.closingStockBehavior,
       })
-      .then(() => setCreateOpen(false))
+      .then(async (product) => {
+        if (values.isNonReturnable) {
+          await setProductNonReturnable(product.id, true);
+        }
+        setCreateOpen(false);
+      })
       .finally(() => {
         endSubmit(submittingRef);
         setIsSubmitting(false);
@@ -151,9 +157,11 @@ export default function ManagerProductListScreen() {
     setIsEditSubmitting(true);
     const hasVariants = values.variants.length > 0;
     setModeError('');
+    const productId = editProduct.id;
+    const priorNonReturnable = Boolean(editProduct.is_non_returnable);
     void updateCompleteMutation
       .mutateAsync({
-        productId: editProduct.id,
+        productId,
         name: values.name,
         sku: values.sku,
         description: values.description ? values.description : null,
@@ -168,7 +176,12 @@ export default function ManagerProductListScreen() {
         ),
         selling_price: hasVariants ? null : values.default_price,
       })
-      .then(() => setEditProduct(null))
+      .then(async () => {
+        if (values.isNonReturnable !== priorNonReturnable) {
+          await setProductNonReturnable(productId, values.isNonReturnable);
+        }
+        setEditProduct(null);
+      })
       .catch((error: unknown) => setModeError(getProductErrorMessage(error)))
       .finally(() => {
         endSubmit(editSubmittingRef);
@@ -288,6 +301,7 @@ export default function ManagerProductListScreen() {
                 description: editProduct.description,
                 is_active: editProduct.is_active,
                 closing_stock_behavior: editProduct.closing_stock_behavior,
+                is_non_returnable: Boolean(editProduct.is_non_returnable),
               }}
               sourceVariants={(editVariants.data ?? []).map((variant) => ({
                 id: variant.id,

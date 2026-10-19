@@ -127,6 +127,19 @@ export type Database = {
         ];
       };
       sales: { Row: Sale; Insert: never; Update: never; Relationships: [] };
+      sale_pricing_program_settings: {
+        Row: {
+          program: string;
+          discount_percent: number | null;
+          pricing_mode: string | null;
+          fixed_amount: number | null;
+          label: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       branches: {
         Row: Branch;
         Insert: BranchInsert;
@@ -330,6 +343,27 @@ export type Database = {
         };
         Returns: Product;
       };
+      list_cashier_local_purchase_catalog: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          product_id: string;
+          product_name: string;
+          product_sku: string;
+          quantity_on_hand: number;
+        }>;
+      };
+      record_branch_local_purchase: {
+        Args: {
+          p_items: Array<{ product_id: string; quantity: string }>;
+          p_notes: string | null;
+          p_idempotency_key: string;
+        };
+        Returns: string;
+      };
+      set_product_non_returnable: {
+        Args: { p_product_id: string; p_is_non_returnable: boolean };
+        Returns: Product;
+      };
       set_product_inventory_mode: {
         Args: { p_product_id: string; p_inventory_mode: string };
         Returns: Product;
@@ -396,6 +430,7 @@ export type Database = {
           p_items: { product_id: string; variant_id?: string | null; quantity: number }[];
           p_amount_paid: string;
           p_idempotency_key: string;
+          p_pricing_program?: string;
         };
         Returns: Sale;
       };

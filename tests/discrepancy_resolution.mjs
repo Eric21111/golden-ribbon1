@@ -5,6 +5,8 @@ import { PGlite } from '@electric-sql/pglite';
 const reports = readFileSync('src/features/reports/DiscrepancyReportsScreens.tsx', 'utf8');
 assert.match(reports, /detailHref/);
 assert.doesNotMatch(reports, /\/owner\/reports\/discrepancies\/\$\{/);
+assert.equal((reports.match(/useState<DateFilterType>\('all_time'\)/g) || []).length, 2);
+assert.doesNotMatch(reports, /useState<DateFilterType>\('today'\)/);
 
 const db = new PGlite();
 await db.exec(`

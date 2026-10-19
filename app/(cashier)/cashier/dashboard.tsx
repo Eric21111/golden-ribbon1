@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
@@ -13,8 +14,6 @@ import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
-import { useQueryClient } from '@tanstack/react-query';
-
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
   authoritativePosBranchId,
@@ -44,6 +43,7 @@ import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
+import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { listCashierPosInventory } from '@/services/inventoryService';
 import { useCartStore } from '@/stores/cartStore';
 import type {
@@ -63,7 +63,8 @@ type RemittanceAttempt = {
 };
 
 function isLegacyCashOnlyPreview(preview: ShiftClosePreview): boolean {
-  return preview.mode === 'legacy_cash_only' || !preview.inventory_reconciliation_required;
+  // Route on server mode only — do not infer legacy from inventory_reconciliation_required.
+  return preview.mode === 'legacy_cash_only';
 }
 
 function Row({ children }: { children: ReactNode }) {
@@ -84,6 +85,7 @@ export default function CashierDashboard() {
   const [closePreview, setClosePreview] = useState<ShiftClosePreview | null>(null);
   const [awaitingFinalizeRetry, setAwaitingFinalizeRetry] = useState(false);
   const lastFinalizeRef = useRef<RemittanceAttempt | null>(null);
+  const remittanceSubmitLock = useRef(false);
   const remittancePending = finalizeMutation.isPending || reconcileMutation.isPending;
   const remittanceError = finalizeMutation.error ?? reconcileMutation.error;
   const posBranchId = authoritativePosBranchId(shiftQuery.data, profile);
@@ -142,9 +144,29 @@ export default function CashierDashboard() {
 
   const startShift = () =>
     startMutation.mutate(undefined, {
-      onSuccess: () => router.replace('/cashier/incoming' as never),
-      onError: (error) => {
-        alertNotice('Cannot start shift', getShiftErrorMessage(error));
+      onSuccess: () => {
+        void pendingShift.refetch();
+        void finalizedToday.refetch();
+        router.replace('/cashier/incoming' as never);
+      },
+      onError: async (error) => {
+        const message = getShiftErrorMessage(error);
+        const pendingResult = await pendingShift.refetch();
+        const raw =
+          typeof error === 'object' && error && 'message' in error
+            ? String((error as { message: unknown }).message).toLowerCase()
+            : '';
+        if (
+          (raw.includes('pending inventory') || raw.includes('complete pending inventory'))
+          && !pendingResult.data
+        ) {
+          alertNotice(
+            'Cannot start shift',
+            'This booth still has an unfinished remittance from another session. Ask a manager to finish it before starting.',
+          );
+          return;
+        }
+        alertNotice('Cannot start shift', message);
       },
     });
 
@@ -241,11 +263,17 @@ export default function CashierDashboard() {
   };
 
   const runFinalize = (attempt: RemittanceAttempt) => {
-    if (remittancePending) return;
+    if (remittancePending || !tryBeginSubmit(remittanceSubmitLock)) return;
     lastFinalizeRef.current = attempt;
     const handlers = {
-      onSuccess: onRemittanceSuccess,
-      onError: onRemittanceError,
+      onSuccess: (result: ShiftCloseResult) => {
+        endSubmit(remittanceSubmitLock);
+        onRemittanceSuccess(result);
+      },
+      onError: async (error: Error) => {
+        endSubmit(remittanceSubmitLock);
+        await onRemittanceError(error);
+      },
     };
     // Path is sticky on the attempt so network retry cannot switch RPCs.
     if (attempt.path === 'legacy') {
@@ -270,7 +298,7 @@ export default function CashierDashboard() {
     actualCash: string,
     products: ShiftCloseFinalizeProduct[],
   ) => {
-    if (remittancePending) return;
+    if (remittancePending || remittanceSubmitLock.current) return;
     const path: RemittancePath = isLegacyCashOnlyPreview(preview) ? 'legacy' : 'pcs';
     confirmAction(
       'Finalize End Shift?',
@@ -288,7 +316,7 @@ export default function CashierDashboard() {
 
   const retryLastFinalize = () => {
     const attempt = lastFinalizeRef.current;
-    if (!attempt || remittancePending) return;
+    if (!attempt || remittancePending || remittanceSubmitLock.current) return;
     runFinalize(attempt);
   };
 
@@ -520,6 +548,22 @@ export default function CashierDashboard() {
                     onPress={() => router.push('/cashier/sales')}
                   />
                   {incomingTile}
+                </Row>
+                <Row>
+                  <NavTile
+                    layout="tile"
+                    icon="basket-outline"
+                    accent="gold"
+                    title="Local purchase"
+                    onPress={() => router.push('/cashier/local-purchase')}
+                  />
+                  <NavTile
+                    layout="tile"
+                    icon="return-down-back-outline"
+                    accent="teal"
+                    title="Leftover return"
+                    onPress={() => router.push('/cashier/returns/create')}
+                  />
                 </Row>
               </>
             ) : null}

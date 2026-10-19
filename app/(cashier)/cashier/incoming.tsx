@@ -14,7 +14,7 @@ import {
   useConfirmShipmentArrival,
   useReportShipmentIssue,
 } from '@/hooks/useTransfers';
-import { confirmAction } from '@/lib/confirmAction';
+import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatDate, formatSnapshottedQuantity, makeIdempotencyKey } from '@/lib/format';
 import type { CashierPendingTransfer } from '@/types/models';
@@ -84,6 +84,7 @@ export default function CashierIncomingShipments() {
       quantity_received: Number(receivedByItem[line.stock_transfer_item_id] ?? ''),
     }));
     if (items.some((item) => !Number.isInteger(item.quantity_received) || item.quantity_received < 0)) {
+      alertNotice('Check quantities', 'Enter a whole PCS quantity of zero or greater for every line.');
       return;
     }
     if (
@@ -95,9 +96,14 @@ export default function CashierIncomingShipments() {
           ),
       )
     ) {
+      alertNotice(
+        'No difference entered',
+        'Change at least one counted quantity from what was sent, or use Arrived if everything matches.',
+      );
       return;
     }
     if (issueNotes.trim().length < 3) {
+      alertNotice('Notes required', 'Describe what is wrong in at least 3 characters.');
       return;
     }
     const transferId = String(transfer.id ?? '').trim();

@@ -281,6 +281,12 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
         </View>
       </View>
 
+      {product.discrepancy_note ? (
+        <Text style={styles.noteLine} accessibilityLabel="Discrepancy note">
+          Note: {product.discrepancy_note}
+        </Text>
+      ) : null}
+
       {expanded ? (
         <View style={styles.ledger}>
           <View style={styles.ledgerRow}>
@@ -441,6 +447,13 @@ const styles = StyleSheet.create({
   summaryItem: { flex: 1, gap: 2 },
   summaryLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
   summaryValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  noteLine: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
   varianceDanger: { color: '#B91C1C' },
   varianceSuccess: { color: managerColors.green },
   ledger: {

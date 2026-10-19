@@ -109,6 +109,8 @@ export type Product = {
   is_active: boolean;
   inventory_mode: InventoryMode;
   closing_stock_behavior: ClosingStockBehavior;
+  /** Stays at branch; excluded from leftover/physical returns. */
+  is_non_returnable?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -389,6 +391,8 @@ export type ShiftCloseFinalizeProduct = {
   product_id: string;
   actual_remaining: string | number;
   waste_quantity?: string | number;
+  /** Required when product is kg_meal and counted stock differs from expected. */
+  discrepancy_note?: string;
 };
 
 export type ShiftCloseResult = {
@@ -469,6 +473,7 @@ export type ShiftCloseReportProduct = {
   unsold_quantity: number;
   carried_quantity: number;
   result: ShiftProductReconResult;
+  discrepancy_note?: string | null;
   reconciled_at: string;
 };
 

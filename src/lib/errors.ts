@@ -290,6 +290,15 @@ export function getInventoryErrorMessage(error: unknown): string {
     return 'This shipment could not be finalized. Pull to refresh and try again.';
   }
   if (message.includes('insufficient stock')) return 'There is not enough stock to complete this operation.';
+  if (message.includes('main-tracked only') || message.includes('no automatic kg')) {
+    return 'KG inventory is tracked at Main only. This booth operation is not supported for KG products.';
+  }
+  if (message.includes('not marked non-returnable')) {
+    return 'Mark the product as non-returnable in product settings before recording a local purchase.';
+  }
+  if (message.includes('kg discrepancy note is required')) {
+    return 'Enter a discrepancy note for this KG product.';
+  }
   if (message.includes('inventory type changed while this shipment was in transit')) {
     return 'Product inventory type changed while this shipment was in transit.';
   }
@@ -381,7 +390,7 @@ export function getShiftErrorMessage(error: unknown): string {
   }
   if (message.includes('already closed')) return 'This shift is already closed.';
   if (message.includes('different cash') || message.includes('different inventory')) {
-    return 'This shift was already finalized with different counts. Refresh and review the saved remittance.';
+    return 'This shift was already finalized with different counts. Refresh and review the saved remittance — do not submit again.';
   }
   if (message.includes('already been reconciled')) return 'This shift has already been reconciled.';
   if (message.includes('does not require reconciliation')) {
@@ -389,6 +398,12 @@ export function getShiftErrorMessage(error: unknown): string {
   }
   if (message.includes('actual remaining is required') || message.includes('every close product')) {
     return 'Enter the physical remaining quantity for every product.';
+  }
+  if (message.includes('main-tracked only') || message.includes('booth close does not count kg')) {
+    return 'KG inventory is tracked at Main only. Enter 0 remaining and 0 waste for KG products at the booth.';
+  }
+  if (message.includes('kg discrepancy note is required')) {
+    return 'Enter a discrepancy note for this KG product.';
   }
   if (message.includes('whole') || message.includes('piece') || message.includes('pcs')) {
     return 'Use whole pieces only for stock counts and waste.';

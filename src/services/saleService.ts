@@ -1,3 +1,7 @@
+import type {
+  SalePricingProgram,
+  SalePricingProgramSetting,
+} from '@/features/pos/pricingPrograms';
 import { getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -27,6 +31,9 @@ export type Sale = {
   status: SaleStatus;
   sold_at: string;
   created_at: string;
+  pricing_program?: SalePricingProgram | null;
+  catalog_subtotal?: number | null;
+  discount_amount?: number | null;
 };
 
 export type SaleItem = {
@@ -38,6 +45,8 @@ export type SaleItem = {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  catalog_unit_price?: number | null;
+  discount_amount?: number | null;
   created_at: string;
   product?: Product | null;
 };
@@ -61,6 +70,7 @@ export type SaleRequest = {
   items: { product_id: string; variant_id: string | null; quantity: number }[];
   amountPaid: string;
   key: string;
+  pricingProgram?: SalePricingProgram;
 };
 
 export async function confirmSale(request: SaleRequest): Promise<Sale> {
@@ -69,9 +79,32 @@ export async function confirmSale(request: SaleRequest): Promise<Sale> {
     p_items: request.items,
     p_amount_paid: request.amountPaid,
     p_idempotency_key: request.key,
+    p_pricing_program: request.pricingProgram ?? 'standard',
   });
   if (error) throw error;
   return data;
+}
+
+/** Loads server pricing settings so POS preview matches confirm_sale. */
+export async function listSalePricingProgramSettings(): Promise<
+  Partial<Record<SalePricingProgram, SalePricingProgramSetting>>
+> {
+  const { data, error } = await supabase
+    .from('sale_pricing_program_settings')
+    .select('program, discount_percent, pricing_mode, fixed_amount, label');
+  if (error) throw error;
+  const map: Partial<Record<SalePricingProgram, SalePricingProgramSetting>> = {};
+  for (const row of data ?? []) {
+    const program = row.program as SalePricingProgram;
+    map[program] = {
+      program,
+      discount_percent: row.discount_percent == null ? null : Number(row.discount_percent),
+      pricing_mode: (row.pricing_mode as SalePricingProgramSetting['pricing_mode']) ?? null,
+      fixed_amount: row.fixed_amount == null ? null : Number(row.fixed_amount),
+      label: row.label,
+    };
+  }
+  return map;
 }
 
 export async function listShiftSales(shiftId: string): Promise<SaleWithRelations[]> {

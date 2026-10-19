@@ -27,9 +27,9 @@ export function ClosingStockBehaviorField({
     <View style={styles.wrap}>
       <Text style={styles.label}>Closing stock behavior</Text>
       <Text style={styles.hint}>
-        Review every product before the first PCS selling session. Cutover mappings were provisional:
-        former piece stock → keep at branch; former kg meal → record as unsold. Correct any product that
-        does not match how the booth actually handles remaining stock.
+        Keep at branch for non-returnable stock (BBQ, Tocino, Cheesesticks, drinks). Record as unsold for
+        leftover meals that should not carry to the next day. Local drink purchases stay at the booth and
+        are not auto-returned to Main.
       </Text>
       <View style={styles.options}>
         {OPTIONS.map((option) => {

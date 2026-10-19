@@ -21,7 +21,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { useReceiveReturn, useReturn } from '@/hooks/useReturns';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, makeIdempotencyKey } from '@/lib/format';
+import { formatDate, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
 
 const schema = z.object({
   items: z
@@ -31,7 +31,7 @@ const schema = z.object({
         quantity_received: z
           .string()
           .min(1, 'Enter the physical count.')
-          .regex(/^\d+$/, 'Enter a whole number of zero or greater.'),
+          .regex(/^\d{1,6}$/, 'Enter a whole PCS quantity (0–999999).'),
       }),
     )
     .min(1),
@@ -301,9 +301,10 @@ export function ReceiveReturnScreen() {
                 const atMin = currentQty <= 0;
                 const matchesExpected = currentQty === item.quantity_returned;
                 const step = (delta: number) => {
-                  const next = Math.max(0, currentQty + delta);
+                  const next = Math.min(999999, Math.max(0, currentQty + delta));
                   quantity.onChange(String(next));
                 };
+                const atMax = currentQty >= 999999;
 
                 return (
                   <View style={styles.card}>
@@ -347,27 +348,32 @@ export function ReceiveReturnScreen() {
                             value={quantity.value}
                             placeholder="0"
                             placeholderTextColor={managerColors.subtext}
-                            maxLength={6}
+                            maxLength={PIECE_QUANTITY_MAX_LENGTH}
                             selectTextOnFocus
                             underlineColorAndroid="transparent"
                             onFocus={() => setFocusedIndex(index)}
                             onBlur={() =>
                               setFocusedIndex((current) => (current === index ? null : current))
                             }
-                            onChangeText={quantity.onChange}
+                            onChangeText={(value) => {
+                              if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
+                            }}
                             style={styles.stepperInput}
                           />
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`Increase received quantity for ${item.product_name}`}
                             hitSlop={6}
+                            disabled={atMax}
                             onPress={() => step(1)}
                             style={({ pressed }) => [
                               styles.stepperButton,
-                              pressed && styles.stepperButtonPressed,
+                              pressed && !atMax && styles.stepperButtonPressed,
                             ]}
                           >
-                            <Text style={styles.stepperSymbol}>+</Text>
+                            <Text style={[styles.stepperSymbol, atMax && styles.stepperSymbolDisabled]}>
+                              +
+                            </Text>
                           </Pressable>
                         </View>
                         <Pressable

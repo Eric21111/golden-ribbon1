@@ -263,6 +263,12 @@ assert.match(dashboard, /isLegacyCashOnlyPreview|legacy_cash_only/);
 assert.match(dashboard, /useReconcileClosedShift/);
 assert.match(dashboard, /reconcileMutation/);
 assert.match(dashboard, /path === 'legacy' \? 'legacy' : 'pcs'|isLegacyCashOnlyPreview\(preview\) \? 'legacy'/);
+assert.match(dashboard, /preview\.mode === 'legacy_cash_only'/);
+assert.doesNotMatch(
+  dashboard,
+  /preview\.mode === 'legacy_cash_only'\s*\|\|\s*!preview\.inventory_reconciliation_required/,
+);
+assert.match(dashboard, /tryBeginSubmit|remittanceSubmitLock/);
 // B) PCS still uses finalize path
 assert.match(dashboard, /useFinalizeCashierShiftReconciliation/);
 assert.match(dashboard, /finalizeMutation\.mutate/);

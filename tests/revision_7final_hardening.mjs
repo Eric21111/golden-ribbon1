@@ -6,6 +6,7 @@ const migrationsDir = 'supabase/migrations';
 const allMigrations = readdirSync(migrationsDir).filter((n) => n.endsWith('.sql')).sort();
 const FINAL_MIG = '20260928150200_revision_7_final_audit_hardening.sql';
 const PATCH2_MIG = '20260928150300_revision_7_final_hardening_patch2.sql';
+const PHASE1_MIG = '20260928150400_phase1_critical_fixes.sql';
 const stripCrypto = (sql) => sql.replace(/create extension if not exists pgcrypto;/g, '');
 
 async function boot() {
@@ -120,16 +121,23 @@ const ownerUpdate = (db, owner, employeeId, { fullName, role, branchId, isActive
 {
   assert.ok(existsSync(`supabase/migrations/${FINAL_MIG}`));
   assert.ok(existsSync(`supabase/migrations/${PATCH2_MIG}`));
+  assert.ok(existsSync(`supabase/migrations/${PHASE1_MIG}`));
   assert.ok(existsSync('docs/pcs-cutover-closing-behavior-review.sql'));
   assert.ok(existsSync('docs/pcs-pending-remittance-stranded-cashiers.sql'));
   const mig = readFileSync(`supabase/migrations/${FINAL_MIG}`, 'utf8');
   const patch2 = readFileSync(`supabase/migrations/${PATCH2_MIG}`, 'utf8');
+  const phase1 = readFileSync(`supabase/migrations/${PHASE1_MIG}`, 'utf8');
   assert.match(mig, /shifts_one_open_per_branch_idx/);
   assert.match(mig, /lock_shift_inventory_gate/);
   assert.match(mig, /unfinished shift or remittance/i);
   assert.match(mig, /Another selling session is already active/i);
   assert.match(mig, /shift_close_product_summaries/);
   assert.doesNotMatch(mig, /for update skip locked/i);
+  assert.match(phase1, /Heal stuck pending flags/);
+  assert.match(phase1, /stuck flags must not bypass the same-day guard/i);
+  assert.match(phase1, /^begin;/m);
+  assert.match(phase1, /^commit;/m);
+  assert.doesNotMatch(phase1, /\bdrop table\b|\btruncate\b|\bdelete from\b/i);
   assert.match(patch2, /begin_shift_close_core/);
   assert.doesNotMatch(patch2, /exception when others then/i);
 
@@ -339,6 +347,103 @@ const ownerUpdate = (db, owner, employeeId, { fullName, role, branchId, isActive
   assert.notEqual(beginDone.status, 'pending');
   assert.ok(Array.isArray(beginDone.products));
   console.log('7final finalize/begin idempotency: ok');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: stuck remittance flags heal on idempotent finalize (no inventory bypass)
+// ---------------------------------------------------------------------------
+{
+  const db = await boot();
+  const ctx = await seed(db);
+  const shiftId = await startShift(db, ctx.cashier);
+  await beginClose(db, ctx.cashier, shiftId);
+  const products = [
+    { product_id: ctx.drink, actual_remaining: '10', waste_quantity: '0' },
+    { product_id: ctx.meal, actual_remaining: '5', waste_quantity: '0' },
+  ];
+  await finalize(db, ctx.cashier, shiftId, '0.00', products);
+
+  // Simulate incomplete flag clear after remittance rows already exist.
+  await db.exec('reset role');
+  await db.exec(`alter table public.shifts disable trigger shifts_protect_lifecycle`);
+  await db.exec(`
+    update public.shifts
+    set reconciliation_required = true,
+        inventory_reconciliation_required = true
+    where id = '${shiftId}'
+  `);
+  await db.exec(`alter table public.shifts enable trigger shifts_protect_lifecycle`);
+
+  const pendingStuck = await asUser(db, ctx.cashier, () =>
+    db.query('select public.get_my_pending_shift_reconciliation() p'),
+  );
+  assert.equal(pendingStuck.rows[0].p, null);
+
+  // Stuck flags must not bypass same-day start guard.
+  await asUser(db, ctx.cashier, () =>
+    assert.rejects(() => db.query('select public.start_cashier_shift()'), /final close|business day/i),
+  );
+
+  const healed = await finalize(db, ctx.cashier, shiftId, '0.00', products);
+  assert.equal(healed.idempotent, true);
+  const flags = (
+    await db.query(
+      `select reconciliation_required, inventory_reconciliation_required
+       from public.shifts where id=$1`,
+      [shiftId],
+    )
+  ).rows[0];
+  assert.equal(flags.reconciliation_required, false);
+  assert.equal(flags.inventory_reconciliation_required, false);
+  await asUser(db, ctx.cashier, () =>
+    assert.rejects(() => db.query('select public.start_cashier_shift()'), /final close|business day/i),
+  );
+  console.log('7final phase1 stuck-flag heal: ok');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: inactive cashier recovery = reactivate, then finalize (no inventory bypass)
+// ---------------------------------------------------------------------------
+{
+  const db = await boot();
+  const ctx = await seed(db);
+  const shiftId = await startShift(db, ctx.cashier);
+  await beginClose(db, ctx.cashier, shiftId);
+
+  // Simulate stranded inactive profile (owner UI cannot deactivate while pending).
+  await db.exec('alter table public.profiles disable trigger profiles_protect_open_shift');
+  await db.exec(`update public.profiles set is_active = false where id = '${ctx.cashier}'`);
+  await db.exec('alter table public.profiles enable trigger profiles_protect_open_shift');
+
+  await asUser(db, ctx.cashier, () =>
+    assert.rejects(
+      () =>
+        db.query('select public.finalize_cashier_shift_reconciliation($1,$2,$3::jsonb)', [
+          shiftId,
+          '0.00',
+          JSON.stringify([
+            { product_id: ctx.drink, actual_remaining: '10', waste_quantity: '0' },
+            { product_id: ctx.meal, actual_remaining: '5', waste_quantity: '0' },
+          ]),
+        ]),
+      /active cashier|Unauthorized/i,
+    ),
+  );
+
+  // Reactivation is allowed (trigger only blocks active → inactive while pending).
+  await ownerUpdate(db, ctx.owner, ctx.cashier, {
+    fullName: 'Cashier',
+    role: 'cashier',
+    branchId: ctx.branch,
+    isActive: true,
+  });
+
+  const recovered = await finalize(db, ctx.cashier, shiftId, '0.00', [
+    { product_id: ctx.drink, actual_remaining: '10', waste_quantity: '0' },
+    { product_id: ctx.meal, actual_remaining: '5', waste_quantity: '0' },
+  ]);
+  assert.equal(recovered.status, 'reconciled');
+  console.log('7final phase1 inactive cashier recovery: ok');
 }
 
 // ---------------------------------------------------------------------------

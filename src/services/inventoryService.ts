@@ -121,3 +121,34 @@ export async function initializeMainInventory(
   const { error } = await supabase.rpc('initialize_main_branch_inventory', { p_items: items, p_notes: notes });
   if (error) throw error;
 }
+
+export type LocalPurchaseCatalogRow = {
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  quantity_on_hand: number;
+};
+
+export async function listCashierLocalPurchaseCatalog(): Promise<LocalPurchaseCatalogRow[]> {
+  const { data, error } = await supabase.rpc('list_cashier_local_purchase_catalog');
+  if (error) throw error;
+  return ((data ?? []) as LocalPurchaseCatalogRow[]).map((row) => ({
+    ...row,
+    quantity_on_hand: Number(row.quantity_on_hand),
+  }));
+}
+
+/** Selling-branch local purchase (PCS). Does not create a Main transfer. */
+export async function recordBranchLocalPurchase(
+  items: Array<{ product_id: string; quantity: string }>,
+  notes: string | null,
+  idempotencyKey: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('record_branch_local_purchase', {
+    p_items: items,
+    p_notes: notes,
+    p_idempotency_key: idempotencyKey,
+  });
+  if (error) throw error;
+  return data as string;
+}

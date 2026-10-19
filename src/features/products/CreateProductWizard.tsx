@@ -10,6 +10,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import type { ClosingStockBehavior } from '@/types/models';
 
 import { ClosingStockBehaviorField } from './ClosingStockBehaviorField';
+import { NonReturnableField } from './NonReturnableField';
 import { generateSkuFromName } from './generateSku';
 import { PRICE_PATTERN } from './productSchema';
 
@@ -22,6 +23,7 @@ export type CreateProductValues = {
   default_price: string;
   variants: CreateProductVariantDraft[];
   closingStockBehavior: ClosingStockBehavior;
+  isNonReturnable: boolean;
 };
 
 export type BranchPricingDraft =
@@ -59,8 +61,14 @@ export function CreateProductWizard({
   const [sku, setSku] = useState('');
   const [description, setDescription] = useState('');
   const [closingStockBehavior, setClosingStockBehavior] = useState<ClosingStockBehavior>('keep_at_branch');
+  const [isNonReturnable, setIsNonReturnable] = useState(false);
   const [step1Errors, setStep1Errors] = useState<{ name?: string; sku?: string; description?: string }>({});
   const skuEditedRef = useRef(false);
+
+  const onNonReturnableChange = (value: boolean) => {
+    setIsNonReturnable(value);
+    if (value) setClosingStockBehavior('keep_at_branch');
+  };
 
   useEffect(() => {
     if (skuEditedRef.current) return;
@@ -260,7 +268,8 @@ export function CreateProductWizard({
         description: description.trim(),
         default_price: topLevelPrice,
         variants: variantValues,
-        closingStockBehavior,
+        closingStockBehavior: isNonReturnable ? 'keep_at_branch' : closingStockBehavior,
+        isNonReturnable,
       },
       pricing,
     );
@@ -274,7 +283,11 @@ export function CreateProductWizard({
 
       {step === 1 ? (
         <View style={styles.stepBody}>
-          <ClosingStockBehaviorField value={closingStockBehavior} onChange={setClosingStockBehavior} />
+          <ClosingStockBehaviorField
+            value={isNonReturnable ? 'keep_at_branch' : closingStockBehavior}
+            onChange={setClosingStockBehavior}
+          />
+          <NonReturnableField value={isNonReturnable} onChange={onNonReturnableChange} />
           <FormField
             label="Product name"
             value={name}
@@ -319,6 +332,10 @@ export function CreateProductWizard({
 
       {step === 2 ? (
         <View style={styles.stepBody}>
+          <Text style={styles.hint}>
+            For meals, use Ulam Only, With Rice, and With Drinks as separate prices on one product.
+            Stock is shared — one deduction per plate, not per option name.
+          </Text>
           <View style={styles.variantList}>
             {variants.map((variant, index) => (
               <View key={variant.id}>

@@ -41,6 +41,8 @@ function invalidateReturnFlow(client: ReturnType<typeof useQueryClient>, returnI
     client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
     client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
     client.invalidateQueries({ queryKey: ['reports', 'return-discrepancies'] }),
+    client.invalidateQueries({ queryKey: ['reports', 'inventory-reconciliation'] }),
+    client.invalidateQueries({ queryKey: ['reports', 'branch-performance'] }),
   ];
   if (returnId) {
     requests.push(client.invalidateQueries({ queryKey: queryKeys.return(returnId) }));

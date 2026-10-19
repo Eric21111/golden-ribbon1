@@ -275,10 +275,12 @@ const asUser = async (db, userId, work) => {
     ),
   );
 
+  // Phase 3 re-allows kg_meal via set_product_inventory_mode only when balances are clear.
+  // With remaining stock, mode change must still be blocked (no silent conversion).
   await asUser(db, ctx.mainMgr, () =>
     assert.rejects(
       () => db.query('select public.set_product_inventory_mode($1,$2)', [ctx.piece, 'kg_meal']),
-      /retired|piece stock/i,
+      /clear every current balance|retired|piece stock/i,
     ),
   );
 
@@ -438,7 +440,7 @@ const asUser = async (db, userId, work) => {
     ),
   );
 
-  // Snapshot trigger no longer depends on products.inventory_mode for new rows
+  // Phase 3 restores product inventory_mode snapshot (piece_stock + kg_meal).
   const src = (
     await db.query(`
       select pg_get_functiondef(p.oid) as def
@@ -447,8 +449,8 @@ const asUser = async (db, userId, work) => {
       where n.nspname='public' and p.proname='snapshot_movement_inventory_mode'
     `)
   ).rows[0].def;
-  assert.match(src, /piece_stock/);
-  assert.doesNotMatch(src, /from public\.products/);
+  assert.match(src, /from public\.products/);
+  assert.match(src, /inventory_mode/);
 
   // Lock gate exists
   const gate = (

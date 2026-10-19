@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
+import { sortMealVariants, STANDARD_MEAL_VARIANT_NAMES } from '@/features/pos/pricingPrograms';
 import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { InventoryItem, PosVariant } from '@/types/models';
@@ -18,7 +19,7 @@ type PosItemSheetProps = {
 };
 
 export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosItemSheetProps) {
-  const variants = item?.variants ?? [];
+  const variants = useMemo(() => sortMealVariants(item?.variants ?? []), [item?.variants]);
   const hasVariants = variants.length > 0;
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -86,7 +87,11 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
 
           {hasVariants ? (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Options</Text>
+              <Text style={styles.sectionLabel}>Meal options</Text>
+              <Text style={styles.optionHint}>
+                One stock deduction per item. Prefer {STANDARD_MEAL_VARIANT_NAMES.join(', ')} —
+                do not also add rice/drinks as separate lines for the same meal.
+              </Text>
               <View style={styles.optionList}>
                 {variants.map((variant) => {
                   const selected = variant.id === selectedVariant?.id;
@@ -229,6 +234,7 @@ const styles = StyleSheet.create({
   qtyCardRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
   subtotalValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 24 },
   sectionLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  optionHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
   optionList: { gap: 8 },
   option: {
     flexDirection: 'row',

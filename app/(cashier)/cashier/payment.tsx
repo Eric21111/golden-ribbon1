@@ -1,7 +1,8 @@
 import { Redirect, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,13 +19,24 @@ import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { OrderSummary } from '@/features/pos/OrderSummary';
+import { authoritativePosBranchId } from '@/features/pos/posInventory';
+import {
+  PRICING_PROGRAM_OPTIONS,
+  previewOrderTotals,
+  pricingProgramLabel,
+  type SalePricingProgram,
+  type SalePricingProgramSetting,
+} from '@/features/pos/pricingPrograms';
 import { useActiveShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney, makeIdempotencyKey } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
-import { cartTotalCents, centsDecimal } from '@/lib/money';
+import { centsDecimal } from '@/lib/money';
 import { invalidateCompletedSaleQueries } from '@/lib/queryClient';
+import { queryKeys } from '@/lib/queryKeys';
+import { listCashierPosInventory } from '@/services/inventoryService';
 import { getCashierLineSellingPrices } from '@/services/productService';
+import { listSalePricingProgramSettings } from '@/services/saleService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 
@@ -40,7 +52,60 @@ export default function PaymentScreen() {
   const [pricesReady, setPricesReady] = useState(false);
   const [priceError, setPriceError] = useState('');
   const [priceRefreshKey, setPriceRefreshKey] = useState(0);
-  const total = cartTotalCents(items);
+  const [stockChecking, setStockChecking] = useState(false);
+  const [pricingProgram, setPricingProgram] = useState<SalePricingProgram>('standard');
+  const [pricingSettings, setPricingSettings] = useState<Partial<
+    Record<SalePricingProgram, SalePricingProgramSetting>
+  > | null>(null);
+
+  const totals = useMemo(
+    () => previewOrderTotals(items, pricingProgram, pricingSettings),
+    [items, pricingProgram, pricingSettings],
+  );
+  const selectedProgram = PRICING_PROGRAM_OPTIONS.find((option) => option.value === pricingProgram);
+
+  const ensureLiveStockAllowsCheckout = async (): Promise<boolean> => {
+    const branchId = authoritativePosBranchId(shift.data, profile);
+    if (!branchId) {
+      setValidation('No branch is assigned to this cashier.');
+      return false;
+    }
+    setStockChecking(true);
+    try {
+      await client.invalidateQueries({ queryKey: queryKeys.cashierPosInventory(branchId) });
+      const rows = await client.fetchQuery({
+        queryKey: queryKeys.cashierPosInventory(branchId),
+        queryFn: listCashierPosInventory,
+        staleTime: 0,
+      });
+      const stockByProduct = new Map(rows.map((row) => [row.product.id, Number(row.quantity_on_hand)]));
+      const needed = new Map<string, { name: string; qty: number }>();
+      for (const line of useCartStore.getState().items) {
+        const current = needed.get(line.product_id) ?? { name: line.product_name, qty: 0 };
+        current.qty += line.quantity;
+        needed.set(line.product_id, current);
+      }
+      const over: string[] = [];
+      for (const [productId, info] of needed) {
+        const available = stockByProduct.get(productId) ?? 0;
+        if (info.qty > available) {
+          over.push(`${info.name} (need ${info.qty}, available ${available})`);
+        }
+      }
+      if (over.length > 0) {
+        setValidation(
+          `Stock changed. Return to the order and reduce quantities:\n${over.join('\n')}`,
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      setValidation('Unable to refresh live stock. Retry before confirming.');
+      return false;
+    } finally {
+      setStockChecking(false);
+    }
+  };
 
   useEffect(() => {
     if (checkout.sale) return;
@@ -53,8 +118,12 @@ export default function PaymentScreen() {
           product_id: item.product_id,
           variant_id: item.variant_id,
         }));
-        const prices = await getCashierLineSellingPrices(lines);
+        const [prices, settings] = await Promise.all([
+          getCashierLineSellingPrices(lines),
+          listSalePricingProgramSettings(),
+        ]);
         if (cancelled) return;
+        setPricingSettings(settings);
         const result = useCartStore.getState().applyLivePrices(prices);
         if (result.changed) {
           setPriceNotice(
@@ -80,32 +149,49 @@ export default function PaymentScreen() {
   }, [checkout.sale, client]);
 
   const runSubmit = () => {
-    if (!shift.data || checkout.pending || !pricesReady) return;
+    if (!shift.data || checkout.pending || !pricesReady || stockChecking) return;
     if (checkout.request) {
       void checkout.submit(checkout.request);
       return;
     }
+    const liveItems = useCartStore.getState().items;
+    if (liveItems.length === 0) {
+      setValidation('Cart is empty after stock adjustment. Return to POS and rebuild the order.');
+      return;
+    }
+    const charged = previewOrderTotals(liveItems, pricingProgram, pricingSettings).chargedTotal;
     setValidation('');
     void checkout.submit({
       shiftId: shift.data.id,
-      amountPaid: centsDecimal(total),
+      amountPaid: centsDecimal(Math.round(charged * 100)),
       key: makeIdempotencyKey('sale'),
-      items: items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })),
+      pricingProgram,
+      items: liveItems.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })),
     });
   };
 
   const submit = () => {
-    if (!shift.data || checkout.pending || !pricesReady) return;
+    if (!shift.data || checkout.pending || !pricesReady || stockChecking) return;
     if (checkout.request) {
       runSubmit();
       return;
     }
     setValidation('');
-    confirmAction(
-      'Checkout order?',
-      `Total ${formatMoney(total / 100)}. Stock will be deducted.`,
-      runSubmit,
-    );
+    void (async () => {
+      const stockOk = await ensureLiveStockAllowsCheckout();
+      if (!stockOk) return;
+      const liveTotals = previewOrderTotals(
+        useCartStore.getState().items,
+        pricingProgram,
+        pricingSettings,
+      );
+      const programName = pricingProgramLabel(pricingProgram);
+      confirmAction(
+        'Checkout order?',
+        `${programName}\nCharge ${formatMoney(liveTotals.chargedTotal)}. Stock will be deducted.`,
+        runSubmit,
+      );
+    })();
   };
 
   const done = () => {
@@ -128,7 +214,7 @@ export default function PaymentScreen() {
     return <Redirect href="/cashier/pos" />;
   }
 
-  const canConfirm = pricesReady && !priceError;
+  const canConfirm = pricesReady && !priceError && !stockChecking;
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
@@ -151,6 +237,66 @@ export default function PaymentScreen() {
               />
             ) : null}
             <OrderSummary items={items} />
+
+            {!checkout.sale ? (
+              <View style={styles.programBlock}>
+                <Text style={styles.programTitle}>Pricing</Text>
+                <View style={styles.programList}>
+                  {PRICING_PROGRAM_OPTIONS.map((option) => {
+                    const selected = option.value === pricingProgram;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={option.label}
+                        disabled={Boolean(checkout.request)}
+                        onPress={() => setPricingProgram(option.value)}
+                        style={({ pressed }) => [
+                          styles.programOption,
+                          selected && styles.programOptionSelected,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text style={[styles.programLabel, selected && styles.programLabelSelected]}>
+                          {option.label}
+                        </Text>
+                        <Text style={styles.programHint}>{option.hint}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {selectedProgram ? (
+                  <Text style={styles.programNote}>{selectedProgram.hint}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.totalsCard}>
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Catalog</Text>
+                <Text style={styles.totalsValue}>{formatMoney(totals.catalogSubtotal)}</Text>
+              </View>
+              {totals.discountAmount > 0 || pricingProgram === 'employee_meal' ? (
+                <View style={styles.totalsRow}>
+                  <Text style={styles.totalsLabel}>
+                    {pricingProgram === 'employee_meal' ? 'Employee meal' : 'Discount'}
+                  </Text>
+                  <Text style={styles.totalsValue}>
+                    −{formatMoney(
+                      pricingProgram === 'employee_meal'
+                        ? totals.catalogSubtotal
+                        : totals.discountAmount,
+                    )}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsChargeLabel}>Charge</Text>
+                <Text style={styles.totalsCharge}>{formatMoney(totals.chargedTotal)}</Text>
+              </View>
+            </View>
+
             {priceNotice ? (
               <Text accessibilityRole="alert" style={styles.notice}>
                 {priceNotice}
@@ -167,7 +313,7 @@ export default function PaymentScreen() {
             <ManagerActionButton
               label={checkout.request ? 'Retry checkout' : 'Checkout'}
               icon="card-outline"
-              loading={checkout.pending}
+              loading={checkout.pending || stockChecking}
               disabled={!canConfirm}
               onPress={submit}
             />
@@ -186,6 +332,9 @@ export default function PaymentScreen() {
           <View style={styles.card}>
             <Text style={styles.title}>ORDER CONFIRMED</Text>
             <Text style={styles.cardLine}>Sale: {checkout.sale?.sale_number}</Text>
+            <Text style={styles.cardLine}>
+              Pricing: {pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}
+            </Text>
             <Text style={styles.cardLine}>Total: {formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
             <ManagerActionButton label="Done" onPress={done} />
           </View>
@@ -213,6 +362,36 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
+  programBlock: { gap: 10 },
+  programTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  programList: { gap: 8 },
+  programOption: {
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  programOptionSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F7F9FD' },
+  programLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  programLabelSelected: { color: managerColors.royalBlue },
+  programHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  programNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  totalsCard: {
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+    backgroundColor: managerColors.cardSurface,
+  },
+  totalsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  totalsLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  totalsValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  totalsChargeLabel: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  totalsCharge: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 20 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
   notice: {
     color: '#92400E',
@@ -223,6 +402,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  pressed: { opacity: 0.75 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(10, 18, 36, 0.6)',

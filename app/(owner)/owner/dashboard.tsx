@@ -93,7 +93,7 @@ export default function OwnerDashboard() {
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  . Only the counted quantity was added to inventory.
+                  . Transfer issues credit counted PCS only; return issues do not restock Main.
                 </Text>
                 <ManagerActionButton
                   label="Review discrepancies"

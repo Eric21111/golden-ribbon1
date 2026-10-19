@@ -57,6 +57,8 @@ function invalidateCashierShipment(client: ReturnType<typeof useQueryClient>, tr
     client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
     client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),
     client.invalidateQueries({ queryKey: ['reports', 'transfer-discrepancies'] }),
+    client.invalidateQueries({ queryKey: ['reports', 'inventory-reconciliation'] }),
+    client.invalidateQueries({ queryKey: ['reports', 'branch-performance'] }),
   ]);
 }
 

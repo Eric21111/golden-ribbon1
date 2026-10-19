@@ -26,7 +26,7 @@ const updateRpc = productService.slice(
 );
 assert.match(updateRpc, /p_closing_stock_behavior:\s*input\.closingStockBehavior/);
 assert.doesNotMatch(updateRpc, /p_inventory_mode:\s*input\.inventoryMode/);
-assert.match(productService, /p_inventory_mode:\s*'piece_stock'/);
+assert.match(productService, /p_inventory_mode:\s*input\.inventoryMode \?\? 'piece_stock'/);
 assert.doesNotMatch(productService, /from\('products'\)[\s\S]{0,80}\.insert/);
 assert.doesNotMatch(productService, /export async function createProduct\(/);
 assert.doesNotMatch(productService, /export async function updateProduct\(/);
@@ -170,22 +170,33 @@ assert.equal(afterA.name, 'Atomic Alpha Classic');
 assert.equal(Number(afterA.selling_price), 85);
 assert.equal(afterA.mode, 'piece_stock');
 
+// Phase 3: kg_meal allowed only when balances are clear (no silent conversion).
 const productB = await createSimple('Atomic Bravo', 'ATOM-B', '70');
+await edit10(productB.id, {
+  name: 'Atomic Bravo Meal',
+  sku: 'ATOM-B',
+  sellingPrice: '75',
+  mode: 'kg_meal',
+});
+const afterB = await snapshot(productB.id);
+assert.equal(afterB.name, 'Atomic Bravo Meal');
+assert.equal(afterB.mode, 'kg_meal');
+
+const productBStocked = await createSimple('Atomic Bravo Stocked', 'ATOM-B2', '70');
+await stockMain(productBStocked.id, 3);
 await asUser(mainMgr, () =>
   assert.rejects(
     () =>
-      edit10(productB.id, {
-        name: 'Atomic Bravo Meal',
-        sku: 'ATOM-B',
+      edit10(productBStocked.id, {
+        name: 'Atomic Bravo Stocked KG',
+        sku: 'ATOM-B2',
         sellingPrice: '75',
         mode: 'kg_meal',
       }),
-    /retired|piece stock/i,
+    /clear every current balance|retired|piece stock/i,
   ),
 );
-const afterB = await snapshot(productB.id);
-assert.equal(afterB.name, 'Atomic Bravo');
-assert.equal(afterB.mode, 'piece_stock');
+assert.equal((await snapshot(productBStocked.id)).mode, 'piece_stock');
 
 const productC = await createSimple('Atomic Charlie', 'ATOM-C', '60');
 const taken = await createSimple('Taken Name', 'ATOM-TAKEN', '50');
@@ -237,7 +248,7 @@ await asUser(mainMgr, () =>
         sellingPrice: '31',
         mode: 'kg_meal',
       }),
-    /retired|piece stock/i,
+    /clear every current balance|open transfers|retired|piece stock/i,
   ),
 );
 assert.equal((await snapshot(productE.id)).mode, 'piece_stock');
@@ -261,7 +272,7 @@ await asUser(mainMgr, () =>
         sellingPrice: '21',
         mode: 'kg_meal',
       }),
-    /retired|piece stock/i,
+    /clear every current balance|open transfers|retired|piece stock/i,
   ),
 );
 assert.equal((await snapshot(productF.id)).mode, 'piece_stock');
@@ -295,7 +306,7 @@ await asUser(mainMgr, () =>
         sellingPrice: '26',
         mode: 'kg_meal',
       }),
-    /retired|piece stock/i,
+    /clear every current balance|open transfers|open returns|retired|piece stock/i,
   ),
 );
 assert.equal((await snapshot(productG.id)).mode, 'piece_stock');

@@ -28,7 +28,7 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6}(\.\d{1,3})?)?$/, 'Enter a quantity.'),
+        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole PCS quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -370,7 +370,7 @@ export function InventorySetupScreen() {
                   const isFocused = focusedIndex === index;
                   const atMin = currentQty <= 0;
                   const step = (delta: number) => {
-                    const next = Math.max(0, currentQty + delta);
+                    const next = Math.min(999999, Math.max(0, currentQty + delta));
                     quantity.onChange(String(next));
                   };
                   return (

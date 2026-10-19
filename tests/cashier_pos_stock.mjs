@@ -94,7 +94,10 @@ assert.match(cardSource, /cardOut/);
 const paymentSource = readFileSync('app/(cashier)/cashier/payment.tsx', 'utf8');
 assert.doesNotMatch(paymentSource, /Money Given/);
 assert.doesNotMatch(paymentSource, /QUICK_CASH/);
-assert.match(paymentSource, /amountPaid: centsDecimal\(total\)/);
+assert.match(paymentSource, /amountPaid: centsDecimal\(Math\.round\(charged \* 100\)\)/);
+assert.match(paymentSource, /ensureLiveStockAllowsCheckout/);
+assert.match(paymentSource, /listCashierPosInventory/);
+assert.match(paymentSource, /pricingProgram/);
 
 const incomingSource = readFileSync('app/(cashier)/cashier/incoming.tsx', 'utf8');
 assert.match(incomingSource, /useReportShipmentIssue/);

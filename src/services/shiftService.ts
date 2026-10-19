@@ -216,7 +216,7 @@ export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftC
       supabase
         .from('shift_product_reconciliations')
         .select(
-          'id, shift_id, product_id, product_name_snapshot, sku_snapshot, closing_stock_behavior, opening_quantity, received_quantity, outgoing_quantity, sold_quantity, waste_quantity, adjustment_quantity, expected_remaining, actual_remaining, discrepancy, unsold_quantity, carried_quantity, result, reconciled_at',
+          'id, shift_id, product_id, product_name_snapshot, sku_snapshot, closing_stock_behavior, opening_quantity, received_quantity, outgoing_quantity, sold_quantity, waste_quantity, adjustment_quantity, expected_remaining, actual_remaining, discrepancy, unsold_quantity, carried_quantity, result, discrepancy_note, reconciled_at',
         )
         .eq('shift_id', shiftId)
         .order('product_name_snapshot'),
@@ -250,6 +250,7 @@ export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftC
     unsold_quantity: Number(row.unsold_quantity),
     carried_quantity: Number(row.carried_quantity),
     result: row.result,
+    discrepancy_note: row.discrepancy_note ?? null,
     reconciled_at: row.reconciled_at,
   }));
 

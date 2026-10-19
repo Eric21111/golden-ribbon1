@@ -58,6 +58,7 @@ export type CreateCompleteProductInput = {
   }>;
   selling_price?: string | null;
   closingStockBehavior?: ClosingStockBehavior;
+  inventoryMode?: import('@/types/models').InventoryMode;
 };
 
 export async function listProductSkus(): Promise<string[]> {
@@ -74,8 +75,20 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
     p_variants: input.variants,
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
-    p_inventory_mode: 'piece_stock',
+    p_inventory_mode: input.inventoryMode ?? 'piece_stock',
     p_closing_stock_behavior: input.closingStockBehavior ?? 'keep_at_branch',
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setProductNonReturnable(
+  productId: string,
+  isNonReturnable: boolean,
+): Promise<Product> {
+  const { data, error } = await supabase.rpc('set_product_non_returnable', {
+    p_product_id: productId,
+    p_is_non_returnable: isNonReturnable,
   });
   if (error) throw error;
   return data;
