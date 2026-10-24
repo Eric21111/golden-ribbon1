@@ -10,11 +10,8 @@ import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import {
   formatCashResultLabel,
-  formatExpectedRemainingLabel,
-  formatInventoryResultLabel,
   incompleteProductCount,
   isValidClosePieceQuantity,
-  previewInventoryResult,
 } from '@/features/shifts/closeDisplay';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { TABLET_MIN_EDGE } from '@/lib/layout';
@@ -73,11 +70,6 @@ function ProductCountCard({
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const hasActual = actualRemaining.trim().length > 0;
-  const preview = previewInventoryResult(
-    Number(product.system_balance_before_waste),
-    actualRemaining,
-    wasteQuantity,
-  );
   const actualError =
     hasActual && !isValidClosePieceQuantity(actualRemaining)
       ? 'Use whole pieces only (0 or more).'
@@ -135,28 +127,6 @@ function ProductCountCard({
             accentColor={managerColors.royalBlue}
             accessibilityHint="Damaged, spoiled, or otherwise unusable pieces."
           />
-        </View>
-      </View>
-
-      <View style={styles.resultRow}>
-        <View style={styles.resultItem}>
-          <Text style={styles.resultLabel}>Expected remaining</Text>
-          <Text style={styles.resultValue}>
-            {formatExpectedRemainingLabel(preview?.expectedRemaining ?? null, hasActual)}
-          </Text>
-        </View>
-        <View style={styles.resultItem}>
-          <Text style={styles.resultLabel}>Difference</Text>
-          <Text
-            style={[
-              styles.resultValue,
-              preview?.result === 'shortage' && styles.resultShortage,
-              preview?.result === 'excess' && styles.resultExcess,
-              preview?.result === 'exact' && styles.resultExact,
-            ]}
-          >
-            {hasActual ? formatInventoryResultLabel(preview) : '—'}
-          </Text>
         </View>
       </View>
 

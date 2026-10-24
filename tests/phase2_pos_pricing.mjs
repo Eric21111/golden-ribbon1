@@ -63,7 +63,7 @@ const {
 
 assert.equal(chargedUnitPrice(80, 'employee_meal'), 0);
 assert.equal(chargedUnitPrice(80, 'pwd'), 60);
-assert.equal(chargedUnitPrice(80, 'back_office_guard'), BACK_OFFICE_GUARD_FIXED_UNIT_PRICE);
+assert.equal(chargedUnitPrice(80, 'back_office_guard'), 67);
 assert.equal(PWD_DISCOUNT_PERCENT_DEFAULT, 25);
 assert.equal(BACK_OFFICE_GUARD_FIXED_UNIT_PRICE, 13);
 // Settings-aware preview (amount_off vs fixed_unit_price)
@@ -116,7 +116,7 @@ assert.match(payment, /listSalePricingProgramSettings/);
 const pricingProgramsSrc = readFileSync('src/features/pos/pricingPrograms.ts', 'utf8');
 assert.match(pricingProgramsSrc, /employee_meal/);
 assert.match(pricingProgramsSrc, /back_office_guard/);
-assert.match(pricingProgramsSrc, /fixed unit price/i);
+assert.match(pricingProgramsSrc, /amount_off|₱13 OFF/i);
 assert.match(pricingProgramsSrc, /amount_off/);
 assert.match(pricingProgramsSrc, /BUSINESS RULE FLAG/);
 assert.match(readFileSync('src/features/pos/PosItemSheet.tsx', 'utf8'), /sortMealVariants/);
@@ -272,19 +272,20 @@ assert.equal(Number(pwd.total_amount), 120);
 assert.equal(Number(pwd.discount_amount), 40);
 assert.equal(await qty(), 16);
 
-// Back office / guard fixed unit ₱13
+// Back office / guard is ₱13 off catalog (ulam is 60 → 47)
 const guard = (
   await asUser(cashier, () =>
     db.query('select (public.confirm_sale($1,$2::jsonb,$3,$4,$5)).*', [
       shiftId,
       JSON.stringify([{ product_id: meal, variant_id: ulamVar, quantity: 1 }]),
-      '13',
+      '47',
       'phase2-guard-fixed-0000001',
       'back_office_guard',
     ]),
   )
 ).rows[0];
-assert.equal(Number(guard.total_amount), 13);
+assert.equal(Number(guard.total_amount), 47);
+assert.equal(Number(guard.discount_amount), 13);
 assert.equal(Number(guard.catalog_subtotal), 60);
 assert.equal(await qty(), 15);
 
@@ -313,7 +314,7 @@ const expected = (
     [shiftId],
   )
 ).rows[0].t;
-assert.equal(Number(expected), 80 + 0 + 120 + 13 + 160);
+assert.equal(Number(expected), 80 + 0 + 120 + 47 + 160);
 
 // Insufficient stock
 await asUser(cashier, () =>
@@ -417,7 +418,7 @@ const expectedFinal = Number(
     )
   ).rows[0].t,
 );
-assert.equal(expectedFinal, 80 + 0 + 120 + 13 + 160 + 70 + 67);
+assert.equal(expectedFinal, 80 + 0 + 120 + 47 + 160 + 70 + 67);
 
 // POS inventory variant order prefers sort_order
 const pos = await asUser(cashier, () => db.query('select * from public.list_cashier_pos_inventory()'));

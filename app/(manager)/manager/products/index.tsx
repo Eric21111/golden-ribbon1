@@ -73,6 +73,7 @@ export default function ManagerProductListScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [modeError, setModeError] = useState('');
+  const [createNotice, setCreateNotice] = useState('');
   const submittingRef = useRef(false);
   const editSubmittingRef = useRef(false);
   // Whether the open wizard has unsaved edits (reported by the wizard). Refs: read only when closing.
@@ -159,10 +160,27 @@ export default function ManagerProductListScreen() {
       })
       .then(async (product) => {
         if (values.isNonReturnable) {
-          await setProductNonReturnable(product.id, true);
+          try {
+            await setProductNonReturnable(product.id, true);
+            setCreateNotice('');
+          } catch {
+            setCreateNotice('Product was created. The non-returnable setting was not saved — edit the product to retry it.');
+          }
+        } else {
+          setCreateNotice('');
         }
+        setFilter(product.is_active ? 'all' : 'inactive');
+        setSearch('');
         createDirtyRef.current = false;
         setCreateOpen(false);
+      })
+      .catch((error: unknown) => {
+        const message = getProductErrorMessage(error);
+        if (message.toLowerCase().includes('sku')) {
+          setFilter('all');
+          setSearch(values.sku);
+        }
+        void message;
       })
       .finally(() => {
         endSubmit(submittingRef);
@@ -266,6 +284,7 @@ export default function ManagerProductListScreen() {
               </Pressable>
             </View>
             <FilterChipRow options={PRODUCT_FILTER_CHOICES} value={filter} onChange={setFilter} />
+            {createNotice ? <Text style={styles.createNotice}>{createNotice}</Text> : null}
           </View>
 
           {query.error ? (
@@ -459,6 +478,7 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
+  createNotice: { color: '#92400E', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
   sortButton: {

@@ -4,10 +4,12 @@ import { PGlite } from '@electric-sql/pglite';
 import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_helper.mjs';
 
 const cashierCreate = readFileSync('app/(cashier)/cashier/returns/create.tsx', 'utf8');
-assert.match(cashierCreate, /returnLeftoverStock/);
-assert.match(cashierCreate, /Confirm leftover return/);
-assert.match(cashierCreate, /Every leftover unit on hand is returned automatically/);
-assert.doesNotMatch(cashierCreate, /stepQuantity|setQuantity|Max/);
+assert.match(cashierCreate, /createStockReturn/);
+assert.match(cashierCreate, /System stock/);
+assert.match(cashierCreate, /Submit return/);
+assert.match(cashierCreate, /after Main receives/);
+assert.doesNotMatch(cashierCreate, /returnLeftoverStock/);
+assert.doesNotMatch(cashierCreate, /Every leftover unit on hand is returned automatically/);
 assert.doesNotMatch(cashierCreate, /createReturn\(/);
 
 const dashboard = readFileSync('app/(cashier)/cashier/dashboard.tsx', 'utf8');

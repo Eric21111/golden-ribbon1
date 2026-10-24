@@ -455,7 +455,11 @@ export function EditProductWizard({
         default_price: topLevelPrice,
         variants: variantValues,
         deletedVariantIds,
-        closingStockBehavior: isNonReturnable ? 'keep_at_branch' : product.closing_stock_behavior,
+        closingStockBehavior: isNonReturnable
+          ? 'keep_at_branch'
+          : product.is_non_returnable
+            ? 'record_as_unsold'
+            : product.closing_stock_behavior,
         isNonReturnable,
         stockUses: stockUsesForSave(savedStockUsesRef.current ?? '', buildStockUsePayload(recipePreview, variants)),
         drinkChoices: drinkChoicesForSave(savedDrinkChoicesRef.current ?? '', buildDrinkChoicePayload(drinkChoices, variants)),

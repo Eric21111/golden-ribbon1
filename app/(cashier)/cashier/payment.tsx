@@ -58,6 +58,7 @@ export default function PaymentScreen() {
   const [pricingSettings, setPricingSettings] = useState<Partial<
     Record<SalePricingProgram, SalePricingProgramSetting>
   > | null>(null);
+  const [pricingProgramsUnavailable, setPricingProgramsUnavailable] = useState(false);
 
   const totals = useMemo(
     () => previewOrderTotals(items, pricingProgram, pricingSettings),
@@ -110,11 +111,20 @@ export default function PaymentScreen() {
           product_id: item.product_id,
           variant_id: item.variant_id,
         }));
-        const [prices, settings] = await Promise.all([
-          getCashierLineSellingPrices(lines),
-          listSalePricingProgramSettings(),
-        ]);
+        const prices = await getCashierLineSellingPrices(lines);
+        let settings = null;
+        let programsUnavailable = false;
+        try {
+          settings = await listSalePricingProgramSettings();
+        } catch (error) {
+          settings = null;
+          const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+          const message = error instanceof Error ? error.message : '';
+          programsUnavailable = code === 'PGRST205' || /could not find the table|sale_pricing_program_settings/i.test(message);
+        }
         if (cancelled) return;
+        setPricingProgramsUnavailable(programsUnavailable);
+        if (programsUnavailable) setPricingProgram('standard');
         setPricingSettings(settings);
         const result = useCartStore.getState().applyLivePrices(prices);
         if (result.changed) {
@@ -242,13 +252,14 @@ export default function PaymentScreen() {
                 <View style={styles.programList}>
                   {PRICING_PROGRAM_OPTIONS.map((option) => {
                     const selected = option.value === pricingProgram;
+                    const unavailable = pricingProgramsUnavailable && option.value !== 'standard';
                     return (
                       <Pressable
                         key={option.value}
                         accessibilityRole="button"
-                        accessibilityState={{ selected }}
+                        accessibilityState={{ selected, disabled: unavailable || Boolean(checkout.request) }}
                         accessibilityLabel={option.label}
-                        disabled={Boolean(checkout.request)}
+                        disabled={unavailable || Boolean(checkout.request)}
                         onPress={() => setPricingProgram(option.value)}
                         style={({ pressed }) => [
                           styles.programOption,
@@ -264,7 +275,11 @@ export default function PaymentScreen() {
                     );
                   })}
                 </View>
-                {selectedProgram ? (
+                {pricingProgramsUnavailable ? (
+                  <Text style={styles.programNote}>
+                    Discounts are unavailable until the pending database update is applied. Standard price still checks out.
+                  </Text>
+                ) : selectedProgram ? (
                   <Text style={styles.programNote}>{selectedProgram.hint}</Text>
                 ) : null}
               </View>

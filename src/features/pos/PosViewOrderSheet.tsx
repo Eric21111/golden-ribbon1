@@ -1,9 +1,9 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
-import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney } from '@/lib/format';
 import { cartLineKey, cartTotalCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
@@ -39,6 +39,7 @@ export function PosViewOrderSheet({
   onConfirm,
   onClose,
 }: PosViewOrderSheetProps) {
+  const [confirmClear, setConfirmClear] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalCents = cartTotalCents(items);
   const totalByProduct = new Map<string, number>();
@@ -96,14 +97,22 @@ export function PosViewOrderSheet({
           {items.length > 0 ? (
             <View style={styles.buttonCol}>
               <ManagerActionButton
-                label="Clear order"
+                label={confirmClear ? 'Confirm clear' : 'Clear order'}
                 variant="secondary"
-                onPress={() =>
-                  confirmAction('Clear order?', 'Remove all products from this unfinished order.', onClear)
-                }
+                onPress={() => {
+                  if (!confirmClear) {
+                    setConfirmClear(true);
+                    return;
+                  }
+                  setConfirmClear(false);
+                  onClear();
+                }}
               />
             </View>
           ) : null}
+        {confirmClear ? (
+          <Text style={styles.clearHint}>This removes every product from the unfinished order.</Text>
+        ) : null}
         </View>
       </View>
     </ManagerBottomSheet>
@@ -127,4 +136,5 @@ const styles = StyleSheet.create({
   totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 21 },
   buttonRow: { flexDirection: 'row', gap: 10 },
   buttonCol: { flex: 1 },
+  clearHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
 });

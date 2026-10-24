@@ -77,16 +77,40 @@ export type SaleRequest = {
   pricingProgram?: SalePricingProgram;
 };
 
+function missingDeployedConfirmSale(error: unknown): boolean {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? '');
+  return code === 'PGRST202' || /could not find the function public\.confirm_sale/i.test(message);
+}
+
+/** Current server pricing, drinks, and shared stock need the pending confirm_sale argument.
+ * Until that migration is applied, a standard sale with no drink can still use the deployed function. */
 export async function confirmSale(request: SaleRequest): Promise<Sale> {
-  const { data, error } = await supabase.rpc('confirm_sale', {
+  const pricingProgram = request.pricingProgram ?? 'standard';
+  const full = await supabase.rpc('confirm_sale', {
     p_shift_id: request.shiftId,
     p_items: request.items,
     p_amount_paid: request.amountPaid,
     p_idempotency_key: request.key,
-    p_pricing_program: request.pricingProgram ?? 'standard',
+    p_pricing_program: pricingProgram,
   });
-  if (error) throw error;
-  return data;
+  const legacySafe = pricingProgram === 'standard' && request.items.every((item) => !item.drink_product_id);
+  if (full.error && missingDeployedConfirmSale(full.error) && legacySafe) {
+    const legacy = await supabase.rpc('confirm_sale', {
+      p_shift_id: request.shiftId,
+      p_items: request.items.map(({ product_id, variant_id, quantity }) => ({
+        product_id,
+        variant_id,
+        quantity,
+      })),
+      p_amount_paid: request.amountPaid,
+      p_idempotency_key: request.key,
+    });
+    if (legacy.error) throw legacy.error;
+    return legacy.data;
+  }
+  if (full.error) throw full.error;
+  return full.data;
 }
 
 /** Loads server pricing settings so POS preview matches confirm_sale. */

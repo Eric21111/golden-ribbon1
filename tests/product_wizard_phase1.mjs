@@ -150,7 +150,7 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
   assert.match(indexSrc, /onDirtyChange=\{\(dirty\) => \{\s*createDirtyRef\.current = dirty;/);
   assert.match(indexSrc, /onDirtyChange=\{\(dirty\) => \{\s*editDirtyRef\.current = dirty;/);
   // successful saves close directly (no prompt) and reset the flag
-  assert.match(indexSrc, /createDirtyRef\.current = false;\n\s*setCreateOpen\(false\);\n\s*\}\)\n\s*\.finally/);
+  assert.match(indexSrc, /createDirtyRef\.current = false;\s*setCreateOpen\(false\);\s*\}\)\s*\.catch\([\s\S]*?\.finally/);
   assert.match(indexSrc, /editDirtyRef\.current = false;\n\s*setEditProduct\(null\);\n\s*\}\)\n\s*\.catch/);
   // both wizards report dirtiness from a first-render snapshot
   for (const src of [createSrc, editSrc]) {

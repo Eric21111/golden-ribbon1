@@ -26,8 +26,16 @@ export function getErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
   if (message.includes('branches_one_main_branch')) return 'Only one branch can be marked as the Main Branch.';
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
-  if (message.includes('products_sku_unique_ci')) return 'That SKU is already in use.';
+  if (
+    message.includes('products_sku_unique_ci')
+    || (message.includes('sku') && (message.includes('already') || message.includes('duplicate') || message.includes('23505')))
+  ) {
+    return 'That SKU is already in use. Search All products — inactive items are included.';
+  }
   if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
+  if (message.includes('shift remittance not found') || message.includes('shift id is required')) {
+    return 'This shift remittance could not be opened. Go back to the remittance list and try that shift again.';
+  }
   if (message.includes('each variant name may appear only once') || message.includes('duplicate_variant_name')) {
     return 'Each variant name may appear only once.';
   }
@@ -289,6 +297,12 @@ export function getInventoryErrorMessage(error: unknown): string {
   if (message.includes('at least one item') || message.includes('requires an actual received')) {
     return 'This shipment could not be finalized. Pull to refresh and try again.';
   }
+  if (message.includes('choose a drink')) return 'Choose a drink for this meal option before checkout.';
+  if (message.includes('does not include a drink')) return 'Remove the drink from an option that does not include one.';
+  if (message.includes('select a meal option') || message.includes('variant) for')) {
+    return 'Select a meal option before checkout.';
+  }
+  if (message.includes('insufficient payment')) return 'The payment amount does not cover the order total. Review the total and try again.';
   if (message.includes('insufficient stock')) return 'There is not enough stock to complete this operation.';
   if (message.includes('main-tracked only') || message.includes('no automatic kg')) {
     return 'KG inventory is tracked at Main only. This booth operation is not supported for KG products.';
@@ -388,6 +402,9 @@ export function getShiftErrorMessage(error: unknown): string {
   if (message.includes('frozen until pending') || message.includes('frozen after final close')) {
     return 'Booth stock is frozen for today until remittance is finished or the next business day.';
   }
+  if (message.includes('reopen reason') || message.includes('reopen pos is only')) {
+    return 'Reopen POS is available after your completed remittance today. Enter a reason of at least 8 characters.';
+  }
   if (message.includes('already closed')) return 'This shift is already closed.';
   if (message.includes('different cash') || message.includes('different inventory')) {
     return 'This shift was already finalized with different counts. Refresh and review the saved remittance — do not submit again.';
@@ -437,6 +454,18 @@ export type CheckoutFailure = {
 /** Keeps an identical idempotent request available when the outcome is unknown or retryable. */
 export function getCheckoutFailure(error: unknown): CheckoutFailure {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const message = readErrorMessage(error).toLowerCase();
+  if (
+    code === 'PGRST202'
+    || code === 'PGRST205'
+    || message.includes('could not find the function')
+    || message.includes('could not find the table')
+  ) {
+    return {
+      message: 'This sale was not saved. Discounts and drink choices need the pending database update before they can be used.',
+      preserveRequest: false,
+    };
+  }
   const definitivelyRejected = ['22023', '42501', '23514', '22003'].includes(code);
   return definitivelyRejected
     ? {

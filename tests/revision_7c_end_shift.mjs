@@ -265,6 +265,31 @@ const finalize = (db, cashier, shiftId, actualCash, products) =>
     ),
   );
 
+  await asUser(db, ctx.cashier, () =>
+    assert.rejects(() => db.query(`select public.reopen_cashier_shift('short')`), /reason/i),
+  );
+  const reopened = await asUser(db, ctx.cashier, () =>
+    db.query(`select public.reopen_cashier_shift('Need to sell the rest of today') id`),
+  );
+  const reopenedId = reopened.rows[0].id;
+  assert.notEqual(reopenedId, shiftId);
+  assert.equal((await db.query('select status from public.shifts where id=$1', [shiftId])).rows[0].status, 'closed');
+  assert.equal(
+    Number((await db.query('select count(*) n from public.shift_reconciliations where shift_id=$1', [shiftId])).rows[0].n),
+    1,
+  );
+  const attached = await asUser(db, ctx.cashier, () => db.query('select public.start_cashier_shift() id'));
+  assert.equal(attached.rows[0].id, reopenedId);
+  const second = await asUser(db, ctx.cashier, () =>
+    db.query(`select public.reopen_cashier_shift('Need to sell the rest of today') id`),
+  );
+  assert.equal(second.rows[0].id, reopenedId);
+  assert.equal(
+    Number((await db.query('select count(*) n from public.shift_reopen_events where closed_shift_id=$1', [shiftId])).rows[0].n),
+    1,
+  );
+  await db.query('select public.assert_selling_branch_inventory_not_frozen($1)', [ctx.branch]);
+
   console.log('7C begin/finalize/freeze/idempotency: ok');
 }
 

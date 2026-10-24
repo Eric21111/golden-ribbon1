@@ -79,7 +79,10 @@ export function formatCashResultLabel(
   return `${formatMoney(magnitude)} excess`;
 }
 
-export function formatCloseSuccessSummary(result: ShiftCloseResult): string {
+export function formatCloseSuccessSummary(
+  result: ShiftCloseResult,
+  namesByProductId?: Record<string, string>,
+): string {
   const cash =
     result.result === 'exact'
       ? 'Cash: Exact'
@@ -101,7 +104,7 @@ export function formatCloseSuccessSummary(result: ShiftCloseResult): string {
     else excess += 1;
   }
 
-  return [
+  const lines = [
     'End Shift Complete',
     '',
     cash,
@@ -110,7 +113,18 @@ export function formatCloseSuccessSummary(result: ShiftCloseResult): string {
     `${exact} exact`,
     `${shortage} shortage`,
     `${excess} excess`,
-  ].join('\n');
+  ];
+  const details = (products as ShiftCloseProductSummary[])
+    .filter((row) => Number.isFinite(Number(row.expected_remaining)) && Number.isFinite(Number(row.discrepancy)))
+    .map((row) => {
+      const name = namesByProductId?.[row.product_id] || 'Product';
+      const expected = Number(row.expected_remaining);
+      const difference = Number(row.discrepancy);
+      const differenceLabel = difference > 0 ? `+${difference}` : String(difference);
+      return `${name}: expected remaining ${expected}, difference ${differenceLabel}`;
+    });
+  if (details.length > 0) lines.push('', ...details);
+  return lines.join('\n');
 }
 
 export function incompleteProductCount(

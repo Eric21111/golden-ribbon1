@@ -30,6 +30,13 @@ export async function startCashierShift(): Promise<string> {
   return data;
 }
 
+/** Same-day POS reopen after a completed remittance. Does not rewrite that remittance. */
+export async function reopenCashierShift(reason: string): Promise<string> {
+  const { data, error } = await supabase.rpc('reopen_cashier_shift', { p_reason: reason });
+  if (error) throw error;
+  return data;
+}
+
 export async function beginCashierShiftClose(shiftId: string): Promise<ShiftCloseBeginResult> {
   const { data, error } = await supabase.rpc('begin_cashier_shift_close', {
     p_shift_id: shiftId,
@@ -213,13 +220,30 @@ export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftC
         .select('expected_cash, actual_cash, difference, result, reconciled_at')
         .eq('shift_id', shiftId)
         .maybeSingle(),
-      supabase
-        .from('shift_product_reconciliations')
-        .select(
-          'id, shift_id, product_id, product_name_snapshot, sku_snapshot, closing_stock_behavior, opening_quantity, received_quantity, outgoing_quantity, sold_quantity, waste_quantity, adjustment_quantity, expected_remaining, actual_remaining, discrepancy, unsold_quantity, carried_quantity, result, discrepancy_note, reconciled_at',
-        )
-        .eq('shift_id', shiftId)
-        .order('product_name_snapshot'),
+      (async () => {
+        const withNote = await supabase
+          .from('shift_product_reconciliations')
+          .select(
+            'id, shift_id, product_id, product_name_snapshot, sku_snapshot, closing_stock_behavior, opening_quantity, received_quantity, outgoing_quantity, sold_quantity, waste_quantity, adjustment_quantity, expected_remaining, actual_remaining, discrepancy, unsold_quantity, carried_quantity, result, discrepancy_note, reconciled_at',
+          )
+          .eq('shift_id', shiftId)
+          .order('product_name_snapshot');
+        const missingNote =
+          withNote.error
+          && /discrepancy_note|column/i.test(`${withNote.error.message} ${withNote.error.details ?? ''}`);
+        if (!missingNote) return withNote;
+        const legacy = await supabase
+          .from('shift_product_reconciliations')
+          .select(
+            'id, shift_id, product_id, product_name_snapshot, sku_snapshot, closing_stock_behavior, opening_quantity, received_quantity, outgoing_quantity, sold_quantity, waste_quantity, adjustment_quantity, expected_remaining, actual_remaining, discrepancy, unsold_quantity, carried_quantity, result, reconciled_at',
+          )
+          .eq('shift_id', shiftId)
+          .order('product_name_snapshot');
+        return {
+          data: (legacy.data ?? []).map((row) => ({ ...row, discrepancy_note: null })),
+          error: legacy.error,
+        };
+      })(),
       // Optional: owner/same-branch managers may read sales_cutoff_at; others get null.
       supabase
         .from('shifts')

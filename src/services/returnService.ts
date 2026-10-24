@@ -71,6 +71,12 @@ export async function getReturn(id: string): Promise<StockReturnDetails> {
   };
 }
 
+export async function createStockReturn(request: import('@/types/returns').ReturnRequest): Promise<string> {
+  const { data, error } = await supabase.rpc('create_stock_return', request);
+  if (error) throw error;
+  return data;
+}
+
 export async function returnLeftoverStock(request: LeftoverReturnRequest): Promise<string> {
   const { data, error } = await supabase.rpc('return_leftover_stock', request);
   if (error) throw error;

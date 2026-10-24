@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -29,6 +30,7 @@ import {
   isNetworkishError,
 } from '@/features/shifts/closeDisplay';
 import { useCashierPosInventory } from '@/hooks/useInventory';
+import { reopenCashierShift } from '@/services/shiftService';
 import {
   useActiveShift,
   useBeginCashierShiftClose,
@@ -95,6 +97,10 @@ export default function CashierDashboard() {
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const [checkingStock, setCheckingStock] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+  const [reopenError, setReopenError] = useState('');
+  const [reopenBusy, setReopenBusy] = useState(false);
 
   const ensureStockAllowsPos = async (onAllowed: () => void) => {
     setCheckingStock(true);
@@ -172,6 +178,26 @@ export default function CashierDashboard() {
 
   const openPos = () => void ensureStockAllowsPos(() => router.push('/cashier/pos'));
 
+  const submitReopen = () => {
+    const reason = reopenReason.trim();
+    if (reason.length < 8 || reopenBusy) {
+      setReopenError('Enter a reason of at least 8 characters.');
+      return;
+    }
+    setReopenBusy(true);
+    setReopenError('');
+    void reopenCashierShift(reason)
+      .then(async () => {
+        setReopenOpen(false);
+        setReopenReason('');
+        await Promise.all([shiftQuery.refetch(), finalizedToday.refetch(), pendingShift.refetch()]);
+        await queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        router.push('/cashier/pos');
+      })
+      .catch((error: unknown) => setReopenError(getShiftErrorMessage(error)))
+      .finally(() => setReopenBusy(false));
+  };
+
   const showIncomingTile = profile?.branch?.receiving_mode === 'cashier_confirm';
   const incomingTile = showIncomingTile ? (
     <NavTile
@@ -226,10 +252,13 @@ export default function CashierDashboard() {
   };
 
   const onRemittanceSuccess = (result: ShiftCloseResult) => {
+    const names = Object.fromEntries(
+      (closePreview?.products ?? []).map((product) => [product.product_id, product.product_name_snapshot]),
+    );
     lastFinalizeRef.current = null;
     setAwaitingFinalizeRetry(false);
     setClosePreview(null);
-    alertNotice('End Shift Complete', formatCloseSuccessSummary(result));
+    alertNotice('End Shift Complete', formatCloseSuccessSummary(result, names));
     void finalizedToday.refetch();
     void pendingShift.refetch();
     void shiftQuery.refetch();
@@ -435,8 +464,46 @@ export default function CashierDashboard() {
                     Today&apos;s End Shift is complete. Start again next business day.
                   </Text>
                   <Text style={styles.note}>
-                    If this looks wrong, pull to refresh. The server decides whether a new shift can start.
+                    Reopen POS only if you still need to sell today. Today&apos;s completed remittance stays as recorded.
+                    The server decides whether a new shift can start.
                   </Text>
+                  {reopenOpen ? (
+                    <>
+                      <FormField
+                        label="Reason"
+                        value={reopenReason}
+                        onChangeText={setReopenReason}
+                        placeholder="Why POS needs to reopen"
+                        accentColor={managerColors.royalBlue}
+                      />
+                      {reopenError ? <Text style={styles.error}>{reopenError}</Text> : null}
+                      <ManagerActionButton
+                        label="Confirm reopen"
+                        loading={reopenBusy}
+                        disabled={reopenBusy}
+                        onPress={submitReopen}
+                      />
+                      <ManagerActionButton
+                        label="Cancel"
+                        variant="secondary"
+                        disabled={reopenBusy}
+                        onPress={() => {
+                          setReopenOpen(false);
+                          setReopenError('');
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <ManagerActionButton
+                      label="Reopen POS"
+                      icon="refresh-outline"
+                      variant="secondary"
+                      onPress={() => {
+                        setReopenError('');
+                        setReopenOpen(true);
+                      }}
+                    />
+                  )}
                 </>
               ) : (
                 <>

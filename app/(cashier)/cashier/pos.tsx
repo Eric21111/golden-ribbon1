@@ -283,7 +283,10 @@ export default function CashierPosScreen() {
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
               onQuantityChange={changeCartQuantity}
-              onClear={clearCart}
+              onClear={() => {
+                clearCart();
+                setOrderSheetOpen(false);
+              }}
               onCheckout={() => router.push('/cashier/payment')}
             />
           </View>
@@ -318,7 +321,10 @@ export default function CashierPosScreen() {
           onIncrease={increaseFromCart}
           onDecrease={decreaseProduct}
           onQuantityChange={changeCartQuantity}
-          onClear={clearCart}
+          onClear={() => {
+            clearCart();
+            setOrderSheetOpen(false);
+          }}
           onConfirm={() => {
             setOrderSheetOpen(false);
             router.push('/cashier/payment');

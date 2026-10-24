@@ -20,7 +20,7 @@ export function NonReturnableField({
       onValueChange={onChange}
       info={{
         title: 'What happens to leftover stock?',
-        body: "Good stock left at the end of the day stays at the branch and is ready to sell the next day. It can't be returned to Main. You don't need to set anything up.",
+        body: "Good stock left at the end of the day stays at the branch and is ready to sell the next day. It can't be returned to Main.",
       }}
     />
   );

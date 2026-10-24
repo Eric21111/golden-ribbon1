@@ -62,6 +62,7 @@ export function InventorySetupScreen() {
   const [sort, setSort] = useState<SortOption>('pending');
   const [sortOpen, setSortOpen] = useState(false);
   const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkValue, setBulkValue] = useState('');
@@ -340,12 +341,18 @@ export function InventorySetupScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open bulk actions"
-              onPress={() => setBulkSheetOpen(true)}
+              onPress={() => {
+                if (!bulkMode) {
+                  setBulkMode(true);
+                  return;
+                }
+                setBulkSheetOpen(true);
+              }}
               style={({ pressed }) => [styles.bulkTrigger, pressed && styles.pressed]}
             >
               <View style={styles.bulkTriggerLeft}>
                 <Ionicons name="layers-outline" size={18} color={managerColors.royalBlue} />
-                <Text style={styles.bulkTriggerLabel}>Bulk actions</Text>
+                <Text style={styles.bulkTriggerLabel}>{bulkMode ? 'Apply bulk quantity' : 'Bulk actions'}</Text>
                 {selectedIds.size > 0 ? (
                   <View style={styles.bulkCountPill}>
                     <Text style={styles.bulkCountText}>{selectedIds.size} selected</Text>
@@ -377,20 +384,22 @@ export function InventorySetupScreen() {
                     <View>
                       <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
                         <View style={styles.cardTop}>
-                          <Pressable
-                            accessibilityRole="checkbox"
-                            accessibilityState={{ checked: selectedIds.has(item.product.id) }}
-                            accessibilityLabel={`Select ${item.product.name} for bulk actions`}
-                            hitSlop={8}
-                            onPress={() => toggleSelected(item.product.id)}
-                            style={styles.checkbox}
-                          >
-                            <Ionicons
-                              name={selectedIds.has(item.product.id) ? 'checkbox' : 'square-outline'}
-                              size={22}
-                              color={selectedIds.has(item.product.id) ? managerColors.royalBlue : managerColors.cardBorder}
-                            />
-                          </Pressable>
+                          {bulkMode ? (
+                            <Pressable
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: selectedIds.has(item.product.id) }}
+                              accessibilityLabel={`Select ${item.product.name} for bulk actions`}
+                              hitSlop={8}
+                              onPress={() => toggleSelected(item.product.id)}
+                              style={styles.checkbox}
+                            >
+                              <Ionicons
+                                name={selectedIds.has(item.product.id) ? 'checkbox' : 'square-outline'}
+                                size={22}
+                                color={selectedIds.has(item.product.id) ? managerColors.royalBlue : managerColors.cardBorder}
+                              />
+                            </Pressable>
+                          ) : null}
                           <View style={styles.cardInfo}>
                             <Text style={styles.name} numberOfLines={2}>{item.product.name}</Text>
                             <Text style={styles.sku}>{item.product.sku}</Text>

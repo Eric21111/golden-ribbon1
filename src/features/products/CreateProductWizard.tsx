@@ -357,7 +357,7 @@ export function CreateProductWizard({
         description: '',
         default_price: topLevelPrice,
         variants: variantValues,
-        closingStockBehavior: 'keep_at_branch',
+        closingStockBehavior: isNonReturnable ? 'keep_at_branch' : 'record_as_unsold',
         isNonReturnable,
         stockUses: buildStockUsePayload(
           recipePreview,

@@ -16,11 +16,12 @@ export type SalePricingProgramSetting = {
 };
 
 /**
- * BUSINESS RULE FLAG — Back Office / Security Guard ₱13:
- * Default pricing_mode = fixed_unit_price (each line charged ₱13), not ₱13 off catalog.
- * Confirm with operations before production use; sale_pricing_program_settings can switch to amount_off.
+ * BUSINESS RULE FLAG: back office / security guard is ₱13 OFF each eligible unit (amount_off).
+ * Not a fixed unit price. sale_pricing_program_settings.fixed_amount is the deduction.
  */
-export const BACK_OFFICE_GUARD_FIXED_UNIT_PRICE = 13;
+export const BACK_OFFICE_GUARD_AMOUNT_OFF = 13;
+/** @deprecated Use BACK_OFFICE_GUARD_AMOUNT_OFF. Kept so older imports still compile. */
+export const BACK_OFFICE_GUARD_FIXED_UNIT_PRICE = BACK_OFFICE_GUARD_AMOUNT_OFF;
 export const PWD_DISCOUNT_PERCENT_DEFAULT = 25;
 
 export const PRICING_PROGRAM_OPTIONS: Array<{
@@ -42,7 +43,7 @@ export const PRICING_PROGRAM_OPTIONS: Array<{
   {
     value: 'back_office_guard',
     label: 'Back office / guard',
-    hint: `₱${BACK_OFFICE_GUARD_FIXED_UNIT_PRICE} per item (fixed unit price — confirm with ops)`,
+    hint: `₱${BACK_OFFICE_GUARD_AMOUNT_OFF} off each item`,
   },
 ];
 
@@ -70,12 +71,10 @@ export function chargedUnitPrice(
     return Math.round(charged) / 100;
   }
 
-  // back_office_guard — FLAG: default fixed unit price, not amount_off
-  const amount = row?.fixed_amount ?? BACK_OFFICE_GUARD_FIXED_UNIT_PRICE;
-  if (row?.pricing_mode === 'amount_off') {
-    return Math.max(0, toCents(catalogUnitPrice) - toCents(amount)) / 100;
-  }
-  return amount;
+  // back_office_guard — ₱13 off catalog unless settings explicitly use a fixed unit price.
+  const amount = row?.fixed_amount ?? BACK_OFFICE_GUARD_AMOUNT_OFF;
+  if (row?.pricing_mode === 'fixed_unit_price') return amount;
+  return Math.max(0, toCents(catalogUnitPrice) - toCents(amount)) / 100;
 }
 
 export function previewOrderTotals(

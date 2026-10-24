@@ -13,12 +13,14 @@ import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getErrorMessage, getInventoryErrorMessage } from '@/lib/errors';
 import { makeIdempotencyKey } from '@/lib/format';
-import { listReturnStock, returnLeftoverStock } from '@/services/returnService';
+import { createStockReturn, listReturnStock } from '@/services/returnService';
 import { useReturnStore } from '@/stores/returnStore';
-import type { LeftoverReturnRequest, ReturnRequest } from '@/types/returns';
+import type { ReturnRequest } from '@/types/returns';
 
-function leftoverRequestOf(request: ReturnRequest | LeftoverReturnRequest): LeftoverReturnRequest {
+function savedReturnRequest(request: { p_items?: ReturnRequest['p_items']; p_notes: string | null; p_idempotency_key: string } | undefined): ReturnRequest | null {
+  if (!request?.p_items?.length) return null;
   return {
+    p_items: request.p_items,
     p_notes: request.p_notes,
     p_idempotency_key: request.p_idempotency_key,
   };
@@ -34,6 +36,8 @@ export default function CreateReturnScreen() {
     queryFn: listReturnStock,
   });
   const [notes, setNotes] = useState('');
+  const [qty, setQty] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState<Array<{ name: string; quantity: number; system: number }> | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -44,15 +48,32 @@ export default function CreateReturnScreen() {
     lock.current = true;
     setBusy(true);
     setError('');
-    const request = saved?.request
-      ? leftoverRequestOf(saved.request)
-      : {
+    const lines = leftover
+      .map((row) => {
+        const raw = (qty[row.product_id] ?? '').trim();
+        const quantity = Number.parseInt(raw, 10);
+        if (!raw || !Number.isInteger(quantity) || quantity <= 0) return null;
+        return { product_id: row.product_id, name: row.product_name, quantity, system: Number(row.quantity_on_hand) };
+      })
+      .filter((row): row is { product_id: string; name: string; quantity: number; system: number } => row != null);
+    const savedRequest = savedReturnRequest(saved?.request);
+    if (!savedRequest && lines.length === 0) {
+      setError('Enter a quantity for at least one product.');
+      lock.current = false;
+      setBusy(false);
+      return;
+    }
+    const request = savedRequest ?? {
+          p_items: lines.map(({ product_id, quantity }) => ({ product_id, quantity_returned: quantity })),
           p_notes: notes.trim() || null,
-          p_idempotency_key: makeIdempotencyKey('leftover'),
+          p_idempotency_key: makeIdempotencyKey('return'),
         };
     try {
       useReturnStore.getState().save(user, { request });
-      const id = await returnLeftoverStock(request);
+      const id = await createStockReturn(request);
+      if (!saved?.request) {
+        setSubmitted(lines.map(({ name, quantity, system }) => ({ name, quantity, system })));
+      }
       useReturnStore.getState().save(user, { request, id });
       await Promise.all(
         ['inventory', 'inventory-movements', 'stock-returns', 'return-inventory'].map((key) =>
@@ -76,12 +97,19 @@ export default function CreateReturnScreen() {
   if (saved?.id) {
     return (
       <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-        <ManagerScreenHeader title="Return confirmed" subtitle="Stock is now In Transit to Main Branch." showBack />
+        <ManagerScreenHeader title="Return submitted" subtitle="Stock is now In Transit to Main Branch." showBack />
         <ConstrainedWidth style={styles.column}>
           <Text style={styles.body}>
-            Leftover on-hand stock left your branch once. Main Branch will count it later. Difference is recorded only
-            when Main receives the return.
+            Main Branch will count this return. Difference is shown only after that receipt.
           </Text>
+          {(submitted ?? []).map((row) => (
+            <View key={row.name} style={styles.card}>
+              <Text style={styles.name}>{row.name}</Text>
+              <Text style={styles.systemStock}>
+                Returned {row.quantity} · System stock was {row.system} · Expected remaining {row.system - row.quantity}
+              </Text>
+            </View>
+          ))}
           <ManagerActionButton
             label="Back to home"
             onPress={() => {
@@ -103,8 +131,7 @@ export default function CreateReturnScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         <Text style={styles.body}>
-          Piece-based stock only. KG-delivered meals are not listed here. Every leftover unit on hand is returned automatically. Confirm only. Main Branch will count the arrival and
-          record any difference.
+          Enter how many pieces to send back. System stock is shown for reference. Expected remaining and any difference appear after Main receives the return.
         </Text>
         {error ? <ErrorState message={error} /> : null}
         {query.isLoading ? <LoadingState /> : null}
@@ -114,23 +141,24 @@ export default function CreateReturnScreen() {
         ) : null}
         {leftover.map((row) => (
           <View key={row.product_id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.name} numberOfLines={2}>
-                  {row.product_name}
-                </Text>
-                <Text style={styles.sku}>
-                  {row.product_sku}
-                  {!row.is_active ? ' · Inactive' : ''}
-                </Text>
-              </View>
-              <View style={styles.availablePill}>
-                <Text style={styles.availableText} numberOfLines={1}>
-                  <Text style={styles.availableValue}>{row.quantity_on_hand}</Text>
-                  <Text style={styles.availableLabel}> leftover</Text>
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.name} numberOfLines={2}>
+              {row.product_name}
+            </Text>
+            <Text style={styles.systemStock}>System stock: {row.quantity_on_hand}</Text>
+            <FormField
+              label="Quantity"
+              value={qty[row.product_id] ?? ''}
+              onChangeText={(value) => {
+                if (value === '' || /^\d{1,6}$/.test(value)) {
+                  setQty((current) => ({ ...current, [row.product_id]: value }));
+                }
+              }}
+              keyboardType="number-pad"
+              editable={!saved}
+              accentColor={managerColors.royalBlue}
+              labelStyle={styles.fieldLabel}
+              style={styles.fieldInput}
+            />
           </View>
         ))}
         {leftover.length > 0 || saved ? (
@@ -152,7 +180,7 @@ export default function CreateReturnScreen() {
               </Text>
             ) : null}
             <ManagerActionButton
-              label={saved ? 'Retry confirmation' : 'Confirm leftover return'}
+              label={saved ? 'Retry confirmation' : 'Submit return'}
               loading={busy}
               disabled={!saved && (leftover.length === 0 || Boolean(query.error))}
               onPress={() => void confirm()}
@@ -184,6 +212,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardInfo: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  systemStock: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
   sku: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
   availablePill: {
     alignItems: 'center',

@@ -48,7 +48,8 @@ const inventoryResultBadge: Record<ShiftProductReconResult, { label: string; ton
 };
 
 export function ShiftRemittanceDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const query = useShiftCloseReportDetail(id ?? '');
   const detail = query.data;
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all');

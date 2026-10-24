@@ -103,6 +103,8 @@ export function BottomSheet({
     scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
   };
 
+  if (!visible) return null;
+
   const body = scroll ? (
     <ScrollView
       ref={scrollRef}

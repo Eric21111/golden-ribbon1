@@ -76,6 +76,11 @@ comment on column public.sale_items.discount_amount is
   'Per-line catalog subtotal minus charged subtotal.';
 
 -- Backfill catalog fields for existing rows (no amount changes).
+-- sales_immutable and sale_items_immutable reject every update. Disable them
+-- only for this fill of the new columns. total_amount and unit_price stay as stored.
+alter table public.sales disable trigger sales_immutable;
+alter table public.sale_items disable trigger sale_items_immutable;
+
 update public.sales
 set catalog_subtotal = total_amount
 where catalog_subtotal is null;
@@ -83,6 +88,9 @@ where catalog_subtotal is null;
 update public.sale_items
 set catalog_unit_price = unit_price
 where catalog_unit_price is null;
+
+alter table public.sales enable trigger sales_immutable;
+alter table public.sale_items enable trigger sale_items_immutable;
 
 -- ---------------------------------------------------------------------------
 -- Charged unit price helper
