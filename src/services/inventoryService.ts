@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { listProducts } from '@/services/productService';
+import { parseStockUses } from '@/features/pos/posAvailability';
 import type {
   Branch,
   BranchInventory,
@@ -17,8 +18,11 @@ type CashierPosInventoryRow = {
   selling_price: number;
   quantity_on_hand: number | null;
   updated_at: string | null;
-  variants: Array<{ id: string; name: string; selling_price: number }> | null;
+  variants: Array<{ id: string; name: string; selling_price: number; sellable_quantity?: number }> | null;
   inventory_mode: Product['inventory_mode'];
+  /** Units that can be sold from ingredient stock. Equals quantity_on_hand for products without a recipe. */
+  sellable_quantity?: number | null;
+  stock_uses?: unknown;
 };
 
 export async function listInventory(branch: Branch, activeOnly = false): Promise<InventoryItem[]> {
@@ -96,7 +100,15 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
     return {
       branch,
       product,
-      quantity_on_hand: row.quantity_on_hand == null ? 0 : Number(row.quantity_on_hand),
+      // In the POS list quantity_on_hand is the SELLABLE quantity: the product's own stock when it has no recipe
+      // (unchanged), otherwise what its ingredients can supply. The raw balance is not needed on this screen.
+      quantity_on_hand:
+        row.sellable_quantity != null
+          ? Number(row.sellable_quantity)
+          : row.quantity_on_hand == null
+            ? 0
+            : Number(row.quantity_on_hand),
+      stock_uses: parseStockUses(row.stock_uses),
       updated_at: row.updated_at,
       branch_product: {
         branch_id: row.branch_id,
@@ -109,6 +121,7 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       variants: (row.variants ?? []).map((variant) => ({
         ...variant,
         selling_price: Number(variant.selling_price),
+        ...(variant.sellable_quantity == null ? {} : { sellable_quantity: Number(variant.sellable_quantity) }),
       })),
     };
   });

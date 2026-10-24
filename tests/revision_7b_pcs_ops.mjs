@@ -96,7 +96,7 @@ const qty = async (db, branchId, productId) =>
 // --- Static client guards ---
 {
   assert.equal(existsSync('src/features/products/InventoryModeField.tsx'), false);
-  assert.equal(existsSync('src/features/products/ClosingStockBehaviorField.tsx'), true);
+  assert.equal(existsSync('src/features/products/ClosingStockBehaviorField.tsx'), false); // unused leftover, removed
 
   const createWizard = readFileSync('src/features/products/CreateProductWizard.tsx', 'utf8');
   const editWizard = readFileSync('src/features/products/EditProductWizard.tsx', 'utf8');
@@ -105,8 +105,10 @@ const qty = async (db, branchId, productId) =>
   const posInventory = readFileSync('src/features/pos/posInventory.ts', 'utf8');
   const mig = readFileSync(`${migrationsDir}/20260928140000_revision_7b_pcs_ops_rpcs.sql`, 'utf8');
 
-  assert.match(createWizard, /ClosingStockBehaviorField/);
-  assert.match(editWizard, /ClosingStockBehaviorField/);
+  assert.doesNotMatch(createWizard, /ClosingStockBehaviorField/);
+  assert.doesNotMatch(editWizard, /ClosingStockBehaviorField/);
+  assert.match(createWizard, /NonReturnableField/);
+  assert.match(editWizard, /NonReturnableField/);
   assert.doesNotMatch(createWizard, /InventoryModeField|kg_meal/);
   assert.doesNotMatch(editWizard, /InventoryModeField/);
   assert.match(productsIndex, /closingStockBehavior/);

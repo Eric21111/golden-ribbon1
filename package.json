@@ -71,6 +71,7 @@
     "test:discrepancy-resolution": "node tests/discrepancy_resolution.mjs",
     "test:kg-meal": "node tests/kg_meal_shift_reconciliation.mjs",
     "test:atomic-product-edit": "node tests/atomic_product_edit.mjs",
+    "test:product-wizard": "node tests/product_wizard_phase1.mjs && node tests/product_wizard_phase2.mjs && node tests/product_wizard_phase3.mjs && node tests/product_wizard_phase4.mjs && node tests/edit_price_prefill.mjs && node tests/wizard_cleanup.mjs",
     "test:7a": "node tests/revision_7a_pcs_cutover.mjs",
     "test:7b": "node tests/revision_7b_pcs_ops.mjs",
     "test:7c": "node tests/revision_7c_end_shift.mjs",

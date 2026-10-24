@@ -42,6 +42,9 @@ export type SaleItem = {
   product_id: string;
   variant_id: string | null;
   variant_name: string | null;
+  /** The drink chosen with this meal (Drink Choice), if its option includes one. */
+  drink_product_id?: string | null;
+  drink_name?: string | null;
   quantity: number;
   unit_price: number;
   subtotal: number;
@@ -67,7 +70,8 @@ export type SaleDetails = Sale & {
 
 export type SaleRequest = {
   shiftId: string;
-  items: { product_id: string; variant_id: string | null; quantity: number }[];
+  /** drink_product_id is only present for a meal option that includes a drink (Drink Choice). */
+  items: { product_id: string; variant_id: string | null; quantity: number; drink_product_id?: string }[];
   amountPaid: string;
   key: string;
   pricingProgram?: SalePricingProgram;

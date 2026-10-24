@@ -8,6 +8,8 @@ import { formatMoney } from '@/lib/format';
 import { cartLineKey, cartTotalCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
 
+import { cartLineLabel } from './cartLine';
+
 import { OrderLine } from './PosOrderLine';
 
 type PosViewOrderSheetProps = {
@@ -15,9 +17,11 @@ type PosViewOrderSheetProps = {
   items: CartItem[];
   /** Available stock per product; limits +. Shared across a product's variant lines. */
   stockByProductId: Map<string, number>;
-  onIncrease: (productId: string, variantId: string | null) => void;
-  onDecrease: (productId: string, variantId: string | null) => void;
-  onQuantityChange: (productId: string, variantId: string | null, quantity: number) => void;
+  /** Cart-aware cap per cart line (shared ingredient stock). When a line is missing, the per-product limit applies. */
+  maxByLine?: Map<string, number>;
+  onIncrease: (productId: string, variantId: string | null, drinkId?: string | null) => void;
+  onDecrease: (productId: string, variantId: string | null, drinkId?: string | null) => void;
+  onQuantityChange: (productId: string, variantId: string | null, quantity: number, drinkId?: string | null) => void;
   onClear: () => void;
   onConfirm: () => void;
   onClose: () => void;
@@ -27,6 +31,7 @@ export function PosViewOrderSheet({
   visible,
   items,
   stockByProductId,
+  maxByLine,
   onIncrease,
   onDecrease,
   onQuantityChange,
@@ -51,20 +56,21 @@ export function PosViewOrderSheet({
             {items.map((item) => {
               const stock = stockByProductId.get(item.product_id) ?? 0;
               const otherQuantity = (totalByProduct.get(item.product_id) ?? 0) - item.quantity;
-              const maxQuantity = Math.max(0, stock - otherQuantity);
-              const atLimit = (totalByProduct.get(item.product_id) ?? 0) >= stock;
-              const label = item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name;
+              const lineMax = maxByLine?.get(cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null));
+              const maxQuantity = lineMax ?? Math.max(0, stock - otherQuantity);
+              const atLimit = lineMax != null ? item.quantity >= lineMax : (totalByProduct.get(item.product_id) ?? 0) >= stock;
+              const label = cartLineLabel(item);
               return (
                 <OrderLine
-                  key={cartLineKey(item.product_id, item.variant_id)}
+                  key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)}
                   item={item}
                   label={label}
                   atLimit={atLimit}
                   maxQuantity={maxQuantity}
-                  onIncrease={() => onIncrease(item.product_id, item.variant_id)}
-                  onDecrease={() => onDecrease(item.product_id, item.variant_id)}
-                  onQuantityChange={(quantity) => onQuantityChange(item.product_id, item.variant_id, quantity)}
-                  onRemove={() => onQuantityChange(item.product_id, item.variant_id, 0)}
+                  onIncrease={() => onIncrease(item.product_id, item.variant_id, item.drink_product_id ?? null)}
+                  onDecrease={() => onDecrease(item.product_id, item.variant_id, item.drink_product_id ?? null)}
+                  onQuantityChange={(quantity) => onQuantityChange(item.product_id, item.variant_id, quantity, item.drink_product_id ?? null)}
+                  onRemove={() => onQuantityChange(item.product_id, item.variant_id, 0, item.drink_product_id ?? null)}
                 />
               );
             })}

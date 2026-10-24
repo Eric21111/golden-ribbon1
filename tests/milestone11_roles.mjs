@@ -484,11 +484,11 @@ await asUser(cashier1, async () => {
 await asUser(owner, async () => {
   await assert.rejects(
     db.query(`select public.owner_update_employee('${cashier1}','Cashier 1','cashier','${branch2}',true)`),
-    /active shift/,
+    /unfinished shift or remittance/,
   );
   await assert.rejects(
     db.query(`select public.owner_update_employee('${cashier1}','Cashier 1','cashier','${branch1}',false)`),
-    /active shift/,
+    /unfinished shift or remittance/,
   );
 });
 const openShiftClosed = await asUser(cashier1, async () => {

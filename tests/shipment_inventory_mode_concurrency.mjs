@@ -209,7 +209,7 @@ const transferA = await send(pieceA, 4, '4a-send-piece-a-0001');
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select public.set_product_inventory_mode($1,$2)', [pieceA, 'kg_meal']),
-    /retired|piece stock|open transfers/i,
+    /open transfers/,
   ),
 );
 await forceMode(pieceA, 'kg_meal');
@@ -257,13 +257,32 @@ assert.equal(
   0,
 );
 
-// Revision 7A: active kg_meal create/send paths are retired (RPC gate).
-await asUser(mainMgr, () =>
-  assert.rejects(
-    db.query('select public.set_product_inventory_mode($1,$2)', [kgMeal, 'kg_meal']),
-    /retired|piece stock/i,
-  ),
-);
+// Phase 3: kg_meal is re-allowed through set_product_inventory_mode, but ONLY while every balance is clear and no
+// transfer or return is open (Revision 7A had retired it outright; the wizard create/edit RPCs still refuse it).
+// kgMeal has no stock, no transfers and no returns, so it may switch; nothing else about it changes.
+{
+  const stockBefore = (await db.query('select count(*)::int n, coalesce(sum(quantity_on_hand),0)::text q from public.branch_inventory where product_id=$1', [kgMeal])).rows[0];
+  assert.deepEqual(stockBefore, { n: 0, q: '0' });
+  assert.equal(await productMode(kgMeal), 'piece_stock');
+  await asUser(mainMgr, () => db.query('select public.set_product_inventory_mode($1,$2)', [kgMeal, 'kg_meal']));
+  assert.equal(await productMode(kgMeal), 'kg_meal');
+  const stockAfter = (await db.query('select count(*)::int n, coalesce(sum(quantity_on_hand),0)::text q from public.branch_inventory where product_id=$1', [kgMeal])).rows[0];
+  assert.deepEqual(stockAfter, stockBefore, 'switching never converts or creates stock');
+  assert.equal(
+    Number((await db.query(`select count(*)::int n from public.inventory_movements where product_id=$1`, [kgMeal])).rows[0].n),
+    0,
+    'and writes no movement',
+  );
+  // a balance anywhere (here: Main) blocks switching back, and a refused call changes nothing
+  await stockMain(kgMeal, 3);
+  await asUser(mainMgr, () =>
+    assert.rejects(
+      db.query('select public.set_product_inventory_mode($1,$2)', [kgMeal, 'piece_stock']),
+      /Clear every current balance, including Main Branch/,
+    ),
+  );
+  assert.equal(await productMode(kgMeal), 'kg_meal');
+}
 
 const destC = await qty(branch, pieceIssue);
 const transferC = await send(pieceIssue, 6, '4a-send-piece-c-0001');
@@ -324,7 +343,7 @@ const arrivalWins = (async () => {
     await asUser(mainMgr, () =>
       assert.rejects(
         db.query('select public.set_product_inventory_mode($1,$2)', [pieceWin, 'kg_meal']),
-        /retired|piece stock|Clear every current balance/i,
+        /Clear every current balance/,
       ),
     );
   })();
@@ -344,7 +363,7 @@ const pendingBlock = await send(pieceBlock, 2, '4a-send-pending-block01');
 await asUser(mainMgr, () =>
   assert.rejects(
     db.query('select public.set_product_inventory_mode($1,$2)', [pieceBlock, 'kg_meal']),
-    /retired|piece stock|open transfers/i,
+    /open transfers/,
   ),
 );
 assert.equal(await transferStatus(pendingBlock), 'pending_receipt');
@@ -360,5 +379,5 @@ const confirmDef = (
 assert.match(confirmDef, /lock_branch_inventory_gate/);
 
 console.log(
-  'Part 4A/7A shipment concurrency tests passed: piece mismatch reject, matching receipt, arrival-wins, kg retired.',
+  'Part 4A/7A shipment concurrency tests passed: piece mismatch reject, matching receipt, arrival-wins, kg_meal switch only when clear.',
 );

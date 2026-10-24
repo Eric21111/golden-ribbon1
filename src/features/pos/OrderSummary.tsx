@@ -3,6 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
 import { cartLineKey, cartTotalCents, toCents } from '@/lib/money';
+
+import { cartLineLabel } from './cartLine';
 import type { CartItem } from '@/types/models';
 
 export function OrderSummary({ items }: { items: CartItem[] }) {
@@ -13,10 +15,10 @@ export function OrderSummary({ items }: { items: CartItem[] }) {
       <Text style={styles.title}>Order Summary</Text>
       {items.length === 0 ? <Text style={styles.empty}>No products selected.</Text> : null}
       {items.map((item) => (
-        <View key={cartLineKey(item.product_id, item.variant_id)} style={styles.itemRow}>
+        <View key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)} style={styles.itemRow}>
           <View style={styles.copy}>
             <Text style={styles.name}>
-              {item.variant_name ? `${item.product_name} (${item.variant_name})` : item.product_name}
+              {cartLineLabel(item)}
             </Text>
             <Text style={styles.calculation}>{item.quantity} × {formatMoney(item.unit_price)}</Text>
           </View>

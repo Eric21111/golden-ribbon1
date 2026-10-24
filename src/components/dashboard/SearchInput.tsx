@@ -3,9 +3,17 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { managerColors } from './theme';
 
-interface SearchInputProps extends Pick<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'autoCapitalize'> {}
+interface SearchInputProps
+  extends Pick<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'autoCapitalize' | 'returnKeyType' | 'onSubmitEditing'> {}
 
-export function SearchInput({ value, onChangeText, placeholder = 'Search', autoCapitalize = 'none' }: SearchInputProps) {
+export function SearchInput({
+  value,
+  onChangeText,
+  placeholder = 'Search',
+  autoCapitalize = 'none',
+  returnKeyType,
+  onSubmitEditing,
+}: SearchInputProps) {
   return (
     <View style={styles.container}>
       <Ionicons name="search-outline" size={18} color={managerColors.subtext} />
@@ -15,6 +23,8 @@ export function SearchInput({ value, onChangeText, placeholder = 'Search', autoC
         placeholder={placeholder}
         placeholderTextColor={managerColors.subtext}
         autoCapitalize={autoCapitalize}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
         style={styles.input}
       />
     </View>

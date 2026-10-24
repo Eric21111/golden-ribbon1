@@ -69,6 +69,9 @@ export type CartItem = {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  /** The drink chosen for a meal option that includes one (Drink Choice). Null/absent otherwise. */
+  drink_product_id?: string | null;
+  drink_name?: string | null;
 };
 
 export type EmployeeRecord = {
@@ -138,6 +141,28 @@ export type BranchProduct = {
   updated_at: string;
 };
 
+/** A saved Drink Choice: a drink the cashier may pick for a meal option (the MASTER variant). */
+export type ProductDrinkChoice = {
+  id: string;
+  product_id: string;
+  variant_id: string;
+  drink_product_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A saved Stock Used Per Order line: what one sold unit of a product (or one of its variants) uses. */
+export type ProductStockUse = {
+  id: string;
+  product_id: string;
+  /** NULL = the product-level list (product sold at one price, or the default for options without their own). */
+  variant_id: string | null;
+  ingredient_product_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProductVariant = {
   id: string;
   product_id: string;
@@ -165,6 +190,36 @@ export type PosVariant = {
   id: string;
   name: string;
   selling_price: number;
+  /** Units of this option the branch's ingredient stock can supply right now (server value). */
+  sellable_quantity?: number;
+  /** Cart-aware cap: the most this line's quantity may reach with the rest of the cart unchanged (client value). */
+  max_quantity?: number;
+  /** Client value: the option includes a drink but none is usable, so it cannot be sold (confirm_sale would refuse it). */
+  unavailable?: boolean;
+  /**
+   * Client value: for an option that includes a drink, each eligible drink with its own cart-aware cap. The cashier
+   * picks exactly one per meal ordered.
+   */
+  drink_options?: PosDrinkOption[];
+};
+
+/** A drink the cashier may pick for a meal option, with how many more of that line the stock allows. */
+export type PosDrinkOption = { id: string; name: string; max_quantity: number };
+
+/** One ingredient a sold unit uses (Stock Used Per Order), in whole stock units. */
+export type PosStockLine = { ingredient_product_id: string; quantity: number };
+
+/**
+ * The stock_uses column of list_cashier_pos_inventory: the effective recipe of the product and of each branch
+ * variant (null = cannot be sold), plus the branch's stock of every ingredient involved.
+ */
+export type PosStockUses = {
+  product: PosStockLine[] | null;
+  variants: Record<string, PosStockLine[] | null>;
+  /** Eligible drink ids of each (branch) option that includes a drink. */
+  drinks?: Record<string, string[]>;
+  ingredient_stock: Record<string, number>;
+  ingredient_names: Record<string, string>;
 };
 
 export type InventoryItem = {
@@ -175,6 +230,10 @@ export type InventoryItem = {
   branch_product?: BranchProduct | null;
   /** Active branch price variants for this product. Empty when single-priced. */
   variants?: PosVariant[];
+  /** POS only: effective recipes + ingredient stock, so carts respect shared stock. Absent = no recipe. */
+  stock_uses?: PosStockUses | null;
+  /** POS only, client-computed: the most this product's single line may reach in the cart (no variants). */
+  max_quantity?: number;
 };
 
 export type InventoryMovement = {

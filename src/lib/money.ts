@@ -24,9 +24,13 @@ export type PricedCartItem = {
   subtotal: number;
 };
 
-/** Cart lines are keyed by product + variant, since a product can appear once per variant. */
-export function cartLineKey(productId: string, variantId: string | null): string {
-  return `${productId}:${variantId ?? ''}`;
+/**
+ * Cart lines are keyed by product + variant, since a product can appear once per variant. A meal sold with a drink is
+ * one line per drink, so the drink is part of the key; without a drink the key is exactly what it always was (which
+ * is also how checkout prices are looked up: a drink never changes the price).
+ */
+export function cartLineKey(productId: string, variantId: string | null, drinkProductId: string | null = null): string {
+  return `${productId}:${variantId ?? ''}${drinkProductId ? `:${drinkProductId}` : ''}`;
 }
 
 /** Reprices cart lines from live branch/variant selling prices. Does not trust stale client unit prices. */

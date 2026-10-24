@@ -22,14 +22,16 @@ import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductRow } from '@/features/pos/PosProductRow';
 import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
+import { buildStockContext, maxLineQuantity, withCartLimits } from '@/features/pos/posAvailability';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCashierPosInventory } from '@/hooks/useInventory';
 import { useActiveShift } from '@/hooks/useShifts';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
-import { cartTotalCents } from '@/lib/money';
+import { cartLineKey, cartTotalCents } from '@/lib/money';
 import { useCartStore } from '@/stores/cartStore';
+import type { PosDrinkChoice } from '@/stores/cartStore';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 const POS_PAGE_SIZE = 10;
@@ -56,9 +58,32 @@ export default function CashierPosScreen() {
     if (shiftQuery.data) beginShift(shiftQuery.data.id);
   }, [beginShift, shiftQuery.data]);
 
+  // Shared ingredient stock (Egg, Rice, ...): the cart store and the limits below count every line together.
+  const stockContext = useMemo(() => buildStockContext(inventory.data ?? []), [inventory.data]);
+  const setStockContext = useCartStore((state) => state.setStockContext);
+  useEffect(() => {
+    setStockContext(stockContext);
+  }, [setStockContext, stockContext]);
+  // Rows carry cart-aware caps (max_quantity). What is listed or out of stock still follows the server's sellable
+  // quantity, so products do not appear or vanish as the cart fills.
+  const limitedInventory = useMemo(
+    () => withCartLimits(inventory.data ?? [], stockContext, items),
+    [inventory.data, stockContext, items],
+  );
+  const maxByLine = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of items) {
+      map.set(
+        cartLineKey(line.product_id, line.variant_id, line.drink_product_id ?? null),
+        maxLineQuantity(stockContext, items, line.product_id, line.variant_id, line.drink_product_id ?? null),
+      );
+    }
+    return map;
+  }, [items, stockContext]);
+
   const filteredInventory = useMemo(
-    () => filterPosInventory(inventory.data ?? [], search),
-    [inventory.data, search],
+    () => filterPosInventory(limitedInventory, search),
+    [limitedInventory, search],
   );
 
   const pagination = useClientPagination(filteredInventory, search, POS_PAGE_SIZE);
@@ -74,9 +99,9 @@ export default function CashierPosScreen() {
 
   const inventoryById = useMemo(() => {
     const map = new Map<string, InventoryItem>();
-    for (const item of inventory.data ?? []) map.set(item.product.id, item);
+    for (const item of limitedInventory) map.set(item.product.id, item);
     return map;
-  }, [inventory.data]);
+  }, [limitedInventory]);
 
   const stockByProductId = useMemo(() => {
     const map = new Map<string, number>();
@@ -97,20 +122,37 @@ export default function CashierPosScreen() {
     void Promise.all([inventory.refetch(), shiftQuery.refetch()]);
   };
 
-  const increaseFromCart = (productId: string, variantId: string | null) => {
+  // A cart line is product + option + the drink chosen with it (Drink Choice); the drink's name comes from the stock data.
+  const drinkOf = (drinkId: string | null | undefined): PosDrinkChoice | null =>
+    drinkId ? { id: drinkId, name: stockContext.names.get(drinkId) ?? 'Drink' } : null;
+
+  const increaseFromCart = (productId: string, variantId: string | null, drinkId: string | null = null) => {
     const row = inventoryById.get(productId);
     if (!row) return;
     const variant = variantId ? row.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
-    addProduct(row, variant);
+    addProduct(row, variant, drinkOf(drinkId));
   };
+
+  // cart quantity per line for meals sold with a drink, keyed "<variantId>:<drinkId>" (the item sheet reads it)
+  const quantitiesByDrinkLine = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of items) {
+      if (!line.drink_product_id) continue;
+      const key = `${line.variant_id ?? ''}:${line.drink_product_id}`;
+      map.set(key, (map.get(key) ?? 0) + line.quantity);
+    }
+    return map;
+  }, [items]);
 
   const activeSheetItem = sheetItem ? inventoryById.get(sheetItem.product.id) ?? sheetItem : null;
 
-  const addFromSheet = (variant: PosVariant | null, quantity: number) => {
+  const addFromSheet = (variant: PosVariant | null, quantity: number, drink: PosDrinkChoice | null = null) => {
     if (!activeSheetItem || quantity <= 0) return;
     const variantId = variant?.id ?? null;
-    const current = quantitiesByProduct.get(activeSheetItem.product.id)?.get(variantId) ?? 0;
-    setProductQuantity(activeSheetItem, current + quantity, variant);
+    const current = drink
+      ? quantitiesByDrinkLine.get(`${variantId ?? ''}:${drink.id}`) ?? 0
+      : quantitiesByProduct.get(activeSheetItem.product.id)?.get(variantId) ?? 0;
+    setProductQuantity(activeSheetItem, current + quantity, variant, drink);
   };
 
   if (shiftQuery.isLoading || inventory.isLoading) {
@@ -192,11 +234,11 @@ export default function CashierPosScreen() {
     />
   );
 
-  const changeCartQuantity = (productId: string, variantId: string | null, quantity: number) => {
+  const changeCartQuantity = (productId: string, variantId: string | null, quantity: number, drinkId: string | null = null) => {
     const row = inventoryById.get(productId);
     if (!row) return;
     const variant = variantId ? row.variants?.find((candidate) => candidate.id === variantId) ?? null : null;
-    setProductQuantity(row, quantity, variant);
+    setProductQuantity(row, quantity, variant, drinkOf(drinkId));
   };
 
   const mobileFooter = (
@@ -237,6 +279,7 @@ export default function CashierPosScreen() {
             <PosOrderPane
               items={items}
               stockByProductId={stockByProductId}
+              maxByLine={maxByLine}
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
               onQuantityChange={changeCartQuantity}
@@ -262,6 +305,7 @@ export default function CashierPosScreen() {
       <PosItemSheet
         item={activeSheetItem}
         quantityByVariant={sheetItem ? quantitiesByProduct.get(sheetItem.product.id) ?? new Map() : new Map()}
+        quantityByLine={quantitiesByDrinkLine}
         onAdd={addFromSheet}
         onClose={() => setSheetItem(null)}
       />
@@ -270,6 +314,7 @@ export default function CashierPosScreen() {
           visible={orderSheetOpen}
           items={items}
           stockByProductId={stockByProductId}
+          maxByLine={maxByLine}
           onIncrease={increaseFromCart}
           onDecrease={decreaseProduct}
           onQuantityChange={changeCartQuantity}

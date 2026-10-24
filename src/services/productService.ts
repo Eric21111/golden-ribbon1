@@ -1,7 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import { formatCatalogPrice } from '@/lib/format';
 import { cartLineKey } from '@/lib/money';
-import type { ClosingStockBehavior, Product, ProductVariant } from '@/types/models';
+import type { DrinkChoicePayload } from '@/features/products/drinkChoiceMapping';
+import type { StockUsePayload } from '@/features/products/stockUseMapping';
+import type { ClosingStockBehavior, Product, ProductDrinkChoice, ProductStockUse, ProductVariant } from '@/types/models';
 
 interface ProductFilters {
   search?: string;
@@ -34,11 +36,15 @@ export async function getCashierLineSellingPrices(
   lines: Array<{ product_id: string; variant_id: string | null }>,
 ): Promise<Record<string, number>> {
   if (!lines.length) return {};
+  // A price depends on product + option only. A meal sold with different drinks is several cart lines but one price, and
+  // get_cashier_line_prices answers once per distinct product/option, so ask (and count) per distinct pair.
+  const distinct = new Map<string, { product_id: string; variant_id: string | null }>();
+  for (const { product_id, variant_id } of lines) distinct.set(cartLineKey(product_id, variant_id), { product_id, variant_id });
   const { data, error } = await supabase.rpc('get_cashier_line_prices', {
-    p_lines: lines.map(({ product_id, variant_id }) => ({ product_id, variant_id })),
+    p_lines: [...distinct.values()],
   });
   if (error) throw error;
-  if ((data ?? []).length !== lines.length) {
+  if ((data ?? []).length !== distinct.size) {
     throw new Error('A product or variant is no longer available in this branch catalog.');
   }
   return Object.fromEntries(
@@ -59,6 +65,10 @@ export type CreateCompleteProductInput = {
   selling_price?: string | null;
   closingStockBehavior?: ClosingStockBehavior;
   inventoryMode?: import('@/types/models').InventoryMode;
+  /** Stock Used Per Order, saved with the product (see stockUseMapping.ts). Omitted/empty = no recipes. */
+  stockUses?: StockUsePayload[];
+  /** Eligible drinks of each option that includes a drink (see drinkChoiceMapping.ts). Omitted/empty = none. */
+  drinkChoices?: DrinkChoicePayload[];
 };
 
 export async function listProductSkus(): Promise<string[]> {
@@ -77,6 +87,8 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
     p_selling_price: input.selling_price ?? null,
     p_inventory_mode: input.inventoryMode ?? 'piece_stock',
     p_closing_stock_behavior: input.closingStockBehavior ?? 'keep_at_branch',
+    p_stock_uses: input.stockUses ?? null,
+    p_drink_choices: input.drinkChoices ?? null,
   });
   if (error) throw error;
   return data;
@@ -109,6 +121,13 @@ export type UpdateCompleteProductInput = {
     variants?: Array<{ name: string; selling_price: string }>;
   }>;
   selling_price?: string | null;
+  /**
+   * undefined = leave every saved recipe untouched (an unrelated edit must never rewrite them).
+   * An array = the COMPLETE new set, replacing the saved one; [] removes them all.
+   */
+  stockUses?: StockUsePayload[];
+  /** Same rule for drink choices: undefined = untouched, an array = the complete new set, [] = remove them all. */
+  drinkChoices?: DrinkChoicePayload[];
 };
 
 export async function updateCompleteProduct(input: UpdateCompleteProductInput): Promise<Product> {
@@ -123,6 +142,8 @@ export async function updateCompleteProduct(input: UpdateCompleteProductInput): 
     p_branches: input.branches,
     p_selling_price: input.selling_price ?? null,
     p_closing_stock_behavior: input.closingStockBehavior ?? null,
+    p_stock_uses: input.stockUses ?? null,
+    p_drink_choices: input.drinkChoices ?? null,
   });
   if (error) throw error;
   return data;
@@ -161,6 +182,30 @@ export async function listProductVariants(productId: string): Promise<ProductVar
     .order('sort_order');
   if (error) throw error;
   return (data ?? []).map((row) => ({ ...row, default_price: Number(row.default_price) }));
+}
+
+/** Saved Drink Choices of a product (one row per eligible drink of each option that includes one). */
+export async function listProductDrinkChoices(productId: string): Promise<ProductDrinkChoice[]> {
+  const { data, error } = await supabase
+    .from('product_drink_choices')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at')
+    .order('id');
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Saved Stock Used Per Order lines of a product (product-level and per variant), oldest first. */
+export async function listProductStockUses(productId: string): Promise<ProductStockUse[]> {
+  const { data, error } = await supabase
+    .from('product_stock_uses')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at')
+    .order('id');
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ ...row, quantity: Number(row.quantity) }));
 }
 
 export async function configureProductVariants(

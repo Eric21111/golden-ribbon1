@@ -1,5 +1,9 @@
+import type { DrinkChoicePayload } from '@/features/products/drinkChoiceMapping';
+import type { StockUsePayload } from '@/features/products/stockUseMapping';
 import type {
   Branch,
+  ProductDrinkChoice,
+  ProductStockUse,
   BranchInventory,
   BranchProduct,
   BranchProductVariant,
@@ -250,6 +254,22 @@ export type Database = {
           { foreignKeyName: 'product_variants_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
         ];
       };
+      product_drink_choices: {
+        Row: ProductDrinkChoice;
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'product_drink_choices_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
+      product_stock_uses: {
+        Row: ProductStockUse;
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'product_stock_uses_product_id_fkey'; columns: ['product_id']; isOneToOne: false; referencedRelation: 'products'; referencedColumns: ['id'] },
+        ];
+      };
       inventory_movements: {
         Row: InventoryMovement;
         Insert: InventoryMovementInsert;
@@ -340,6 +360,8 @@ export type Database = {
           p_selling_price?: string | null;
           p_inventory_mode?: string | null;
           p_closing_stock_behavior?: string | null;
+          p_stock_uses?: StockUsePayload[] | null;
+          p_drink_choices?: DrinkChoicePayload[] | null;
         };
         Returns: Product;
       };
@@ -385,6 +407,8 @@ export type Database = {
           p_selling_price?: string | null;
           p_inventory_mode?: string | null;
           p_closing_stock_behavior?: string | null;
+          p_stock_uses?: StockUsePayload[] | null;
+          p_drink_choices?: DrinkChoicePayload[] | null;
         };
         Returns: Product;
       };
@@ -414,8 +438,10 @@ export type Database = {
           selling_price: number;
           quantity_on_hand: number | null;
           updated_at: string | null;
-          variants: Array<{ id: string; name: string; selling_price: number }>;
+          variants: Array<{ id: string; name: string; selling_price: number; sellable_quantity?: number }>;
           inventory_mode: Product['inventory_mode'];
+          sellable_quantity: number | null;
+          stock_uses: unknown;
         }>;
       };
       create_stock_return: { Args: ReturnRequest; Returns: string };
@@ -427,7 +453,7 @@ export type Database = {
       confirm_sale: {
         Args: {
           p_shift_id: string;
-          p_items: { product_id: string; variant_id?: string | null; quantity: number }[];
+          p_items: { product_id: string; variant_id?: string | null; quantity: number; drink_product_id?: string }[];
           p_amount_paid: string;
           p_idempotency_key: string;
           p_pricing_program?: string;

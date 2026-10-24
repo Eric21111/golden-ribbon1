@@ -99,9 +99,11 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
       <Text style={styles.sectionTitle}>ITEMS ORDERED</Text>
       <View style={styles.receipt}>
         {sale.items.map((item, index) => {
-          const name = item.variant_name
+          const baseName = item.variant_name
             ? `${item.product?.name ?? `Product (${item.product_id})`} (${item.variant_name})`
             : item.product?.name ?? `Product (${item.product_id})`;
+          // a meal sold with a drink shows the drink chosen
+          const name = item.drink_name ? `${baseName} · ${item.drink_name}` : baseName;
           return (
             <View key={item.id}>
               {index > 0 ? <View style={styles.receiptDivider} /> : null}

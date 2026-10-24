@@ -183,6 +183,7 @@ const zeroActual = id(44);
 const allPendingA = id(45);
 const allPendingB = id(46);
 const todayShift = id(47);
+const yesterdayEdgeShift = id(48);
 
 await insertClosed({
   shiftId: a,
@@ -428,25 +429,46 @@ const zeroDay = dayOf(await remit(sm2, 'custom', '2026-09-25T00:00:00+08:00', '2
 assert.equal(Number(zeroDay.reconciled_shift_count), 1);
 assert.equal(num(zeroDay.actual_remitted), 0);
 
-await db.exec(`
-  insert into public.shifts(
-    id, branch_id, cashier_id, status, started_at, ended_at, reconciliation_required
-  ) values (
-    '${todayShift}', '${sm1}', '${cashierA}', 'closed',
-    now() - interval '2 hours', now() - interval '1 hour', true
-  );
-  insert into public.shift_reconciliations(
-    shift_id, branch_id, expected_cash, actual_cash, difference, result, recorded_by
-  ) values (
-    '${todayShift}', '${sm1}', 25, 25, 0, 'exact', '${cashierA}'
-  );
-`);
+// "today" is the current Asia/Manila calendar day [00:00, 24:00) and a shift belongs to the Manila date of its ended_at.
+// The fixtures are pinned to explicit Manila instants (Manila has no DST, so +08:00 is exact) rather than "N hours ago":
+// "1 hour ago" falls on YESTERDAY for the first hour after Manila midnight, which made this test depend on the time of
+// day it ran. Today's midnight is never in the future and is inside today at every moment of the day (the lower bound is
+// inclusive); one second earlier is the last instant of yesterday at every moment of the day.
+const manilaToday = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const manilaYesterday = new Date(Date.parse(`${manilaToday}T00:00:00Z`) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const todayStartManila = `${manilaToday}T00:00:00+08:00`;
+const yesterdayLastSecondManila = `${manilaYesterday}T23:59:59+08:00`;
+await insertClosed({
+  shiftId: todayShift,
+  branchId: sm1,
+  cashierId: cashierA,
+  endedAt: todayStartManila,
+  required: true,
+  remittance: { expected: 25, actual: 25 },
+});
+await insertClosed({
+  shiftId: yesterdayEdgeShift,
+  branchId: sm1,
+  cashierId: cashierB,
+  endedAt: yesterdayLastSecondManila,
+  required: true,
+  remittance: { expected: 25, actual: 25 },
+});
 const allTime = flattenShifts(await remit(null));
 const todayOnly = flattenShifts(await remit(null, 'today'));
 assert.ok(allTime.some((row) => row.shift_id === zeroActual));
 assert.ok(allTime.some((row) => row.shift_id === todayShift));
-assert.ok(todayOnly.some((row) => row.shift_id === todayShift));
+assert.ok(allTime.some((row) => row.shift_id === yesterdayEdgeShift));
+assert.ok(todayOnly.some((row) => row.shift_id === todayShift), 'a shift ending at Manila midnight today is today');
+assert.equal(todayOnly.some((row) => row.shift_id === yesterdayEdgeShift), false, 'one second before Manila midnight is yesterday');
 assert.equal(todayOnly.some((row) => row.shift_id === zeroActual), false);
+// business_date follows the Manila calendar date of ended_at
+assert.ok(dayOf(await remit(null, 'today'), manilaToday)?.shifts.some((row) => row.shift_id === todayShift));
+assert.ok(dayOf(await remit(null), manilaYesterday)?.shifts.some((row) => row.shift_id === yesterdayEdgeShift));
+// the same boundary through an explicit custom range (the app sends Manila instants)
+const customToday = flattenShifts(await remit(null, 'custom', todayStartManila, `${new Date(Date.parse(todayStartManila) + 24 * 60 * 60 * 1000).toISOString()}`));
+assert.ok(customToday.some((row) => row.shift_id === todayShift));
+assert.equal(customToday.some((row) => row.shift_id === yesterdayEdgeShift), false);
 
 await db.close();
 console.log('waste daily remittance report tests passed');

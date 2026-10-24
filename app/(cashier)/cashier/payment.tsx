@@ -20,6 +20,7 @@ import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { OrderSummary } from '@/features/pos/OrderSummary';
 import { authoritativePosBranchId } from '@/features/pos/posInventory';
+import { buildStockContext, findShortages } from '@/features/pos/posAvailability';
 import {
   PRICING_PROGRAM_OPTIONS,
   previewOrderTotals,
@@ -78,20 +79,11 @@ export default function PaymentScreen() {
         queryFn: listCashierPosInventory,
         staleTime: 0,
       });
-      const stockByProduct = new Map(rows.map((row) => [row.product.id, Number(row.quantity_on_hand)]));
-      const needed = new Map<string, { name: string; qty: number }>();
-      for (const line of useCartStore.getState().items) {
-        const current = needed.get(line.product_id) ?? { name: line.product_name, qty: 0 };
-        current.qty += line.quantity;
-        needed.set(line.product_id, current);
-      }
-      const over: string[] = [];
-      for (const [productId, info] of needed) {
-        const available = stockByProduct.get(productId) ?? 0;
-        if (info.qty > available) {
-          over.push(`${info.name} (need ${info.qty}, available ${available})`);
-        }
-      }
+      // Counts shared ingredient stock across every line (Egg, Rice, ...). Products without a recipe are checked
+      // against their own stock exactly as before. confirm_sale remains the final authority.
+      const over = findShortages(buildStockContext(rows), useCartStore.getState().items).map(
+        (shortage) => `${shortage.name} (need ${shortage.needed}, available ${shortage.available})`,
+      );
       if (over.length > 0) {
         setValidation(
           `Stock changed. Return to the order and reduce quantities:\n${over.join('\n')}`,
@@ -166,7 +158,13 @@ export default function PaymentScreen() {
       amountPaid: centsDecimal(Math.round(charged * 100)),
       key: makeIdempotencyKey('sale'),
       pricingProgram,
-      items: liveItems.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })),
+      // a meal sold with a drink carries the drink chosen; every other line is sent exactly as before
+      items: liveItems.map(({ product_id, variant_id, quantity, drink_product_id }) => ({
+        product_id,
+        variant_id,
+        quantity,
+        ...(drink_product_id ? { drink_product_id } : {}),
+      })),
     });
   };
 

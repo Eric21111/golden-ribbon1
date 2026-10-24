@@ -5,7 +5,9 @@ import {
   configureProductVariants,
   createCompleteProduct,
   getProduct,
+  listProductDrinkChoices,
   listProductSkus,
+  listProductStockUses,
   listProductVariants,
   listProducts,
   updateBranchProductVariantPrice,
@@ -41,6 +43,29 @@ export function useProductVariants(productId: string) {
   });
 }
 
+/** Saved Stock Used Per Order lines, loaded when a product is opened for editing. */
+export function useProductStockUses(productId: string) {
+  return useQuery({
+    queryKey: ['product-stock-uses', productId],
+    queryFn: () => listProductStockUses(productId),
+    enabled: Boolean(productId),
+    // Always read the saved recipes fresh when an edit opens: saving over a stale copy could drop changes.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/** Saved Drink Choices, loaded when a product is opened for editing (always fresh, like the stock lists). */
+export function useProductDrinkChoices(productId: string) {
+  return useQuery({
+    queryKey: ['product-drink-choices', productId],
+    queryFn: () => listProductDrinkChoices(productId),
+    enabled: Boolean(productId),
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 export function useCreateCompleteProduct() {
   const client = useQueryClient();
   return useMutation({
@@ -49,6 +74,8 @@ export function useCreateCompleteProduct() {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['products'] }),
         client.invalidateQueries({ queryKey: ['product-variants'] }),
+        client.invalidateQueries({ queryKey: ['product-stock-uses'] }),
+        client.invalidateQueries({ queryKey: ['product-drink-choices'] }),
         client.invalidateQueries({ queryKey: ['branch-products'] }),
         client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
       ]);
@@ -65,6 +92,8 @@ export function useUpdateCompleteProduct() {
         client.invalidateQueries({ queryKey: ['products'] }),
         client.invalidateQueries({ queryKey: queryKeys.product(productId) }),
         client.invalidateQueries({ queryKey: ['product-variants', productId] }),
+        client.invalidateQueries({ queryKey: ['product-stock-uses', productId] }),
+        client.invalidateQueries({ queryKey: ['product-drink-choices', productId] }),
         client.invalidateQueries({ queryKey: ['product-branch-prices', productId] }),
         client.invalidateQueries({ queryKey: ['product-branch-variant-prices', productId] }),
         client.invalidateQueries({ queryKey: ['branch-products'] }),

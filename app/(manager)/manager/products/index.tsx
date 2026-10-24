@@ -38,14 +38,18 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import {
   useCreateCompleteProduct,
+  useProductDrinkChoices,
   useProductSkus,
+  useProductStockUses,
   useProductVariants,
   useProducts,
   useUpdateCompleteProduct,
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
+import { confirmAction } from '@/lib/confirmAction';
 import { closingStockBehaviorLabel } from '@/lib/format';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
+import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
 import { setProductNonReturnable } from '@/services/productService';
 import type { Product } from '@/types/models';
 
@@ -71,6 +75,9 @@ export default function ManagerProductListScreen() {
   const [modeError, setModeError] = useState('');
   const submittingRef = useRef(false);
   const editSubmittingRef = useRef(false);
+  // Whether the open wizard has unsaved edits (reported by the wizard). Refs: read only when closing.
+  const createDirtyRef = useRef(false);
+  const editDirtyRef = useRef(false);
   const branches = useBranches();
   const sellingBranches = useMemo(
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
@@ -86,6 +93,15 @@ export default function ManagerProductListScreen() {
   const createMutation = useCreateCompleteProduct();
   const updateCompleteMutation = useUpdateCompleteProduct();
   const editVariants = useProductVariants(editProduct?.id ?? '');
+  // Saved Stock Used Per Order. The edit form needs it up front: saving without it could wipe the saved recipes.
+  const editStockUses = useProductStockUses(editProduct?.id ?? '');
+  const editDrinkChoices = useProductDrinkChoices(editProduct?.id ?? '');
+  // Every product can be a stock item, whatever the search box currently filters the list to.
+  const allProducts = useProducts('');
+  const ingredientProducts = useMemo(
+    () => (allProducts.data ?? []).map((product) => ({ id: product.id, name: product.name })),
+    [allProducts.data],
+  );
   const editBranchPrices = useProductBranchPrices(editProduct?.id ?? '');
   const editBranchVariantPrices = useProductBranchVariantPrices(editProduct?.id ?? '');
 
@@ -138,11 +154,14 @@ export default function ManagerProductListScreen() {
         ),
         selling_price: hasVariants ? null : values.default_price,
         closingStockBehavior: values.closingStockBehavior,
+        stockUses: values.stockUses,
+        drinkChoices: values.drinkChoices,
       })
       .then(async (product) => {
         if (values.isNonReturnable) {
           await setProductNonReturnable(product.id, true);
         }
+        createDirtyRef.current = false;
         setCreateOpen(false);
       })
       .finally(() => {
@@ -175,11 +194,15 @@ export default function ManagerProductListScreen() {
             : { branch_id: draft.branchId, selling_price: draft.selling_price },
         ),
         selling_price: hasVariants ? null : values.default_price,
+        // undefined when the recipes were not changed: the saved ones are then left exactly as they are
+        stockUses: values.stockUses,
+        drinkChoices: values.drinkChoices,
       })
       .then(async () => {
         if (values.isNonReturnable !== priorNonReturnable) {
           await setProductNonReturnable(productId, values.isNonReturnable);
         }
+        editDirtyRef.current = false;
         setEditProduct(null);
       })
       .catch((error: unknown) => setModeError(getProductErrorMessage(error)))
@@ -187,6 +210,39 @@ export default function ManagerProductListScreen() {
         endSubmit(editSubmittingRef);
         setIsEditSubmitting(false);
       });
+  };
+
+  // Every way of dismissing a sheet (Close, backdrop, Android back / Escape) calls the sheet's onClose, so they
+  // all go through these. Nothing changed: close at once. Unsaved edits: ask first. A save in flight and a
+  // successful save are never interrupted (a save closes the sheet directly).
+  const requestCloseCreate = () => {
+    const closeNow = () => {
+      createDirtyRef.current = false;
+      setCreateOpen(false);
+    };
+    if (decideClose({ dirty: createDirtyRef.current, submitting: isSubmitting }) === 'close') {
+      closeNow();
+      return;
+    }
+    confirmAction(DISCARD_DIALOG.title, DISCARD_DIALOG.message, closeNow, {
+      cancel: DISCARD_DIALOG.cancel,
+      confirm: DISCARD_DIALOG.confirm,
+    });
+  };
+
+  const requestCloseEdit = () => {
+    const closeNow = () => {
+      editDirtyRef.current = false;
+      setEditProduct(null);
+    };
+    if (decideClose({ dirty: editDirtyRef.current, submitting: isEditSubmitting }) === 'close') {
+      closeNow();
+      return;
+    }
+    confirmAction(DISCARD_DIALOG.title, DISCARD_DIALOG.message, closeNow, {
+      cancel: DISCARD_DIALOG.cancel,
+      confirm: DISCARD_DIALOG.confirm,
+    });
   };
 
   return (
@@ -248,7 +304,10 @@ export default function ManagerProductListScreen() {
                       tone={item.is_active ? 'success' : 'neutral'}
                     />
                   }
-                  onPress={() => setEditProduct(item)}
+                  onPress={() => {
+                    editDirtyRef.current = false;
+                    setEditProduct(item);
+                  }}
                 />
               )}
             />
@@ -260,6 +319,7 @@ export default function ManagerProductListScreen() {
               icon="add-circle-outline"
               onPress={() => {
                 createMutation.reset();
+                createDirtyRef.current = false;
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
@@ -273,14 +333,18 @@ export default function ManagerProductListScreen() {
           </View>
         </ConstrainedWidth>
 
-        <BottomSheet visible={createOpen} title="Create product" scroll onClose={() => setCreateOpen(false)}>
+        <BottomSheet visible={createOpen} title="Create product" scroll onClose={requestCloseCreate}>
           <CreateProductWizard
             key={createKey}
             existingSkus={existingSkus}
             branchOptions={branchOptions}
+            ingredientProducts={ingredientProducts}
             loading={isSubmitting}
             error={createMutation.error ? getProductErrorMessage(createMutation.error) : undefined}
             onSubmit={submitCreate}
+            onDirtyChange={(dirty) => {
+              createDirtyRef.current = dirty;
+            }}
           />
         </BottomSheet>
 
@@ -288,14 +352,24 @@ export default function ManagerProductListScreen() {
           visible={editProduct != null}
           title="Edit product"
           scroll
-          onClose={() => setEditProduct(null)}
+          onClose={requestCloseEdit}
         >
-          {editProduct && (editVariants.isLoading || editBranchPrices.isLoading || editBranchVariantPrices.isLoading) ? (
+          {editProduct && (editVariants.isLoading || editBranchPrices.isLoading || editBranchVariantPrices.isLoading || editStockUses.isLoading || editDrinkChoices.isLoading) ? (
             <LoadingState label="Loading product…" />
+          ) : editProduct && (editStockUses.error || !editStockUses.data || editDrinkChoices.error || !editDrinkChoices.data) ? (
+            // Never open the form without the saved recipes and drink choices: saving would replace them with nothing.
+            <ErrorState
+              message="Couldn't load this product's stock and drink choices. Try again before editing."
+              onRetry={() => {
+                void editStockUses.refetch();
+                void editDrinkChoices.refetch();
+              }}
+            />
           ) : editProduct ? (
             <EditProductWizard
               key={editProduct.id}
               product={{
+                id: editProduct.id,
                 name: editProduct.name,
                 sku: editProduct.sku,
                 description: editProduct.description,
@@ -317,6 +391,16 @@ export default function ManagerProductListScreen() {
                 name: row.name,
                 selling_price: row.selling_price,
               }))}
+              sourceStockUses={(editStockUses.data ?? []).map((row) => ({
+                variant_id: row.variant_id,
+                ingredient_product_id: row.ingredient_product_id,
+                quantity: row.quantity,
+              }))}
+              sourceDrinkChoices={(editDrinkChoices.data ?? []).map((row) => ({
+                variant_id: row.variant_id,
+                drink_product_id: row.drink_product_id,
+              }))}
+              ingredientProducts={ingredientProducts}
               branchOptions={branchOptions}
               canActivate={Boolean(
                 mainInventory.data?.some(
@@ -329,6 +413,9 @@ export default function ManagerProductListScreen() {
                 || (updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined)
               }
               onSubmit={submitEdit}
+              onDirtyChange={(dirty) => {
+                editDirtyRef.current = dirty;
+              }}
             />
           ) : null}
         </BottomSheet>

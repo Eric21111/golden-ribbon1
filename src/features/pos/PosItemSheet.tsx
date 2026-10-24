@@ -8,27 +8,32 @@ import { managerColors } from '@/components/dashboard/theme';
 import { sortMealVariants, STANDARD_MEAL_VARIANT_NAMES } from '@/features/pos/pricingPrograms';
 import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
+import type { PosDrinkChoice } from '@/stores/cartStore';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 type PosItemSheetProps = {
   item: InventoryItem | null;
   /** Cart quantity for this product, keyed by variant id (null key = no variant / single price). */
   quantityByVariant: Map<string | null, number>;
-  onAdd: (variant: PosVariant | null, quantity: number) => void;
+  /** Cart quantity per line when a drink is chosen, keyed "<variantId>:<drinkId>". */
+  quantityByLine?: Map<string, number>;
+  /** `drink` is set when the option includes a drink: the one the cashier picked. */
+  onAdd: (variant: PosVariant | null, quantity: number, drink?: PosDrinkChoice | null) => void;
   onClose: () => void;
 };
 
-export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosItemSheetProps) {
+export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, onClose }: PosItemSheetProps) {
   const variants = useMemo(() => sortMealVariants(item?.variants ?? []), [item?.variants]);
   const hasVariants = variants.length > 0;
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedDrinkId, setSelectedDrinkId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [draft, setDraft] = useState('1');
 
   // Reset selection whenever a new item is opened.
   useEffect(() => {
     if (!item) return;
-    setSelectedVariantId(item.variants?.[0]?.id ?? null);
+    setSelectedVariantId((item.variants?.find((variant) => !variant.unavailable) ?? item.variants?.[0])?.id ?? null);
     setQuantity(1);
     setDraft('1');
   }, [item]);
@@ -37,13 +42,45 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
     ? variants.find((variant) => variant.id === selectedVariantId) ?? variants[0] ?? null
     : null;
 
+  // Drink Choice: an option that includes a drink needs exactly one of its eligible drinks. Each drink has its own
+  // limit (stock left for that meal + drink, counting the whole cart).
+  const drinkOptions = selectedVariant?.drink_options ?? [];
+  const needsDrink = drinkOptions.length > 0;
+  const lineQuantity = (drinkId: string) => quantityByLine?.get(`${selectedVariant?.id ?? ''}:${drinkId}`) ?? 0;
+  const drinkLeft = (option: { id: string; max_quantity: number }) => Math.max(0, option.max_quantity - lineQuantity(option.id));
+  const selectedDrink = needsDrink ? drinkOptions.find((option) => option.id === selectedDrinkId) ?? null : null;
+
+  // Start on the first drink that is in stock, and re-pick when the option changes or the chosen drink runs out.
+  useEffect(() => {
+    if (!needsDrink) {
+      setSelectedDrinkId(null);
+      return;
+    }
+    const current = drinkOptions.find((option) => option.id === selectedDrinkId);
+    if (current && drinkLeft(current) > 0) return;
+    setSelectedDrinkId(drinkOptions.find((option) => drinkLeft(option) > 0)?.id ?? drinkOptions[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVariant?.id, item, quantityByLine]);
+
   const totalInCart = useMemo(
     () => [...quantityByVariant.values()].reduce((sum, qty) => sum + qty, 0),
     [quantityByVariant],
   );
-  const remaining = !item ? 0 : Math.max(0, item.quantity_on_hand - totalInCart);
+  // Shared-stock aware: the cap of the selected line (max_quantity) minus what that line already has in the cart.
+  // Without recipe data it is the original per-product remaining stock.
+  const remaining = !item
+    ? 0
+    : needsDrink
+      ? selectedDrink
+        ? drinkLeft(selectedDrink)
+        : 0
+      : selectedVariant?.max_quantity != null
+      ? Math.max(0, selectedVariant.max_quantity - (quantityByVariant.get(selectedVariant.id) ?? 0))
+      : !hasVariants && item.max_quantity != null
+        ? Math.max(0, item.max_quantity - (quantityByVariant.get(null) ?? 0))
+        : Math.max(0, item.quantity_on_hand - totalInCart);
   const atLimit = quantity >= remaining;
-  const canAdd = remaining > 0 && quantity > 0;
+  const canAdd = remaining > 0 && quantity > 0 && (!needsDrink || selectedDrink !== null);
 
   useEffect(() => {
     const next = Math.min(Math.max(quantity, remaining > 0 ? 1 : 0), remaining);
@@ -95,16 +132,19 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
               <View style={styles.optionList}>
                 {variants.map((variant) => {
                   const selected = variant.id === selectedVariant?.id;
+                  const unavailable = variant.unavailable === true;
                   return (
                     <Pressable
                       key={variant.id}
                       accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={variant.name}
+                      accessibilityState={{ selected, disabled: unavailable }}
+                      accessibilityLabel={unavailable ? `${variant.name}, unavailable` : variant.name}
+                      disabled={unavailable}
                       onPress={() => setSelectedVariantId(variant.id)}
                       style={({ pressed }) => [
                         styles.option,
                         selected && styles.optionSelected,
+                        unavailable && styles.optionOut,
                         pressed && styles.pressed,
                       ]}
                     >
@@ -117,8 +157,45 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
                         {variant.name}
                       </Text>
                       <Text style={[styles.optionPrice, selected && styles.optionNameSelected]}>
-                        {formatMoney(variant.selling_price)}
+                        {unavailable ? 'Unavailable' : formatMoney(variant.selling_price)}
                       </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          {needsDrink ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Choose a drink</Text>
+              <Text style={styles.optionHint}>This meal includes one drink. Pick one.</Text>
+              <View style={styles.optionList}>
+                {drinkOptions.map((option) => {
+                  const selected = option.id === selectedDrink?.id;
+                  const out = drinkLeft(option) <= 0;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected, disabled: out }}
+                      accessibilityLabel={out ? `${option.name}, out of stock` : `Drink: ${option.name}`}
+                      disabled={out}
+                      onPress={() => setSelectedDrinkId(option.id)}
+                      style={({ pressed }) => [
+                        styles.option,
+                        selected && styles.optionSelected,
+                        out && styles.optionOut,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Ionicons
+                        name={selected ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={selected ? managerColors.royalBlue : managerColors.subtext}
+                      />
+                      <Text style={[styles.optionName, selected && styles.optionNameSelected]}>{option.name}</Text>
+                      {out ? <Text style={styles.optionPrice}>Out of stock</Text> : null}
                     </Pressable>
                   );
                 })}
@@ -193,7 +270,7 @@ export function PosItemSheet({ item, quantityByVariant, onAdd, onClose }: PosIte
             label="Add to Order"
             disabled={!canAdd}
             onPress={() => {
-              onAdd(selectedVariant, quantity);
+              onAdd(selectedVariant, quantity, selectedDrink ? { id: selectedDrink.id, name: selectedDrink.name } : null);
               onClose();
             }}
           />
@@ -248,6 +325,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   optionSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F7F9FD' },
+  optionOut: { opacity: 0.55 },
   optionName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   optionNameSelected: { color: managerColors.royalBlue },
   optionPrice: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 14 },

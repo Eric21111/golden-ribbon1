@@ -3,8 +3,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 const wizard = readFileSync('src/features/products/EditProductWizard.tsx', 'utf8');
-assert.match(wizard, /Same for All/);
-assert.match(wizard, /Different per Branch/);
+// The pricing-mode toggle now lives in the shared BranchPricingStep component used by the wizard.
+const pricingStep = readFileSync('src/features/products/BranchPricingStep.tsx', 'utf8');
+assert.match(wizard, /BranchPricingStep/);
+assert.match(pricingStep, /Same for All/);
+assert.match(pricingStep, /Different per Branch/);
 assert.match(wizard, /Save changes/);
 assert.match(wizard, /deletedVariantIds/);
 
