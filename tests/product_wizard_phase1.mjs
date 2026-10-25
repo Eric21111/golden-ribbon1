@@ -79,9 +79,10 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
     const end = src.indexOf('      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
-    for (const forbidden of ['category', 'previewNotice', 'stockSummaries']) {
+    for (const forbidden of ['previewNotice', 'stockSummaries']) {
       assert.ok(!block.includes(forbidden), `${name}: submit values must not include ${forbidden}`);
     }
+    assert.match(block, /productCategory:/, `${name}: category is saved for the stock and drink pickers`);
     for (const required of ['name:', 'sku:', 'description:', 'default_price:', 'variants:', 'closingStockBehavior:', 'isNonReturnable', 'stockUses:', 'drinkChoices:']) {
       assert.ok(block.includes(required), `${name}: submit values keep ${required}`);
     }

@@ -9,6 +9,12 @@ import type { ReturnStatus } from '@/types/returns';
 
 export const formatMoney = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format;
 
+/** Selling price for display. Stock-only products never show ₱0 in place of a price. */
+export function formatProductPrice(product: { selling_price: number | null; sell_in_pos?: boolean }): string {
+  if (product.sell_in_pos === false || product.selling_price == null) return 'Stock only';
+  return formatMoney(product.selling_price);
+}
+
 export const INVALID_QUANTITY_LABEL = 'Invalid quantity';
 /** Fits 999999.999, matching parse_inventory_quantity. Do not use 6. */
 export const KG_QUANTITY_MAX_LENGTH = 10;

@@ -3,7 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
 import { managerColors } from '@/components/dashboard/theme';
-import { formatLiveStock, formatMoney } from '@/lib/format';
+import { formatLiveStock, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 import { getStockStatus, stockStatusLabelForItem, type StockStatus } from './inventoryStatus';
@@ -25,7 +25,7 @@ function badgeTone(status: StockStatus): ManagerBadgeTone {
 export function InventoryListItem({ item, showBranch = false, onPress }: InventoryListItemProps) {
   const status = getStockStatus(item);
 
-  const meta = [item.product.sku, showBranch ? item.branch.name : null, formatMoney(item.product.selling_price)]
+  const meta = [item.product.sku, showBranch ? item.branch.name : null, formatProductPrice(item.product)]
     .filter(Boolean)
     .join(' · ');
 

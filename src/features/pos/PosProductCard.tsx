@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatProductPrice } from '@/lib/format';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 interface PosProductCardProps {
@@ -204,7 +204,7 @@ export function PosProductCard({
                   <Text style={styles.sku}>{item.product.sku}</Text>
                 </View>
                 <Text style={[styles.price, compact && styles.priceCompact]}>
-                  {formatMoney(item.product.selling_price)}
+                  {formatProductPrice(item.product)}
                 </Text>
               </View>
               <Text style={styles.stock}>{stockLabel}</Text>

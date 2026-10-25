@@ -126,8 +126,8 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Meal options</Text>
               <Text style={styles.optionHint}>
-                One stock deduction per item. Prefer {STANDARD_MEAL_VARIANT_NAMES.join(', ')} —
-                do not also add rice/drinks as separate lines for the same meal.
+                One stock deduction per item. Prefer {STANDARD_MEAL_VARIANT_NAMES.join(', ')}.
+                A drink chosen here is included in the meal price. A drink added from the menu is charged its own price.
               </Text>
               <View style={styles.optionList}>
                 {variants.map((variant) => {
@@ -169,7 +169,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
           {needsDrink ? (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Choose a drink</Text>
-              <Text style={styles.optionHint}>This meal includes one drink. Pick one.</Text>
+              <Text style={styles.optionHint}>Included in this meal's price. Out of stock drinks cannot be selected.</Text>
               <View style={styles.optionList}>
                 {drinkOptions.map((option) => {
                   const selected = option.id === selectedDrink?.id;

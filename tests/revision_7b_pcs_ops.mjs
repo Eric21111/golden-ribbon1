@@ -176,7 +176,7 @@ const qty = async (db, branchId, productId) =>
   ).rows[0].b;
   assert.equal(updatedBehavior, 'keep_at_branch');
 
-  // Main PCS init reactivation gated by former_is_active
+  // Opening stock no longer changes Product Status, including former cutover products.
   await asUser(db, ctx.mainMgr, () =>
     db.query('select public.initialize_main_branch_inventory($1::jsonb, null)', [
       JSON.stringify([
@@ -192,7 +192,7 @@ const qty = async (db, branchId, productId) =>
     )
   ).rows;
   const byId = Object.fromEntries(activeFlags.map((r) => [r.id, r.is_active]));
-  assert.equal(byId[ctx.formerActive], true);
+  assert.equal(byId[ctx.formerActive], false, 'opening stock leaves a disabled product disabled');
   assert.equal(byId[ctx.formerInactive], false);
   assert.equal(await qty(db, ctx.main, ctx.formerActive), 12);
   assert.equal(await qty(db, ctx.main, ctx.formerInactive), 8);

@@ -10,11 +10,12 @@ import { PGlite } from '@electric-sql/pglite';
 import { loadTs } from './_load_ts.mjs';
 
 const mapping = loadTs('src/features/products/stockUseMapping.ts');
+const errors = loadTs('src/lib/errors.ts');
 const data = loadTs('src/features/products/recipePreviewData.ts');
 const guards = loadTs('src/features/products/wizardGuards.ts');
 const availability = loadTs('src/features/pos/posAvailability.ts');
 const { buildStockUsePayload, savedStockUsesToRecipes, canonicalStockUses, stockUsesForSave } = mapping;
-const { ingredientOptionsFromProducts, suggestedIngredientIds, getQuickAddItems, getPickerOptions, summarizeExtras, unitLabel, THIS_PRODUCT_ID } = data;
+const { ingredientOptionsFromProducts, suggestedIngredientIds, getQuickAddItems, getPickerOptions, filterPickerItems, summarizeExtras, unitLabel, THIS_PRODUCT_ID } = data;
 const { PRODUCT_STOCK_KEY } = guards;
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
@@ -31,6 +32,28 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   assert.equal(unitLabel(egg.unit, 2), 'half-egg units');
   assert.equal(egg.hint, '½ egg');
   assert.equal(unitLabel(options.find((o) => o.name === 'Rice').unit, 2), 'pcs');
+  const stockOnly = ingredientOptionsFromProducts([
+    { id: 'p-rice', name: 'Rice', sellInPos: false },
+    { id: 'p-silog', name: 'Silog', sellInPos: true },
+  ]);
+  assert.equal(stockOnly.find((item) => item.name === 'Rice').hint, 'Stock only');
+  assert.equal(stockOnly.find((item) => item.name === 'Silog').hint, undefined);
+  const labeled = ingredientOptionsFromProducts([
+    { id: 'p-rice', name: 'Rice', sellInPos: false },
+    { id: 'p-coke', name: 'Coke', sellInPos: true, category: 'drinks' },
+    { id: 'p-beef', name: 'Beef Curry', sellInPos: true, category: 'meals' },
+  ]);
+  const suppliesFirst = filterPickerItems(labeled, 'supplies').map((item) => item.name);
+  assert.deepEqual(suppliesFirst, ['Rice']);
+  const allNames = filterPickerItems(labeled, 'all').map((item) => item.name);
+  assert.deepEqual(allNames, ['Rice', 'Beef Curry', 'Coke'], 'inventory supplies stay ahead of other products');
+  assert.deepEqual(filterPickerItems(labeled, 'drinks').map((item) => item.name), ['Coke']);
+  const missing = errors.getProductErrorMessage({
+    message: 'Could not find the function public.create_inventory_product',
+    code: 'PGRST202',
+  });
+  assert.match(missing, /has not been applied/);
+  assert.doesNotMatch(missing, /created|success/i);
   assert.ok(!options.some((o) => o.id.startsWith('sample-')), 'no sample ids');
   // "This Product" comes first and only the product's own name is hidden
   const picker = getPickerOptions('BBQ', options);

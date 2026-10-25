@@ -1,5 +1,5 @@
-// Disposable staging check: populate a database at the current production head,
-// then apply only the 15 pending migrations. Does not connect to production.
+// Disposable staging check: populate a database at the frozen production-head marker,
+// then apply the migrations that follow it. Does not connect to production.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
@@ -12,7 +12,7 @@ const pending = files.filter((name) => name.slice(0, 14) > HEAD);
 const strip = (sql) => sql.replace(/create extension if not exists pgcrypto;/g, '');
 const id = (n) => `51000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-assert.equal(pending.length, 15, `expected 15 pending migrations, found ${pending.length}: ${pending.join(', ')}`);
+assert.equal(pending.length, 19, `expected 19 migrations after ${HEAD}, found ${pending.length}: ${pending.join(', ')}`);
 
 const db = new PGlite();
 await db.exec(`
@@ -358,14 +358,15 @@ await asUser(mainMgr, () =>
     'staging opening',
   ]),
 );
-const openedAfter = (await db.query(`select is_active from public.products where id = $1`, [opened.id])).rows[0];
-assert.equal(openedAfter.is_active, true);
+const openedAfter = (await db.query(`select is_active, selling_price::text price from public.products where id = $1`, [opened.id])).rows[0];
+assert.equal(openedAfter.is_active, false, 'opening stock does not change Product Status');
+assert.equal(openedAfter.price, '15.00');
 assert.equal(
   Number((await db.query(`select quantity_on_hand q from public.branch_inventory where branch_id = $1 and product_id = $2`, [main, opened.id])).rows[0].q),
   4,
 );
 assert.equal(await drinkQty(), beforeDrink - 1, 'opening stock did not change the historical booth drink balance');
-console.log('opening stock activates the new product only');
+console.log('opening stock adds quantity without changing Product Status');
 
 const overloads = (
   await db.query(`

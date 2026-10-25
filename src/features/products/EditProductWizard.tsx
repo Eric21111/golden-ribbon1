@@ -9,9 +9,10 @@ import type { ClosingStockBehavior } from '@/types/models';
 
 import { BranchPricingStep, type BranchPriceStatus } from './BranchPricingStep';
 import { NonReturnableField } from './NonReturnableField';
-import { InventoryOnlyNotice, PosAvailabilityField } from './PosAvailabilityField';
+import { PosAvailabilityField } from './PosAvailabilityField';
+import { ProductStatusField } from './ProductStatusField';
 import { ProductCategoryField } from './ProductCategoryField';
-import { SectionHeader, SettingRow, SettingsCard } from './StepOneLayout';
+import { SectionHeader, SettingsCard } from './StepOneLayout';
 import {
   activeUniformBase,
   activeUniformPrice,
@@ -22,7 +23,6 @@ import {
   seedVariantPrices,
   flowSteps,
   getWizardFlow,
-  isSaveSupported,
   PRODUCT_STOCK_KEY,
   POS_AVAILABILITY_ENABLED,
   resolveSellable,
@@ -79,6 +79,10 @@ export type EditProductValues = {
   stockUses?: StockUsePayload[];
   /** Same rule for the eligible drinks of each option (undefined = untouched, [] = remove them all). */
   drinkChoices?: DrinkChoicePayload[];
+  /** False keeps or makes the product stock-only and does not rewrite its price or stock. */
+  sellInPos: boolean;
+  /** Saved so the stock and drink pickers can tell supplies from drinks. Unset leaves the saved category alone. */
+  productCategory: CategoryChoice;
 };
 
 export type BranchPricingDraft =
@@ -97,6 +101,8 @@ interface EditProductWizardProps {
     sku: string;
     description: string | null;
     is_active: boolean;
+    sell_in_pos?: boolean;
+    product_category?: CategoryChoice | null;
     closing_stock_behavior: ClosingStockBehavior;
     is_non_returnable?: boolean;
   };
@@ -110,7 +116,6 @@ interface EditProductWizardProps {
   /** Real products that can be used as stock items (Stock Used Per Order). */
   ingredientProducts?: IngredientProduct[];
   branchOptions: Array<{ id: string; name: string }>;
-  canActivate: boolean;
   loading?: boolean;
   error?: string;
   onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[]) => void;
@@ -140,7 +145,6 @@ export function EditProductWizard({
   sourceDrinkChoices,
   ingredientProducts = [],
   branchOptions,
-  canActivate,
   loading = false,
   error,
   onSubmit,
@@ -179,6 +183,10 @@ export function EditProductWizard({
     () => ingredientOptionsFromProducts(ingredientProducts, product.id),
     [ingredientProducts, product.id],
   );
+  const drinkOptions = useMemo(
+    () => ingredientOptionsFromProducts(ingredientProducts, product.id),
+    [ingredientProducts, product.id],
+  );
   // Drink Choice per variant, starting from what is saved. Like the stock lists it is only sent when it changes.
   const [drinkChoices, setDrinkChoices] = useState<Record<string, DrinkChoice>>(() =>
     savedDrinkChoicesToState(sourceDrinkChoices, variants, (id) => ingredientProducts.find((p) => p.id === id)?.name ?? id),
@@ -188,12 +196,13 @@ export function EditProductWizard({
     savedDrinkChoicesRef.current = canonicalDrinkChoices(buildDrinkChoicePayload(drinkChoices, variants));
   }
   // PREVIEW ONLY: product category. Local state; never saved or submitted. It only changes the Step 2 layout.
-  const [category, setCategory] = useState<CategoryChoice>(INITIAL_EDIT_CATEGORY);
+  const [category, setCategory] = useState<CategoryChoice>(
+    product.product_category && product.product_category !== 'unset' ? product.product_category : INITIAL_EDIT_CATEGORY,
+  );
   const [step2Error, setStep2Error] = useState<string | undefined>();
   const [step3Error, setStep3Error] = useState<string | undefined>();
-  // PREVIEW ONLY: "Available for sale in POS". Every product starts as sellable (existing products are never
-  // presumed inventory-only), and it is never inferred from the category. Local state; never saved or submitted.
-  const [sellableChoice, setSellable] = useState(true);
+  // Saved as sell_in_pos. Existing products stay sellable unless that flag is off. The category never decides this.
+  const [sellableChoice, setSellable] = useState(product.sell_in_pos !== false);
   // While POS availability is hidden this is always true, so it can never route to the inventory-only flow.
   const sellable = resolveSellable(POS_AVAILABILITY_ENABLED, sellableChoice);
 
@@ -372,9 +381,30 @@ export function EditProductWizard({
   }
 
   function submit() {
-    // Inventory-only products can't be saved yet (see isSaveSupported). They never reach the pricing step that
-    // calls this, but a product that isn't sold directly in POS must never be saved by accident.
-    if (!isSaveSupported(flow)) return;
+    if (!sellable) {
+      if (!validateStep1()) return;
+      onSubmit(
+        {
+          name: name.trim(),
+          sku: sku.trim(),
+          description: (product.description ?? '').trim(),
+          isActive,
+          default_price: '',
+          variants: [],
+          deletedVariantIds: [],
+          closingStockBehavior: isNonReturnable
+            ? 'keep_at_branch'
+            : product.is_non_returnable
+              ? 'record_as_unsold'
+              : product.closing_stock_behavior,
+          isNonReturnable,
+          sellInPos: false,
+          productCategory: category,
+        },
+        [],
+      );
+      return;
+    }
     let pricing: BranchPricingDraft[] = [];
 
     if (pricingMode === 'same') {
@@ -435,15 +465,23 @@ export function EditProductWizard({
     const firstBasePrice = pricing.find((draft): draft is Extract<BranchPricingDraft, { selling_price: string }> =>
       draft.selling_price != null,
     )?.selling_price;
-    const topLevelPrice = variants.length === 0 ? (firstBasePrice || activeUniformBase(pricingMode, uniformBase).trim() || '0.00') : '0.00';
+    const topLevelPrice = variants.length === 0 ? (firstBasePrice || activeUniformBase(pricingMode, uniformBase).trim()) : '';
+    if (variants.length === 0 && !isValidPrice(topLevelPrice)) {
+      setStep3Error('Enter a valid selling price.');
+      return;
+    }
 
     const variantValues: EditProductVariantValue[] = variants.map((variant) => {
       const fromPricing = pricing
         .flatMap((draft) => draft.variants ?? [])
         .find((entry) => entry.name === variant.name.trim());
-      const price = fromPricing?.selling_price || activeUniformPrice(pricingMode, uniformVariantPrices, variant.key) || '0.00';
+      const price = fromPricing?.selling_price || activeUniformPrice(pricingMode, uniformVariantPrices, variant.key) || '';
       return { id: variant.id, name: variant.name.trim(), default_price: price };
     });
+    if (variantValues.some((variant) => !isValidPrice(variant.default_price))) {
+      setStep3Error('Enter a price for every variant.');
+      return;
+    }
 
     onSubmit(
       {
@@ -463,6 +501,8 @@ export function EditProductWizard({
         isNonReturnable,
         stockUses: stockUsesForSave(savedStockUsesRef.current ?? '', buildStockUsePayload(recipePreview, variants)),
         drinkChoices: drinkChoicesForSave(savedDrinkChoicesRef.current ?? '', buildDrinkChoicePayload(drinkChoices, variants)),
+        sellInPos: true,
+        productCategory: category,
       },
       pricing,
     );
@@ -505,7 +545,9 @@ export function EditProductWizard({
   const previewNotice = buildPreviewNotice(
     getUnsavedPreviewItems({
       category,
-      defaultCategory: INITIAL_EDIT_CATEGORY,
+      defaultCategory: product.product_category && product.product_category !== 'unset'
+        ? product.product_category
+        : INITIAL_EDIT_CATEGORY,
       sellable,
     }),
   );
@@ -591,17 +633,7 @@ export function EditProductWizard({
             <SectionHeader title="Other settings" />
             <SettingsCard>
               <NonReturnableField value={isNonReturnable} onChange={setIsNonReturnable} />
-              <SettingRow
-                label="Active"
-                description={
-                  canActivate ? 'Turn off to stop using it. Past records are kept.' : 'You can turn this on after Main adds opening stock.'
-                }
-                value={isActive}
-                onValueChange={(next) => {
-                  if (next && !canActivate) return;
-                  setIsActive(next);
-                }}
-              />
+              <ProductStatusField value={isActive} onChange={setIsActive} />
             </SettingsCard>
           </View>
         </View>
@@ -616,6 +648,7 @@ export function EditProductWizard({
             category={category}
             productName={name}
             ingredients={ingredients}
+            drinkOptions={drinkOptions}
             onChangeRecipe={(variantKey, lines) =>
               setRecipePreview((current) => ({ ...current, [variantKey]: lines }))
             }
@@ -673,9 +706,7 @@ export function EditProductWizard({
         </View>
       ) : null}
 
-      {step === 3 && error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {inventoryOnly ? <InventoryOnlyNotice /> : null}
+      {(step === 3 || inventoryOnly) && error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.buttonRow}>
         {step > 1 ? (
@@ -691,8 +722,7 @@ export function EditProductWizard({
         <View style={styles.buttonCol}>
           {step === 1 ? (
             inventoryOnly ? (
-              // Inventory-only can't be saved yet: the button stays disabled and the field explains why.
-              <ManagerActionButton label="Save changes" disabled onPress={() => {}} />
+              <ManagerActionButton label="Save changes" loading={loading} onPress={submit} />
             ) : (
               <ManagerActionButton label="Next" onPress={goToStep2} />
             )

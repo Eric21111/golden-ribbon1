@@ -78,6 +78,13 @@ export function getProductErrorMessage(error: unknown): string {
   logDevError(error);
   const message = readErrorMessage(error).toLowerCase();
   if (
+    message.includes('create_inventory_product')
+    || message.includes('update_inventory_product')
+    || message.includes('set_product_sell_in_pos')
+  ) {
+    return 'Stock-only products could not be saved. The database update for Sell in POS has not been applied yet.';
+  }
+  if (
     message.includes('schema cache')
     || message.includes('could not find the function')
     || message.includes('pgrst202')

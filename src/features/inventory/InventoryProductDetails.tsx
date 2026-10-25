@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors, spacing } from '@/constants/theme';
-import { formatDate, formatLiveStock, formatMoney } from '@/lib/format';
+import { formatDate, formatLiveStock, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 import { getStockStatus, stockStatusLabel } from './inventoryStatus';
@@ -39,7 +39,7 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
           </Text>
         </View>
       </View>
-      <Text style={styles.meta}>{formatMoney(item.product.selling_price)}</Text>
+      <Text style={styles.meta}>{formatProductPrice(item.product)}</Text>
       <Text style={styles.meta}>
         {item.updated_at ? `Updated ${formatDate(item.updated_at)}` : 'Not initialized'}
       </Text>

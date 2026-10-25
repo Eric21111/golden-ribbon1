@@ -11,7 +11,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { MIN_TOUCH_TARGET } from '../src/features/products/touchTargets.ts';
 import { MAX_RECIPE_QUANTITY } from '../src/features/products/recipePreviewData.ts';
 import {
-  INVENTORY_ONLY_UNSUPPORTED_MESSAGE,
   flowSteps,
   getWizardFlow,
   isPriceMissing,
@@ -140,18 +139,9 @@ const count = (src, re) => (src.match(re) ?? []).length;
   // the drink choice is saved with the product now, so it no longer carries a "Not saved yet" marker
   assert.doesNotMatch(drinkSrc, /PreviewPill|Not saved yet/);
 
-  // while POS availability is off, the reason saving is unavailable sits right above the disabled button
-  assert.equal(
-    INVENTORY_ONLY_UNSUPPORTED_MESSAGE,
-    'Stock-only products can\'t be saved yet. This is coming in a later update.',
-  );
-  assert.match(fieldSrc, /export function InventoryOnlyNotice\(\)/);
-  assert.match(fieldSrc, /INVENTORY_ONLY_UNSUPPORTED_MESSAGE/);
-  const fieldBody = fieldSrc.slice(0, fieldSrc.indexOf('export function InventoryOnlyNotice'));
-  assert.doesNotMatch(fieldBody, /INVENTORY_ONLY_UNSUPPORTED_MESSAGE\}/, 'not duplicated up in the field');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
-    assert.match(src, /\{inventoryOnly \? <InventoryOnlyNotice \/> : null\}\n\n\s*<View style=\{styles\.buttonRow\}>/, `${name}: notice directly above the buttons`);
-    assert.match(src, /disabled onPress=\{\(\) => \{\}\} \/>/, `${name}: the button is still disabled`);
+    assert.match(src, /sellInPos: false/, `${name}: stock-only save is available`);
+    assert.doesNotMatch(src, /InventoryOnlyNotice/, `${name}: saving is no longer blocked`);
   }
 
   // price problems are flagged on the field itself, not only in a message at the bottom

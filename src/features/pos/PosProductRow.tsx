@@ -2,7 +2,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
 interface PosProductRowProps {
@@ -14,7 +14,7 @@ interface PosProductRowProps {
 
 function priceLabel(item: InventoryItem): string {
   const variants = item.variants ?? [];
-  if (variants.length === 0) return formatMoney(item.product.selling_price);
+  if (variants.length === 0) return formatProductPrice(item.product);
   const prices = variants.map((variant) => variant.selling_price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);

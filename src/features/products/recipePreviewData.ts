@@ -15,6 +15,10 @@ export type InventoryItemOption = {
   unit: RecipeUnit;
   /** Short note shown in the picker, e.g. what one unit means. */
   hint?: string;
+  /** Sell in POS is off, or the product was saved as an inventory supply. */
+  stockOnly?: boolean;
+  /** Saved category is Drinks. Meal choices must not offer meals or supplies. */
+  isDrink?: boolean;
 };
 
 /** One inventory item used by a variant, and how many whole stock units each order uses. */
@@ -27,7 +31,12 @@ const PCS: RecipeUnit = { singular: 'pc', plural: 'pcs' };
 const HALF_EGG: RecipeUnit = { singular: 'half-egg unit', plural: 'half-egg units' };
 
 /** A real product offered as a stock item. */
-export type IngredientProduct = { id: string; name: string };
+export type IngredientProduct = {
+  id: string;
+  name: string;
+  sellInPos?: boolean;
+  category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
+};
 
 /** Products carry no unit of their own; by convention Egg stock is kept in half-egg units. */
 export function isEggProduct(name: string): boolean {
@@ -45,12 +54,19 @@ export function ingredientOptionsFromProducts(
 ): InventoryItemOption[] {
   return products
     .filter((product) => product.id !== excludeProductId)
-    .map((product) => ({
-      id: product.id,
-      name: product.name,
-      unit: unitForIngredient(product.name),
-      ...(isEggProduct(product.name) ? { hint: '½ egg' } : {}),
-    }))
+    .map((product) => {
+      const hint = [isEggProduct(product.name) ? '½ egg' : null, product.sellInPos === false ? 'Stock only' : null]
+        .filter((part) => part != null)
+        .join(' · ');
+      return {
+        id: product.id,
+        name: product.name,
+        unit: unitForIngredient(product.name),
+        ...(hint ? { hint } : {}),
+        stockOnly: product.sellInPos === false || product.category === 'supplies',
+        isDrink: product.category === 'drinks',
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -108,6 +124,23 @@ export function findInventoryItem(
 }
 
 /** Case-insensitive match on the item name or its hint. An empty query matches everything. */
+export type PickerListFilter = 'supplies' | 'all' | 'drinks';
+
+/**
+ * Stock pickers default to inventory supplies and keep those first when All is selected.
+ * The drink picker lists saved drinks only.
+ */
+export function filterPickerItems(items: InventoryItemOption[], filter: PickerListFilter): InventoryItemOption[] {
+  const byName = (a: InventoryItemOption, b: InventoryItemOption) => a.name.localeCompare(b.name);
+  const self = items.filter((item) => item.id === THIS_PRODUCT_ID);
+  const rest = items.filter((item) => item.id !== THIS_PRODUCT_ID);
+  if (filter === 'drinks') return rest.filter((item) => item.isDrink).sort(byName);
+  const supplies = rest.filter((item) => item.stockOnly).sort(byName);
+  if (filter === 'supplies') return [...self, ...supplies];
+  const others = rest.filter((item) => !item.stockOnly).sort(byName);
+  return [...self, ...supplies, ...others];
+}
+
 export function matchesInventorySearch(item: InventoryItemOption, query: string): boolean {
   const term = query.trim().toLowerCase();
   if (!term) return true;

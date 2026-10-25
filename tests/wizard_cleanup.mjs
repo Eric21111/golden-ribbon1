@@ -116,11 +116,13 @@ const data = read('src/features/products/recipePreviewData.ts');
     // fields keep their order: category, then POS, then the saved settings
     assert.match(src, /<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField[\s\S]*?<SectionHeader title="Other settings"[\s\S]*?<NonReturnableField/, name);
   }
-  assert.match(edit, /label="Active"/);
-  assert.match(edit, /You can turn this on after Main adds opening stock\./);
-  assert.match(edit, /Turn off to stop using it\. Past records are kept\./);
-  assert.match(edit, /if \(next && !canActivate\) return;/, 'a product that cannot be activated still cannot be switched on');
-  assert.doesNotMatch(create, /label="Active"/);
+  const status = read('src/features/products/ProductStatusField.tsx');
+  assert.match(status, /label="Product Status"/);
+  assert.match(status, /choice=\{\{ on: 'Enabled', off: 'Disabled' \}\}/);
+  assert.match(edit, /<ProductStatusField value=\{isActive\} onChange=\{setIsActive\} \/>/);
+  assert.match(create, /<ProductStatusField value=\{enabledChoice\} onChange=\{changeEnabled\} \/>/);
+  assert.doesNotMatch(edit, /opening stock/);
+  assert.doesNotMatch(edit, /canActivate/);
 
   // the preview badge exists once, in the shared layout, and not on each field
   assert.equal((layout.match(/Not saved yet/g) ?? []).length, 1);
@@ -128,7 +130,7 @@ const data = read('src/features/products/recipePreviewData.ts');
   assert.doesNotMatch(pos, /POS availability'|>POS availability</, 'no heading repeating the switch label');
 
   // short one-line copy
-  assert.match(pos, /description="Turn off for items you only keep in stock\."/);
+  assert.match(pos, /description="Yes sells it on its own at its price\. No hides it from the standalone menu\. Meal drink choices can still use it\."/);
   assert.match(category, /Choose what kind of product this is\./);
   assert.match(nonReturnable, /description="Unsold stock stays at the branch\."/);
   assert.doesNotMatch(nonReturnable, /Return Policy/);

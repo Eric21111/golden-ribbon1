@@ -2,8 +2,8 @@ export type ProductFilter = 'all' | 'active' | 'inactive';
 
 export const PRODUCT_FILTER_CHOICES: Array<{ label: string; value: ProductFilter }> = [
   { label: 'All', value: 'all' },
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' },
+  { label: 'Enabled', value: 'active' },
+  { label: 'Disabled', value: 'inactive' },
 ];
 
 export function matchesProductFilter(isActive: boolean, filter: ProductFilter): boolean {
@@ -27,9 +27,9 @@ export function productFilterEmptyMessage(
   }
   switch (filter) {
     case 'active':
-      return { title: 'No active products', message: 'Activate a product or switch to All.' };
+      return { title: 'No enabled products', message: 'Enable a product or switch to All.' };
     case 'inactive':
-      return { title: 'No inactive products', message: 'Inactive products remain for history.' };
+      return { title: 'No disabled products', message: 'Disabled products remain for history.' };
     default:
       return {
         title: 'No products yet',

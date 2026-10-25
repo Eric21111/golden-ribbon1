@@ -386,6 +386,38 @@ export type Database = {
         Args: { p_product_id: string; p_is_non_returnable: boolean };
         Returns: Product;
       };
+      create_inventory_product: {
+        Args: {
+          p_name: string;
+          p_sku: string;
+          p_description: string | null;
+          p_closing_stock_behavior?: string | null;
+        };
+        Returns: Product;
+      };
+      update_inventory_product: {
+        Args: {
+          p_product_id: string;
+          p_name: string;
+          p_sku: string;
+          p_description: string | null;
+          p_is_active: boolean;
+          p_closing_stock_behavior?: string | null;
+        };
+        Returns: Product;
+      };
+      set_product_sell_in_pos: {
+        Args: { p_product_id: string; p_sell_in_pos: boolean };
+        Returns: Product;
+      };
+      set_product_status: {
+        Args: { p_product_id: string; p_is_active: boolean };
+        Returns: Product;
+      };
+      set_product_category: {
+        Args: { p_product_id: string; p_category: string | null };
+        Returns: Product;
+      };
       set_product_inventory_mode: {
         Args: { p_product_id: string; p_inventory_mode: string };
         Returns: Product;

@@ -241,6 +241,8 @@ await asUser(mainMgr, () =>
   ]),
 );
 assert.equal(await qty(main, pares), 12.5);
+assert.equal((await db.query(`select is_active from public.products where id=$1`, [pares])).rows[0].is_active, false);
+await db.exec(`update public.products set is_active = true where id = '${pares}'`);
 
 // KG transfer leaves Main, stays unmeasured at booth (no double sellable stock)
 const kgXfer = (

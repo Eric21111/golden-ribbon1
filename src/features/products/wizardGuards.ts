@@ -13,7 +13,7 @@ export type PreviewConfigState = {
   category: string;
   /** The category a wizard starts with; choosing it again is not "using" the preview setting. */
   defaultCategory: string;
-  /** "Available for sale in POS". Absent / true is the normal state; false is the (preview-only) inventory-only choice. */
+  /** Kept for callers. POS availability is saved on the product, so it is not an unsaved preview setting. */
   sellable?: boolean;
 };
 
@@ -21,7 +21,6 @@ export type PreviewConfigState = {
 export function getUnsavedPreviewItems(state: PreviewConfigState): string[] {
   const items: string[] = [];
   if (state.category !== state.defaultCategory) items.push('Product Category');
-  if (state.sellable === false) items.push('POS Availability');
   return items;
 }
 
@@ -178,15 +177,10 @@ export function flowSteps(flow: WizardFlow): Array<1 | 2 | 3> {
   return [1, 2, 3];
 }
 
-// ---- inventory-only (preview-only until the backend can store POS availability)
+// ---- inventory-only (saved as products.sell_in_pos, independent of Active)
 
-/**
- * TEMPORARILY OFF. While false, the "Sell in POS" switch and the inventory-only one-step flow (with its disabled
- * save) are hidden, and every product goes through its normal category flow and can be saved. The component,
- * the flow rules and the messages below are kept so the feature can be switched back on once the backend can
- * store POS availability: set this to true and nothing else needs to change.
- */
-export const POS_AVAILABILITY_ENABLED = false;
+/** The Sell in POS switch is stored on the product. Category remains a local layout choice. */
+export const POS_AVAILABILITY_ENABLED = true;
 
 /**
  * The value the wizard actually uses for "sellable". While the feature is off this is always true, whatever the
@@ -196,18 +190,36 @@ export function resolveSellable(enabled: boolean, chosen: boolean): boolean {
   return enabled ? chosen : true;
 }
 
-export const INVENTORY_ONLY_MESSAGE = 'Stock only. Customers can\'t buy this in POS.';
+export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. It stays available for inventory, transfers, and meal components.';
 
 /**
- * POS availability can't be stored yet, so an inventory-only product would just be saved as a normal product
- * (₱0.00 default price, no branch prices) and could still appear in POS. Rather than do that, saving is blocked.
+ * Editable defaults for a new product, chosen from the setup type the user picked.
+ * Product names are never read. A later manual change to either switch is kept.
+ * Drinks start as sold separately and can be turned off for a meal-only drink.
  */
-export const INVENTORY_ONLY_UNSUPPORTED_MESSAGE =
-  'Stock-only products can\'t be saved yet. This is coming in a later update.';
+export function defaultsForProductSetup(category: string): { enabled: boolean; sellSeparately: boolean } {
+  if (category === 'supplies') return { enabled: true, sellSeparately: false };
+  return { enabled: true, sellSeparately: true };
+}
 
-/** Whether a flow may be saved. Inventory-only is not supported yet, so it never can. */
-export function isSaveSupported(flow: WizardFlow): boolean {
-  return flow !== 'inventory';
+/** Applies those defaults unless the user has already moved that switch themselves. */
+export function applySetupDefaults(options: {
+  category: string;
+  enabled: boolean;
+  sellSeparately: boolean;
+  enabledOverridden: boolean;
+  sellOverridden: boolean;
+}): { enabled: boolean; sellSeparately: boolean } {
+  const defaults = defaultsForProductSetup(options.category);
+  return {
+    enabled: options.enabledOverridden ? options.enabled : defaults.enabled,
+    sellSeparately: options.sellOverridden ? options.sellSeparately : defaults.sellSeparately,
+  };
+}
+
+/** Whether a flow may be saved. Stock-only products are saved without a selling price. */
+export function isSaveSupported(_flow: WizardFlow): boolean {
+  return true;
 }
 
 // ---- price field feedback (Step 3)

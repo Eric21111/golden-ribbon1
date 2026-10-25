@@ -54,12 +54,15 @@ export function SettingRow({
   value,
   onValueChange,
   info,
+  choice,
 }: {
   label: string;
   description?: string;
   value: boolean;
   onValueChange: (next: boolean) => void;
   info?: { title: string; body: string };
+  /** Words shown beside the switch, such as Enabled/Disabled or Yes/No. */
+  choice?: { on: string; off: string };
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
   return (
@@ -87,6 +90,7 @@ export function SettingRow({
           </View>
           {description ? <Text style={styles.rowDescription}>{description}</Text> : null}
         </View>
+        {choice ? <Text style={styles.choice}>{value ? choice.on : choice.off}</Text> : null}
         <Switch
           accessibilityLabel={label}
           onValueChange={onValueChange}
@@ -125,6 +129,7 @@ const styles = StyleSheet.create({
   labelLine: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   rowLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   rowDescription: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  choice: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   infoTouch: { width: MIN_TOUCH_TARGET - 8, height: MIN_TOUCH_TARGET - 8, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
   tip: { backgroundColor: '#F2F6FF', borderWidth: 1, borderColor: '#D3E0FA', borderRadius: 12, padding: 12, gap: 4, marginBottom: 4 },

@@ -6,15 +6,17 @@ const createWizard = readFileSync('src/features/products/CreateProductWizard.tsx
 const editWizard = readFileSync('src/features/products/EditProductWizard.tsx', 'utf8');
 assert.doesNotMatch(createWizard, /Default\/base price|Pricing type|Single price/);
 assert.doesNotMatch(editWizard, /Default\/base price|Pricing type|Single price/);
-assert.match(editWizard, /canActivate/);
+assert.match(editWizard, /ProductStatusField/);
+assert.doesNotMatch(editWizard, /canActivate/);
 assert.match(createWizard, /priceDrafts/);
 assert.match(editWizard, /priceDrafts/);
 assert.doesNotMatch(createWizard, /ProductForm/);
 assert.doesNotMatch(editWizard, /ProductForm/);
 
 const products = readFileSync('app/(manager)/manager/products/index.tsx', 'utf8');
-assert.match(products, /Inactive until opening stock/);
-assert.match(products, /canActivate=/);
+assert.match(products, /setProductStatus/);
+assert.doesNotMatch(products, /Inactive until opening stock/);
+assert.doesNotMatch(products, /canActivate=/);
 assert.match(products, /createCompleteProduct|useCreateCompleteProduct/);
 assert.match(products, /tryBeginSubmit/);
 // Edit now saves atomically (info + variants + branch pricing in one transaction) via
@@ -75,22 +77,22 @@ const asUser = async (userId, work) => {
 };
 
 await db.exec(
-  `insert into public.products(id,name,sku,selling_price,is_active) values ('${product}','Chicken','CH',0,false)`,
+  `insert into public.products(id,name,sku,selling_price,is_active) values ('${product}','Chicken','CH',80,false)`,
 );
-await assert.rejects(
-  db.exec(`update public.products set is_active=true where id='${product}'`),
-  /opening stock/,
-);
+await db.exec(`update public.products set is_active=true where id='${product}'`);
+const enabled = (await db.query(`select is_active, selling_price::text price from public.products where id='${product}'`)).rows[0];
+assert.equal(enabled.is_active, true, 'zero stock does not block Product Status');
+assert.equal(enabled.price, '80.00', 'enabling does not change the selling price');
+await db.exec(`update public.products set is_active=false where id='${product}'`);
 await asUser(mainMgr, async () => {
   await db.query(
     `select public.initialize_main_branch_inventory('[{"product_id":"${product}","quantity":12}]'::jsonb, 'open')`,
   );
 });
 
-assert.equal(
-  (await db.query(`select is_active, selling_price from public.products where id='${product}'`)).rows[0].is_active,
-  true,
-);
+const afterOpening = (await db.query(`select is_active, selling_price::text price from public.products where id='${product}'`)).rows[0];
+assert.equal(afterOpening.is_active, false, 'opening stock does not change Product Status');
+assert.equal(afterOpening.price, '80.00');
 
 await db.exec(
   `insert into public.products(id,name,sku,selling_price,is_active)
@@ -158,4 +160,4 @@ assert.equal(
 );
 
 await db.close();
-console.log('Product create tests passed: variant prices, both branch catalogs, active only after opening.');
+console.log('Product create tests passed: variant prices, both branch catalogs, status independent of opening stock.');

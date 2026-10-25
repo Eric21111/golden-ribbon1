@@ -71,6 +71,18 @@ export type CreateCompleteProductInput = {
   drinkChoices?: DrinkChoicePayload[];
 };
 
+export type InventoryProductInput = {
+  name: string;
+  sku: string;
+  description: string | null;
+  closingStockBehavior?: ClosingStockBehavior;
+};
+
+export type UpdateInventoryProductInput = InventoryProductInput & {
+  productId: string;
+  isActive: boolean;
+};
+
 export async function listProductSkus(): Promise<string[]> {
   const { data, error } = await supabase.from('products').select('sku');
   if (error) throw error;
@@ -89,6 +101,65 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
     p_closing_stock_behavior: input.closingStockBehavior ?? 'keep_at_branch',
     p_stock_uses: input.stockUses ?? null,
     p_drink_choices: input.drinkChoices ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Stock-only product: no selling price, hidden from POS, still usable as a meal component. */
+export async function createInventoryProduct(input: InventoryProductInput): Promise<Product> {
+  const { data, error } = await supabase.rpc('create_inventory_product', {
+    p_name: input.name,
+    p_sku: input.sku,
+    p_description: input.description,
+    p_closing_stock_behavior: input.closingStockBehavior ?? 'keep_at_branch',
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Rename or deactivate a stock-only product. Does not change its price, stock, or movement history. */
+export async function updateInventoryProduct(input: UpdateInventoryProductInput): Promise<Product> {
+  const { data, error } = await supabase.rpc('update_inventory_product', {
+    p_product_id: input.productId,
+    p_name: input.name,
+    p_sku: input.sku,
+    p_description: input.description,
+    p_is_active: input.isActive,
+    p_closing_stock_behavior: input.closingStockBehavior ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Saves the wizard category used by the stock and drink pickers. Does not change price or stock. */
+export async function setProductCategory(
+  productId: string,
+  category: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies',
+): Promise<Product> {
+  const { data, error } = await supabase.rpc('set_product_category', {
+    p_product_id: productId,
+    p_category: category,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Sets Product Status only. Does not change price, stock, or whether it is sold separately. */
+export async function setProductStatus(productId: string, isActive: boolean): Promise<Product> {
+  const { data, error } = await supabase.rpc('set_product_status', {
+    p_product_id: productId,
+    p_is_active: isActive,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Turns POS selling on or off without rewriting stock. Turning it on requires a real selling price. */
+export async function setProductSellInPos(productId: string, sellInPos: boolean): Promise<Product> {
+  const { data, error } = await supabase.rpc('set_product_sell_in_pos', {
+    p_product_id: productId,
+    p_sell_in_pos: sellInPos,
   });
   if (error) throw error;
   return data;

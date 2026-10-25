@@ -2,7 +2,7 @@
 //   1. sellability toggling (preview-only, never inferred from the category, never presumed for existing products)
 //   2. wizard navigation (inventory-only = Step 1 only; Drinks two-step and the three-step flow are preserved)
 //   3. preservation of existing data (variants, prices and every entry survive toggling; saved values unchanged)
-//   4. backend limitation guard (documents why this cannot be enforced yet)
+//   4. Sell in POS is stored (products.sell_in_pos). Category stays a local layout choice.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
@@ -10,7 +10,7 @@ import {
   POS_AVAILABILITY_ENABLED,
   resolveSellable,
   INVENTORY_ONLY_MESSAGE,
-  INVENTORY_ONLY_UNSUPPORTED_MESSAGE,
+  defaultsForProductSetup,
   buildDraftSnapshot,
   buildPreviewNotice,
   flowSteps,
@@ -53,50 +53,51 @@ function functionBody(src, signature) {
     assert.equal(getWizardFlow({ sellable: true, category, variantCount: 0 }), 'full');
   }
 
-  // every product starts sellable; nothing derives it from the category or from an existing product
+  // Create starts from the meals setup (sold separately). Edit starts from the saved flag and does not reapply setup defaults.
+  assert.equal(defaultsForProductSetup('meals').sellSeparately, true);
+  assert.match(createSrc, /useState\(initialSetup\.sellSeparately\)/, 'create starts from the setup default');
+  assert.match(createSrc, /applySetupDefaults\(/, 'changing setup type fills defaults until a switch is moved');
+  assert.doesNotMatch(editSrc, /applySetupDefaults\(/, 'edit keeps the saved settings');
+  assert.match(editSrc, /useState\(product\.sell_in_pos !== false\)/, 'edit starts from the saved flag');
+  assert.match(editSrc, /useState\(product\.is_active\)/, 'edit status starts from the saved flag');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
-    assert.match(src, /const \[sellableChoice, setSellable\] = useState\(true\);/, `${name}: starts sellable`);
-    assert.doesNotMatch(src, /setSellable\([^)]*category/, `${name}: never set from the category`);
+    assert.doesNotMatch(src, /setSellable\([^)]*category/, `${name}: the switch itself is not assigned from the category`);
   }
-  assert.doesNotMatch(editSrc, /setSellable\(false\)/, 'existing products are never marked inventory-only');
+  assert.doesNotMatch(editSrc, /setSellable\(false\)/);
   assert.doesNotMatch(createSrc, /setSellable\(false\)/);
 
   // the setting is a preview-only change: reported, and part of unsaved-change detection
   const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks: {} };
   assert.deepEqual(getUnsavedPreviewItems(base), [], 'sellable (absent) is not a preview setting');
   assert.deepEqual(getUnsavedPreviewItems({ ...base, sellable: true }), []);
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, sellable: false }), ['POS Availability']);
+  assert.deepEqual(getUnsavedPreviewItems({ ...base, sellable: false }), [], 'POS availability is saved, not a preview warning');
   assert.equal(
     buildPreviewNotice(getUnsavedPreviewItems({ ...base, category: 'snacks', sellable: false })),
-    'Not saved yet: Product Category and POS Availability. Everything else is saved.',
+    'Not saved yet: Product Category. Everything else is saved.',
   );
   const snap = (sellable) => buildDraftSnapshot({ name: 'Rice', sellable });
   assert.notEqual(snap(false), snap(true), 'turning it off is an unsaved change');
   assert.equal(snap(true), snap(true));
   for (const src of [createSrc, editSrc]) {
-    assert.match(src, /category,\n\s*sellable,\n\s*\}\);/, 'snapshot includes the sellable choice');
-    assert.match(src, /defaultCategory: [A-Z_]+,\n\s*sellable,\n\s*\}\)/, 'preview notice includes it');
+    assert.match(src, /category,\n\s*sellable,/, 'snapshot includes the sellable choice');
+    assert.match(src, /defaultCategory:[\s\S]*?sellable,\n\s*\}\)/, 'preview notice includes it');
   }
 
   // the field: exact label/description/messages, marked preview-only
-  assert.match(fieldSrc, /label="Sell in POS"/);
-  assert.match(fieldSrc, /description="Turn off for items you only keep in stock\."/);
+  assert.match(fieldSrc, /label="Sell Separately in POS"/);
+  assert.match(fieldSrc, /description="Yes sells it on its own at its price\. No hides it from the standalone menu\. Meal drink choices can still use it\."/);
   // marked preview-only by the Setup group header that holds it
   for (const src of [createSrc, editSrc]) {
     assert.match(src, /<SectionHeader title="How it's sold" preview \/>\s*<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField/);
   }
-  assert.equal(INVENTORY_ONLY_MESSAGE, 'Stock only. Customers can\'t buy this in POS.');
+  assert.equal(INVENTORY_ONLY_MESSAGE, 'Not sold on its own. It stays available for inventory, transfers, and meal components.');
   assert.match(fieldSrc, /\{!value \? \(/, 'the inventory-only message only shows when it is off');
   assert.match(fieldSrc, /INVENTORY_ONLY_MESSAGE/);
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     assert.match(src, /<PosAvailabilityField value=\{sellable\} onChange=\{changeSellable\} \/>/, `${name}: field in Step 1`);
+    assert.match(src, /sellInPos: false/, `${name}: stock-only save sends the flag`);
+    assert.match(src, /sellInPos: true/, `${name}: sellable save sends the flag`);
   }
-  // the screen says plainly that inventory-only products cannot be saved yet
-  assert.equal(
-    INVENTORY_ONLY_UNSUPPORTED_MESSAGE,
-    'Stock-only products can\'t be saved yet. This is coming in a later update.',
-  );
-  assert.match(fieldSrc, /INVENTORY_ONLY_UNSUPPORTED_MESSAGE/);
   console.log('phase3 sellability toggling: ok');
 }
 
@@ -113,28 +114,22 @@ function functionBody(src, signature) {
     assert.match(src, /const steps = flowSteps\(flow\);/);
     assert.match(src, /<StepIndicator step=\{step\} flow=\{flow\}/);
 
-    // Step 1 is the only step, but saving an inventory-only product is not supported yet: the button is
-    // disabled and does nothing, and there is no separate save path for it
     assert.match(
       src,
-      new RegExp(`<ManagerActionButton label="${saveLabel}" disabled onPress=\\{\\(\\) => \\{\\}\\} />`),
-      `${name}: "${saveLabel}" is disabled for inventory-only products`,
+      new RegExp(`inventoryOnly \\? \\(\\s*<ManagerActionButton label="${saveLabel}" loading=\\{loading\\} onPress=\\{submit\\} />`),
+      `${name}: stock-only products save from step 1`,
     );
-    assert.doesNotMatch(src, /submitInventoryOnly|inventoryOnlyError|inventoryOnlyMessage/, `${name}: no inventory-only save path remains`);
     assert.match(src, /<ManagerActionButton label="Next" onPress=\{goToStep2\} \/>/, `${name}: other flows still use Next`);
     // the existing step moves are untouched
     assert.match(src, /setStep\(simpleFlow \? 3 : 2\)/);
     assert.match(src, /setStep\(\(current\) => \(current === 3 \? \(simpleFlow \? 1 : 2\) : 1\)\)/);
     // the server error stays on the pricing step, as before
-    assert.match(src, /\{step === 3 && error \? <Text/);
+    assert.match(src, /\(step === 3 \|\| inventoryOnly\) && error \? <Text/);
 
-    // the normal save refuses an inventory-only product even if it were ever reached, before any payload is built
     const submitBody = functionBody(src, 'function submit()');
-    assert.match(submitBody, /if \(!isSaveSupported\(flow\)\) return;/);
-    assert.ok(
-      submitBody.indexOf('isSaveSupported') < submitBody.indexOf('onSubmit('),
-      `${name}: the guard comes before anything is sent`,
-    );
+    assert.match(submitBody, /if \(!sellable\)/);
+    assert.match(submitBody, /sellInPos: false/);
+    assert.ok(submitBody.indexOf('sellInPos: false') < submitBody.indexOf('sellInPos: true'));
     // hidden variants / prices can no longer block saving: there is nothing to save in this mode, and they are kept
     // the shared Step 1 / variant checks keep the existing rules and messages
     assert.match(src, /function validateStep1\(\): boolean \{/);
@@ -177,9 +172,11 @@ function functionBody(src, signature) {
     const end = src.indexOf('      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
-    for (const forbidden of ['sellable', 'inventoryOnly', 'category']) {
-      assert.ok(!block.includes(forbidden), `${name}: saved values must not include ${forbidden}`);
-    }
+    assert.ok(!block.includes('inventoryOnly'), `${name}: saved values must not include inventoryOnly`);
+    assert.match(block, /productCategory:/, `${name}: category is saved for the stock and drink pickers`);
+    assert.match(block, /sellInPos: true/);
+    assert.match(src, /sellInPos: false/);
+    assert.match(src, /default_price: ''/);
     for (const required of ['name:', 'sku:', 'description:', 'default_price:', 'variants:', 'closingStockBehavior:', 'isNonReturnable', 'stockUses:', 'drinkChoices:']) {
       assert.ok(block.includes(required), `${name}: saved values keep ${required}`);
     }
@@ -188,8 +185,7 @@ function functionBody(src, signature) {
     assert.match(src, /Enter a price for every variant on each selected branch\./);
   }
 
-  // inventory-only is blocked, not faked: it never saves, while every other flow still can
-  assert.equal(isSaveSupported('inventory'), false);
+  assert.equal(isSaveSupported('inventory'), true);
   assert.equal(isSaveSupported('full'), true);
   assert.equal(isSaveSupported('simple'), true);
   // switching back to sellable restores the normal Next / Create flow (the disabled button is only the inventory branch)
@@ -199,35 +195,31 @@ function functionBody(src, signature) {
   console.log('phase3 data preservation: ok');
 }
 
-// ---------------------------------------------------------------- 4. backend limitation guard
+// ---------------------------------------------------------------- 4. Sell in POS is stored; sellable products still require a price
 {
-  // Inventory-only cannot be enforced yet: the schema has no sellability field, and a variant-free product needs
-  // a valid default price. If either changes, this fails, which is the cue to revisit the inventory-only flow.
+  const latest = read('supabase/migrations/20261024160000_inventory_only_products.sql');
+  assert.match(latest, /add column if not exists sell_in_pos boolean not null default true/);
+  assert.match(latest, /selling_price is null/);
+  assert.match(latest, /create function public\.create_inventory_product/);
+  assert.doesNotMatch(latest, /selling_price,\s*false,\s*'piece_stock'[\s\S]{0,80}0/);
   const migrations = readdirSync('supabase/migrations').filter((file) => file.endsWith('.sql'));
   const all = migrations.map((file) => read(`supabase/migrations/${file}`)).join('\n');
-  assert.doesNotMatch(all, /is_sellable|sellable boolean|available_in_pos/i, 'no sellability field exists in the backend');
-  assert.match(all, /A default base price is required\./, 'a variant-free product still needs a valid default price');
-  console.log('phase3 backend limitation guard: ok');
+  assert.match(all, /A default base price is required\./, 'a variant-free sellable product still needs a valid default price');
+  console.log('phase3 sell_in_pos column: ok');
 }
 
-// ---------------------------------------------------------------- POS availability is hidden for now
+// ---------------------------------------------------------------- POS availability is saved
 {
-  // one switch controls it; it is OFF, and only the visible setting + inventory-only flow depend on it
-  assert.equal(POS_AVAILABILITY_ENABLED, false, 'hidden until the backend can store POS availability');
-  assert.equal(resolveSellable(false, true), true);
-  assert.equal(resolveSellable(false, false), true, 'a stored "off" choice is ignored while hidden');
+  assert.equal(POS_AVAILABILITY_ENABLED, true);
   assert.equal(resolveSellable(true, true), true);
-  assert.equal(resolveSellable(true, false), false, 'when the feature returns, the choice is honoured');
-
-  // while hidden, no category / variant combination can reach the inventory-only flow or a disabled save
+  assert.equal(resolveSellable(true, false), false);
   for (const category of categories) {
     for (const variantCount of [0, 1, 5]) {
-      for (const chosen of [true, false]) {
-        const flow = getWizardFlow({ sellable: resolveSellable(POS_AVAILABILITY_ENABLED, chosen), category, variantCount });
-        assert.notEqual(flow, 'inventory', category + '/' + variantCount + '/' + chosen);
-        assert.equal(isSaveSupported(flow), true, category + ': saving is never blocked');
-        assert.ok(flowSteps(flow).length >= 2, category + ': has a pricing step');
-      }
+      const off = getWizardFlow({ sellable: false, category, variantCount });
+      assert.equal(off, 'inventory');
+      assert.equal(isSaveSupported(off), true);
+      const on = getWizardFlow({ sellable: true, category, variantCount });
+      assert.notEqual(on, 'inventory');
     }
   }
   // category never makes a product unsellable: Inventory Supplies still uses Product Info -> Price
@@ -238,16 +230,12 @@ function functionBody(src, signature) {
     // the wizards use the resolved value, and the field only renders when the feature is on
     assert.match(src, /const sellable = resolveSellable\(POS_AVAILABILITY_ENABLED, sellableChoice\);/, name);
     assert.match(src, /\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField value=\{sellable\} onChange=\{changeSellable\} \/> : null\}/, name);
-    // nothing else in the wizard reads the raw stored choice
-    assert.equal((src.match(/sellableChoice/g) ?? []).length, 2, name + ': only the declaration and the resolver read it');
-    // the saved payload never mentions it
-    assert.doesNotMatch(src, /onSubmit\(\{[\s\S]{0,400}sellable/, name);
   }
-  // the component and its messages are kept for later
+  assert.equal((editSrc.match(/sellableChoice/g) ?? []).length, 2, 'edit reads the saved choice only to start and to resolve it');
+  assert.equal((createSrc.match(/sellableChoice/g) ?? []).length, 3, 'create also keeps the current choice when a setup default is overridden');
   assert.match(fieldSrc, /export function PosAvailabilityField/);
-  assert.match(fieldSrc, /export function InventoryOnlyNotice/);
-  assert.match(fieldSrc, /HIDDEN FOR NOW/);
-  console.log('phase3 hidden POS availability: ok');
+  assert.doesNotMatch(fieldSrc, /HIDDEN FOR NOW/);
+  console.log('phase3 POS availability is saved: ok');
 }
 
 console.log('product_wizard_phase3: ALL PASS');

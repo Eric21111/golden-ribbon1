@@ -4,6 +4,8 @@ import { queryKeys } from '@/lib/queryKeys';
 import {
   configureProductVariants,
   createCompleteProduct,
+  createInventoryProduct,
+  updateInventoryProduct,
   getProduct,
   listProductDrinkChoices,
   listProductSkus,
@@ -14,7 +16,9 @@ import {
   updateCompleteProduct,
   updateProductVariant,
   type CreateCompleteProductInput,
+  type InventoryProductInput,
   type UpdateCompleteProductInput,
+  type UpdateInventoryProductInput,
 } from '@/services/productService';
 
 export function useProducts(search = '', activeOnly = false) {
@@ -78,6 +82,29 @@ export function useCreateCompleteProduct() {
         client.invalidateQueries({ queryKey: ['product-drink-choices'] }),
         client.invalidateQueries({ queryKey: ['branch-products'] }),
         client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
+      ]);
+    },
+  });
+}
+
+export function useCreateInventoryProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: InventoryProductInput) => createInventoryProduct(input),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+export function useUpdateInventoryProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateInventoryProductInput) => updateInventoryProduct(input),
+    onSuccess: async (_product, { productId }) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['products'] }),
+        client.invalidateQueries({ queryKey: queryKeys.product(productId) }),
       ]);
     },
   });

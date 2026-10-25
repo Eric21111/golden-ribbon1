@@ -2,15 +2,18 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useEffect, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 
 import {
   THIS_PRODUCT_ID,
+  filterPickerItems,
   getPickerOptions,
   matchesInventorySearch,
   type InventoryItemOption,
+  type PickerListFilter,
 } from './recipePreviewData';
 
 const BORDER = '#D9DFEA';
@@ -27,6 +30,7 @@ export function InventoryItemPickerModal({
   addedItemIds,
   title = 'Select Stock Item',
   includeThisProduct = true,
+  mode = 'stock',
   onSelect,
   onClose,
 }: {
@@ -35,6 +39,8 @@ export function InventoryItemPickerModal({
   title?: string;
   /** "This Product" is offered for stock lists; a drink is never the meal itself. */
   includeThisProduct?: boolean;
+  /** Stock lists prioritize inventory supplies. Drink lists show saved drinks only. */
+  mode?: 'stock' | 'drink';
   /** Name of the product being created/edited, shown for "This Product". */
   productName: string;
   /** Real products that can be used as stock items. */
@@ -45,15 +51,21 @@ export function InventoryItemPickerModal({
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
+  const [listFilter, setListFilter] = useState<PickerListFilter>('supplies');
 
-  // Start every opening with a clean search.
+  // Start every opening on inventory supplies, with a clean search.
   useEffect(() => {
-    if (!visible) setSearch('');
+    if (!visible) {
+      setSearch('');
+      setListFilter('supplies');
+    }
   }, [visible]);
 
-  const matches = getPickerOptions(productName, ingredients)
-    .filter((item) => includeThisProduct || item.id !== THIS_PRODUCT_ID)
-    .filter((item) => matchesInventorySearch(item, search));
+  const activeFilter: PickerListFilter = mode === 'drink' ? 'drinks' : listFilter;
+  const matches = filterPickerItems(
+    getPickerOptions(productName, ingredients).filter((item) => includeThisProduct || item.id !== THIS_PRODUCT_ID),
+    activeFilter,
+  ).filter((item) => matchesInventorySearch(item, search));
   const currentProduct = matches.find((item) => item.id === THIS_PRODUCT_ID);
   const inventoryItems = matches.filter((item) => item.id !== THIS_PRODUCT_ID);
 
@@ -101,10 +113,32 @@ export function InventoryItemPickerModal({
           returnKeyType="search"
           onSubmitEditing={Keyboard.dismiss}
         />
-        <Text style={styles.hint}>Missing an item? Create it as a product first.</Text>
+        {mode === 'stock' ? (
+          <FilterChipRow
+            options={[
+              { label: 'Inventory supplies', value: 'supplies' },
+              { label: 'All', value: 'all' },
+            ]}
+            value={listFilter}
+            onChange={setListFilter}
+          />
+        ) : null}
+        <Text style={styles.hint}>
+          {mode === 'drink'
+            ? 'Only products saved with the Drinks category are listed.'
+            : 'Inventory supplies are listed first. Missing an item? Create it as a product first.'}
+        </Text>
 
         {matches.length === 0 ? (
-          <Text style={styles.empty}>No matching items.</Text>
+          <Text style={styles.empty}>
+            {search.trim()
+              ? 'No matching items.'
+              : mode === 'drink'
+                ? 'No drinks yet. Create the drink as its own product and set its category to Drinks.'
+                : listFilter === 'supplies'
+                  ? 'No inventory supplies yet. Choose All, or create one with Sell Separately in POS set to No.'
+                  : 'No matching items.'}
+          </Text>
         ) : (
           <>
             {currentProduct ? (

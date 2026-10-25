@@ -9,7 +9,8 @@ import type { ClosingStockBehavior } from '@/types/models';
 
 import { BranchPricingStep, type BranchPriceStatus } from './BranchPricingStep';
 import { NonReturnableField } from './NonReturnableField';
-import { InventoryOnlyNotice, PosAvailabilityField } from './PosAvailabilityField';
+import { PosAvailabilityField } from './PosAvailabilityField';
+import { ProductStatusField } from './ProductStatusField';
 import { ProductCategoryField } from './ProductCategoryField';
 import { SectionHeader, SettingsCard } from './StepOneLayout';
 import {
@@ -19,9 +20,10 @@ import {
   buildPreviewNotice,
   getUnsavedPreviewItems,
   otherModeHasPrices,
+  applySetupDefaults,
+  defaultsForProductSetup,
   flowSteps,
   getWizardFlow,
-  isSaveSupported,
   PRODUCT_STOCK_KEY,
   POS_AVAILABILITY_ENABLED,
   resolveSellable,
@@ -65,6 +67,12 @@ export type CreateProductValues = {
   stockUses: StockUsePayload[];
   /** Eligible drinks of each option that includes a drink, saved with the product (see drinkChoiceMapping.ts). */
   drinkChoices: DrinkChoicePayload[];
+  /** False saves a stock-only product: no selling price and hidden from POS. */
+  sellInPos: boolean;
+  /** Product Status. Independent of stock quantity. */
+  isActive: boolean;
+  /** Saved so the stock and drink pickers can tell supplies from drinks. */
+  productCategory: CategoryChoice;
 };
 
 export type BranchPricingDraft =
@@ -102,6 +110,8 @@ export function CreateProductWizard({
   onDirtyChange,
 }: CreateProductWizardProps) {
   const ingredients = useMemo(() => ingredientOptionsFromProducts(ingredientProducts), [ingredientProducts]);
+  // POS-off products stay selectable as a meal's included drink. The cashier catalog hides them on their own.
+  const drinkOptions = useMemo(() => ingredientOptionsFromProducts(ingredientProducts), [ingredientProducts]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1 — product info
@@ -123,14 +133,16 @@ export function CreateProductWizard({
   const [recipePreview, setRecipePreview] = useState<Record<string, RecipeLine[]>>({});
   // Drink Choice per variant: does it include a drink, and which drinks may the cashier pick from. Saved with the product.
   const [drinkChoices, setDrinkChoices] = useState<Record<string, DrinkChoice>>({});
-  // PREVIEW ONLY: product category. Local state; never saved or submitted. It only changes the Step 2 layout.
+  // Saved as product_category. Also the setup type that fills Product Status and Sell Separately until the user moves them.
   const [category, setCategory] = useState<CategoryChoice>(DEFAULT_PRODUCT_CATEGORY);
   const [step2Error, setStep2Error] = useState<string | undefined>();
   const [step3Error, setStep3Error] = useState<string | undefined>();
-  // PREVIEW ONLY: "Available for sale in POS". Every product starts as sellable (existing products are never
-  // presumed inventory-only), and it is never inferred from the category. Local state; never saved or submitted.
-  const [sellableChoice, setSellable] = useState(true);
-  // While POS availability is hidden this is always true, so it can never route to the inventory-only flow.
+  const initialSetup = defaultsForProductSetup(DEFAULT_PRODUCT_CATEGORY);
+  // Saved as sell_in_pos. Starts from the setup type. A manual change is kept when the setup type changes again.
+  const [sellableChoice, setSellable] = useState(initialSetup.sellSeparately);
+  const sellOverridden = useRef(false);
+  const [enabledChoice, setEnabled] = useState(initialSetup.enabled);
+  const statusOverridden = useRef(false);
   const sellable = resolveSellable(POS_AVAILABILITY_ENABLED, sellableChoice);
 
   // Step 3 — branch pricing
@@ -272,14 +284,51 @@ export function CreateProductWizard({
   // Only flips the flag. Variants, prices and every other entry stay in state untouched, so turning it back on
   // restores everything exactly as it was. Nothing is deleted or overwritten.
   function changeSellable(next: boolean) {
+    sellOverridden.current = true;
     setSellable(next);
     setStep3Error(undefined);
   }
 
+  function changeEnabled(next: boolean) {
+    statusOverridden.current = true;
+    setEnabled(next);
+  }
+
+  function changeCategory(next: CategoryChoice) {
+    setCategory(next);
+    const nextSetup = applySetupDefaults({
+      category: next,
+      enabled: enabledChoice,
+      sellSeparately: sellableChoice,
+      enabledOverridden: statusOverridden.current,
+      sellOverridden: sellOverridden.current,
+    });
+    setEnabled(nextSetup.enabled);
+    setSellable(nextSetup.sellSeparately);
+  }
+
   function submit() {
-    // Inventory-only products can't be saved yet (see isSaveSupported). They never reach the pricing step that
-    // calls this, but a product that isn't sold directly in POS must never be saved by accident.
-    if (!isSaveSupported(flow)) return;
+    if (!sellable) {
+      if (!validateStep1()) return;
+      onSubmit(
+        {
+          name: name.trim(),
+          sku: sku.trim(),
+          description: '',
+          default_price: '',
+          variants: [],
+          closingStockBehavior: isNonReturnable ? 'keep_at_branch' : 'record_as_unsold',
+          isNonReturnable,
+          stockUses: [],
+          drinkChoices: [],
+          sellInPos: false,
+          productCategory: category,
+          isActive: enabledChoice,
+        },
+        [],
+      );
+      return;
+    }
     let pricing: BranchPricingDraft[] = [];
 
     if (pricingMode === 'same') {
@@ -340,15 +389,23 @@ export function CreateProductWizard({
     const firstBasePrice = pricing.find((draft): draft is Extract<BranchPricingDraft, { selling_price: string }> =>
       draft.selling_price != null,
     )?.selling_price;
-    const topLevelPrice = variants.length === 0 ? (firstBasePrice || activeUniformBase(pricingMode, uniformBase).trim() || '0.00') : '0.00';
+    const topLevelPrice = variants.length === 0 ? (firstBasePrice || activeUniformBase(pricingMode, uniformBase).trim()) : '';
+    if (variants.length === 0 && !isValidPrice(topLevelPrice)) {
+      setStep3Error('Enter a valid selling price.');
+      return;
+    }
 
     const variantValues: CreateProductVariantDraft[] = variants.map((variant) => {
       const fromPricing = pricing
         .flatMap((draft) => draft.variants ?? [])
         .find((entry) => entry.name === variant.name.trim());
-      const price = fromPricing?.selling_price || activeUniformPrice(pricingMode, uniformVariantPrices, variant.id) || '0.00';
+      const price = fromPricing?.selling_price || activeUniformPrice(pricingMode, uniformVariantPrices, variant.id) || '';
       return { id: variant.id, name: variant.name.trim(), default_price: price };
     });
+    if (variantValues.some((variant) => !isValidPrice(variant.default_price))) {
+      setStep3Error('Enter a price for every variant.');
+      return;
+    }
 
     onSubmit(
       {
@@ -367,6 +424,9 @@ export function CreateProductWizard({
           drinkChoices,
           variantValues.map((variant) => ({ key: variant.id, id: null, name: variant.name })),
         ),
+        sellInPos: true,
+        productCategory: category,
+        isActive: enabledChoice,
       },
       pricing,
     );
@@ -395,6 +455,7 @@ export function CreateProductWizard({
     drinkPreview: drinkChoices, // (key name kept: it is the unsaved-changes snapshot of the drink choices)
     category,
     sellable,
+    enabled: enabledChoice,
   });
   const initialSnapshotRef = useRef<string | null>(null);
   if (initialSnapshotRef.current === null) initialSnapshotRef.current = draftSnapshot;
@@ -478,7 +539,7 @@ export function CreateProductWizard({
           />
           <View style={styles.group}>
             <SectionHeader title="How it's sold" preview />
-            <ProductCategoryField value={category} onChange={setCategory} />
+            <ProductCategoryField value={category} onChange={changeCategory} />
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
           {simpleFlow && getCategoryConfig(category).productLevelStock ? (
@@ -497,6 +558,7 @@ export function CreateProductWizard({
             <SectionHeader title="Other settings" />
             <SettingsCard>
               <NonReturnableField value={isNonReturnable} onChange={setIsNonReturnable} />
+              <ProductStatusField value={enabledChoice} onChange={changeEnabled} />
             </SettingsCard>
           </View>
         </View>
@@ -511,6 +573,7 @@ export function CreateProductWizard({
             category={category}
             productName={name}
             ingredients={ingredients}
+            drinkOptions={drinkOptions}
             onChangeRecipe={(variantKey, lines) =>
               setRecipePreview((current) => ({ ...current, [variantKey]: lines }))
             }
@@ -570,9 +633,7 @@ export function CreateProductWizard({
         </View>
       ) : null}
 
-      {step === 3 && error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {inventoryOnly ? <InventoryOnlyNotice /> : null}
+      {(step === 3 || inventoryOnly) && error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.buttonRow}>
         {step > 1 ? (
@@ -588,8 +649,7 @@ export function CreateProductWizard({
         <View style={styles.buttonCol}>
           {step === 1 ? (
             inventoryOnly ? (
-              // Inventory-only can't be saved yet: the button stays disabled and the field explains why.
-              <ManagerActionButton label="Create product" disabled onPress={() => {}} />
+              <ManagerActionButton label="Create product" loading={loading} onPress={submit} />
             ) : (
               <ManagerActionButton label="Next" onPress={goToStep2} />
             )

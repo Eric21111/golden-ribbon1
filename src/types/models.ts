@@ -108,7 +108,11 @@ export type Product = {
   name: string;
   sku: string;
   description: string | null;
-  selling_price: number;
+  selling_price: number | null;
+  /** False: stock only. Hidden from POS, no selling price required. Independent of is_active. */
+  sell_in_pos?: boolean;
+  /** meals, snacks, drinks, extras, or supplies. Absent until a manager saves one. */
+  product_category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
   is_active: boolean;
   inventory_mode: InventoryMode;
   closing_stock_behavior: ClosingStockBehavior;

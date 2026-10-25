@@ -151,12 +151,15 @@ const edit9 = (productId, args) =>
     ]),
   );
 
-const stockMain = (productId, qty) =>
-  asUser(mainMgr, () =>
+const stockMain = async (productId, qty) => {
+  await asUser(mainMgr, () =>
     db.query('select public.initialize_main_branch_inventory($1::jsonb, null)', [
       JSON.stringify([{ product_id: productId, quantity: String(qty) }]),
     ]),
   );
+  // Opening stock no longer changes Product Status. Transfers still require Enabled.
+  await db.exec(`update public.products set is_active = true where id = '${productId}'`);
+};
 
 const productA = await createSimple('Atomic Alpha', 'ATOM-A', '80');
 await stockMain(productA.id, 12);

@@ -61,9 +61,10 @@ export const useCartStore = create<CartState>((set, get) => ({
         .reduce((sum, item) => sum + item.quantity, 0);
       if (totalForProduct + 1 > quantity_on_hand) return state;
     }
+    const unitPrice = variant ? variant.selling_price : product.selling_price;
+    if (unitPrice == null) return state;
     const existing = state.items.find((item) => sameLine(item, product.id, variantId, drinkId));
     const nextQuantity = (existing?.quantity ?? 0) + 1;
-    const unitPrice = variant ? variant.selling_price : product.selling_price;
     const nextItem: CartItem = {
       product_id: product.id,
       variant_id: variantId,
@@ -121,6 +122,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       };
     }
     const unitPrice = variant ? variant.selling_price : product.selling_price;
+    if (unitPrice == null) return state;
     const nextItem: CartItem = {
       product_id: product.id,
       variant_id: variantId,

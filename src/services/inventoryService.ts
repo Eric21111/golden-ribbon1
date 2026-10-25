@@ -57,9 +57,9 @@ export async function listInventory(branch: Branch, activeOnly = false): Promise
 
     return [{
       branch,
-      product: branchProduct
+      product: branchProduct && product.sell_in_pos !== false
         ? { ...product, selling_price: Number(branchProduct.selling_price) }
-        : product,
+        : { ...product, selling_price: product.selling_price == null ? null : Number(product.selling_price) },
       quantity_on_hand: balance?.quantity_on_hand ?? 0,
       updated_at: balance?.updated_at ?? null,
       branch_product: branchProduct

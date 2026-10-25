@@ -35,23 +35,31 @@ import {
 import { useBranches } from '@/hooks/useBranches';
 import { useProductBranchPrices, useProductBranchVariantPrices } from '@/hooks/useBranchProducts';
 import { useClientPagination } from '@/hooks/useClientPagination';
-import { useInventory } from '@/hooks/useInventory';
 import {
   useCreateCompleteProduct,
+  useCreateInventoryProduct,
   useProductDrinkChoices,
   useProductSkus,
   useProductStockUses,
   useProductVariants,
   useProducts,
   useUpdateCompleteProduct,
+  useUpdateInventoryProduct,
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { confirmAction } from '@/lib/confirmAction';
 import { closingStockBehaviorLabel } from '@/lib/format';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
-import { setProductNonReturnable } from '@/services/productService';
+import { setProductCategory, setProductNonReturnable, setProductSellInPos, setProductStatus } from '@/services/productService';
 import type { Product } from '@/types/models';
+
+function compareSellingPrice(a: Product, b: Product): number {
+  if (a.selling_price == null && b.selling_price == null) return 0;
+  if (a.selling_price == null) return 1;
+  if (b.selling_price == null) return -1;
+  return a.selling_price - b.selling_price;
+}
 
 type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
 
@@ -84,15 +92,12 @@ export default function ManagerProductListScreen() {
     () => (branches.data ?? []).filter((branch) => branch.is_active && !branch.is_main_branch),
     [branches.data],
   );
-  const mainBranch = useMemo(
-    () => (branches.data ?? []).find((branch) => branch.is_main_branch) ?? null,
-    [branches.data],
-  );
-  const mainInventory = useInventory(mainBranch, false);
   const query = useProducts(search);
   const skuQuery = useProductSkus();
   const createMutation = useCreateCompleteProduct();
+  const createInventoryMutation = useCreateInventoryProduct();
   const updateCompleteMutation = useUpdateCompleteProduct();
+  const updateInventoryMutation = useUpdateInventoryProduct();
   const editVariants = useProductVariants(editProduct?.id ?? '');
   // Saved Stock Used Per Order. The edit form needs it up front: saving without it could wipe the saved recipes.
   const editStockUses = useProductStockUses(editProduct?.id ?? '');
@@ -100,7 +105,13 @@ export default function ManagerProductListScreen() {
   // Every product can be a stock item, whatever the search box currently filters the list to.
   const allProducts = useProducts('');
   const ingredientProducts = useMemo(
-    () => (allProducts.data ?? []).map((product) => ({ id: product.id, name: product.name })),
+    () =>
+      (allProducts.data ?? []).map((product) => ({
+        id: product.id,
+        name: product.name,
+        sellInPos: product.sell_in_pos !== false,
+        category: product.product_category ?? null,
+      })),
     [allProducts.data],
   );
   const editBranchPrices = useProductBranchPrices(editProduct?.id ?? '');
@@ -113,9 +124,9 @@ export default function ManagerProductListScreen() {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'price-asc':
-          return a.selling_price - b.selling_price;
+          return compareSellingPrice(a, b);
         case 'price-desc':
-          return b.selling_price - a.selling_price;
+          return compareSellingPrice(b, a);
         default:
           return a.name.localeCompare(b.name);
       }
@@ -139,8 +150,8 @@ export default function ManagerProductListScreen() {
     if (!tryBeginSubmit(submittingRef)) return;
     setIsSubmitting(true);
     const hasVariants = values.variants.length > 0;
-    void createMutation
-      .mutateAsync({
+    const save = values.sellInPos
+      ? createMutation.mutateAsync({
         name: values.name,
         sku: values.sku,
         description: values.description ? values.description : null,
@@ -158,18 +169,42 @@ export default function ManagerProductListScreen() {
         stockUses: values.stockUses,
         drinkChoices: values.drinkChoices,
       })
+      : createInventoryMutation.mutateAsync({
+          name: values.name,
+          sku: values.sku,
+          description: values.description ? values.description : null,
+          closingStockBehavior: values.closingStockBehavior,
+        });
+    void save
       .then(async (product) => {
+        let notice = '';
         if (values.isNonReturnable) {
           try {
             await setProductNonReturnable(product.id, true);
-            setCreateNotice('');
           } catch {
-            setCreateNotice('Product was created. The non-returnable setting was not saved — edit the product to retry it.');
+            notice = 'Product was created. The non-returnable setting was not saved — edit the product to retry it.';
           }
-        } else {
-          setCreateNotice('');
         }
-        setFilter(product.is_active ? 'all' : 'inactive');
+        if (values.productCategory !== 'unset') {
+          try {
+            await setProductCategory(product.id, values.productCategory);
+          } catch {
+            notice = 'Product was created. Its category was not saved, so it may not show under Drinks yet.';
+          }
+        }
+        let active = product.is_active;
+        if (values.isActive !== product.is_active) {
+          try {
+            const updated = await setProductStatus(product.id, values.isActive);
+            active = updated.is_active;
+          } catch {
+            notice = notice
+              ? `${notice} Product Status was not saved.`
+              : 'Product was created. Product Status was not saved, so it stays disabled until that update is applied.';
+          }
+        }
+        setCreateNotice(notice);
+        setFilter(active ? 'all' : 'inactive');
         setSearch('');
         createDirtyRef.current = false;
         setCreateOpen(false);
@@ -196,8 +231,9 @@ export default function ManagerProductListScreen() {
     setModeError('');
     const productId = editProduct.id;
     const priorNonReturnable = Boolean(editProduct.is_non_returnable);
-    void updateCompleteMutation
-      .mutateAsync({
+    const wasSellable = editProduct.sell_in_pos !== false;
+    const save = values.sellInPos
+      ? updateCompleteMutation.mutateAsync({
         productId,
         name: values.name,
         sku: values.sku,
@@ -216,9 +252,28 @@ export default function ManagerProductListScreen() {
         stockUses: values.stockUses,
         drinkChoices: values.drinkChoices,
       })
+      : updateInventoryMutation.mutateAsync({
+          productId,
+          name: values.name,
+          sku: values.sku,
+          description: values.description ? values.description : null,
+          isActive: values.isActive,
+          closingStockBehavior: values.closingStockBehavior,
+        });
+    void save
       .then(async () => {
+        if (values.sellInPos && !wasSellable) {
+          await setProductSellInPos(productId, true);
+        }
         if (values.isNonReturnable !== priorNonReturnable) {
           await setProductNonReturnable(productId, values.isNonReturnable);
+        }
+        if (values.productCategory !== 'unset') {
+          try {
+            await setProductCategory(productId, values.productCategory);
+          } catch {
+            setCreateNotice('Product was saved. Its category was not saved, so it may not show under Drinks yet.');
+          }
         }
         editDirtyRef.current = false;
         setEditProduct(null);
@@ -313,13 +368,17 @@ export default function ManagerProductListScreen() {
                 <ListRowCard
                   title={item.name}
                   meta={
-                    item.is_active
-                      ? `${item.sku} · ${closingStockBehaviorLabel(item.closing_stock_behavior)}`
-                      : `${item.sku} · ${closingStockBehaviorLabel(item.closing_stock_behavior)} · Inactive until opening stock`
+                    [
+                      item.sku,
+                      item.sell_in_pos === false ? 'Stock only' : null,
+                      closingStockBehaviorLabel(item.closing_stock_behavior),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
                   }
                   trailing={
                     <ManagerBadge
-                      label={item.is_active ? 'Active' : 'Inactive'}
+                      label={item.is_active ? 'Enabled' : 'Disabled'}
                       tone={item.is_active ? 'success' : 'neutral'}
                     />
                   }
@@ -359,7 +418,13 @@ export default function ManagerProductListScreen() {
             branchOptions={branchOptions}
             ingredientProducts={ingredientProducts}
             loading={isSubmitting}
-            error={createMutation.error ? getProductErrorMessage(createMutation.error) : undefined}
+            error={
+              createMutation.error
+                ? getProductErrorMessage(createMutation.error)
+                : createInventoryMutation.error
+                  ? getProductErrorMessage(createInventoryMutation.error)
+                  : undefined
+            }
             onSubmit={submitCreate}
             onDirtyChange={(dirty) => {
               createDirtyRef.current = dirty;
@@ -393,6 +458,8 @@ export default function ManagerProductListScreen() {
                 sku: editProduct.sku,
                 description: editProduct.description,
                 is_active: editProduct.is_active,
+                sell_in_pos: editProduct.sell_in_pos !== false,
+                product_category: editProduct.product_category ?? null,
                 closing_stock_behavior: editProduct.closing_stock_behavior,
                 is_non_returnable: Boolean(editProduct.is_non_returnable),
               }}
@@ -421,11 +488,6 @@ export default function ManagerProductListScreen() {
               }))}
               ingredientProducts={ingredientProducts}
               branchOptions={branchOptions}
-              canActivate={Boolean(
-                mainInventory.data?.some(
-                  (row) => row.product.id === editProduct.id && (row.quantity_on_hand > 0 || row.updated_at != null),
-                ),
-              )}
               loading={isEditSubmitting}
               error={
                 modeError

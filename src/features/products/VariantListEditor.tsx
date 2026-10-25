@@ -39,6 +39,7 @@ export function VariantListEditor({
   category,
   productName,
   ingredients,
+  drinkOptions,
   error,
   onChangeName,
   onChangeRecipe,
@@ -57,6 +58,8 @@ export function VariantListEditor({
   productName: string;
   /** Real products that can be used as stock items. */
   ingredients: InventoryItemOption[];
+  /** Drinks a meal may include, including products that are not sold on their own. */
+  drinkOptions?: InventoryItemOption[];
   error?: string;
   onChangeName: (index: number, name: string) => void;
   onChangeRecipe: (variantKey: string, lines: RecipeLine[]) => void;
@@ -305,7 +308,7 @@ export function VariantListEditor({
                         <VariantDrinkChoicePreview
                           choice={drinkChoice}
                           productName={productName}
-                          drinks={ingredients}
+                          drinks={drinkOptions ?? ingredients}
                           showValidation={showErrors}
                           onChange={(next) => onChangeDrinks(variant.key, next)}
                         />

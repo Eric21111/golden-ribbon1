@@ -14,8 +14,9 @@ assert.match(wizard, /deletedVariantIds/);
 const products = readFileSync('app/(manager)/manager/products/index.tsx', 'utf8');
 assert.match(products, /EditProductWizard/);
 assert.match(products, /useUpdateCompleteProduct/);
-assert.match(products, /canActivate=/);
-assert.match(products, /Inactive until opening stock/);
+assert.match(products, /setProductStatus/);
+assert.doesNotMatch(products, /Inactive until opening stock/);
+assert.doesNotMatch(products, /canActivate=/);
 assert.doesNotMatch(products, /ProductForm/);
 
 const db = new PGlite();
@@ -207,26 +208,26 @@ await asUser(mainMgr, async () => {
   );
 });
 
-// --- Activation still gated by opening stock (existing trigger fires regardless of call path) ---
+// --- Product Status can be enabled with zero stock, without rewriting variant prices ---
 await asUser(mainMgr, async () => {
-  await assert.rejects(
-    () =>
-      db.query(`select public.update_complete_product($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9)`, [
-        created.id, 'Rice Meal Deluxe', 'RICE-U', null, true,
-        JSON.stringify([
-          { id: withRiceId, name: 'Rice Bowl', default_price: '155' },
-          { id: variantsAfter[1].id, name: 'Extra Rice', default_price: '20' },
-        ]),
-        JSON.stringify([]), JSON.stringify([]), null,
-      ]),
-    /opening stock/,
-  );
+  await db.query(`select public.update_complete_product($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9)`, [
+    created.id, 'Rice Meal Deluxe', 'RICE-U', null, true,
+    JSON.stringify([
+      { id: withRiceId, name: 'Rice Bowl', default_price: '155' },
+      { id: variantsAfter[1].id, name: 'Extra Rice', default_price: '20' },
+    ]),
+    JSON.stringify([]), JSON.stringify([]), null,
+  ]);
 });
-assert.equal(
-  (await db.query(`select is_active from public.products where id=$1`, [created.id])).rows[0].is_active,
-  false,
-  'a rolled-back activation attempt leaves is_active untouched (all-or-nothing)',
-);
+const enabled = (await db.query(`select is_active from public.products where id=$1`, [created.id])).rows[0];
+assert.equal(enabled.is_active, true, 'zero stock does not block Product Status');
+const pricesAfterEnable = (
+  await db.query(`select name, default_price::text price from public.product_variants where product_id=$1 order by name`, [created.id])
+).rows;
+assert.deepEqual(pricesAfterEnable, [
+  { name: 'Extra Rice', price: '20.00' },
+  { name: 'Rice Bowl', price: '155.00' },
+]);
 
 // --- Deleting every remaining variant drops the product back to single pricing ---
 await asUser(mainMgr, async () => {

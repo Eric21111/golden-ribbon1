@@ -93,9 +93,10 @@ assert.equal(
   (await db.query(
     `select is_active from public.products where id='${chicken}'`,
   )).rows[0].is_active,
-  true,
-  'first opening activates the product',
+  false,
+  'opening stock does not change Product Status',
 );
+await db.exec(`update public.products set is_active = true where id = '${chicken}'`);
 
 await asUser(cashier, async () => {
   await db.query('select public.start_cashier_shift()');

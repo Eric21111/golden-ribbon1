@@ -63,8 +63,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   assert.notEqual(snap('snacks'), snap('unset'), 'choosing a category is a (preview) change');
 
   // wiring
-  assert.match(editSrc, /useState<CategoryChoice>\(INITIAL_EDIT_CATEGORY\)/, 'Edit starts unset');
-  assert.match(editSrc, /defaultCategory: INITIAL_EDIT_CATEGORY/);
+  assert.match(editSrc, /: INITIAL_EDIT_CATEGORY,/, 'Edit starts unset when no category is saved');
+  assert.match(editSrc, /: INITIAL_EDIT_CATEGORY,/);
   assert.match(editSrc, /<ProductCategoryField value=\{category\} onChange=\{setCategory\} allowUnset \/>/);
   assert.match(createSrc, /useState<CategoryChoice>\(DEFAULT_PRODUCT_CATEGORY\)/, 'Create keeps its default');
   assert.doesNotMatch(createSrc, /allowUnset/);
@@ -142,15 +142,14 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   for (const [name, src] of [['editor', editorSrc], ['create', createSrc], ['edit', editSrc]]) {
     assert.doesNotMatch(src, /['"]Regular['"]/, `${name}: no placeholder "Regular" variant`);
   }
-  // the product-level list is saved ONLY through the stockUses payload (built by stockUseMapping); the preview-only
-  // category and drink choice are never part of the saved values
+  // the product-level list is saved ONLY through the stockUses payload. Category is saved so the drink
+  // picker can list drinks, and the raw recipe map is not part of the saved values.
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
     const end = src.indexOf('      pricing,', start);
     const block = src.slice(start, end);
-    for (const forbidden of ['PRODUCT_STOCK_KEY', 'category']) {
-      assert.ok(!block.includes(forbidden), `${name}: saved values must not include ${forbidden}`);
-    }
+    assert.ok(!block.includes('PRODUCT_STOCK_KEY'), `${name}: saved values must not include PRODUCT_STOCK_KEY`);
+    assert.match(block, /productCategory:/, `${name}: category is saved for the stock and drink pickers`);
   }
   console.log('phase2 single-price stock: ok');
 }

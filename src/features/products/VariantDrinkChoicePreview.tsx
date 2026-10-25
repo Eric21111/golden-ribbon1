@@ -99,6 +99,7 @@ export function VariantDrinkChoicePreview({
         visible={pickerOpen}
         title="Select Drink"
         includeThisProduct={false}
+        mode="drink"
         productName={productName}
         ingredients={drinks}
         addedItemIds={choice.drinkIds}

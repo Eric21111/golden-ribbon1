@@ -217,7 +217,7 @@ export function CreateTransferScreen() {
                     <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand)}</Text>
                     {insufficient ? <ManagerBadge label="Insufficient stock" tone="danger" /> : null}
                   </View>
-                  {item.isNew ? (
+                  {item.isNew && item.product.sell_in_pos !== false && item.product.selling_price != null ? (
                     <Text style={styles.body}>
                       New to this branch — initial selling price: {formatMoney(item.product.selling_price)}
                     </Text>
@@ -409,7 +409,7 @@ export function CreateTransferScreen() {
                           </Text>
                         </View>
                       </View>
-                      {isNew && currentQty > 0 ? (
+                      {isNew && currentQty > 0 && item.product.sell_in_pos !== false && item.product.selling_price != null ? (
                         <Text style={styles.body}>
                           New to this branch — initial selling price: {formatMoney(item.product.selling_price)}
                         </Text>
