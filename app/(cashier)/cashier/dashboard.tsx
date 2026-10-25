@@ -124,7 +124,7 @@ export default function CashierDashboard() {
           'Cannot open POS',
           rows.length === 0
             ? 'This branch has no active products. Ask a manager to add stock first.'
-            : 'All products are out of stock. Confirm incoming shipments or ask Main to restock before opening POS.',
+            : 'Everything is out of stock. Confirm a shipment or ask Main to restock.',
         );
         return;
       }
@@ -137,7 +137,7 @@ export default function CashierDashboard() {
 
       confirmAction(
         'Some products are out of stock',
-        `You can continue, but these products have no stock:\n\n${formatOutOfStockWarning(oosNames)}`,
+        `These have no stock. You can still continue:\n\n${formatOutOfStockWarning(oosNames)}`,
         onAllowed,
         { confirm: 'Continue' },
       );
@@ -168,7 +168,7 @@ export default function CashierDashboard() {
         ) {
           alertNotice(
             'Cannot start shift',
-            'This booth still has an unfinished remittance from another session. Ask a manager to finish it before starting.',
+            'This booth has an unfinished remittance. Ask a manager to finish it first.',
           );
           return;
         }
@@ -283,7 +283,7 @@ export default function CashierDashboard() {
       }
       alertNotice(
         'Connection problem',
-        'Could not confirm the remittance. Retry with the same counts — do not re-enter unless the values need changing.',
+        'Could not confirm. Retry the same counts. Change them only if a number was wrong.',
       );
       return;
     }

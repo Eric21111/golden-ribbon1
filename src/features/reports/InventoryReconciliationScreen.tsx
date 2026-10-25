@@ -96,8 +96,7 @@ export function InventoryReconciliationScreen() {
 
         <Text style={styles.sectionTitle}>RECONCILIATION OVERVIEW</Text>
         <Text style={styles.hint}>
-          Return and transfer count differences appear after Main receives. They stay visible here even when Calculated
-          and Current stock still match.
+          Count differences stay listed even when stock totals match.
         </Text>
         <StatTile layout="wide" emphasis icon="alert-circle-outline" label="Reconciliation issues" value={issueCount} />
         <View style={styles.statsRow}>

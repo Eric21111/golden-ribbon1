@@ -116,7 +116,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     showStatus: false,
     simpleEmpty: {
       title: 'Sold as a single drink',
-      body: 'Skip this step. Drinks stocked separately (e.g. Coke Mismo, Coke Can) are separate products.',
+      body: 'Skip this, or add a size. Each packaged drink is its own product.',
       link: 'Add a size or packaging',
     },
     emptyBody: STANDARD_EMPTY_BODY,
@@ -162,7 +162,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     showStatus: false,
     simpleEmpty: {
       title: 'Inventory item',
-      body: 'Usually not sold directly, so selling options are optional.',
+      body: 'Usually not sold on its own. Options are optional.',
       link: 'Add a selling option anyway',
     },
     emptyBody: STANDARD_EMPTY_BODY,

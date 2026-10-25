@@ -112,7 +112,7 @@ const data = read('src/features/products/recipePreviewData.ts');
     assert.equal((src.match(/<SectionHeader /g) ?? []).length, 2, name + ': exactly two groups');
     // the old headings and dividers are gone
     assert.doesNotMatch(src, /Product details|sectionTitle|sectionDivider/, name);
-    assert.match(src, /Add each drink you stock separately as its own product, like Coke Mismo\./, name);
+    assert.match(src, /Each drink is its own product, like Coke Mismo\./, name);
     // fields keep their order: category, then POS, then the saved settings
     assert.match(src, /<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField[\s\S]*?<SectionHeader title="Other settings"[\s\S]*?<NonReturnableField/, name);
   }
@@ -130,7 +130,7 @@ const data = read('src/features/products/recipePreviewData.ts');
   assert.doesNotMatch(pos, /POS availability'|>POS availability</, 'no heading repeating the switch label');
 
   // short one-line copy
-  assert.match(pos, /description="Yes sells it on its own at its price\. No hides it from the standalone menu\. Meal drink choices can still use it\."/);
+  assert.match(pos, /description="Off keeps it for stock and meals only\."/);
   assert.match(category, /Choose what kind of product this is\./);
   assert.match(nonReturnable, /description="Unsold stock stays at the branch\."/);
   assert.doesNotMatch(nonReturnable, /Return Policy/);

@@ -169,7 +169,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
           {needsDrink ? (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Choose a drink</Text>
-              <Text style={styles.optionHint}>Included in this meal's price. Out of stock drinks cannot be selected.</Text>
+              <Text style={styles.optionHint}>Included in the meal price. Out of stock cannot be selected.</Text>
               <View style={styles.optionList}>
                 {drinkOptions.map((option) => {
                   const selected = option.id === selectedDrink?.id;

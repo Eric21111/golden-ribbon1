@@ -599,7 +599,7 @@ export function EditProductWizard({
             style={styles.fieldInput}
           />
           {category === 'drinks' ? (
-            <Text style={styles.hint}>Add each drink you stock separately as its own product, like Coke Mismo.</Text>
+            <Text style={styles.hint}>Each drink is its own product, like Coke Mismo.</Text>
           ) : null}
           <FormField
             label="SKU"

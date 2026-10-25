@@ -171,7 +171,7 @@ export function TransferDiscrepanciesReportScreen({
         {discrepancies.length === 0 && !query.isLoading && query.isFetched ? (
           <EmptyState
             title="No transfer discrepancies"
-            message="Notes appear when a cashier reports a short or over shipment instead of confirming the full sent quantity."
+            message="Shown when a cashier counts a short or over shipment."
           />
         ) : null}
 

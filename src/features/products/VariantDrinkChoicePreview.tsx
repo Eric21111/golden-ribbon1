@@ -89,8 +89,8 @@ export function VariantDrinkChoicePreview({
             {missing
               ? 'Select at least one drink.'
               : selectedCount === 1
-                ? 'Only 1 drink offered, so the cashier has no choice.'
-                : `The cashier picks 1 of these ${selectedCount} drinks at checkout.`}
+                ? 'Only 1 drink, so the cashier cannot choose.'
+                : `Cashier picks 1 of ${selectedCount}.`}
           </Text>
         </View>
       ) : null}

@@ -115,7 +115,7 @@ export function ReceiveReturnScreen() {
       <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader
           title="Unauthorized"
-          subtitle="Only the Main Branch Manager can receive returns."
+          subtitle="Main Branch Manager only."
           showBack
         />
         <ConstrainedWidth style={styles.column}>
@@ -246,7 +246,7 @@ export function ReceiveReturnScreen() {
                       setReview(null);
                       Alert.alert(
                         'Return received',
-                        `Counted leftover is waste and does not restock Main inventory. Final status: ${finalStatus.replaceAll('_', ' ')}.`,
+                        `Leftover is waste and does not restock Main. Status: ${finalStatus.replaceAll('_', ' ')}.`,
                         [
                           {
                             text: 'View details',

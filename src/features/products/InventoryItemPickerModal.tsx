@@ -124,9 +124,7 @@ export function InventoryItemPickerModal({
           />
         ) : null}
         <Text style={styles.hint}>
-          {mode === 'drink'
-            ? 'Only products saved with the Drinks category are listed.'
-            : 'Inventory supplies are listed first. Missing an item? Create it as a product first.'}
+          {mode === 'drink' ? 'Drinks only.' : 'Supplies are listed first.'}
         </Text>
 
         {matches.length === 0 ? (
@@ -134,9 +132,9 @@ export function InventoryItemPickerModal({
             {search.trim()
               ? 'No matching items.'
               : mode === 'drink'
-                ? 'No drinks yet. Create the drink as its own product and set its category to Drinks.'
+                ? 'No drinks yet. Set the product category to Drinks.'
                 : listFilter === 'supplies'
-                  ? 'No inventory supplies yet. Choose All, or create one with Sell Separately in POS set to No.'
+                  ? 'No supplies yet. Try All, or turn Sell Separately off.'
                   : 'No matching items.'}
           </Text>
         ) : (

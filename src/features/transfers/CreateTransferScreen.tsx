@@ -340,8 +340,7 @@ export function CreateTransferScreen() {
           !destinationCatalog.error &&
           catalogByProductId.size === 0 ? (
             <Text style={styles.body}>
-              This branch has no products yet. Sending a product here creates its branch catalog
-              entry at that product's base selling price — reprice it later in the branch catalog.
+              New branch. Sent items use the product base price. Change it later in Branch Catalogs.
             </Text>
           ) : null}
 
@@ -399,7 +398,7 @@ export function CreateTransferScreen() {
                           {isNew ? (
                             <ManagerBadge label="New to this branch" tone="info" />
                           ) : isInactive ? (
-                            <ManagerBadge label="Inactive — will reactivate" tone="warning" />
+                            <ManagerBadge label="Will reactivate" tone="warning" />
                           ) : null}
                         </View>
                         <View style={styles.availablePill}>

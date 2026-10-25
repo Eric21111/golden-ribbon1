@@ -282,7 +282,7 @@ export function CashierShiftCloseForm({
         <>
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Inventory count</Text>
-            <Text style={styles.hint}>Count what's left and any waste for each product.</Text>
+            <Text style={styles.hint}>Count remaining stock and waste.</Text>
             <View
               style={[styles.banner, incomplete === 0 ? styles.bannerDone : styles.bannerPending]}
               accessibilityLiveRegion="polite"
@@ -367,7 +367,7 @@ export function CashierShiftCloseForm({
           Difference: {formatCashResultLabel(expectedCash, actualCash, cashResult)}
         </Text>
         {!actualCash.trim() ? (
-          <Text style={styles.helper}>Enter actual cash counted. Leave blank until counted.</Text>
+          <Text style={styles.helper}>Enter the cash you counted.</Text>
         ) : null}
       </View>
 

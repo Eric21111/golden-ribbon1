@@ -53,6 +53,6 @@ export function filterEmptyMessage(
     case 'not_set':
       return { title: 'All products initialized', message: 'Every product already has opening stock.' };
     default:
-      return { title: 'No inventory found', message: 'Create active products, then initialize opening stock.' };
+      return { title: 'No inventory found', message: 'Add products, then set opening stock.' };
   }
 }

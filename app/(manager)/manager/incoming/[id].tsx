@@ -51,7 +51,7 @@ export default function IncomingTransferDetailsScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         {pendingCashierConfirm ? (
-          <ErrorState message="Cashiers confirm arrival. Ask the assigned cashier to open Incoming and confirm the shipment." />
+          <ErrorState message="The cashier confirms this shipment from Incoming." />
         ) : null}
         <RouteBanner
           from={{ label: transfer.from_branch?.name ?? 'Sending branch', isMain: true }}

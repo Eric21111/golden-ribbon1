@@ -82,7 +82,7 @@ export function getProductErrorMessage(error: unknown): string {
     || message.includes('update_inventory_product')
     || message.includes('set_product_sell_in_pos')
   ) {
-    return 'Stock-only products could not be saved. The database update for Sell in POS has not been applied yet.';
+    return 'Stock-only save failed. The Sell in POS database update has not been applied yet.';
   }
   if (
     message.includes('schema cache')

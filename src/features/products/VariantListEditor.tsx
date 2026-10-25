@@ -318,10 +318,10 @@ export function VariantListEditor({
                       <Text style={styles.hiddenNote}>
                         {[
                           hiddenStock
-                            ? `Stock items are hidden for ${config.label}, but they stay on this ${noun} and are still saved.`
+                            ? `Saved stock stays on this ${noun}.`
                             : null,
                           hiddenDrink
-                            ? `Drink choice is hidden for ${config.label}, but it stays on this ${noun} and is still saved.`
+                            ? `Saved drink choice stays on this ${noun}.`
                             : null,
                         ]
                           .filter(Boolean)

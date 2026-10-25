@@ -79,8 +79,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   assert.match(editorSrc, /variants\.map\(\(variant, index\) =>/);
   assert.doesNotMatch(editorSrc, /category === 'unset' \? null/);
   // switching category only hides sections (with a note); nothing is deleted
-  assert.match(editorSrc, /Drink choice is hidden for \$\{config\.label\}, but it stays on this \$\{noun\} and is still saved\./, 'a hidden drink choice is kept AND saved');
-  assert.match(editorSrc, /they stay on this \$\{noun\} and are still saved/, 'a hidden stock list is kept AND saved');
+  assert.match(editorSrc, /Saved drink choice stays on this \$\{noun\}\./, 'a hidden drink choice is kept AND saved');
+  assert.match(editorSrc, /Saved stock stays on this \$\{noun\}\./, 'a hidden stock list is kept AND saved');
   for (const src of [createSrc, editSrc]) {
     assert.doesNotMatch(src, /setVariants\(\[\]\)/, 'no code path wipes the variants');
   }

@@ -95,7 +95,7 @@ export default function LocalPurchaseScreen() {
         {!catalog.isLoading && !catalog.error && (catalog.data?.length ?? 0) === 0 ? (
           <EmptyState
             title="No non-returnable products"
-            message="Ask a Main Branch Manager to mark drinks or snacks as non-returnable in product settings."
+            message="Ask Main to mark this product non-returnable first."
           />
         ) : null}
         {(catalog.data ?? []).map((row) => (

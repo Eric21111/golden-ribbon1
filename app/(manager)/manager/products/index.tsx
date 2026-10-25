@@ -182,14 +182,14 @@ export default function ManagerProductListScreen() {
           try {
             await setProductNonReturnable(product.id, true);
           } catch {
-            notice = 'Product was created. The non-returnable setting was not saved — edit the product to retry it.';
+            notice = 'Created. Non-returnable was not saved. Edit the product to retry.';
           }
         }
         if (values.productCategory !== 'unset') {
           try {
             await setProductCategory(product.id, values.productCategory);
           } catch {
-            notice = 'Product was created. Its category was not saved, so it may not show under Drinks yet.';
+            notice = 'Created. Category was not saved, so it may not show under Drinks.';
           }
         }
         let active = product.is_active;
@@ -200,7 +200,7 @@ export default function ManagerProductListScreen() {
           } catch {
             notice = notice
               ? `${notice} Product Status was not saved.`
-              : 'Product was created. Product Status was not saved, so it stays disabled until that update is applied.';
+              : 'Created. Product Status was not saved, so it stays disabled.';
           }
         }
         setCreateNotice(notice);
@@ -272,7 +272,7 @@ export default function ManagerProductListScreen() {
           try {
             await setProductCategory(productId, values.productCategory);
           } catch {
-            setCreateNotice('Product was saved. Its category was not saved, so it may not show under Drinks yet.');
+            setCreateNotice('Saved. Category was not saved, so it may not show under Drinks.');
           }
         }
         editDirtyRef.current = false;
@@ -443,7 +443,7 @@ export default function ManagerProductListScreen() {
           ) : editProduct && (editStockUses.error || !editStockUses.data || editDrinkChoices.error || !editDrinkChoices.data) ? (
             // Never open the form without the saved recipes and drink choices: saving would replace them with nothing.
             <ErrorState
-              message="Couldn't load this product's stock and drink choices. Try again before editing."
+              message="Couldn't load stock and drink choices. Retry before editing."
               onRetry={() => {
                 void editStockUses.refetch();
                 void editDrinkChoices.refetch();

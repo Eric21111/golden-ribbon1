@@ -92,7 +92,7 @@ assert.equal(getStockStatus(inventoryItem({ mode: 'kg_meal', main: true, qty: 10
 assert.match(branchPerf, /formatLiveStock/);
 assert.doesNotMatch(branchPerf, /formatReportLiveOnHand/);
 assert.doesNotMatch(ownerInventory, /Not tracked/);
-assert.match(managerIncomingDetail, /Cashiers confirm arrival/);
+assert.match(managerIncomingDetail, /cashier confirms this shipment/i);
 assert.doesNotMatch(managerIncomingDetail, /useReceiveTransfer|receiveTransfer\(/);
 assert.doesNotMatch(readFileSync('src/services/transferService.ts', 'utf8'), /receive_stock_transfer/);
 assert.doesNotMatch(readFileSync('src/hooks/useTransfers.ts', 'utf8'), /receiveTransfer/);

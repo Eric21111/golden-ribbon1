@@ -111,7 +111,7 @@ export default function ManagerInventoryScreen() {
     filter === 'all' && !search.trim()
       ? {
           title: isMain ? 'No inventory found' : 'No inventory initialized',
-          message: isMain ? 'Create active products, then initialize opening stock.' : 'Received products will appear here.',
+          message: isMain ? 'Add products, then set opening stock.' : 'Received products will appear here.',
         }
       : filterEmptyMessage(filter, Boolean(search.trim()));
 

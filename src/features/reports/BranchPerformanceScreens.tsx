@@ -59,8 +59,7 @@ export function BranchPerformanceReportScreen() {
           onCustomEndChange={setCustomEnd}
         />
         <Text style={styles.hint}>
-          Return discrepancies appear after Main counts a leftover return. They are not created at the cashier. All Time
-          is the default so earlier receives are not hidden.
+          Return issues appear after Main counts a leftover return. All Time is the default.
         </Text>
 
         <Text style={styles.sectionTitle}>COMPANY TOTALS</Text>
@@ -206,8 +205,7 @@ export function BranchPerformanceDetailScreen() {
           onCustomEndChange={setCustomEnd}
         />
         <Text style={styles.hint}>
-          Return rows appear after Main counts the leftover return. A cashier leftover confirm does not create a
-          discrepancy by itself.
+          Return issues appear after Main counts the leftover. A cashier confirm alone does not create one.
         </Text>
 
         {query.isLoading ? <LoadingState label="Loading branch details…" /> : null}

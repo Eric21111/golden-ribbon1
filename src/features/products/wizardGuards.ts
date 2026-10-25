@@ -190,7 +190,7 @@ export function resolveSellable(enabled: boolean, chosen: boolean): boolean {
   return enabled ? chosen : true;
 }
 
-export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. It stays available for inventory, transfers, and meal components.';
+export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. Still used for stock and meals.';
 
 /**
  * Editable defaults for a new product, chosen from the setup type the user picked.

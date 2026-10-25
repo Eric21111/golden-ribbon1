@@ -24,8 +24,12 @@ export function PosAvailabilityField({
       <SettingsCard>
         <SettingRow
           label="Sell Separately in POS"
-          description="Yes sells it on its own at its price. No hides it from the standalone menu. Meal drink choices can still use it."
+          description="Off keeps it for stock and meals only."
           choice={{ on: 'Yes', off: 'No' }}
+          info={{
+            title: 'Sell separately',
+            body: 'Yes lists it on the POS menu at its price. No hides that menu item. Meal drink choices can still use it.',
+          }}
           value={value}
           onValueChange={onChange}
         />

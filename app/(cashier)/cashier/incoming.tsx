@@ -98,7 +98,7 @@ export default function CashierIncomingShipments() {
     ) {
       alertNotice(
         'No difference entered',
-        'Change at least one counted quantity from what was sent, or use Arrived if everything matches.',
+        'Change a counted quantity, or tap Arrived if it matches.',
       );
       return;
     }
@@ -162,7 +162,7 @@ export default function CashierIncomingShipments() {
           ListEmptyComponent={
             <EmptyState
               title="No incoming shipments"
-              message="Transfers sent to this branch that need shipment confirmation appear here."
+              message="Shipments waiting for your count appear here."
             />
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}

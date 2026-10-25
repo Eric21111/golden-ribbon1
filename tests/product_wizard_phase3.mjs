@@ -85,12 +85,12 @@ function functionBody(src, signature) {
 
   // the field: exact label/description/messages, marked preview-only
   assert.match(fieldSrc, /label="Sell Separately in POS"/);
-  assert.match(fieldSrc, /description="Yes sells it on its own at its price\. No hides it from the standalone menu\. Meal drink choices can still use it\."/);
+  assert.match(fieldSrc, /description="Off keeps it for stock and meals only\."/);
   // marked preview-only by the Setup group header that holds it
   for (const src of [createSrc, editSrc]) {
     assert.match(src, /<SectionHeader title="How it's sold" preview \/>\s*<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField/);
   }
-  assert.equal(INVENTORY_ONLY_MESSAGE, 'Not sold on its own. It stays available for inventory, transfers, and meal components.');
+  assert.equal(INVENTORY_ONLY_MESSAGE, 'Not sold on its own. Still used for stock and meals.');
   assert.match(fieldSrc, /\{!value \? \(/, 'the inventory-only message only shows when it is off');
   assert.match(fieldSrc, /INVENTORY_ONLY_MESSAGE/);
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {

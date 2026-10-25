@@ -14,8 +14,12 @@ export function ProductStatusField({
   return (
     <SettingRow
       label="Product Status"
-      description="Enabled keeps it available for stock, recipes, and transfers. Disabled stops new use and keeps past records. Stock on hand does not change this."
+      description="On for stock, recipes, and transfers."
       choice={{ on: 'Enabled', off: 'Disabled' }}
+      info={{
+        title: 'Product Status',
+        body: 'Disabled stops new use. Past sales stay. Stock quantity does not change this.',
+      }}
       value={value}
       onValueChange={onChange}
     />
