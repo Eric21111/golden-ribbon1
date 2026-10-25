@@ -7,7 +7,9 @@ const cashierCreate = readFileSync('app/(cashier)/cashier/returns/create.tsx', '
 assert.match(cashierCreate, /createStockReturn/);
 assert.match(cashierCreate, /System stock/);
 assert.match(cashierCreate, /Submit return/);
-assert.match(cashierCreate, /after Main receives/);
+assert.match(cashierCreate, /Expected remaining/);
+assert.match(cashierCreate, /Difference/);
+assert.doesNotMatch(cashierCreate, /Expected remaining and any difference appear/);
 assert.doesNotMatch(cashierCreate, /returnLeftoverStock/);
 assert.doesNotMatch(cashierCreate, /Every leftover unit on hand is returned automatically/);
 assert.doesNotMatch(cashierCreate, /createReturn\(/);

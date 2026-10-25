@@ -100,16 +100,24 @@ export default function CreateReturnScreen() {
         <ManagerScreenHeader title="Return submitted" subtitle="Stock is now In Transit to Main Branch." showBack />
         <ConstrainedWidth style={styles.column}>
           <Text style={styles.body}>
-            Main Branch will count this return. Difference is shown only after that receipt.
+            Stock is in transit. These figures are from the quantities you submitted.
           </Text>
-          {(submitted ?? []).map((row) => (
-            <View key={row.name} style={styles.card}>
-              <Text style={styles.name}>{row.name}</Text>
-              <Text style={styles.systemStock}>
-                Returned {row.quantity} · System stock was {row.system} · Expected remaining {row.system - row.quantity}
-              </Text>
-            </View>
-          ))}
+          {(submitted ?? []).map((row) => {
+            const expectedRemaining = row.system - row.quantity;
+            const difference = row.quantity - row.system;
+            return (
+              <View key={row.name} style={styles.card}>
+                <Text style={styles.name}>{row.name}</Text>
+                <Text style={styles.systemStock}>
+                  Returned {row.quantity} · System stock was {row.system}
+                </Text>
+                <Text style={styles.systemStock}>Expected remaining {expectedRemaining}</Text>
+                <Text style={styles.systemStock}>
+                  Difference {difference > 0 ? `+${difference}` : difference}
+                </Text>
+              </View>
+            );
+          })}
           <ManagerActionButton
             label="Back to home"
             onPress={() => {
@@ -131,7 +139,7 @@ export default function CreateReturnScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         <Text style={styles.body}>
-          Enter how many pieces to send back. System stock is shown for reference. Expected remaining and any difference appear after Main receives the return.
+          Enter how many pieces to send back. System stock is shown for reference.
         </Text>
         {error ? <ErrorState message={error} /> : null}
         {query.isLoading ? <LoadingState /> : null}

@@ -12,7 +12,7 @@ const pending = files.filter((name) => name.slice(0, 14) > HEAD);
 const strip = (sql) => sql.replace(/create extension if not exists pgcrypto;/g, '');
 const id = (n) => `51000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-assert.equal(pending.length, 19, `expected 19 migrations after ${HEAD}, found ${pending.length}: ${pending.join(', ')}`);
+assert.equal(pending.length, 20, `expected 20 migrations after ${HEAD}, found ${pending.length}: ${pending.join(', ')}`);
 
 const db = new PGlite();
 await db.exec(`

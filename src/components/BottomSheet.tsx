@@ -103,8 +103,8 @@ export function BottomSheet({
     scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
   };
 
-  if (!visible) return null;
-
+  // Keep the Modal mounted and toggle `visible`. Unmounting it while Android still has the
+  // native dialog open leaves a full-screen touch blocker after Close, Add to Order, or checkout.
   const body = scroll ? (
     <ScrollView
       ref={scrollRef}

@@ -522,6 +522,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: import('./models').PendingShiftReconciliation | null;
       };
+      get_shift_remittance_detail: {
+        Args: { p_shift_id: string };
+        Returns: import('./models').ShiftCloseReportDetail;
+      };
       report_branch_shift_remittances: {
         Args: {
           p_branch_id?: string | null;

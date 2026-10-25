@@ -85,19 +85,22 @@ export function PosViewOrderSheet({
           <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
         </View>
 
-        <View style={styles.buttonRow}>
-          <View style={styles.buttonCol}>
-            <ManagerActionButton
-              label="Confirm Order"
-              icon="checkmark-circle-outline"
-              disabled={items.length === 0}
-              onPress={onConfirm}
-            />
-          </View>
+        <View style={styles.actions}>
+          <ManagerActionButton
+            label="Confirm Order"
+            icon="checkmark-circle-outline"
+            disabled={items.length === 0}
+            onPress={onConfirm}
+          />
           {items.length > 0 ? (
-            <View style={styles.buttonCol}>
+            <View style={styles.clearBlock}>
+              <Text style={styles.clearHint}>
+                {confirmClear
+                  ? 'Tap again to remove every product from this order.'
+                  : 'Clear order removes every product. Nothing is sold.'}
+              </Text>
               <ManagerActionButton
-                label={confirmClear ? 'Confirm clear' : 'Clear order'}
+                label={confirmClear ? 'Clear order now' : 'Clear order'}
                 variant="secondary"
                 onPress={() => {
                   if (!confirmClear) {
@@ -110,9 +113,6 @@ export function PosViewOrderSheet({
               />
             </View>
           ) : null}
-        {confirmClear ? (
-          <Text style={styles.clearHint}>This removes every product from the unfinished order.</Text>
-        ) : null}
         </View>
       </View>
     </ManagerBottomSheet>
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   },
   totalMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14, flex: 1 },
   totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 21 },
-  buttonRow: { flexDirection: 'row', gap: 10 },
-  buttonCol: { flex: 1 },
+  actions: { gap: 10 },
+  clearBlock: { gap: 8 },
   clearHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
 });

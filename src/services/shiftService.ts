@@ -1,4 +1,5 @@
 import { getTodayRangeManila } from '@/lib/format';
+import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import type {
   PendingShiftReconciliation,
@@ -197,20 +198,66 @@ export async function listShiftWaste(
   return enrichWasteReportQuantities(report);
 }
 
+function missingRemittanceDetailRpc(error: unknown): boolean {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? '');
+  return code === 'PGRST202' || /could not find the function public\.get_shift_remittance_detail/i.test(message);
+}
+
+function cachedRemittanceRow(shiftId: string) {
+  const cached = queryClient.getQueriesData<ShiftRemittanceReport>({ queryKey: ['reports', 'shift-remittances'] });
+  for (const [, report] of cached) {
+    for (const day of report?.days ?? []) {
+      const found = day.shifts.find((row) => row.shift_id === shiftId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function asDetail(value: ShiftCloseReportDetail): ShiftCloseReportDetail {
+  return {
+    ...value,
+    inventory_reconciliation_required: Boolean(value.inventory_reconciliation_required),
+    reconciliation_required: Boolean(value.reconciliation_required),
+    expected_cash: Number(value.expected_cash),
+    actual_cash: value.actual_cash == null ? null : Number(value.actual_cash),
+    difference: value.difference == null ? null : Number(value.difference),
+    products: (value.products ?? []).map((row) => ({
+      ...row,
+      opening_quantity: Number(row.opening_quantity),
+      received_quantity: Number(row.received_quantity),
+      outgoing_quantity: Number(row.outgoing_quantity),
+      sold_quantity: Number(row.sold_quantity),
+      waste_quantity: Number(row.waste_quantity),
+      adjustment_quantity: Number(row.adjustment_quantity),
+      expected_remaining: Number(row.expected_remaining),
+      actual_remaining: Number(row.actual_remaining),
+      discrepancy: Number(row.discrepancy),
+      unsold_quantity: Number(row.unsold_quantity),
+      carried_quantity: Number(row.carried_quantity),
+      discrepancy_note: row.discrepancy_note ?? null,
+    })),
+  };
+}
+
 export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftCloseReportDetail> {
   if (!shiftId) throw new Error('Shift id is required.');
 
-  // Remittance RPC is security-definer (owner / main manager). Direct shifts SELECT is
-  // branch-scoped for managers, so identity comes from the remittance report row.
-  const remittance = await listShiftRemittances(null, 'all_time');
-  let remittanceRow: ShiftRemittanceReport['days'][number]['shifts'][number] | null = null;
-  for (const day of remittance.days ?? []) {
-    const found = day.shifts.find((row) => row.shift_id === shiftId);
-    if (found) {
-      remittanceRow = found;
-      break;
+  const direct = await supabase.rpc('get_shift_remittance_detail', { p_shift_id: shiftId });
+  if (!direct.error && direct.data) return asDetail(direct.data as ShiftCloseReportDetail);
+  if (direct.error && !missingRemittanceDetailRpc(direct.error)) throw direct.error;
+
+  // The by-id function is not on the server yet. Use the row already loaded for the list,
+  // then the full report. shifts SELECT is branch-scoped, so identity still comes from that report.
+  const remittanceRow = cachedRemittanceRow(shiftId) ?? await (async () => {
+    const remittance = await listShiftRemittances(null, 'all_time');
+    for (const day of remittance.days ?? []) {
+      const found = day.shifts.find((row) => row.shift_id === shiftId);
+      if (found) return found;
     }
-  }
+    return null;
+  })();
   if (!remittanceRow) throw new Error('Shift remittance not found.');
 
   const [{ data: cashRow, error: cashError }, { data: products, error: productsError }, { data: shiftMeta }] =

@@ -1,4 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -82,6 +83,7 @@ export default function ManagerProductListScreen() {
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [modeError, setModeError] = useState('');
   const [createNotice, setCreateNotice] = useState('');
+  const client = useQueryClient();
   const submittingRef = useRef(false);
   const editSubmittingRef = useRef(false);
   // Whether the open wizard has unsaved edits (reported by the wizard). Refs: read only when closing.
@@ -206,6 +208,7 @@ export default function ManagerProductListScreen() {
         setCreateNotice(notice);
         setFilter(active ? 'all' : 'inactive');
         setSearch('');
+        await client.invalidateQueries({ queryKey: ['products'] });
         createDirtyRef.current = false;
         setCreateOpen(false);
       })

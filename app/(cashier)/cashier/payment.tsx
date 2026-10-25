@@ -30,6 +30,7 @@ import {
 } from '@/features/pos/pricingPrograms';
 import { useActiveShift } from '@/hooks/useShifts';
 import { confirmAction } from '@/lib/confirmAction';
+import { getErrorMessage, getInventoryErrorMessage } from '@/lib/errors';
 import { formatMoney, makeIdempotencyKey } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { centsDecimal } from '@/lib/money';
@@ -92,8 +93,8 @@ export default function PaymentScreen() {
         return false;
       }
       return true;
-    } catch {
-      setValidation('Unable to refresh live stock. Retry before confirming.');
+    } catch (error) {
+      setValidation(getInventoryErrorMessage(error));
       return false;
     } finally {
       setStockChecking(false);
@@ -133,9 +134,17 @@ export default function PaymentScreen() {
           );
         }
         setPricesReady(true);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setPriceError('Unable to refresh current product prices. Retry before confirming.');
+          const mapped = getErrorMessage(error);
+          const raw = error instanceof Error ? error.message.trim() : '';
+          setPriceError(
+            mapped !== 'Something went wrong. Please try again.'
+              ? mapped
+              : raw && raw.length < 240
+                ? raw
+                : 'Unable to refresh current product prices. Retry before confirming.',
+          );
           setPricesReady(false);
         }
       }

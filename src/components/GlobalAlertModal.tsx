@@ -10,15 +10,14 @@ export function GlobalAlertModal() {
   const request = useAlertStore((state) => state.request);
   const dismiss = useAlertStore((state) => state.dismiss);
 
-  if (!request) return null;
-
   const handleConfirm = () => {
+    const current = request;
     dismiss();
-    if (request.kind === 'confirm') request.onConfirm();
+    if (current?.kind === 'confirm') current.onConfirm();
   };
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={dismiss}>
+    <Modal transparent animationType="fade" visible={request != null} onRequestClose={dismiss}>
       <View style={styles.overlay}>
         <Pressable
           accessibilityLabel="Dismiss"
@@ -26,6 +25,7 @@ export function GlobalAlertModal() {
           style={StyleSheet.absoluteFill}
           onPress={dismiss}
         />
+        {request ? (
         <View style={styles.card}>
           <Text style={styles.title}>{request.title}</Text>
           <Text style={styles.message}>{request.message}</Text>
@@ -42,6 +42,7 @@ export function GlobalAlertModal() {
             <ManagerActionButton label="OK" onPress={dismiss} />
           )}
         </View>
+        ) : null}
       </View>
     </Modal>
   );

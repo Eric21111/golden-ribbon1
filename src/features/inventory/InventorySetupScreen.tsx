@@ -1,6 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
@@ -16,7 +15,7 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
-import { managerColors, managerGradients } from '@/components/dashboard/theme';
+import { managerColors } from '@/components/dashboard/theme';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
@@ -61,17 +60,13 @@ export function InventorySetupScreen() {
   const [filter, setFilter] = useState<StockFilter>('all');
   const [sort, setSort] = useState<SortOption>('pending');
   const [sortOpen, setSortOpen] = useState(false);
-  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
-  const [bulkMode, setBulkMode] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkValue, setBulkValue] = useState('');
   const branches = useBranches();
   const mainBranch = branches.data?.find((branch) => branch.is_main_branch);
   // Include inactive products so newly created (inactive) items can receive opening stock.
   const inventory = useInventory(mainBranch, false);
   const mutation = useInitializeMainInventory();
-  const { control, handleSubmit, reset, getValues, watch, setValue, formState } = useForm<Values>({
+  const { control, handleSubmit, reset, getValues, watch, formState } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { items: [], notes: '' },
   });
@@ -82,25 +77,6 @@ export function InventorySetupScreen() {
   // list for lifetime "Not set" status instead.
   const completedCount = watchedItems.filter((item) => Number(item.quantity) > 0).length;
   const totalSelectedQuantity = watchedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  const indexByProductId = useMemo(() => new Map(fields.map((f, i) => [f.product_id, i])), [fields]);
-
-  const applyQuantityToIds = (ids: string[], value: string) => {
-    ids.forEach((id) => {
-      const index = indexByProductId.get(id);
-      if (index === undefined) return;
-      setValue(`items.${index}.quantity`, value, { shouldValidate: false, shouldDirty: true });
-    });
-  };
-
-  const toggleSelected = (id: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const refetchBranches = branches.refetch;
   const refetchInventory = inventory.refetch;
   useFocusEffect(
@@ -151,21 +127,6 @@ export function InventorySetupScreen() {
   }, [fields, itemsById, search, filter, sort]);
 
   const pagination = useClientPagination(displayIndexes, `${search}|${filter}|${sort}`, 10);
-
-  // Bulk actions act on everything matching the current search/filter, not just the current
-  // page — pagination is a rendering detail, not a scope limit on "visible" for this purpose.
-  const visibleProductIds = useMemo(() => displayIndexes.map((row) => row.field.product_id), [displayIndexes]);
-  const allVisibleSelected = visibleProductIds.length > 0 && visibleProductIds.every((id) => selectedIds.has(id));
-  const toggleSelectAllVisible = () => {
-    setSelectedIds((current) => {
-      if (allVisibleSelected) {
-        const next = new Set(current);
-        visibleProductIds.forEach((id) => next.delete(id));
-        return next;
-      }
-      return new Set([...current, ...visibleProductIds]);
-    });
-  };
 
   const totalCount = inventory.data?.length ?? 0;
 
@@ -290,8 +251,6 @@ export function InventorySetupScreen() {
                       {
                         onSuccess: () => {
                           setReview(null);
-                          setSelectedIds(new Set());
-                          setBulkValue('');
                           reset({
                             items: getValues('items').map((item) => ({ ...item, quantity: '' })),
                             notes: '',
@@ -337,32 +296,6 @@ export function InventorySetupScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          {totalCount > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open bulk actions"
-              onPress={() => {
-                if (!bulkMode) {
-                  setBulkMode(true);
-                  return;
-                }
-                setBulkSheetOpen(true);
-              }}
-              style={({ pressed }) => [styles.bulkTrigger, pressed && styles.pressed]}
-            >
-              <View style={styles.bulkTriggerLeft}>
-                <Ionicons name="layers-outline" size={18} color={managerColors.royalBlue} />
-                <Text style={styles.bulkTriggerLabel}>{bulkMode ? 'Apply bulk quantity' : 'Bulk actions'}</Text>
-                {selectedIds.size > 0 ? (
-                  <View style={styles.bulkCountPill}>
-                    <Text style={styles.bulkCountText}>{selectedIds.size} selected</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
-            </Pressable>
-          ) : null}
-
           {pagination.pageItems.map(({ field, index, item }) => {
             if (!item) return null;
             const initialized = item.updated_at !== null;
@@ -384,22 +317,6 @@ export function InventorySetupScreen() {
                     <View>
                       <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
                         <View style={styles.cardTop}>
-                          {bulkMode ? (
-                            <Pressable
-                              accessibilityRole="checkbox"
-                              accessibilityState={{ checked: selectedIds.has(item.product.id) }}
-                              accessibilityLabel={`Select ${item.product.name} for bulk actions`}
-                              hitSlop={8}
-                              onPress={() => toggleSelected(item.product.id)}
-                              style={styles.checkbox}
-                            >
-                              <Ionicons
-                                name={selectedIds.has(item.product.id) ? 'checkbox' : 'square-outline'}
-                                size={22}
-                                color={selectedIds.has(item.product.id) ? managerColors.royalBlue : managerColors.cardBorder}
-                              />
-                            </Pressable>
-                          ) : null}
                           <View style={styles.cardInfo}>
                             <Text style={styles.name} numberOfLines={2}>{item.product.name}</Text>
                             <Text style={styles.sku}>{item.product.sku}</Text>
@@ -519,119 +436,6 @@ export function InventorySetupScreen() {
           </View>
         ) : null}
       </View>
-
-      <ManagerBottomSheet visible={bulkSheetOpen} title="Bulk actions" onClose={() => setBulkSheetOpen(false)}>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: allVisibleSelected }}
-          onPress={toggleSelectAllVisible}
-          style={({ pressed }) => [styles.bulkHeaderRow, pressed && styles.pressed]}
-        >
-          <View style={styles.bulkSelectAll}>
-            <Ionicons
-              name={allVisibleSelected ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={allVisibleSelected ? managerColors.royalBlue : managerColors.subtext}
-            />
-            <Text style={styles.bulkSelectAllLabel}>
-              {allVisibleSelected ? 'Clear selection' : `Select all (${visibleProductIds.length})`}
-            </Text>
-          </View>
-          {selectedIds.size > 0 ? (
-            <View style={styles.bulkCountPill}>
-              <Text style={styles.bulkCountText}>{selectedIds.size} selected</Text>
-            </View>
-          ) : null}
-        </Pressable>
-
-        <View style={styles.bulkDivider} />
-
-        <View style={styles.bulkStepperPill}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Decrease bulk quantity"
-            hitSlop={8}
-            onPress={() => {
-              const current = Number.parseInt(bulkValue || '0', 10) || 0;
-              setBulkValue(String(Math.max(0, current - 1)));
-            }}
-            style={({ pressed }) => [styles.bulkStepperButton, pressed && styles.bulkStepperButtonPressed]}
-          >
-            <Text style={styles.bulkStepperSymbol}>−</Text>
-          </Pressable>
-          <TextInput
-            accessibilityLabel="Bulk quantity value"
-            value={bulkValue}
-            onChangeText={(value) => {
-              if (value === '' || /^\d{0,6}$/.test(value)) setBulkValue(value);
-            }}
-            keyboardType="number-pad"
-            placeholder="0"
-            placeholderTextColor={managerColors.subtext}
-            maxLength={PIECE_QUANTITY_MAX_LENGTH}
-            style={styles.bulkStepperInput}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Increase bulk quantity"
-            hitSlop={8}
-            onPress={() => {
-              const current = Number.parseInt(bulkValue || '0', 10) || 0;
-              setBulkValue(String(current + 1));
-            }}
-            style={({ pressed }) => [styles.bulkStepperButton, pressed && styles.bulkStepperButtonPressed]}
-          >
-            <Text style={styles.bulkStepperSymbol}>+</Text>
-          </Pressable>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            applyQuantityToIds(selectedIds.size > 0 ? [...selectedIds] : visibleProductIds, '0');
-            setBulkValue('');
-            setSelectedIds(new Set());
-            setBulkSheetOpen(false);
-          }}
-          style={({ pressed }) => [styles.bulkResetLink, pressed && styles.pressed]}
-        >
-          <Text style={styles.bulkResetLinkText}>
-            {selectedIds.size > 0 ? 'Reset selected to 0' : 'Reset all to 0'}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Apply quantity to selected products"
-          disabled={selectedIds.size === 0 || bulkValue === ''}
-          onPress={() => {
-            applyQuantityToIds([...selectedIds], bulkValue);
-            setBulkValue('');
-            setSelectedIds(new Set());
-            setBulkSheetOpen(false);
-          }}
-          style={({ pressed }) => [pressed && styles.pressed]}
-        >
-          {selectedIds.size === 0 || bulkValue === '' ? (
-            <View style={[styles.bulkApplyButton, styles.bulkApplyButtonDisabled]}>
-              <Ionicons name="checkmark-circle" size={18} color={managerColors.subtext} />
-              <Text style={[styles.bulkApplyButtonText, styles.bulkApplyButtonTextDisabled]}>
-                Select products to apply
-              </Text>
-            </View>
-          ) : (
-            <LinearGradient
-              colors={managerGradients.hero}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.bulkApplyButton}
-            >
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-              <Text style={styles.bulkApplyButtonText}>Apply to {selectedIds.size} selected</Text>
-            </LinearGradient>
-          )}
-        </Pressable>
-      </ManagerBottomSheet>
 
       <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
         <View style={styles.sortList}>
