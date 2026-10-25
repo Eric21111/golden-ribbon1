@@ -94,39 +94,51 @@ end $$;
 -- Bypass immutability triggers for this transaction only.
 set local session_replication_role = replica;
 
--- History and line items that reference sales, shifts, products, or profiles.
-delete from public.return_discrepancies;
-delete from public.transfer_discrepancies;
-delete from public.sale_items;
-delete from public.stock_transfer_items;
-delete from public.stock_return_items;
-delete from public.inventory_movements;
-delete from public.shift_waste_occurrences;
-delete from public.shift_product_reconciliations;
-delete from public.shift_product_close_baselines;
-delete from public.shift_product_opening_stock;
-delete from public.shift_reopen_events;
-
-delete from public.sales;
-delete from public.stock_transfers;
-delete from public.stock_returns;
-delete from public.shift_reconciliations;
-delete from public.shifts;
-
-delete from public.daily_product_sales_summary;
-delete from public.daily_branch_sales_summary;
-delete from public.data_archives;
-delete from public.audit_logs;
-
-delete from public.pcs_cutover_product_snapshots;
-delete from public.kg_meal_cutover_balance_snapshots;
-delete from public.branch_product_variants;
-delete from public.branch_products;
-delete from public.branch_inventory;
-delete from public.product_drink_choices;
-delete from public.product_stock_uses;
-delete from public.product_variants;
-delete from public.products;
+-- Child tables first. Skip any table this database does not have yet.
+do $$
+declare
+  t text;
+  tables text[] := array[
+    'public.return_discrepancies',
+    'public.transfer_discrepancies',
+    'public.sale_items',
+    'public.stock_transfer_items',
+    'public.stock_return_items',
+    'public.inventory_movements',
+    'public.shift_waste_occurrences',
+    'public.shift_product_reconciliations',
+    'public.shift_product_close_baselines',
+    'public.shift_product_opening_stock',
+    'public.shift_reopen_events',
+    'public.sales',
+    'public.stock_transfers',
+    'public.stock_returns',
+    'public.shift_reconciliations',
+    'public.shifts',
+    'public.daily_product_sales_summary',
+    'public.daily_branch_sales_summary',
+    'public.data_archives',
+    'public.audit_logs',
+    'public.pcs_cutover_product_snapshots',
+    'public.kg_meal_cutover_balance_snapshots',
+    'public.branch_product_variants',
+    'public.branch_products',
+    'public.branch_inventory',
+    'public.product_drink_choices',
+    'public.product_stock_uses',
+    'public.product_variants',
+    'public.products'
+  ];
+begin
+  foreach t in array tables loop
+    if to_regclass(t) is null then
+      raise notice 'Skipped missing table %', t;
+    else
+      execute format('delete from %s', t);
+      raise notice 'Cleared %', t;
+    end if;
+  end loop;
+end $$;
 
 -- Other employees first. profiles.branch_id blocks deletion of selling branches.
 delete from public.profiles
@@ -177,17 +189,34 @@ begin
     raise exception 'Wipe check failed: Auth users were not limited to the Owner and Main Branch Manager.';
   end if;
 
-  if (select count(*) from public.products) <> 0
-     or (select count(*) from public.sales) <> 0
-     or (select count(*) from public.shifts) <> 0
-     or (select count(*) from public.branch_inventory) <> 0
-     or (select count(*) from public.inventory_movements) <> 0 then
-    raise exception 'Wipe check failed: products, sales, shifts, or inventory remain.';
+  if to_regclass('public.products') is not null
+     and (select count(*) from public.products) <> 0 then
+    raise exception 'Wipe check failed: products remain.';
+  end if;
+  if to_regclass('public.sales') is not null
+     and (select count(*) from public.sales) <> 0 then
+    raise exception 'Wipe check failed: sales remain.';
+  end if;
+  if to_regclass('public.shifts') is not null
+     and (select count(*) from public.shifts) <> 0 then
+    raise exception 'Wipe check failed: shifts remain.';
+  end if;
+  if to_regclass('public.branch_inventory') is not null
+     and (select count(*) from public.branch_inventory) <> 0 then
+    raise exception 'Wipe check failed: inventory remains.';
+  end if;
+  if to_regclass('public.inventory_movements') is not null
+     and (select count(*) from public.inventory_movements) <> 0 then
+    raise exception 'Wipe check failed: inventory movements remain.';
   end if;
 
-  if (select count(*) from public.sale_pricing_program_settings) < 1
-     or (select count(*) from public.archive_settings) <> 1 then
-    raise exception 'Wipe check failed: app configuration rows were removed.';
+  if to_regclass('public.sale_pricing_program_settings') is not null
+     and (select count(*) from public.sale_pricing_program_settings) < 1 then
+    raise exception 'Wipe check failed: pricing settings were removed.';
+  end if;
+  if to_regclass('public.archive_settings') is not null
+     and (select count(*) from public.archive_settings) <> 1 then
+    raise exception 'Wipe check failed: archive settings were removed.';
   end if;
 end $$;
 
