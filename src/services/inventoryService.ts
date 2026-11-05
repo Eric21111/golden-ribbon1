@@ -69,8 +69,22 @@ export async function listInventory(branch: Branch, activeOnly = false): Promise
   });
 }
 
+/**
+ * Saved product categories by product id, for the category icons on cashier screens. The cashier RPCs do not return
+ * the category, but cashiers can read active products. Icons are decoration: if this read fails the lists still load
+ * and show the neutral "Category not set" indicator.
+ */
+export async function listCashierProductCategories(): Promise<Map<string, Product['product_category']>> {
+  const { data, error } = await supabase.from('products').select('id, product_category');
+  if (error || !data) return new Map();
+  return new Map((data as Array<Pick<Product, 'id' | 'product_category'>>).map((row) => [row.id, row.product_category]));
+}
+
 export async function listCashierPosInventory(): Promise<InventoryItem[]> {
-  const { data, error } = await supabase.rpc('list_cashier_pos_inventory');
+  const [{ data, error }, categories] = await Promise.all([
+    supabase.rpc('list_cashier_pos_inventory'),
+    listCashierProductCategories(),
+  ]);
   if (error) throw error;
 
   return ((data ?? []) as CashierPosInventoryRow[]).map((row) => {
@@ -91,6 +105,7 @@ export async function listCashierPosInventory(): Promise<InventoryItem[]> {
       sku: row.product_sku,
       description: null,
       selling_price: Number(row.selling_price),
+      product_category: categories.get(row.product_id) ?? null,
       is_active: true,
       inventory_mode: row.inventory_mode ?? 'piece_stock',
       closing_stock_behavior: 'keep_at_branch',
@@ -140,13 +155,19 @@ export type LocalPurchaseCatalogRow = {
   product_name: string;
   product_sku: string;
   quantity_on_hand: number;
+  /** Saved category, for the category icon. Not part of the RPC; added from the products table. */
+  product_category?: Product['product_category'];
 };
 
 export async function listCashierLocalPurchaseCatalog(): Promise<LocalPurchaseCatalogRow[]> {
-  const { data, error } = await supabase.rpc('list_cashier_local_purchase_catalog');
+  const [{ data, error }, categories] = await Promise.all([
+    supabase.rpc('list_cashier_local_purchase_catalog'),
+    listCashierProductCategories(),
+  ]);
   if (error) throw error;
   return ((data ?? []) as LocalPurchaseCatalogRow[]).map((row) => ({
     ...row,
+    product_category: categories.get(row.product_id) ?? null,
     quantity_on_hand: Number(row.quantity_on_hand),
   }));
 }

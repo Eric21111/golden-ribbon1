@@ -9,23 +9,13 @@ import { MIN_TOUCH_TARGET } from './touchTargets';
 
 const BORDER = '#D9DFEA';
 
-/** Small amber badge. One is shown per group of preview-only settings, not one per field. */
-export function PreviewPill() {
-  return (
-    <View style={styles.pill}>
-      <Text style={styles.pillText}>Not saved yet</Text>
-    </View>
-  );
-}
-
-/** Small uppercase group label for Step 1, with the preview badge on the right when the group is preview-only. */
-export function SectionHeader({ title, preview = false }: { title: string; preview?: boolean }) {
+/** Small uppercase group label for Step 1. */
+export function SectionHeader({ title }: { title: string }) {
   return (
     <View style={styles.header}>
       <Text accessibilityRole="header" style={styles.headerText}>
         {title}
       </Text>
-      {preview ? <PreviewPill /> : null}
     </View>
   );
 }
@@ -45,8 +35,10 @@ export function SettingsCard({ children }: { children: ReactNode }) {
 }
 
 /**
- * An on/off setting: a bold label, one short line under it, and the switch on the right. `info` adds an (i)
- * button that reveals a longer explanation under the row, so the row itself stays short.
+ * An on/off setting: a bold label, one short line under it, and the switch on the right. The switch says on/off by
+ * itself, so no Yes/No or Enabled/Disabled word sits beside it. `info` adds an (i) button that reveals a longer
+ * explanation under the row (closed until tapped), so the row itself stays short. `info.title` is the (i) button's
+ * spoken label only; it is not repeated inside the box. Blank lines in `info.body` start a new paragraph.
  */
 export function SettingRow({
   label,
@@ -54,15 +46,12 @@ export function SettingRow({
   value,
   onValueChange,
   info,
-  choice,
 }: {
   label: string;
   description?: string;
   value: boolean;
   onValueChange: (next: boolean) => void;
   info?: { title: string; body: string };
-  /** Words shown beside the switch, such as Enabled/Disabled or Yes/No. */
-  choice?: { on: string; off: string };
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
   return (
@@ -90,7 +79,6 @@ export function SettingRow({
           </View>
           {description ? <Text style={styles.rowDescription}>{description}</Text> : null}
         </View>
-        {choice ? <Text style={styles.choice}>{value ? choice.on : choice.off}</Text> : null}
         <Switch
           accessibilityLabel={label}
           onValueChange={onValueChange}
@@ -101,8 +89,11 @@ export function SettingRow({
       </View>
       {info && infoOpen ? (
         <View style={styles.tip}>
-          <Text style={styles.tipTitle}>{info.title}</Text>
-          <Text style={styles.tipBody}>{info.body}</Text>
+          {info.body.split('\n\n').map((paragraph) => (
+            <Text key={paragraph} style={styles.tipBody}>
+              {paragraph}
+            </Text>
+          ))}
         </View>
       ) : null}
     </View>
@@ -112,8 +103,6 @@ export function SettingRow({
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   headerText: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' },
-  pill: { backgroundColor: '#FEF3C7', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { color: '#92400E', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   card: {
     borderWidth: 1,
     borderColor: BORDER,
@@ -123,16 +112,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER },
-  row: { paddingVertical: 8 },
+  row: { paddingVertical: 10 },
   rowMain: { minHeight: MIN_TOUCH_TARGET + 8, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rowCopy: { flex: 1, minWidth: 0, gap: 1 },
+  rowCopy: { flex: 1, minWidth: 0, gap: 2 },
   labelLine: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   rowLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   rowDescription: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
-  choice: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   infoTouch: { width: MIN_TOUCH_TARGET - 8, height: MIN_TOUCH_TARGET - 8, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
-  tip: { backgroundColor: '#F2F6FF', borderWidth: 1, borderColor: '#D3E0FA', borderRadius: 12, padding: 12, gap: 4, marginBottom: 4 },
-  tipTitle: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  tip: { backgroundColor: '#F2F6FF', borderWidth: 1, borderColor: '#D3E0FA', borderRadius: 12, padding: 12, gap: 6, marginTop: 2, marginBottom: 6 },
   tipBody: { color: '#475467', fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
 });

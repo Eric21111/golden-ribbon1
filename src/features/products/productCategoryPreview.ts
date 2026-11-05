@@ -29,7 +29,7 @@ type CategoryConfigFields = {
   ingredientsLabel: string;
   showIngredients: boolean;
   /**
-   * Whether other inventory items (Rice, Egg, Browse all) can be added to the stock list. When false the list is
+   * Whether other inventory items (Rice, Egg, Add Stock Item) can be added to the stock list. When false the list is
    * only the product itself (e.g. 5 pcs of a snack), with no extra-item chips or picker.
    */
   allowOtherStock: boolean;
@@ -55,6 +55,12 @@ type CategoryConfigFields = {
    * it. A product sold at one price just removes the card. It is offered once and never added back.
    */
   startsWithOption: boolean;
+  /**
+   * Offer the "Use this product's stock / Use other stock items" choice above the stock list, with a preview of what one
+   * order deducts. Only Extras & Sides: a side is either its own stock (Fries) or borrows another item's (Extra Rice = Rice).
+   * It changes how the same list is edited, never what is saved.
+   */
+  stockModeChoice: boolean;
 };
 
 export type ProductCategoryConfig = CategoryConfigFields & { id: ProductCategory };
@@ -71,7 +77,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     noun: 'Variant',
     nameLabel: 'Variant name',
     namePlaceholder: 'e.g. With Rice',
-    ingredientsLabel: 'THIS MEAL USES',
+    ingredientsLabel: 'STOCK DEDUCTION',
     showIngredients: true,
     allowOtherStock: true,
     showDrinkChoice: true,
@@ -81,6 +87,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     productLevelStock: true,
     autoAddMainProduct: true,
     startsWithOption: true,
+    stockModeChoice: false,
   },
   {
     id: 'snacks',
@@ -90,9 +97,9 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     noun: 'Option',
     nameLabel: 'Option name',
     namePlaceholder: 'e.g. 3 pcs',
-    ingredientsLabel: 'THIS SNACK USES · OPTIONAL',
+    ingredientsLabel: 'STOCK DEDUCTION · OPTIONAL',
     showIngredients: true,
-    allowOtherStock: false, // a snack is just the snack: no Rice / Egg / Browse all
+    allowOtherStock: false, // a snack is just the snack: no Rice / Egg / Add Stock Item
     showDrinkChoice: false, // snacks have no drink choice
     showStatus: false,
     simpleEmpty: null,
@@ -100,6 +107,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     productLevelStock: true,
     autoAddMainProduct: true,
     startsWithOption: true,
+    stockModeChoice: false,
   },
   {
     id: 'drinks',
@@ -123,6 +131,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     productLevelStock: false,
     autoAddMainProduct: false,
     startsWithOption: false,
+    stockModeChoice: false,
   },
   {
     id: 'extras',
@@ -132,7 +141,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     noun: 'Option',
     nameLabel: 'Option name',
     namePlaceholder: 'e.g. Extra rice',
-    ingredientsLabel: 'STOCK USED PER ORDER · OPTIONAL',
+    ingredientsLabel: 'STOCK DEDUCTION',
     showIngredients: true,
     allowOtherStock: true,
     showDrinkChoice: false,
@@ -146,6 +155,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     productLevelStock: true,
     autoAddMainProduct: false,
     startsWithOption: false,
+    stockModeChoice: true,
   },
   {
     id: 'supplies',
@@ -169,6 +179,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     productLevelStock: false,
     autoAddMainProduct: false,
     startsWithOption: false,
+    stockModeChoice: false,
   },
 ];
 
@@ -186,7 +197,7 @@ export const UNSET_CATEGORY_CONFIG: ResolvedCategoryConfig = {
   noun: 'Variant',
   nameLabel: 'Variant name',
   namePlaceholder: 'Variant name',
-  ingredientsLabel: 'STOCK USED PER ORDER · OPTIONAL',
+  ingredientsLabel: 'STOCK DEDUCTION · OPTIONAL',
   showIngredients: true,
   allowOtherStock: true,
   showDrinkChoice: false,
@@ -196,6 +207,7 @@ export const UNSET_CATEGORY_CONFIG: ResolvedCategoryConfig = {
   productLevelStock: true,
   autoAddMainProduct: false,
   startsWithOption: false,
+  stockModeChoice: false,
 };
 
 /**

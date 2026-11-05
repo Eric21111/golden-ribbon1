@@ -89,7 +89,7 @@ const data = read('src/features/products/recipePreviewData.ts');
   // the stock list honours the flag in both places it is used (variant cards and the product-level list)
   assert.equal((editor.match(/mainOnly=\{!config\.allowOtherStock\}/g) ?? []).length, 2);
   assert.match(recipe, /const quickAddItems = mainOnly \? \[\] : getQuickAddItems/);
-  assert.match(recipe, /\{mainOnly \? null : \(\s*<Pressable[\s\S]*?Browse all/);
+  assert.match(recipe, /\{mainOnly \? null : \(\s*<Pressable[\s\S]*?Add Stock Item/);
   assert.match(recipe, /\{mainOnly \? null : \(\s*<InventoryItemPickerModal/);
   // hidden drink data never blocks a snack: validation only runs where the drink section is shown
   assert.match(create, /isDrinkChoiceVisible\(category, true\)/);
@@ -106,8 +106,8 @@ const data = read('src/features/products/recipePreviewData.ts');
   assert.equal(existsSync('src/features/products/InfoHeading.tsx'), false, 'replaced by the inline (i) on the row');
 
   for (const [name, src] of [['create', create], ['edit', edit]]) {
-    // one Setup group (preview-only: category + POS) and one Settings group (saved)
-    assert.match(src, /<SectionHeader title="How it's sold" preview \/>/, name);
+    // one group for category + POS and one for the other settings (all saved)
+    assert.match(src, /<SectionHeader title="Category & availability" \/>/, name);
     assert.match(src, /<SectionHeader title="Other settings" \/>/, name);
     assert.equal((src.match(/<SectionHeader /g) ?? []).length, 2, name + ': exactly two groups');
     // the old headings and dividers are gone
@@ -117,31 +117,81 @@ const data = read('src/features/products/recipePreviewData.ts');
     assert.match(src, /<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField[\s\S]*?<SectionHeader title="Other settings"[\s\S]*?<NonReturnableField/, name);
   }
   const status = read('src/features/products/ProductStatusField.tsx');
-  assert.match(status, /label="Product Status"/);
-  assert.match(status, /choice=\{\{ on: 'Enabled', off: 'Disabled' \}\}/);
+  assert.match(status, /label="Enable Product"/);
+  assert.doesNotMatch(status + pos, /choice=/, 'no Yes/No or Enabled/Disabled word beside the switches');
+  assert.doesNotMatch(layout, /styles\.choice|choice\?:/);
   assert.match(edit, /<ProductStatusField value=\{isActive\} onChange=\{setIsActive\} \/>/);
   assert.match(create, /<ProductStatusField value=\{enabledChoice\} onChange=\{changeEnabled\} \/>/);
   assert.doesNotMatch(edit, /opening stock/);
   assert.doesNotMatch(edit, /canActivate/);
 
-  // the preview badge exists once, in the shared layout, and not on each field
-  assert.equal((layout.match(/Not saved yet/g) ?? []).length, 1);
+  // no "Not saved yet" badge anywhere in Step 1: everything on it is saved
+  assert.doesNotMatch(layout, /Not saved yet|pillText|PreviewPill/);
   for (const src of [pos, category]) assert.doesNotMatch(src, /Not saved yet|pillText/);
   assert.doesNotMatch(pos, /POS availability'|>POS availability</, 'no heading repeating the switch label');
 
   // short one-line copy
-  assert.match(pos, /description="Off keeps it for stock and meals only\."/);
+  assert.match(pos, /label="Show in Cashier POS"/);
+  assert.match(pos, /description="Show this product on the cashier menu\."/);
   assert.match(category, /Choose what kind of product this is\./);
-  assert.match(nonReturnable, /description="Unsold stock stays at the branch\."/);
+  assert.match(nonReturnable, /description="Keep leftover stock instead of returning it to Main\."/);
   assert.doesNotMatch(nonReturnable, /Return Policy/);
   // the long explanation lives behind the (i), not on the row
   assert.match(nonReturnable, /info=\{\{/);
   assert.match(layout, /info && infoOpen/);
 
   // the saved flag is unchanged: same switch, same label, still the value that is saved
-  assert.match(nonReturnable, /label="Non-returnable"/);
+  assert.match(nonReturnable, /label="Keep Unsold Stock at Branch"/);
   assert.match(layout, /accessibilityLabel=\{label\}/, 'switches stay labelled for screen readers');
   assert.match(layout, /MIN_TOUCH_TARGET/);
+}
+
+// ---- the three renamed settings use their new names everywhere a person can read them (code strings, not comments)
+{
+  const OLD_LABELS = /Sell Separately|Sell in POS|Sold in POS|Product Status|Non-returnable|non-returnable items|marked non-returnable|Product status/;
+  const walk = (dir, out = []) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const file = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(file, out);
+      else if (/\.(ts|tsx)$/.test(entry.name)) out.push(file);
+    }
+    return out;
+  };
+  for (const file of [...walk('app'), ...walk('src')]) {
+    const lines = read(file).split('\n');
+    lines.forEach((line, index) => {
+      const code = line.trim();
+      if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return;
+      // errors.ts matches the database's own message text, which cannot change without editing an old migration
+      if (file.endsWith('errors.ts') && code.includes("includes('not marked non-returnable')")) return;
+      assert.doesNotMatch(line, OLD_LABELS, `${file}:${index + 1} still shows an old label`);
+    });
+  }
+  // the helper lines and the info boxes (the wording is checked against PGlite in product_setting_helper_rules.mjs)
+  const fieldSrc = (name) => read(`src/features/products/${name}.tsx`);
+  const layout = fieldSrc('StepOneLayout');
+  const pos2 = fieldSrc('PosAvailabilityField');
+  const keep2 = fieldSrc('NonReturnableField');
+  const status2 = fieldSrc('ProductStatusField');
+  assert.match(pos2, /description="Show this product on the cashier menu\."/);
+  assert.match(keep2, /description="Keep leftover stock instead of returning it to Main\."/);
+  assert.match(status2, /description="Allow sales, transfers, and local purchases\."/);
+  // rules and exceptions kept: branch price + enabled; stock/transfers/meal options when off; returns, shift close, older products
+  assert.match(pos2, /Available for separate sale when enabled and priced at the branch\./);
+  assert.match(pos2, /can still be used for stock, transfers, and meal options when eligible\./);
+  assert.match(keep2, /It cannot be returned to Main and is eligible for local purchases\./);
+  assert.match(keep2, /Turning Off allows returns and changes the shift-close behavior when switching from On\. Existing products may have different closing settings\./);
+  assert.match(status2, /Stops new sales, transfers, and local purchases\. A disabled drink is not offered as a meal drink\. Existing stock and sales history remain unchanged\./);
+  // the setting name is not repeated inside its own box: the title is only the (i) button's spoken label
+  assert.doesNotMatch(layout, /tipTitle|>\s*\{info\.title\}/);
+  assert.match(layout, /accessibilityLabel=\{info\.title\}/);
+  assert.match(layout, /info\.body\.split\('\\n\\n'\)/, 'blank lines in the body make separate paragraphs');
+  assert.match(layout, /useState\(false\)/, 'info boxes start collapsed');
+  for (const [src, label] of [[pos2, 'Show in Cashier POS'], [keep2, 'Keep Unsold Stock at Branch'], [status2, 'Enable Product']]) {
+    assert.doesNotMatch(src.slice(src.indexOf('body:')), new RegExp(label), `${label}: not repeated in its own info text`);
+    assert.match(src, new RegExp(`title: '${label}'`), `${label}: the (i) button is labelled with the setting`);
+  }
+  assert.match(read('app/(cashier)/cashier/local-purchase.tsx'), /Only enabled products set to Keep Unsold Stock at Branch/);
 }
 
 console.log('wizard_cleanup: ALL PASS');

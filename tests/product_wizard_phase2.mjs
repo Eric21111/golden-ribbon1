@@ -18,7 +18,6 @@ import {
   MAIN_PRODUCT_ITEM_ID,
   PRODUCT_STOCK_KEY,
   buildDraftSnapshot,
-  getUnsavedPreviewItems,
   shouldOfferFirstOption,
   shouldSeedProductStock,
   withoutDefaultProductStock,
@@ -53,10 +52,6 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   assert.equal(unset.autoAddMainProduct, false, 'nothing is auto-added to existing products');
   assert.equal(unset.simpleEmpty, null);
 
-  // "unset" is the baseline, so it is not reported as a preview setting; choosing a category is
-  const base = { category: 'unset', defaultCategory: 'unset', recipes: {}, drinks: {} };
-  assert.deepEqual(getUnsavedPreviewItems(base), []);
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, category: 'snacks' }), ['Product Category']);
   // and an unchanged form is not dirty
   const snap = (category) => buildDraftSnapshot({ name: 'Beef Curry', category });
   assert.equal(snap('unset'), snap('unset'));
@@ -70,9 +65,9 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   assert.doesNotMatch(createSrc, /allowUnset/);
   assert.match(fieldSrc, /label: 'Category not set'/);
   assert.match(fieldSrc, /Choose what kind of product this is\./);
-  // the preview badge is shown once for the whole Setup group (category + POS), not per field
-  assert.match(editSrc, /<SectionHeader title="How it's sold" preview \/>/, 'the category stays marked as preview-only');
-  assert.match(createSrc, /<SectionHeader title="How it's sold" preview \/>/);
+  // the category is saved, so its group no longer carries a "Not saved yet" badge
+  assert.match(editSrc, /<SectionHeader title="Category & availability" \/>/);
+  assert.match(createSrc, /<SectionHeader title="Category & availability" \/>/);
   assert.match(editorSrc, /Category not set\. Pick one in Step 1 to set up drink options\./);
 
   // existing variants/prices are untouched by the unset layout: variants are always listed, never hidden
@@ -146,7 +141,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   // picker can list drinks, and the raw recipe map is not part of the saved values.
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
-    const end = src.indexOf('      pricing,', start);
+    // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
+    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
     const block = src.slice(start, end);
     assert.ok(!block.includes('PRODUCT_STOCK_KEY'), `${name}: saved values must not include PRODUCT_STOCK_KEY`);
     assert.match(block, /productCategory:/, `${name}: category is saved for the stock and drink pickers`);
@@ -179,7 +175,6 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
     assert.match(src, /setStep\(simpleFlow \? 3 : 2\)/);
     // Phase 1 safeguards still in place
     assert.match(src, /onDirtyChange\?\.\(isDirty\)/);
-    assert.match(src, /buildPreviewNotice/);
   }
   assert.match(indexSrc, /onClose=\{requestCloseCreate\}/);
   assert.match(indexSrc, /onClose=\{requestCloseEdit\}/);
@@ -199,9 +194,9 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   // which categories open on an option card, and the wording
   for (const id of ['meals', 'snacks']) assert.equal(getCategoryConfig(id).startsWithOption, true, `${id}: opens on an option card`);
   for (const id of ['drinks', 'extras', 'supplies', 'unset']) assert.equal(getCategoryConfig(id).startsWithOption, false, `${id}: unchanged`);
-  assert.equal(getCategoryConfig('meals').ingredientsLabel, 'THIS MEAL USES');
-  assert.equal(getCategoryConfig('snacks').ingredientsLabel, 'THIS SNACK USES · OPTIONAL');
-  assert.equal(getCategoryConfig('extras').ingredientsLabel, 'STOCK USED PER ORDER · OPTIONAL', 'Extras keeps its own label');
+  assert.equal(getCategoryConfig('meals').ingredientsLabel, 'STOCK DEDUCTION', 'one name for the section in every category');
+  assert.equal(getCategoryConfig('snacks').ingredientsLabel, 'STOCK DEDUCTION · OPTIONAL', 'snacks keep their optional suffix');
+  assert.equal(getCategoryConfig('extras').ingredientsLabel, 'STOCK DEDUCTION', 'Extras names the section by what it does');
   assert.equal(getCategoryConfig('meals').emptyBody, 'Skip this step if the product has a single price.');
 
   // the rule: only a brand-new, option-free product, and only once
@@ -239,7 +234,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   // nothing about this reaches the saved values
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
-    const end = src.indexOf('      pricing,', start);
+    // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
+    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
     const block = src.slice(start, end);
     for (const forbidden of ['startsWithOption', 'firstOption', 'shownName']) {
       assert.ok(!block.includes(forbidden), `${name}: saved values must not include ${forbidden}`);

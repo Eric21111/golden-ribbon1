@@ -31,8 +31,9 @@ const code = migrationSrc.replace(/--[^\n]*/g, '');
   assert.match(code, /revoke all on function public\.normalize_product_stock_uses\(jsonb\) from public, anon, authenticated;/);
   assert.match(code, /revoke all on function public\.apply_product_stock_uses\(uuid, jsonb\) from public, anon, authenticated;/);
   // later migrations may redefine confirm_sale (the variant mapping fix does) but must not touch the product RPCs again unnoticed
-  // (the one known follow-up is Drink Choice, which adds p_drink_choices and has its own tests)
-  const KNOWN_FOLLOW_UPS = ['20261024100000_save_product_drink_choices.sql'];
+  // (known follow-ups: Drink Choice, which adds p_drink_choices, and edit_product_keeps_branch_availability, which only stops the
+  // branch upserts from forcing is_active = true; each has its own tests)
+  const KNOWN_FOLLOW_UPS = ['20261024100000_save_product_drink_choices.sql', '20261027100000_edit_product_keeps_branch_availability.sql', '20261028100000_update_complete_product_lock_order.sql']; // the last two: edit_product_atomic_availability.mjs
   for (const later of readdirSync('supabase/migrations').filter((f) => f > MIGRATION && !KNOWN_FOLLOW_UPS.includes(f))) {
     const text = readFileSync(`supabase/migrations/${later}`, 'utf8').replace(/--[^\n]*/g, '');
     assert.doesNotMatch(text, /function public\.(create|update)_complete_product/i, `${later} redefines a product RPC`);

@@ -1,7 +1,9 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { managerColors } from '@/components/dashboard/theme';
+import { GlyphIcon } from '@/components/GlyphIcon';
+import { managerColors, statChipColors } from '@/components/dashboard/theme';
+import { getCategoryIndicator } from '@/features/products/productCategoryIndicator';
 import { formatMoney, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
@@ -23,11 +25,18 @@ function priceLabel(item: InventoryItem): string {
 
 export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProps) {
   const outOfStock = item.quantity_on_hand === 0;
+  const indicator = getCategoryIndicator(item.product.product_category);
+  const tint = statChipColors[indicator.color];
 
   const content = (
     <View style={styles.row}>
-      <View style={[styles.iconChip, outOfStock && styles.iconChipOut]}>
-        <Ionicons name="fast-food-outline" size={19} color={outOfStock ? managerColors.subtext : managerColors.royalBlue} />
+      <View
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={indicator.label}
+        style={[styles.iconChip, { backgroundColor: tint.chip }, outOfStock && styles.iconChipOut]}
+      >
+        <GlyphIcon name={indicator.icon} size={19} color={outOfStock ? managerColors.subtext : tint.icon} />
       </View>
       <View style={styles.body}>
         <View style={styles.line1}>
@@ -96,7 +105,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EAF0FB',
   },
   iconChipOut: { backgroundColor: managerColors.cardBorder },
   body: { flex: 1, minWidth: 0, gap: 4 },

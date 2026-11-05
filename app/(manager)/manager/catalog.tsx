@@ -7,15 +7,26 @@ import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
+import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import {
+  buildCatalogRows,
+  catalogEmptyState,
+  catalogSummary,
+  posLines,
+  type CatalogRow,
+} from '@/features/products/branchCatalogRows';
+import { categoryLabelOf } from '@/features/products/productFilters';
 import { useBranches } from '@/hooks/useBranches';
-import { useBranchProducts } from '@/hooks/useBranchProducts';
+import { useBranchProducts, useBranchVariantsForBranch } from '@/hooks/useBranchProducts';
 import { useClientPagination } from '@/hooks/useClientPagination';
-import { useProducts } from '@/hooks/useProducts';
+import { useProductIdsWithOptions, useProducts } from '@/hooks/useProducts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 
@@ -27,6 +38,53 @@ const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
   { label: 'Price (Low to High)', value: 'price-asc' },
   { label: 'Price (High to Low)', value: 'price-desc' },
 ];
+
+/** The whole card read out loud: name, price, whether it is in the cashier POS, then why not / what is off. */
+function spokenCard(row: CatalogRow, branchName: string): string {
+  const blockers = row.badges.map((badge) => badge.label.toLowerCase());
+  return [row.product.name, row.priceText, `listed at ${branchName}`, row.inPos ? 'in POS' : 'not in POS', ...blockers].join(', ');
+}
+
+function CatalogDetails({ row, branchName }: { row: CatalogRow; branchName: string }) {
+  return (
+    <View style={styles.detail}>
+      <View style={styles.detailHead}>
+        <CategoryIcon category={row.product.product_category} size={28} />
+        <View style={styles.detailHeadCopy}>
+          <Text style={styles.detailName}>{row.product.name}</Text>
+          <Text style={styles.meta}>
+            {row.product.sku} · {categoryLabelOf(row.product) ?? 'Category not set'}
+          </Text>
+        </View>
+      </View>
+      <SummaryCard
+        rows={[
+          { label: 'Branch', value: branchName },
+          { label: row.options.length > 0 ? 'Price range' : 'Branch price', value: row.priceText, emphasis: true },
+          { label: 'Product', value: row.product.is_active ? 'Enabled' : 'Disabled', tone: row.product.is_active ? undefined : 'warning' },
+          { label: 'Show in Cashier POS', value: row.product.sell_in_pos === false ? 'Off (stock only)' : 'On', tone: row.product.sell_in_pos === false ? 'warning' : undefined },
+          { label: 'Cashier menu', value: row.inPos ? 'In POS' : 'Not in POS', tone: row.inPos ? undefined : 'warning' },
+        ]}
+      />
+      {row.options.length > 0 ? (
+        <SummaryCard
+          title={`Options at ${branchName}`}
+          rows={row.options.map((option) => ({
+            label: option.name,
+            value: option.active ? formatMoney(option.price) : `${formatMoney(option.price)} · off`,
+            tone: option.active ? undefined : 'warning',
+          }))}
+        />
+      ) : null}
+      {posLines(row, branchName).map((line) => (
+        <Text key={line} style={styles.detailLine}>
+          {line}
+        </Text>
+      ))}
+      <Text style={styles.note}>Read only. Change prices and product settings in Products.</Text>
+    </View>
+  );
+}
 
 export default function BranchCatalogScreen() {
   const branches = useBranches();
@@ -40,45 +98,43 @@ export default function BranchCatalogScreen() {
   const [sort, setSort] = useState<SortOption>('name-asc');
   const [sortOpen, setSortOpen] = useState(false);
   const catalog = useBranchProducts(branchId, false);
+  const branchVariants = useBranchVariantsForBranch(branchId);
+  const productIdsWithOptions = useProductIdsWithOptions();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const branchName = sellingBranches.find((branch) => branch.id === branchId)?.name ?? 'this branch';
 
   useEffect(() => {
     if (!branchId && sellingBranches[0]) setBranchId(sellingBranches[0].id);
   }, [branchId, sellingBranches]);
 
   const visibleRows = useMemo(() => {
-    const byId = new Map((catalog.data ?? []).map((row) => [row.product_id, row]));
     const term = search.trim().toLowerCase();
-    const rows = (products.data ?? [])
-      .filter((product) => {
-        const entry = byId.get(product.id);
-        if (!entry?.is_active) return false;
-        if (!term) return true;
-        return `${product.name} ${product.sku}`.toLowerCase().includes(term);
-      })
-      .map((product) => ({
-        product,
-        entry: byId.get(product.id)!,
-      }));
+    const rows = buildCatalogRows(products.data ?? [], catalog.data ?? [], branchVariants.data ?? [], productIdsWithOptions.data ?? []).filter(
+      (row) => !term || `${row.product.name} ${row.product.sku}`.toLowerCase().includes(term),
+    );
 
     return rows.sort((a, b) => {
       switch (sort) {
         case 'name-desc':
           return b.product.name.localeCompare(a.product.name);
         case 'price-asc':
-          return a.entry.selling_price - b.entry.selling_price;
+          return a.lowPrice - b.lowPrice;
         case 'price-desc':
-          return b.entry.selling_price - a.entry.selling_price;
+          return b.lowPrice - a.lowPrice;
         default:
           return a.product.name.localeCompare(b.product.name);
       }
     });
-  }, [catalog.data, products.data, search, sort]);
+  }, [catalog.data, branchVariants.data, productIdsWithOptions.data, products.data, search, sort]);
+
+  const selected = visibleRows.find((row) => row.product.id === selectedId) ?? null;
 
   const pagination = useClientPagination(visibleRows, `${branchId}|${search}|${sort}`, 10);
 
   const loading =
-    branches.isLoading || products.isLoading || (Boolean(branchId) && catalog.isLoading);
-  const loadError = branches.error ?? products.error ?? catalog.error;
+    branches.isLoading || products.isLoading || (Boolean(branchId) && (catalog.isLoading || branchVariants.isLoading)) ||
+    productIdsWithOptions.isLoading;
+  const loadError = branches.error ?? products.error ?? catalog.error ?? branchVariants.error ?? productIdsWithOptions.error;
 
   return (
     <MainBranchGuard>
@@ -117,9 +173,14 @@ export default function BranchCatalogScreen() {
           ) : null}
 
           {sellingBranches.length > 0 && !loading && !loadError ? (
-            <Text style={styles.summary}>
-              {visibleRows.length} {visibleRows.length === 1 ? 'product' : 'products'}
-            </Text>
+            <View style={styles.summaryBlock}>
+              <Text accessibilityLiveRegion="polite" style={styles.summary}>
+                {catalogSummary(visibleRows, branchName)}
+              </Text>
+              <Text style={styles.note}>
+                Listed means priced at this branch. "In POS" means it is on the cashier menu, which does not guarantee stock or recipe ingredients. Stock levels are not shown here.
+              </Text>
+            </View>
           ) : null}
 
           {loadError ? (
@@ -129,6 +190,8 @@ export default function BranchCatalogScreen() {
                 void branches.refetch();
                 void products.refetch();
                 void catalog.refetch();
+                void branchVariants.refetch();
+                void productIdsWithOptions.refetch();
               }}
             />
           ) : loading ? (
@@ -144,16 +207,7 @@ export default function BranchCatalogScreen() {
               keyExtractor={(row) => row.product.id}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              ListEmptyComponent={
-                <EmptyState
-                  title="No available products"
-                  message={
-                    search.trim()
-                      ? 'Try another name or SKU.'
-                      : 'Send stock or set a branch price from Products to make items available here.'
-                  }
-                />
-              }
+              ListEmptyComponent={<EmptyState {...catalogEmptyState(branchName, Boolean(search.trim()))} />}
               ListFooterComponent={
                 pagination.showPagination ? (
                   <View style={styles.pager}>
@@ -166,15 +220,32 @@ export default function BranchCatalogScreen() {
                 ) : null
               }
               renderItem={({ item }) => (
-                <View style={styles.card}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={spokenCard(item, branchName)}
+                  accessibilityHint="Opens branch details"
+                  onPress={() => setSelectedId(item.product.id)}
+                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                >
                   <View style={styles.row}>
+                    <CategoryIcon category={item.product.product_category} size={22} />
                     <Text style={styles.name} numberOfLines={2}>
                       {item.product.name}
                     </Text>
-                    <Text style={styles.priceValue}>{formatMoney(item.entry.selling_price)}</Text>
+                    <Text style={styles.priceValue}>{item.priceText}</Text>
                   </View>
-                  <Text style={styles.meta}>{item.product.sku}</Text>
-                </View>
+                  <Text style={styles.meta}>
+                    {item.product.sku}
+                    {item.options.length > 0 ? ` · ${item.activeOptionCount} ${item.activeOptionCount === 1 ? 'option' : 'options'}` : ''}
+                  </Text>
+                  {item.badges.length > 0 ? (
+                    <View style={styles.badges}>
+                      {item.badges.map((badge) => (
+                        <ManagerBadge key={badge.key} label={badge.label} tone={badge.tone} />
+                      ))}
+                    </View>
+                  ) : null}
+                </Pressable>
               )}
             />
           )}
@@ -210,6 +281,10 @@ export default function BranchCatalogScreen() {
             })}
           </View>
         </ManagerBottomSheet>
+
+        <ManagerBottomSheet visible={selected != null} title={`Listed at ${branchName}`} scroll onClose={() => setSelectedId(null)}>
+          {selected ? <CatalogDetails row={selected} branchName={branchName} /> : null}
+        </ManagerBottomSheet>
       </Screen>
     </MainBranchGuard>
   );
@@ -232,7 +307,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.75 },
+  summaryBlock: { gap: 2 },
   summary: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  note: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  detail: { gap: 12 },
+  detailHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  detailHeadCopy: { flex: 1, gap: 2 },
+  detailName: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
+  detailLine: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   list: { paddingBottom: 24, flexGrow: 1 },
   separator: { height: 10 },
   pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
@@ -252,7 +335,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   name: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  priceValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  priceValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15, flexShrink: 0 },
   sortList: { gap: 8, paddingBottom: 8 },
   sortRow: {
     minHeight: 52,

@@ -1,7 +1,7 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -27,11 +27,19 @@ import {
   type BranchPricingDraft as EditBranchPricingDraft,
   type EditProductValues,
 } from '@/features/products/EditProductWizard';
+import { ProductFilterButton, ProductFilterSummary, ProductFiltersSheet } from '@/features/products/ProductFilterControls';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import type { KeepOff } from '@/features/products/branchPricingEdit';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import {
-  PRODUCT_FILTER_CHOICES,
-  matchesProductFilter,
+  CATEGORY_CHIP_CHOICES,
+  DEFAULT_PRODUCT_FILTERS,
+  countActiveFilters,
+  countSheetFilters,
+  matchesProductFilters,
+  productRowText,
   productFilterEmptyMessage,
-  type ProductFilter,
+  type ProductListFilters,
 } from '@/features/products/productFilters';
 import { useBranches } from '@/hooks/useBranches';
 import { useProductBranchPrices, useProductBranchVariantPrices } from '@/hooks/useBranchProducts';
@@ -49,9 +57,9 @@ import {
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { confirmAction } from '@/lib/confirmAction';
-import { closingStockBehaviorLabel } from '@/lib/format';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
+import { configureBranchProducts, configureBranchProductVariants } from '@/services/branchProductService';
 import { setProductCategory, setProductNonReturnable, setProductSellInPos, setProductStatus } from '@/services/productService';
 import type { Product } from '@/types/models';
 
@@ -64,6 +72,19 @@ function compareSellingPrice(a: Product, b: Product): number {
 
 type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc';
 
+// Category chips carry the same icon as the rows. "All" is not a category, so it has none.
+const CATEGORY_CHIPS = CATEGORY_CHIP_CHOICES.map((choice) => ({
+  ...choice,
+  leading:
+    choice.value === 'all' ? undefined : (
+      <CategoryIcon category={choice.value === 'unset' ? null : choice.value} size={18} decorative />
+    ),
+}));
+
+const DEFAULT_SORT: SortOption = 'name-asc';
+// Side padding of the screen column; the category chip row runs out to the screen edges by this much.
+const COLUMN_PADDING = 20;
+
 const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
   { label: 'Name (A–Z)', value: 'name-asc' },
   { label: 'Name (Z–A)', value: 'name-desc' },
@@ -72,9 +93,13 @@ const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
 ];
 
 export default function ManagerProductListScreen() {
+  // With large system text the card body gets narrow (the badge and the chevron grow too), so a long name may take a third line.
+  const { fontScale } = useWindowDimensions();
+  const titleLines = fontScale > 1.15 ? 3 : 2;
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<ProductFilter>('all');
-  const [sort, setSort] = useState<SortOption>('name-asc');
+  const [filters, setFilters] = useState<ProductListFilters>(DEFAULT_PRODUCT_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState<SortOption>(DEFAULT_SORT);
   const [sortOpen, setSortOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createKey, setCreateKey] = useState(0);
@@ -112,6 +137,7 @@ export default function ManagerProductListScreen() {
         id: product.id,
         name: product.name,
         sellInPos: product.sell_in_pos !== false,
+        isActive: product.is_active,
         category: product.product_category ?? null,
       })),
     [allProducts.data],
@@ -120,7 +146,7 @@ export default function ManagerProductListScreen() {
   const editBranchVariantPrices = useProductBranchVariantPrices(editProduct?.id ?? '');
 
   const filtered = useMemo(() => {
-    const rows = (query.data ?? []).filter((product) => matchesProductFilter(product.is_active, filter));
+    const rows = (query.data ?? []).filter((product) => matchesProductFilters(product, filters));
     return [...rows].sort((a, b) => {
       switch (sort) {
         case 'name-desc':
@@ -133,9 +159,19 @@ export default function ManagerProductListScreen() {
           return a.name.localeCompare(b.name);
       }
     });
-  }, [query.data, filter, sort]);
+  }, [query.data, filters, sort]);
 
-  const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}`, 10);
+  const pagination = useClientPagination(
+    filtered,
+    `${search}|${filters.status}|${filters.category}|${filters.pos}|${filters.returns}|${sort}`,
+    10,
+  );
+
+  const anyFilterOn = countActiveFilters(filters) > 0;
+  const clearAll = () => {
+    setFilters(DEFAULT_PRODUCT_FILTERS);
+    setSearch('');
+  };
 
   const existingSkus = skuQuery.data ?? [];
   const branchOptions = useMemo(
@@ -143,10 +179,7 @@ export default function ManagerProductListScreen() {
     [sellingBranches],
   );
 
-  const empty =
-    filter === 'all' && !search.trim()
-      ? productFilterEmptyMessage('all', false, true)
-      : productFilterEmptyMessage(filter, Boolean(search.trim()), true);
+  const empty = productFilterEmptyMessage(filters.status, Boolean(search.trim()), true, anyFilterOn);
 
   const submitCreate = (values: CreateProductValues, catalogDrafts: BranchPricingDraft[]) => {
     if (!tryBeginSubmit(submittingRef)) return;
@@ -184,7 +217,7 @@ export default function ManagerProductListScreen() {
           try {
             await setProductNonReturnable(product.id, true);
           } catch {
-            notice = 'Created. Non-returnable was not saved. Edit the product to retry.';
+            notice = 'Created. Keep Unsold Stock at Branch was not saved. Edit the product to retry.';
           }
         }
         if (values.productCategory !== 'unset') {
@@ -201,12 +234,12 @@ export default function ManagerProductListScreen() {
             active = updated.is_active;
           } catch {
             notice = notice
-              ? `${notice} Product Status was not saved.`
-              : 'Created. Product Status was not saved, so it stays disabled.';
+              ? `${notice} Enable Product was not saved.`
+              : 'Created. Enable Product was not saved, so it stays disabled.';
           }
         }
         setCreateNotice(notice);
-        setFilter(active ? 'all' : 'inactive');
+        setFilters({ ...DEFAULT_PRODUCT_FILTERS, status: active ? 'all' : 'inactive' });
         setSearch('');
         await client.invalidateQueries({ queryKey: ['products'] });
         createDirtyRef.current = false;
@@ -215,7 +248,7 @@ export default function ManagerProductListScreen() {
       .catch((error: unknown) => {
         const message = getProductErrorMessage(error);
         if (message.toLowerCase().includes('sku')) {
-          setFilter('all');
+          setFilters(DEFAULT_PRODUCT_FILTERS);
           setSearch(values.sku);
         }
         void message;
@@ -226,7 +259,7 @@ export default function ManagerProductListScreen() {
       });
   };
 
-  const submitEdit = (values: EditProductValues, catalogDrafts: EditBranchPricingDraft[]) => {
+  const submitEdit = (values: EditProductValues, catalogDrafts: EditBranchPricingDraft[], keepOff: KeepOff[]) => {
     if (!editProduct) return;
     if (!tryBeginSubmit(editSubmittingRef)) return;
     setIsEditSubmitting(true);
@@ -276,6 +309,38 @@ export default function ManagerProductListScreen() {
             await setProductCategory(productId, values.productCategory);
           } catch {
             setCreateNotice('Saved. Category was not saved, so it may not show under Drinks.');
+          }
+        }
+        // Saving a branch switches its product and options back on. Whatever was switched off there is switched off again with the
+        // existing branch functions. If one fails the branch is named, because those options may be on until it is fixed.
+        if (keepOff.length > 0) {
+          const failed: string[] = [];
+          for (const entry of keepOff) {
+            try {
+              if (entry.productOff) {
+                await configureBranchProducts(entry.branchId, [
+                  { product_id: productId, selling_price: Number(entry.productPrice), is_active: false },
+                ]);
+              }
+              if (entry.offOptions.length > 0) {
+                await configureBranchProductVariants(
+                  entry.branchId,
+                  productId,
+                  entry.offOptions.map((option) => ({ name: option.name, selling_price: Number(option.price), is_active: false })),
+                );
+              }
+            } catch {
+              failed.push(branchOptions.find((branch) => branch.id === entry.branchId)?.name ?? 'a branch');
+            }
+          }
+          await Promise.all([
+            client.invalidateQueries({ queryKey: ['branch-products'] }),
+            client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
+          ]);
+          if (failed.length > 0) {
+            setCreateNotice((current) =>
+              `${current ? `${current} ` : ''}Saved, but what was switched off at ${failed.join(', ')} may be on again. Check Branch Catalogs.`,
+            );
           }
         }
         editDirtyRef.current = false;
@@ -332,16 +397,32 @@ export default function ManagerProductListScreen() {
               <View style={styles.searchField}>
                 <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
               </View>
+              <ProductFilterButton count={countSheetFilters(filters)} onPress={() => setFiltersOpen(true)} />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+                accessibilityHint="Opens the sort options"
                 onPress={() => setSortOpen(true)}
-                style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.sortButton, sort !== DEFAULT_SORT && styles.sortButtonOn, pressed && styles.pressed]}
               >
-                <Ionicons name="options-outline" size={20} color={managerColors.ink} />
+                <Ionicons name="swap-vertical-outline" size={20} color={sort !== DEFAULT_SORT ? managerColors.royalBlue : managerColors.ink} />
               </Pressable>
             </View>
-            <FilterChipRow options={PRODUCT_FILTER_CHOICES} value={filter} onChange={setFilter} />
+            <FilterChipRow
+              options={CATEGORY_CHIPS}
+              bleed={COLUMN_PADDING}
+              keepSelectedVisible
+              value={filters.category}
+              onChange={(category) => setFilters((current) => ({ ...current, category }))}
+            />
+            <ProductFilterSummary
+              resultCount={filtered.length}
+              totalCount={query.data?.length ?? 0}
+              filters={filters}
+              hasSearch={Boolean(search.trim())}
+              onChange={setFilters}
+              onClearAll={clearAll}
+            />
             {createNotice ? <Text style={styles.createNotice}>{createNotice}</Text> : null}
           </View>
 
@@ -367,18 +448,29 @@ export default function ManagerProductListScreen() {
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => (
+              renderItem={({ item }) => {
+                const text = productRowText(item);
+                return (
                 <ListRowCard
+                  {...categoryRowProps(item.product_category)}
                   title={item.name}
-                  meta={
-                    [
-                      item.sku,
-                      item.sell_in_pos === false ? 'Stock only' : null,
-                      closingStockBehaviorLabel(item.closing_stock_behavior),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
+                  titleLines={titleLines}
+                  titleTag={text.sku}
+                  meta={text.category}
+                  metaRow={
+                    <>
+                      <View style={styles.fact}>
+                        <Ionicons name={text.stockOnly ? 'eye-off-outline' : 'eye-outline'} size={13} color={managerColors.subtext} />
+                        <Text style={styles.factText}>{text.pos}</Text>
+                      </View>
+                      <View style={styles.fact}>
+                        <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
+                        <Text style={styles.factText}>{text.closing}</Text>
+                      </View>
+                    </>
                   }
+                  accessibilityLabel={text.spoken}
+                  accessibilityHint="Opens edit product"
                   trailing={
                     <ManagerBadge
                       label={item.is_active ? 'Enabled' : 'Disabled'}
@@ -390,7 +482,8 @@ export default function ManagerProductListScreen() {
                     setEditProduct(item);
                   }}
                 />
-              )}
+                );
+              }}
             />
           )}
 
@@ -474,11 +567,13 @@ export default function ManagerProductListScreen() {
               sourceBranchPrices={(editBranchPrices.data ?? []).map((row) => ({
                 branch_id: row.branch_id,
                 selling_price: row.selling_price,
+                is_active: row.is_active,
               }))}
               sourceBranchVariantPrices={(editBranchVariantPrices.data ?? []).map((row) => ({
                 branch_id: row.branch_id,
                 name: row.name,
                 selling_price: row.selling_price,
+                is_active: row.is_active,
               }))}
               sourceStockUses={(editStockUses.data ?? []).map((row) => ({
                 variant_id: row.variant_id,
@@ -504,7 +599,14 @@ export default function ManagerProductListScreen() {
           ) : null}
         </BottomSheet>
 
-        <BottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+        <ProductFiltersSheet
+          visible={filtersOpen}
+          filters={filters}
+          onChange={setFilters}
+          onClose={() => setFiltersOpen(false)}
+        />
+
+        <BottomSheet visible={sortOpen} title="Sort by" onClose={() => setSortOpen(false)}>
           <View style={styles.sortList}>
             {SORT_OPTIONS.map((option) => {
               const isSelected = option.value === sort;
@@ -541,7 +643,7 @@ export default function ManagerProductListScreen() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+  column: { flex: 1, paddingHorizontal: COLUMN_PADDING, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
   createNotice: { color: '#92400E', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -556,6 +658,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sortButtonOn: { borderColor: '#C9D7F2', backgroundColor: '#EAF0FB' },
+  // One small fact (icon + words). Facts wrap onto the next line as whole items, never in the middle of a phrase.
+  fact: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  factText: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   pressed: { opacity: 0.75 },
   sortList: { gap: 8, paddingBottom: 8 },
   sortRow: {
@@ -577,8 +683,8 @@ const styles = StyleSheet.create({
   separator: { height: 12 },
   pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   footer: {
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
+    marginHorizontal: -COLUMN_PADDING,
+    paddingHorizontal: COLUMN_PADDING,
     paddingTop: 14,
     paddingBottom: 16,
     borderTopWidth: 1,

@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { makeIdempotencyKey } from '@/lib/format';
@@ -84,8 +85,8 @@ export default function LocalPurchaseScreen() {
       />
       <ConstrainedWidth style={styles.column}>
         <Text style={styles.body}>
-          Record drinks or other non-returnable items bought locally. Only products marked non-returnable in product
-          settings appear here. KG meals are Main-tracked and cannot be purchased here.
+          Record drinks or other items bought locally. Only enabled products set to Keep Unsold Stock at Branch in
+          product settings appear here. KG meals are Main-tracked and cannot be purchased here.
         </Text>
         {error ? <ErrorState message={error} /> : null}
         {catalog.isLoading ? <LoadingState label="Loading catalog…" /> : null}
@@ -94,13 +95,14 @@ export default function LocalPurchaseScreen() {
         ) : null}
         {!catalog.isLoading && !catalog.error && (catalog.data?.length ?? 0) === 0 ? (
           <EmptyState
-            title="No non-returnable products"
-            message="Ask Main to mark this product non-returnable first."
+            title="No products set to Keep Unsold Stock at Branch"
+            message="Ask Main to turn on Keep Unsold Stock at Branch for a product first."
           />
         ) : null}
         {(catalog.data ?? []).map((row) => (
           <View key={row.product_id} style={styles.card}>
             <View style={styles.cardTop}>
+              <CategoryIcon category={row.product_category} size={24} />
               <View style={styles.cardInfo}>
                 <Text style={styles.name} numberOfLines={2}>
                   {row.product_name}

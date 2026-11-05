@@ -20,8 +20,8 @@ const migrationSrc = readFileSync(`supabase/migrations/${NEW_MIGRATION}`, 'utf8'
   // the old per-product deduction is gone; both loops now read the aggregated list
   assert.equal((code.match(/jsonb_to_recordset\(v_deductions\)/g) ?? []).length, 2, 'check and deduct share one list');
   // a later migration must not silently replace confirm_sale. The one known follow-up is the variant mapping fix, which
-  // has its own regression test (confirm_sale_variant_mapping.mjs); anything else needs this test revisited.
-  const KNOWN_FOLLOW_UPS = ['20261023120000_confirm_sale_variant_mapping.sql', '20261024120000_confirm_sale_drink_choice.sql'];
+  // has its own regression test (confirm_sale_variant_mapping.mjs), as does the active-option guard; anything else needs this test revisited.
+  const KNOWN_FOLLOW_UPS = ['20261023120000_confirm_sale_variant_mapping.sql', '20261024120000_confirm_sale_drink_choice.sql', '20261026100000_pos_require_active_branch_variant.sql']; // the last one: pos_variant_fallback.mjs
   for (const later of readdirSync('supabase/migrations').filter((f) => f > NEW_MIGRATION && !KNOWN_FOLLOW_UPS.includes(f))) {
     const text = readFileSync(`supabase/migrations/${later}`, 'utf8').replace(/--[^\n]*/g, '');
     assert.doesNotMatch(text, /function public\.confirm_sale/i, `${later} redefines confirm_sale`);

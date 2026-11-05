@@ -19,7 +19,9 @@ assert.match(productsIndex, /closingStockBehavior:\s*values\.closingStockBehavio
 assert.doesNotMatch(productsIndex, /inventoryMode:\s*values\.inventoryMode/);
 assert.doesNotMatch(productsIndex, /setProductInventoryMode/);
 assert.doesNotMatch(productsIndex, /InventoryModeField/);
-assert.match(productsIndex, /closingStockBehaviorLabel|ClosingStockBehavior/);
+// the shift-close line on the card is built by productRowText (which uses closingStockBehaviorLabel), and an edit still passes it through
+assert.match(productsIndex, /productRowText|closingStockBehaviorLabel|ClosingStockBehavior/);
+assert.match(productsIndex, /closingStockBehavior: values\.closingStockBehavior/);
 const updateRpc = productService.slice(
   productService.indexOf("rpc('update_complete_product'"),
   productService.indexOf('export async function updateProductVariant'),

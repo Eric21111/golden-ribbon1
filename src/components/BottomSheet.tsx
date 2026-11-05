@@ -145,6 +145,9 @@ export function BottomSheet({
               maxHeight: sheetMaxHeight,
               marginBottom: keyboardLiftApplied,
               paddingBottom: Math.max(insets.bottom, spacing.md),
+              // landscape: keep Close and the content clear of a camera cut-out or a side navigation bar
+              paddingLeft: Math.max(insets.left, spacing.md),
+              paddingRight: Math.max(insets.right, spacing.md),
             },
           ]}
         >

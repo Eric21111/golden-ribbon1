@@ -1,19 +1,27 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
 
+import { CategoryIcon } from './CategoryIcon';
+import { DeductionPreview } from './DeductionPreview';
 import { InventoryItemPickerModal } from './InventoryItemPickerModal';
 import { MIN_TOUCH_TARGET } from './touchTargets';
 import {
   MAX_RECIPE_QUANTITY,
+  OWN_STOCK_LINES,
+  effectiveLines,
   THIS_PRODUCT_ID,
   findInventoryItem,
   getQuickAddItems,
+  includesOwnStock,
+  stockModeOf,
+  summarizeDeduction,
   unitLabel,
   type InventoryItemOption,
   type RecipeLine,
+  type StockMode,
 } from './recipePreviewData';
 
 const BORDER = '#D9DFEA';
@@ -24,9 +32,11 @@ const BLUE_TINT = '#EAF0FB';
  * saves the lists with the product.
  */
 export function VariantRecipePreview({
-  label = 'STOCK USED PER ORDER',
+  label = 'STOCK DEDUCTION',
   lockMainProduct = false,
   mainOnly = false,
+  stockModeChoice = false,
+  inheritedLines,
   lines,
   productName,
   ingredients,
@@ -38,10 +48,22 @@ export function VariantRecipePreview({
   /** When true, the "This Product" line can't be removed (its quantity can still change). */
   lockMainProduct?: boolean;
   /**
-   * When true only the product itself can be listed (a snack): no Rice / Egg chips and no "Browse all". If the
+   * When true only the product itself can be listed (a snack): no Rice / Egg chips and no "Add Stock Item". If the
    * product line was removed, a single chip puts it back.
    */
   mainOnly?: boolean;
+  /**
+   * Extras & Sides: choose between this product's own stock and other stock items, and show what one order deducts.
+   * Own stock is the list "This Product" x1 (or no list); other items replace it. Switching back and forth keeps the
+   * other items you had picked, so nothing is lost by trying the other mode.
+   */
+  stockModeChoice?: boolean;
+  /**
+   * The product-level list saved for the whole product, passed to the lists of its options. An option with no list of its
+   * own really uses it (the database resolves option list, then product-level list, then the product itself), so the
+   * preview and the "other items" mode follow it too. Adding an item copies it into the option first, never drops it.
+   */
+  inheritedLines?: RecipeLine[];
   lines: RecipeLine[];
   /** Name of the product being created/edited, shown for the "This Product" option. */
   productName: string;
@@ -52,6 +74,17 @@ export function VariantRecipePreview({
   onChange: (lines: RecipeLine[]) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  // True while the sheet was opened by tapping "Use other stock items" with nothing to restore: the pick STARTS the list
+  // instead of being added to "This Product". Closing the sheet without a pick changes nothing, so an "other items"
+  // list can never exist with no item in it.
+  const [startingOther, setStartingOther] = useState(false);
+  const [switchedToOwn, setSwitchedToOwn] = useState(false);
+  const stashedOtherLines = useRef<RecipeLine[]>([]);
+  // What an order really deducts: this list, else the product-level list saved for the whole product.
+  const effective = effectiveLines(lines, inheritedLines ?? []);
+  const inheriting = lines.length === 0 && effective.length > 0;
+  const mode: StockMode = stockModeOf(effective);
+  const showList = !stockModeChoice || mode === 'other';
   const quickAddItems = mainOnly ? [] : getQuickAddItems(lines, productName, ingredients, suggestedIds);
   const mainMissing = mainOnly && !lines.some((line) => line.itemId === THIS_PRODUCT_ID);
   // A snack only shows the row when its own line needs putting back; otherwise there is nothing to add.
@@ -62,18 +95,85 @@ export function VariantRecipePreview({
     onChange(lines.map((line, i) => (i === index ? { ...line, quantity: clamped } : line)));
   }
 
+  function selectMode(next: StockMode) {
+    if (next === mode) return;
+    if (next === 'own') {
+      stashedOtherLines.current = effective;
+      setSwitchedToOwn(true);
+      onChange(OWN_STOCK_LINES);
+      return;
+    }
+    setSwitchedToOwn(false);
+    if (stashedOtherLines.current.length > 0) {
+      onChange(stashedOtherLines.current);
+      return;
+    }
+    setStartingOther(true);
+    setPickerOpen(true);
+  }
+
+  function removeLine(index: number) {
+    const next = lines.filter((_, i) => i !== index);
+    // Extras: taking out the last item goes back to this product's own stock, written explicitly. An empty list would
+    // mean something else to the database (the product-level list, or the product itself).
+    onChange(stockModeChoice && next.length === 0 ? OWN_STOCK_LINES : next);
+  }
+
   function addItem(itemId: string) {
+    // An inherited list becomes this option's own list first, so adding an item never silently drops what it used.
+    const base = lines.length > 0 ? lines : inheriting ? effective : [];
     // An item can appear only once per variant.
-    if (lines.some((line) => line.itemId === itemId)) return;
-    onChange([...lines, { itemId, quantity: 1 }]);
+    if (base.some((line) => line.itemId === itemId)) return;
+    onChange([...base, { itemId, quantity: 1 }]);
+  }
+
+  function closePicker() {
+    setStartingOther(false);
+    setPickerOpen(false);
   }
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
 
+      {stockModeChoice ? (
+        <View accessibilityRole="radiogroup" style={styles.modes}>
+          {(
+            [
+              ['own', "Use this product's stock"],
+              ['other', 'Use other stock items'],
+            ] as const
+          ).map(([value, text]) => {
+            const selected = mode === value;
+            return (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityLabel={text}
+                accessibilityState={{ selected }}
+                onPress={() => selectMode(value)}
+                style={({ pressed }) => [styles.modeRow, pressed && styles.pressed]}
+              >
+                <Ionicons
+                  name={selected ? 'radio-button-on' : 'radio-button-off'}
+                  size={20}
+                  color={selected ? managerColors.royalBlue : managerColors.subtext}
+                />
+                <Text style={[styles.modeText, selected && styles.modeTextSelected]}>{text}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {showList ? (
+        <>
       {lines.length === 0 ? (
-        <Text style={styles.empty}>No stock items added yet.</Text>
+        <Text style={styles.empty}>
+          {inheriting
+            ? `No list of its own, so it uses the product's saved list: ${summarizeDeduction(effective, productName, ingredients)}. Add or change an item to give this option its own list.`
+            : 'No stock items added yet.'}
+        </Text>
       ) : (
         <View>
           {lines.map((line, index) => {
@@ -84,13 +184,16 @@ export function VariantRecipePreview({
             const shownName = item.id === THIS_PRODUCT_ID && productName.trim() ? productName.trim() : item.name;
             return (
               <View key={line.itemId} style={[styles.line, index > 0 && styles.lineDivider]}>
+                {item.id !== THIS_PRODUCT_ID ? <CategoryIcon category={item.category} size={22} /> : null}
                 <View style={styles.lineInfo}>
                   <Text style={styles.itemName} numberOfLines={1}>
                     {shownName}
                   </Text>
-                  <Text style={styles.itemUnit} numberOfLines={1}>
-                    {unitLabel(item.unit, line.quantity)}
-                    {item.id !== THIS_PRODUCT_ID && item.hint ? ` · ${item.hint}` : ''}
+                  {/* "Base product · Required" is wider than the room beside the stepper on a 360dp screen: let it wrap */}
+                  <Text style={styles.itemUnit} numberOfLines={locked ? 2 : 1}>
+                    {locked
+                      ? 'Base product · Required'
+                      : `${unitLabel(item.unit, line.quantity)}${item.id !== THIS_PRODUCT_ID && item.hint ? ` · ${item.hint}` : ''}`}
                   </Text>
                 </View>
                 <View style={styles.stepper}>
@@ -132,7 +235,7 @@ export function VariantRecipePreview({
                 {locked ? (
                   <View
                     accessible
-                    accessibilityLabel={`${item.name} is always included`}
+                    accessibilityLabel={`${shownName} is the base product and is required`}
                     style={styles.removeButton}
                   >
                     <Ionicons name="lock-closed-outline" size={16} color={managerColors.subtext} />
@@ -142,7 +245,7 @@ export function VariantRecipePreview({
                     accessibilityRole="button"
                     accessibilityLabel={`Remove ${item.name}`}
                     hitSlop={8}
-                    onPress={() => onChange(lines.filter((_, i) => i !== index))}
+                    onPress={() => removeLine(index)}
                     style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
                   >
                     <Ionicons name="close" size={18} color={managerColors.subtext} />
@@ -186,17 +289,20 @@ export function VariantRecipePreview({
           {mainOnly ? null : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Add inventory item"
+              accessibilityLabel="Add Stock Item"
               onPress={() => setPickerOpen(true)}
               style={({ pressed }) => [styles.chipTouch, pressed && styles.pressed]}
             >
               <View style={styles.browseChip}>
-                <Ionicons name="search" size={14} color={managerColors.royalBlue} />
-                <Text style={styles.chipText}>Browse all</Text>
+                <Ionicons name="add" size={14} color={managerColors.royalBlue} />
+                <Text style={styles.chipText}>Add Stock Item</Text>
               </View>
             </Pressable>
           )}
         </View>
+      ) : null}
+
+        </>
       ) : null}
 
       {mainOnly ? null : (
@@ -204,20 +310,42 @@ export function VariantRecipePreview({
           visible={pickerOpen}
           productName={productName}
           ingredients={ingredients}
-          addedItemIds={lines.map((line) => line.itemId)}
+          addedItemIds={startingOther ? [] : (lines.length > 0 ? lines : effective).map((line) => line.itemId)}
           onSelect={(itemId) => {
-            addItem(itemId);
-            setPickerOpen(false);
+            if (startingOther) onChange([{ itemId, quantity: 1 }]);
+            else addItem(itemId);
+            closePicker();
           }}
-          onClose={() => setPickerOpen(false)}
+          onClose={closePicker}
         />
       )}
+
+      {stockModeChoice ? (
+        <DeductionPreview
+          sentences={[
+            `Each order uses ${summarizeDeduction(effective, productName, ingredients)}.${
+              includesOwnStock(effective) && effective.length > 1 ? " This product's own stock is deducted too." : ''
+            }`,
+          ]}
+        />
+      ) : null}
+
+      {stockModeChoice && mode === 'own' && switchedToOwn ? (
+        <DeductionPreview
+          warning
+          sentences={['This product needs its own stock balance at the branch before it can sell. The other items are no longer used.']}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
+  modes: { gap: 2 },
+  modeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TOUCH_TARGET },
+  modeText: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  modeTextSelected: { fontFamily: 'Inter_600SemiBold' },
   label: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.6 },
   empty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },

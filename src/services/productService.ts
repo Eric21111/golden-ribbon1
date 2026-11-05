@@ -293,3 +293,13 @@ export async function configureProductVariants(
   });
   if (error) throw error;
 }
+
+/**
+ * Ids of every product that has configured options (any product_variants row). Branch Catalogs uses it to tell "no options
+ * set up here" from a genuine single-price product, the same way the database does when it decides what the POS may sell.
+ */
+export async function listProductIdsWithOptions(): Promise<string[]> {
+  const { data, error } = await supabase.from('product_variants').select('product_id');
+  if (error) throw error;
+  return [...new Set((data ?? []).map((row) => row.product_id as string))];
+}

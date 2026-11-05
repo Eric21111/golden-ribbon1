@@ -9,12 +9,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import {
   POS_AVAILABILITY_ENABLED,
   resolveSellable,
-  INVENTORY_ONLY_MESSAGE,
   defaultsForProductSetup,
   buildDraftSnapshot,
-  buildPreviewNotice,
   flowSteps,
-  getUnsavedPreviewItems,
   getWizardFlow,
   isSaveSupported,
 } from '../src/features/products/wizardGuards.ts';
@@ -66,33 +63,23 @@ function functionBody(src, signature) {
   assert.doesNotMatch(editSrc, /setSellable\(false\)/);
   assert.doesNotMatch(createSrc, /setSellable\(false\)/);
 
-  // the setting is a preview-only change: reported, and part of unsaved-change detection
-  const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks: {} };
-  assert.deepEqual(getUnsavedPreviewItems(base), [], 'sellable (absent) is not a preview setting');
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, sellable: true }), []);
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, sellable: false }), [], 'POS availability is saved, not a preview warning');
-  assert.equal(
-    buildPreviewNotice(getUnsavedPreviewItems({ ...base, category: 'snacks', sellable: false })),
-    'Not saved yet: Product Category. Everything else is saved.',
-  );
+  // the setting is part of unsaved-change detection
   const snap = (sellable) => buildDraftSnapshot({ name: 'Rice', sellable });
   assert.notEqual(snap(false), snap(true), 'turning it off is an unsaved change');
   assert.equal(snap(true), snap(true));
   for (const src of [createSrc, editSrc]) {
     assert.match(src, /category,\n\s*sellable,/, 'snapshot includes the sellable choice');
-    assert.match(src, /defaultCategory:[\s\S]*?sellable,\n\s*\}\)/, 'preview notice includes it');
+    assert.doesNotMatch(src, /defaultCategory:/, 'no unsaved-category notice is computed any more');
   }
 
-  // the field: exact label/description/messages, marked preview-only
-  assert.match(fieldSrc, /label="Sell Separately in POS"/);
-  assert.match(fieldSrc, /description="Off keeps it for stock and meals only\."/);
-  // marked preview-only by the Setup group header that holds it
+  // the field: exact label and description
+  assert.match(fieldSrc, /label="Show in Cashier POS"/);
+  assert.match(fieldSrc, /description="Show this product on the cashier menu\."/);
+
   for (const src of [createSrc, editSrc]) {
-    assert.match(src, /<SectionHeader title="How it's sold" preview \/>\s*<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField/);
+    assert.match(src, /<SectionHeader title="Category & availability" \/>\s*<ProductCategoryField[^\n]*\n\s*\{POS_AVAILABILITY_ENABLED \? <PosAvailabilityField/);
   }
-  assert.equal(INVENTORY_ONLY_MESSAGE, 'Not sold on its own. Still used for stock and meals.');
-  assert.match(fieldSrc, /\{!value \? \(/, 'the inventory-only message only shows when it is off');
-  assert.match(fieldSrc, /INVENTORY_ONLY_MESSAGE/);
+  assert.doesNotMatch(fieldSrc, /INVENTORY_ONLY_MESSAGE|\{!value \?/, 'no extra message box: the one-line description already says what Off means');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     assert.match(src, /<PosAvailabilityField value=\{sellable\} onChange=\{changeSellable\} \/>/, `${name}: field in Step 1`);
     assert.match(src, /sellInPos: false/, `${name}: stock-only save sends the flag`);
@@ -169,7 +156,8 @@ function functionBody(src, signature) {
 
     // saved values are unchanged: the sellable choice never reaches the payload
     const start = src.indexOf('onSubmit(\n      {');
-    const end = src.indexOf('      pricing,', start);
+    // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
+    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
     assert.ok(!block.includes('inventoryOnly'), `${name}: saved values must not include inventoryOnly`);

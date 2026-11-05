@@ -86,12 +86,13 @@ const count = (src, re) => (src.match(re) ?? []).length;
   assert.match(pickerSrc, /onSubmitEditing=\{Keyboard\.dismiss\}/);
   assert.match(searchSrc, /'returnKeyType' \| 'onSubmitEditing'/);
   assert.match(searchSrc, /returnKeyType=\{returnKeyType\}/);
-  assert.match(recipeSrc, /onClose=\{\(\) => setPickerOpen\(false\)\}/, 'closing the picker never closes the wizard sheet');
+  assert.match(recipeSrc, /onClose=\{closePicker\}/, 'closing the picker never closes the wizard sheet');
+  assert.match(recipeSrc, /function closePicker\(\) \{\n\s*setStartingOther\(false\);\n\s*setPickerOpen\(false\);\n\s*\}/, 'closePicker only closes the picker');
   // search, selection and duplicate prevention are unchanged
   assert.match(pickerSrc, /matchesInventorySearch\(item, search\)/);
   assert.match(pickerSrc, /disabled=\{added\}/);
-  assert.match(recipeSrc, /if \(lines\.some\(\(line\) => line\.itemId === itemId\)\) return;/);
-  assert.match(recipeSrc, /Missing an item|addedItemIds=\{lines\.map/);
+  assert.match(recipeSrc, /if \(base\.some\(\(line\) => line\.itemId === itemId\)\) return;/);
+  assert.match(recipeSrc, /addedItemIds=\{startingOther \? \[\] : \(lines\.length > 0 \? lines : effective\)\.map\(\(line\) => line\.itemId\)\}/, 'items already in the list are shown as Added and cannot be picked again');
   // the drink picker has no keyboard at all (chips only)
   assert.doesNotMatch(drinkSrc, /TextInput/);
   console.log('phase4 pickers and keyboard: ok');
@@ -132,11 +133,9 @@ const count = (src, re) => (src.match(re) ?? []).length;
 
 // ---------------------------------------------------------------- 4. warnings and feedback
 {
-  // "Not saved yet" stays readable (12px) wherever it appears
+  // nothing in Step 1 is marked "Not saved yet" any more: category, POS and the drink choice are all saved
   const layoutSrc = read('src/features/products/StepOneLayout.tsx');
-  assert.match(layoutSrc, /Not saved yet/);
-  assert.match(layoutSrc, /pillText: \{[^}]*fontSize: 12/, 'pill text is 12px');
-  // the drink choice is saved with the product now, so it no longer carries a "Not saved yet" marker
+  assert.doesNotMatch(layoutSrc, /Not saved yet|pillText/);
   assert.doesNotMatch(drinkSrc, /PreviewPill|Not saved yet/);
 
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {

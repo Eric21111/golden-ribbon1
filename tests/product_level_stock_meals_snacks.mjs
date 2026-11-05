@@ -304,7 +304,7 @@ const open = {};
     assert.match(read(`src/features/products/${f}`), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock/);
   }
   const guardsSrc = read('src/features/products/wizardGuards.ts');
-  assert.match(guardsSrc, /if \(state\.category !== state\.defaultCategory\) items\.push\('Product Category'\);/);
+  assert.doesNotMatch(guardsSrc, /items\.push\('Product Category'\)/, 'the category is saved, so it is never reported as unsaved');
   console.log('wiring: ok');
 }
 

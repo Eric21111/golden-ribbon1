@@ -24,6 +24,7 @@ import {
   matchesStockFilter,
   type StockFilter,
 } from '@/features/inventory/inventoryStatus';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
@@ -211,6 +212,7 @@ export default function ManagerInventoryScreen() {
                 const status = getStockStatus(item);
                 return (
                   <ListRowCard
+                    {...categoryRowProps(item.product.product_category)}
                     title={item.product.name}
                     subtitle={`${item.product.sku}${
                       !isMain && !item.branch_product?.is_active
@@ -261,6 +263,7 @@ export default function ManagerInventoryScreen() {
         {selected ? (
           <View style={styles.detail}>
             <ListRowCard
+              {...categoryRowProps(selected.product.product_category)}
               title={selected.product.name}
               subtitle={`${selected.product.sku}${
                 !isMain && !selected.branch_product?.is_active

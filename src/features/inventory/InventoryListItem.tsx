@@ -3,6 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
 import { managerColors } from '@/components/dashboard/theme';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import { formatLiveStock, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
@@ -31,6 +32,7 @@ export function InventoryListItem({ item, showBranch = false, onPress }: Invento
 
   return (
     <ListRowCard
+      {...categoryRowProps(item.product.product_category)}
       title={item.product.name}
       meta={meta}
       onPress={onPress}

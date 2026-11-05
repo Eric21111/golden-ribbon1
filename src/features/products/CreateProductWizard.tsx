@@ -17,8 +17,6 @@ import {
   activeUniformBase,
   activeUniformPrice,
   buildDraftSnapshot,
-  buildPreviewNotice,
-  getUnsavedPreviewItems,
   otherModeHasPrices,
   applySetupDefaults,
   defaultsForProductSetup,
@@ -44,7 +42,8 @@ import {
   THIS_PRODUCT_ID,
   ingredientOptionsFromProducts,
   suggestedIngredientIds,
-  summarizeExtras,
+  effectiveLines,
+  summarizeVariantStock,
   type DrinkChoice,
   type IngredientProduct,
   type RecipeLine,
@@ -69,7 +68,7 @@ export type CreateProductValues = {
   drinkChoices: DrinkChoicePayload[];
   /** False saves a stock-only product: no selling price and hidden from POS. */
   sellInPos: boolean;
-  /** Product Status. Independent of stock quantity. */
+  /** Enable Product (is_active). Independent of stock quantity. */
   isActive: boolean;
   /** Saved so the stock and drink pickers can tell supplies from drinks. */
   productCategory: CategoryChoice;
@@ -133,7 +132,7 @@ export function CreateProductWizard({
   const [recipePreview, setRecipePreview] = useState<Record<string, RecipeLine[]>>({});
   // Drink Choice per variant: does it include a drink, and which drinks may the cashier pick from. Saved with the product.
   const [drinkChoices, setDrinkChoices] = useState<Record<string, DrinkChoice>>({});
-  // Saved as product_category. Also the setup type that fills Product Status and Sell Separately until the user moves them.
+  // Saved as product_category. Also the setup type that fills Enable Product and Show in Cashier POS until the user moves them.
   const [category, setCategory] = useState<CategoryChoice>(DEFAULT_PRODUCT_CATEGORY);
   const [step2Error, setStep2Error] = useState<string | undefined>();
   const [step3Error, setStep3Error] = useState<string | undefined>();
@@ -464,14 +463,6 @@ export function CreateProductWizard({
     onDirtyChange?.(isDirty);
   }, [isDirty]);
 
-  // Final-step reminder: which preview-only settings have been used and are NOT saved.
-  const previewNotice = buildPreviewNotice(
-    getUnsavedPreviewItems({
-      category,
-      defaultCategory: DEFAULT_PRODUCT_CATEGORY,
-      sellable,
-    }),
-  );
   const otherModePricesKept = otherModeHasPrices(pricingMode, {
     uniformBase,
     uniformPrices: uniformVariantPrices,
@@ -482,7 +473,11 @@ export function CreateProductWizard({
   const stockSummaries: Record<string, string> = {};
   if (getCategoryConfig(category).showIngredients) {
     for (const variant of variants) {
-      const summary = summarizeExtras(recipePreview[variant.id] ?? [], name, ingredients);
+      const summary = summarizeVariantStock(
+        effectiveLines(recipePreview[variant.id] ?? [], recipePreview[PRODUCT_STOCK_KEY] ?? []),
+        name,
+        ingredients,
+      );
       if (summary) stockSummaries[variant.id] = summary;
     }
   }
@@ -538,7 +533,7 @@ export function CreateProductWizard({
             style={styles.fieldInput}
           />
           <View style={styles.group}>
-            <SectionHeader title="How it's sold" preview />
+            <SectionHeader title="Category & availability" />
             <ProductCategoryField value={category} onChange={changeCategory} />
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
@@ -546,6 +541,7 @@ export function CreateProductWizard({
             <View style={styles.group}>
               <VariantRecipePreview
                 label={getCategoryConfig(category).ingredientsLabel}
+                stockModeChoice={getCategoryConfig(category).stockModeChoice}
                 lines={recipePreview[PRODUCT_STOCK_KEY] ?? []}
                 productName={name}
                 ingredients={ingredients}
@@ -613,7 +609,6 @@ export function CreateProductWizard({
             onModeChange={switchPricingMode}
             variants={variants.map((variant) => ({ key: variant.id, name: variant.name }))}
             stockSummaries={stockSummaries}
-            previewNotice={previewNotice}
             otherModePricesKept={otherModePricesKept}
             branches={branchOptions}
             uniformBase={uniformBase}
@@ -654,7 +649,7 @@ export function CreateProductWizard({
               <ManagerActionButton label="Next" onPress={goToStep2} />
             )
           ) : step === 2 ? (
-            <ManagerActionButton label="Next" onPress={goToStep3} />
+            <ManagerActionButton label="Next: Pricing" onPress={goToStep3} />
           ) : (
             <ManagerActionButton label="Create product" loading={loading} onPress={submit} />
           )}

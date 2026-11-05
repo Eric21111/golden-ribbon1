@@ -8,14 +8,17 @@ import { confirmAction } from '@/lib/confirmAction';
 
 import { getCategoryConfig, isDrinkChoiceVisible, type CategoryChoice } from './productCategoryPreview';
 import { VariantDrinkChoicePreview } from './VariantDrinkChoicePreview';
+import { DeductionPreview } from './DeductionPreview';
 import { VariantRecipePreview } from './VariantRecipePreview';
 import { MIN_TOUCH_TARGET } from './touchTargets';
 import {
   NO_DRINK_CHOICE,
   THIS_PRODUCT_ID,
   suggestedIngredientIds,
-  summarizeDrinkChoice,
-  summarizeExtras,
+  summarizeDrinkLine,
+  effectiveLines,
+  describeOrderDeduction,
+  summarizeVariantStock,
   type DrinkChoice,
   type InventoryItemOption,
   type RecipeLine,
@@ -173,13 +176,26 @@ export function VariantListEditor({
             // Hidden sections keep their data; they just aren't shown or summarised.
             // One short line for the collapsed card, e.g. "+ Rice, Egg · Drink: 3 options". The main product
             // is implied (every variant has it), so it isn't repeated.
-            const extras = config.showIngredients ? summarizeExtras(lines, productName, ingredients) : '';
+            const extras = config.showIngredients
+              ? summarizeVariantStock(effectiveLines(lines, recipes[PRODUCT_STOCK_KEY] ?? []), productName, ingredients)
+              : '';
             const drinkVisible = isDrinkChoiceVisible(category, drinkChoice.enabled);
-            const drinkNames = drinkVisible ? summarizeDrinkChoice(drinkChoice, ingredients) : '';
-            const drinkCount = drinkNames ? drinkNames.split(', ').length : 0;
+            // Meals & Viands only: what one order of this option deducts, including the drink when it includes one.
+            const orderPreview =
+              config.id === 'meals' && config.showIngredients
+                ? describeOrderDeduction({
+                    lines,
+                    inheritedLines: recipes[PRODUCT_STOCK_KEY] ?? [],
+                    productName,
+                    ingredients,
+                    drink: drinkVisible ? drinkChoice : null,
+                    drinks: drinkOptions ?? ingredients,
+                  })
+                : [];
+            const drinkLine = drinkVisible ? summarizeDrinkLine(drinkChoice, drinkOptions ?? ingredients) : '';
             const collapsedLine = [
               extras || (config.showIngredients && lines.length > 0 ? 'Main item only' : ''),
-              drinkCount === 0 ? '' : drinkCount === 1 ? `Drink: ${drinkNames}` : `Drink: ${drinkCount} options`,
+              drinkLine,
             ]
               .filter(Boolean)
               .join(' · ');
@@ -292,6 +308,8 @@ export function VariantListEditor({
                         <View style={styles.sectionDivider} />
                         <VariantRecipePreview
                           label={config.ingredientsLabel}
+                          stockModeChoice={config.stockModeChoice}
+                          inheritedLines={recipes[PRODUCT_STOCK_KEY] ?? []}
                           lockMainProduct={config.id === 'meals'}
                           mainOnly={!config.allowOtherStock}
                           lines={lines}
@@ -314,6 +332,7 @@ export function VariantListEditor({
                         />
                       </>
                     ) : null}
+                    {orderPreview.length > 0 ? <DeductionPreview sentences={orderPreview} /> : null}
                     {hasHiddenData ? (
                       <Text style={styles.hiddenNote}>
                         {[
@@ -341,12 +360,13 @@ export function VariantListEditor({
                       </Pressable>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={`Done with this ${noun}`}
+                        accessibilityLabel={`Done editing this ${noun}`}
+                        accessibilityHint="Closes this card. Nothing is saved until the last step."
                         onPress={finishVariant}
                         style={({ pressed }) => [styles.doneButton, pressed && styles.pressed]}
                       >
                         <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                        <Text style={styles.doneButtonText}>Done</Text>
+                        <Text style={styles.doneButtonText}>Done editing</Text>
                       </Pressable>
                     </View>
                   </>
@@ -361,6 +381,7 @@ export function VariantListEditor({
         <View style={styles.productStock}>
           <VariantRecipePreview
             label={config.ingredientsLabel}
+            stockModeChoice={config.stockModeChoice}
             lockMainProduct={config.id === 'meals'}
                           mainOnly={!config.allowOtherStock}
             lines={recipes[PRODUCT_STOCK_KEY] ?? []}
@@ -369,6 +390,11 @@ export function VariantListEditor({
             suggestedIds={suggestedIds}
             onChange={(next) => onChangeRecipe(PRODUCT_STOCK_KEY, next)}
           />
+          {config.id === 'meals' ? (
+            <DeductionPreview
+              sentences={describeOrderDeduction({ lines: recipes[PRODUCT_STOCK_KEY] ?? [], productName, ingredients })}
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -404,6 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     padding: 14,
+    gap: 14,
   },
   card: {
     borderWidth: 1,

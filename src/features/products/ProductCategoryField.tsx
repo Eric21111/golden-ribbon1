@@ -1,15 +1,24 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { FilterDropdown } from '@/components/FilterDropdown';
 import { managerColors } from '@/components/dashboard/theme';
 
+import { CategoryIcon } from './CategoryIcon';
 import { PRODUCT_CATEGORIES, type CategoryChoice } from './productCategoryPreview';
 
-const CATEGORY_OPTIONS: Array<{ label: string; value: CategoryChoice }> = PRODUCT_CATEGORIES.map((category) => ({
+type CategoryOption = { label: string; value: CategoryChoice; leading: ReactNode };
+
+const CATEGORY_OPTIONS: CategoryOption[] = PRODUCT_CATEGORIES.map((category) => ({
   label: category.label,
   value: category.id,
+  leading: <CategoryIcon category={category.id} size={24} decorative />,
 }));
-const UNSET_OPTION: { label: string; value: CategoryChoice } = { label: 'Category not set', value: 'unset' };
+const UNSET_OPTION: CategoryOption = {
+  label: 'Category not set',
+  value: 'unset',
+  leading: <CategoryIcon category={null} size={24} decorative />,
+};
 
 /**
  * Product category dropdown for Step 1. PREVIEW ONLY: the choice is kept in the wizard's local state, is not

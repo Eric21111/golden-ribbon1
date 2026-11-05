@@ -17,8 +17,6 @@ import {
   activeUniformBase,
   activeUniformPrice,
   buildDraftSnapshot,
-  buildPreviewNotice,
-  getUnsavedPreviewItems,
   otherModeHasPrices,
   seedVariantPrices,
   flowSteps,
@@ -40,7 +38,8 @@ import { VariantListEditor } from './VariantListEditor';
 import {
   ingredientOptionsFromProducts,
   suggestedIngredientIds,
-  summarizeExtras,
+  effectiveLines,
+  summarizeVariantStock,
   type DrinkChoice,
   type IngredientProduct,
   type RecipeLine,
@@ -55,6 +54,8 @@ import {
 } from './stockUseMapping';
 import { VariantRecipePreview } from './VariantRecipePreview';
 import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, savedDrinkChoicesToState, type DrinkChoicePayload, type SavedDrinkChoice } from './drinkChoiceMapping';
+
+import { branchesToAdd, keptOffNotes, planBranchSave, type KeepOff } from './branchPricingEdit';
 
 type PricingMode = 'same' | 'different';
 type PriceDraft = { base: string; variantPrices: Record<string, string> };
@@ -90,8 +91,10 @@ export type BranchPricingDraft =
   | { branchId: string; selling_price?: undefined; variants: Array<{ name: string; selling_price: string }> };
 
 export type EditProductSourceVariant = { id: string; name: string; default_price: number };
-export type EditProductSourceBranchPrice = { branch_id: string; selling_price: number };
-export type EditProductSourceBranchVariantPrice = { branch_id: string; name: string; selling_price: number };
+/** `is_active` false = the branch has the whole product switched off. Absent means on. */
+export type EditProductSourceBranchPrice = { branch_id: string; selling_price: number; is_active?: boolean };
+/** `is_active` false = this option is switched off at that branch. Absent means on. */
+export type EditProductSourceBranchVariantPrice = { branch_id: string; name: string; selling_price: number; is_active?: boolean };
 
 interface EditProductWizardProps {
   product: {
@@ -118,7 +121,11 @@ interface EditProductWizardProps {
   branchOptions: Array<{ id: string; name: string }>;
   loading?: boolean;
   error?: string;
-  onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[]) => void;
+  /**
+   * `pricing` is only the branches that need writing (new or changed prices); a branch left as it is is not sent, so what is
+   * switched off there stays off. `keepOff` lists what to switch off again afterwards at the branches that were sent.
+   */
+  onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[], keepOff: KeepOff[]) => void;
   /** Reports whether the form has unsaved edits, so the screen can confirm before discarding them. */
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -267,7 +274,14 @@ export function EditProductWizard({
     for (const id of pricedBranchIds) {
       priceDrafts[id] = { base: String(byBranch.get(id) ?? ''), variantPrices: {} };
     }
-    return { mode: 'same' as PricingMode, uniformBase: '', uniformVariantPrices: {}, priceDrafts };
+    // Not the same everywhere (different prices, or only some branches carry it): show each branch's own price. Only a product
+    // that no branch carries yet starts in "Same for All" with an empty price.
+    return {
+      mode: (pricedBranchIds.length > 0 ? 'different' : 'same') as PricingMode,
+      uniformBase: '',
+      uniformVariantPrices: {},
+      priceDrafts,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -402,6 +416,7 @@ export function EditProductWizard({
           productCategory: category,
         },
         [],
+        [],
       );
       return;
     }
@@ -483,6 +498,16 @@ export function EditProductWizard({
       return;
     }
 
+    // Branches that already carry the product with exactly these prices are not sent, so whatever is switched off there stays
+    // off. What is switched off at a branch that IS sent is switched off again after the save (the screen does that).
+    const plan = planBranchSave({
+      pricing,
+      variants: variantValues,
+      sourceVariants,
+      sourceBranchPrices,
+      sourceBranchVariantPrices,
+    });
+
     onSubmit(
       {
         name: name.trim(),
@@ -504,7 +529,8 @@ export function EditProductWizard({
         sellInPos: true,
         productCategory: category,
       },
-      pricing,
+      plan.send,
+      plan.keepOff,
     );
   }
 
@@ -541,16 +567,6 @@ export function EditProductWizard({
     onDirtyChange?.(isDirty);
   }, [isDirty]);
 
-  // Final-step reminder: which preview-only settings have been used and are NOT saved.
-  const previewNotice = buildPreviewNotice(
-    getUnsavedPreviewItems({
-      category,
-      defaultCategory: product.product_category && product.product_category !== 'unset'
-        ? product.product_category
-        : INITIAL_EDIT_CATEGORY,
-      sellable,
-    }),
-  );
   const otherModePricesKept = otherModeHasPrices(pricingMode, {
     uniformBase,
     uniformPrices: uniformVariantPrices,
@@ -561,7 +577,11 @@ export function EditProductWizard({
   const stockSummaries: Record<string, string> = {};
   if (getCategoryConfig(category).showIngredients) {
     for (const variant of variants) {
-      const summary = summarizeExtras(recipePreview[variant.key] ?? [], name, ingredients);
+      const summary = summarizeVariantStock(
+        effectiveLines(recipePreview[variant.key] ?? [], recipePreview[PRODUCT_STOCK_KEY] ?? []),
+        name,
+        ingredients,
+      );
       if (summary) stockSummaries[variant.key] = summary;
     }
   }
@@ -613,7 +633,7 @@ export function EditProductWizard({
             style={styles.fieldInput}
           />
           <View style={styles.group}>
-            <SectionHeader title="How it's sold" preview />
+            <SectionHeader title="Category & availability" />
             <ProductCategoryField value={category} onChange={setCategory} allowUnset />
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
@@ -621,6 +641,7 @@ export function EditProductWizard({
             <View style={styles.group}>
               <VariantRecipePreview
                 label={getCategoryConfig(category).ingredientsLabel}
+                stockModeChoice={getCategoryConfig(category).stockModeChoice}
                 lines={recipePreview[PRODUCT_STOCK_KEY] ?? []}
                 productName={name}
                 ingredients={ingredients}
@@ -686,7 +707,6 @@ export function EditProductWizard({
             onModeChange={switchPricingMode}
             variants={variants.map((variant) => ({ key: variant.key, name: variant.name }))}
             stockSummaries={stockSummaries}
-            previewNotice={previewNotice}
             otherModePricesKept={otherModePricesKept}
             branches={branchOptions}
             uniformBase={uniformBase}
@@ -702,6 +722,13 @@ export function EditProductWizard({
             onDraftBaseChange={setBase}
             onDraftVariantPriceChange={setVariantPrice}
             error={step3Error}
+            notCarriedBranches={branchesToAdd(branchOptions, { sourceBranchPrices, sourceBranchVariantPrices })}
+            keptOffNotes={keptOffNotes(branchOptions, {
+              variants: variants.map((variant) => ({ id: variant.id, name: variant.name, default_price: '' })),
+              sourceVariants,
+              sourceBranchPrices,
+              sourceBranchVariantPrices,
+            })}
           />
         </View>
       ) : null}
@@ -727,7 +754,7 @@ export function EditProductWizard({
               <ManagerActionButton label="Next" onPress={goToStep2} />
             )
           ) : step === 2 ? (
-            <ManagerActionButton label="Next" onPress={goToStep3} />
+            <ManagerActionButton label="Next: Pricing" onPress={goToStep3} />
           ) : (
             <ManagerActionButton label="Save changes" loading={loading} onPress={submit} />
           )}

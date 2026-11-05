@@ -13,6 +13,7 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { colors, spacing } from '@/constants/theme';
 import { useLayout } from '@/lib/layout';
+import { resolveScreenEdges } from '@/lib/safeArea';
 
 import { ConstrainedWidth } from './ConstrainedWidth';
 import { useBottomNavigationVisible } from './RoleNavigation';
@@ -23,7 +24,10 @@ interface ScreenProps extends PropsWithChildren {
   refreshing?: boolean;
   onRefresh?: () => void;
   backgroundColor?: ColorValue;
-  /** Override safe-area edges. Default: none when bottom nav visible, else bottom only. */
+  /**
+   * Safe-area edges. Top, left and right are always padded; bottom is padded only when no tab bar is showing. Pass a
+   * list without 'top' to leave the top unpadded. See resolveScreenEdges.
+   */
   edges?: readonly Edge[];
   /**
    * Cap and center content on tablet.
@@ -44,7 +48,7 @@ export function Screen({
 }: ScreenProps) {
   const hasBottomNavigation = useBottomNavigationVisible();
   const { contentMaxWidth } = useLayout();
-  const safeEdges = edges ?? (hasBottomNavigation ? [] : (['bottom'] as const));
+  const safeEdges = resolveScreenEdges(edges, hasBottomNavigation);
   const maxWidth = constrain === true ? contentMaxWidth : typeof constrain === 'number' ? constrain : undefined;
 
   const body =

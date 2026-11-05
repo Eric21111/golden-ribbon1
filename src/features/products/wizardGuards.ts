@@ -6,35 +6,6 @@
 export type PricingMode = 'same' | 'different';
 
 /**
- * The preview-only settings the wizard keeps in local state. None of them are saved yet. (Stock Used Per Order and
- * Drink Choice are NOT among them any more: both are saved with the product.)
- */
-export type PreviewConfigState = {
-  category: string;
-  /** The category a wizard starts with; choosing it again is not "using" the preview setting. */
-  defaultCategory: string;
-  /** Kept for callers. POS availability is saved on the product, so it is not an unsaved preview setting. */
-  sellable?: boolean;
-};
-
-/** Staff-facing names of the preview-only settings the user has actually used. */
-export function getUnsavedPreviewItems(state: PreviewConfigState): string[] {
-  const items: string[] = [];
-  if (state.category !== state.defaultCategory) items.push('Product Category');
-  return items;
-}
-
-/** One short sentence for the pricing step, or null when no preview-only setting has been used. */
-export function buildPreviewNotice(items: string[]): string | null {
-  if (items.length === 0) return null;
-  const list =
-    items.length === 1
-      ? items[0]
-      : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-  return `Not saved yet: ${list}. Everything else is saved.`;
-}
-
-/**
  * Prices only count for the pricing mode that is selected. Both modes' inputs are kept in state so switching
  * back restores them, but a hidden mode must never leak into what is submitted.
  */
@@ -179,7 +150,7 @@ export function flowSteps(flow: WizardFlow): Array<1 | 2 | 3> {
 
 // ---- inventory-only (saved as products.sell_in_pos, independent of Active)
 
-/** The Sell in POS switch is stored on the product. Category remains a local layout choice. */
+/** The Show in Cashier POS switch is stored on the product. Category remains a local layout choice. */
 export const POS_AVAILABILITY_ENABLED = true;
 
 /**
@@ -189,8 +160,6 @@ export const POS_AVAILABILITY_ENABLED = true;
 export function resolveSellable(enabled: boolean, chosen: boolean): boolean {
   return enabled ? chosen : true;
 }
-
-export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. Still used for stock and meals.';
 
 /**
  * Editable defaults for a new product, chosen from the setup type the user picked.

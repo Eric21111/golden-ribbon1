@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   configureProductVariants,
+  listProductIdsWithOptions,
   createCompleteProduct,
   createInventoryProduct,
   updateInventoryProduct,
@@ -20,6 +21,14 @@ import {
   type UpdateCompleteProductInput,
   type UpdateInventoryProductInput,
 } from '@/services/productService';
+
+/** Product ids that have configured options. Saving a product invalidates ['product-variants'], which refreshes this. */
+export function useProductIdsWithOptions() {
+  return useQuery({
+    queryKey: ['product-variants', 'with-options'],
+    queryFn: listProductIdsWithOptions,
+  });
+}
 
 export function useProducts(search = '', activeOnly = false) {
   return useQuery({

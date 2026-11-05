@@ -114,7 +114,6 @@ export function BranchPricingStep({
   onModeChange,
   variants,
   stockSummaries,
-  previewNotice,
   otherModePricesKept,
   branches,
   uniformBase,
@@ -128,14 +127,14 @@ export function BranchPricingStep({
   onDraftBaseChange,
   onDraftVariantPriceChange,
   error,
+  notCarriedBranches,
+  keptOffNotes = [],
 }: {
   mode: PricingMode;
   onModeChange: (mode: PricingMode) => void;
   variants: Array<{ key: string; name: string }>;
   /** Optional one-line "what it uses" per variant key, shown under the variant name. */
   stockSummaries: Record<string, string>;
-  /** Reminder that preview-only settings (category, stock used, drink choice) are not saved. Null/absent: none used. */
-  previewNotice?: string | null;
   /** True when the pricing mode that is NOT selected still holds entered prices. */
   otherModePricesKept?: boolean;
   branches: Array<{ id: string; name: string }>;
@@ -150,6 +149,13 @@ export function BranchPricingStep({
   onDraftBaseChange: (text: string) => void;
   onDraftVariantPriceChange: (key: string, text: string) => void;
   error?: string;
+  /**
+   * Edit only: the selling branches that do not carry the product yet. "Same for All" adds the product to them. Absent (Create)
+   * means every branch is new.
+   */
+  notCarriedBranches?: string[];
+  /** Edit only: what is switched off at which branch. Saving keeps it switched off. */
+  keptOffNotes?: string[];
 }) {
   const hasVariants = variants.length > 0;
   const fullCount = branches.filter((branch) => branchStatus[branch.id] === 'full').length;
@@ -163,13 +169,6 @@ export function BranchPricingStep({
 
   return (
     <View style={styles.wrap}>
-      {previewNotice ? (
-        <View style={styles.previewNotice}>
-          <Ionicons name="information-circle" size={16} color={WARN} />
-          <Text style={styles.previewNoticeText}>{previewNotice}</Text>
-        </View>
-      ) : null}
-
       <View style={styles.toggle}>
         {(['same', 'different'] as const).map((option) => {
           const active = mode === option;
@@ -220,7 +219,12 @@ export function BranchPricingStep({
             </View>
           )}
           <Text style={styles.hint}>
-            Applies to all {branches.length} {branches.length === 1 ? 'branch' : 'branches'}.
+            Applies to all {branches.length} selling {branches.length === 1 ? 'branch' : 'branches'}.
+            {notCarriedBranches === undefined || notCarriedBranches.length > 0
+              ? ` Saving adds this product to every selling branch that does not carry it yet${
+                  notCarriedBranches && notCarriedBranches.length > 0 ? ` (${notCarriedBranches.join(', ')})` : ''
+                }. Use Different per Branch to choose which.`
+              : ''}
           </Text>
         </>
       ) : (
@@ -229,6 +233,7 @@ export function BranchPricingStep({
             {fullCount} of {branches.length} {branches.length === 1 ? 'branch' : 'branches'} priced
             {partialCount > 0 ? ` · ${partialCount} incomplete` : ''}
           </Text>
+          <Text style={styles.hint}>A branch you leave unpriced is not added or changed.</Text>
           <View style={styles.branchChips}>
             {branches.map((branch) => {
               const status = branchStatus[branch.id] ?? 'none';
@@ -286,6 +291,12 @@ export function BranchPricingStep({
 
         </>
       )}
+
+      {keptOffNotes.map((note) => (
+        <Text key={note} style={styles.hint}>
+          {note} It stays off when you save.
+        </Text>
+      ))}
 
       {branches.length > 0 && nothingPriced ? (
         <View style={styles.notice}>
@@ -383,18 +394,6 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   invalidText: { color: DANGER, fontFamily: 'Inter_500Medium', fontSize: 11 },
-  previewNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-  },
-  previewNoticeText: { flex: 1, color: WARN, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
