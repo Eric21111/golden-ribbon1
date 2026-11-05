@@ -1,6 +1,6 @@
 import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { managerGradients } from './theme';
 
@@ -11,6 +11,8 @@ interface ManagerActionButtonProps {
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'danger';
   icon?: IoniconsIconName;
+  /** Extra style for the button itself, e.g. horizontal padding on a button that is not full width. */
+  style?: StyleProp<ViewStyle>;
 }
 
 export function ManagerActionButton({
@@ -20,6 +22,7 @@ export function ManagerActionButton({
   disabled = false,
   variant = 'primary',
   icon,
+  style,
 }: ManagerActionButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -31,6 +34,7 @@ export function ManagerActionButton({
         onPress={onPress}
         style={({ pressed }) => [
           styles.secondary,
+          style,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
         ]}
@@ -55,6 +59,7 @@ export function ManagerActionButton({
         onPress={onPress}
         style={({ pressed }) => [
           styles.danger,
+          style,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
         ]}
@@ -82,7 +87,7 @@ export function ManagerActionButton({
         colors={managerGradients.hero}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
-        style={styles.primary}
+        style={[styles.primary, style]}
       >
         {loading ? (
           <ActivityIndicator color="#FFFFFF" />
@@ -108,6 +113,7 @@ const styles = StyleSheet.create({
   primaryLabel: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
   secondary: {
     height: 54,
+    paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',

@@ -12,10 +12,22 @@ import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
-import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
+import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import {
+  ALL_LIST_FILTER_KEYS,
+  DEFAULT_LIST_FILTERS,
+  countListFilters,
+  listFilterEmptyMessage,
+  matchesListFilters,
+  productSearchText,
+  type ListFilters,
+} from '@/features/products/listFilters';
+import { resultCountText } from '@/features/products/productFilters';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
@@ -59,6 +71,8 @@ export function InventorySetupScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StockFilter>('all');
   const [sort, setSort] = useState<SortOption>('pending');
+  const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const branches = useBranches();
@@ -112,8 +126,9 @@ export function InventorySetupScreen() {
         // "Has stock" means currently holds a positive quantity — not merely "has a balance row",
         // which would also match products already initialized to 0 and defeat the filter.
         if (filter === 'has_stock' && row.item.quantity_on_hand <= 0) return false;
+        if (!matchesListFilters(row.item.product, listFilters)) return false;
         if (!term) return true;
-        return `${row.item.product.name} ${row.item.product.sku}`.toLowerCase().includes(term);
+        return productSearchText(row.item.product).includes(term);
       });
 
     return rows.sort((a, b) => {
@@ -124,9 +139,9 @@ export function InventorySetupScreen() {
       if (aPending !== bPending) return aPending - bPending;
       return (a.item?.product.name ?? '').localeCompare(b.item?.product.name ?? '');
     });
-  }, [fields, itemsById, search, filter, sort]);
+  }, [fields, itemsById, search, filter, sort, listFilters]);
 
-  const pagination = useClientPagination(displayIndexes, `${search}|${filter}|${sort}`, 10);
+  const pagination = useClientPagination(displayIndexes, `${search}|${filter}|${sort}|${JSON.stringify(listFilters)}`, 10);
 
   const totalCount = inventory.data?.length ?? 0;
 
@@ -278,16 +293,20 @@ export function InventorySetupScreen() {
             <View style={styles.searchField}>
               <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+            <FilterIconButton count={countListFilters(listFilters)} onPress={() => setFiltersOpen(true)} />
+            <SortIconButton
+              currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+              active={sort !== 'pending'}
               onPress={() => setSortOpen(true)}
-              style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-            </Pressable>
+            />
           </View>
           <FilterChipRow options={FILTER_OPTIONS} value={filter} onChange={setFilter} />
+          <ListFilterSummary
+            countText={resultCountText(displayIndexes.length, totalCount)}
+            filters={listFilters}
+            keys={ALL_LIST_FILTER_KEYS}
+            onChange={setListFilters}
+          />
         </View>
 
         <ScrollView
@@ -393,6 +412,10 @@ export function InventorySetupScreen() {
             );
           })}
 
+          {pagination.pageItems.length === 0 && (search.trim() || countListFilters(listFilters) > 0) ? (
+            <EmptyState {...listFilterEmptyMessage(Boolean(search.trim()))} />
+          ) : null}
+
           {pagination.showPagination ? (
             <View style={styles.pager}>
               <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
@@ -437,6 +460,13 @@ export function InventorySetupScreen() {
         ) : null}
       </View>
 
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={listFilters}
+        keys={ALL_LIST_FILTER_KEYS}
+        onChange={setListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
       <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
         <View style={styles.sortList}>
           {SORT_OPTIONS.map((option) => {
@@ -475,16 +505,6 @@ const styles = StyleSheet.create({
   filters: { gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: managerColors.cardSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pressed: { opacity: 0.75 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: {

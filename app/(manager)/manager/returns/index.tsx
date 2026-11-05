@@ -15,6 +15,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { returnStatusBadgeLabel, returnStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
+import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import type { StockReturnSummary } from '@/features/returns/ReturnListItem';
@@ -131,14 +132,11 @@ export default function ManagerReturnsScreen() {
             <View style={styles.searchField}>
               <SearchInput value={search} onChangeText={setSearch} placeholder="Search return # or branch" />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+            <SortIconButton
+              currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+              active={sort !== 'newest'}
               onPress={() => setSortOpen(true)}
-              style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-            </Pressable>
+            />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Date range: ${DATE_RANGE_LABELS[dateRange]}`}
@@ -270,7 +268,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sortButtonActive: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  sortButtonActive: { borderColor: '#C9D7F2', backgroundColor: '#EAF0FB' },
   pressed: { opacity: 0.75 },
   dateSheetBody: { paddingBottom: 8 },
   sortList: { gap: 8, paddingBottom: 8 },

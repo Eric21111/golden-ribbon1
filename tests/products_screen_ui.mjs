@@ -66,11 +66,13 @@ const card = read('src/components/dashboard/ListRowCard.tsx');
 
 // ---------------------------------------------------------------- 3. filter / sort clarity
 {
-  assert.match(screen, /sort !== DEFAULT_SORT && styles\.sortButtonOn/, 'a changed sort looks "on", like Filters');
-  assert.match(screen, /accessibilityHint="Opens the sort options"/);
-  assert.match(screen, /accessibilityLabel=\{`Sort: \$\{SORT_OPTIONS\.find/, 'the label says the current sort');
-  assert.match(controls, /accessibilityHint="Opens the filters"/);
-  assert.match(controls, /accessibilityLabel=\{count > 0 \? `Filters, \$\{count\} on` : 'Filters'\}/);
+  const toolbar = read('src/components/dashboard/ToolbarIconButtons.tsx');
+  assert.match(screen, /active=\{sort !== DEFAULT_SORT\}/, 'a changed sort looks "on", like Filters');
+  assert.match(toolbar, /accessibilityHint=\{hint\}/);
+  assert.match(toolbar, /hint="Opens the sort options"/);
+  assert.match(screen, /currentLabel=\{SORT_OPTIONS\.find/, 'the label says the current sort');
+  assert.match(toolbar, /label=\{count > 0 \? `\$\{label\}, \$\{count\} on` : label\}/);
+  assert.match(toolbar, /hint="Opens the filters"/);
   assert.match(controls, /resultCountText\(resultCount, totalCount\)/);
   assert.match(controls, /accessibilityLiveRegion="polite"/, 'a changed result count is announced');
   assert.match(screen, /totalCount=\{query\.data\?\.length \?\? 0\}/);

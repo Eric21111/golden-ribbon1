@@ -117,10 +117,10 @@ export function buildCatalogRows(
   return rows;
 }
 
-/** "6 products listed at SM1" or "6 products listed at SM1 · 2 not in POS". */
+/** "6 products at SM1" or "6 products at SM1 · 2 not in POS". */
 export function catalogSummary(rows: CatalogRow[], branchName: string): string {
   const notInPos = rows.filter((row) => !row.inPos).length;
-  const base = `${rows.length} ${rows.length === 1 ? 'product' : 'products'} listed at ${branchName}`;
+  const base = `${rows.length} ${rows.length === 1 ? 'product' : 'products'} at ${branchName}`;
   return notInPos > 0 ? `${base} · ${notInPos} not in POS` : base;
 }
 
@@ -148,8 +148,7 @@ export function posLines(row: CatalogRow, branchName: string): string[] {
 export function catalogEmptyState(branchName: string, hasSearch: boolean): { title: string; message: string } {
   if (hasSearch) return { title: 'No matches', message: 'Try another name or SKU.' };
   return {
-    title: `Nothing listed at ${branchName}`,
-    message:
-      'A product is listed here once it has a price at this branch, or once stock of a priced product that is sold in POS is sent to it. Set a branch price in Products, or send stock from Inventory.',
+    title: `Nothing at ${branchName}`,
+    message: 'Set a price in Products to list it here.',
   };
 }

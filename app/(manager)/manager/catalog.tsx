@@ -1,5 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useEffect, useMemo, useState } from 'react';
+import { router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -8,11 +9,13 @@ import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
+import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
 import {
@@ -152,14 +155,11 @@ export default function BranchCatalogScreen() {
                     placeholder="Search product name or SKU"
                   />
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+                <SortIconButton
+                  currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+                  active={sort !== 'name-asc'}
                   onPress={() => setSortOpen(true)}
-                  style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
-                >
-                  <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-                </Pressable>
+                />
               </View>
               <FilterChipRow
                 options={sellingBranches.map((branch) => ({
@@ -173,14 +173,9 @@ export default function BranchCatalogScreen() {
           ) : null}
 
           {sellingBranches.length > 0 && !loading && !loadError ? (
-            <View style={styles.summaryBlock}>
-              <Text accessibilityLiveRegion="polite" style={styles.summary}>
-                {catalogSummary(visibleRows, branchName)}
-              </Text>
-              <Text style={styles.note}>
-                Listed means priced at this branch. "In POS" means it is on the cashier menu, which does not guarantee stock or recipe ingredients. Stock levels are not shown here.
-              </Text>
-            </View>
+            <Text accessibilityLiveRegion="polite" style={styles.summary}>
+              {catalogSummary(visibleRows, branchName)}
+            </Text>
           ) : null}
 
           {loadError ? (
@@ -207,7 +202,14 @@ export default function BranchCatalogScreen() {
               keyExtractor={(row) => row.product.id}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              ListEmptyComponent={<EmptyState {...catalogEmptyState(branchName, Boolean(search.trim()))} />}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <EmptyState {...catalogEmptyState(branchName, Boolean(search.trim()))} />
+                  {search.trim() ? null : (
+                    <ManagerActionButton label="Go to Products" variant="secondary" style={styles.emptyAction} onPress={() => router.push('/manager/products')} />
+                  )}
+                </View>
+              }
               ListFooterComponent={
                 pagination.showPagination ? (
                   <View style={styles.pager}>
@@ -296,18 +298,9 @@ const styles = StyleSheet.create({
   filters: { gap: 12 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: managerColors.cardSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pressed: { opacity: 0.75 },
-  summaryBlock: { gap: 2 },
+  emptyAction: { paddingHorizontal: 28 },
+  empty: { flex: 1, alignItems: 'center', gap: 4, paddingHorizontal: 24 },
   summary: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   note: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },

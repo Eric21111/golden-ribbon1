@@ -16,6 +16,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
+import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import {
@@ -25,6 +26,17 @@ import {
   type StockFilter,
 } from '@/features/inventory/inventoryStatus';
 import { categoryRowProps } from '@/features/products/productCategoryIndicator';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import {
+  ALL_LIST_FILTER_KEYS,
+  DEFAULT_LIST_FILTERS,
+  countListFilters,
+  listFilterEmptyMessage,
+  matchesListFilters,
+  productSearchText,
+  type ListFilters,
+} from '@/features/products/listFilters';
+import { resultCountText } from '@/features/products/productFilters';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
@@ -70,6 +82,8 @@ export default function ManagerInventoryScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StockFilter>('all');
   const [sort, setSort] = useState<SortOption>('name-asc');
+  const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
 
@@ -78,8 +92,9 @@ export default function ManagerInventoryScreen() {
     const term = search.trim().toLowerCase();
     const rows = items.filter((item) => {
       if (!matchesStockFilter(item, filter)) return false;
+      if (!matchesListFilters(item.product, listFilters)) return false;
       if (!term) return true;
-      return `${item.product.name} ${item.product.sku}`.toLowerCase().includes(term);
+      return productSearchText(item.product).includes(term);
     });
     return [...rows].sort((a, b) => {
       switch (sort) {
@@ -93,9 +108,9 @@ export default function ManagerInventoryScreen() {
           return a.product.name.localeCompare(b.product.name);
       }
     });
-  }, [query.data, filter, search, sort]);
+  }, [query.data, filter, search, sort, listFilters]);
 
-  const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}`, 10);
+  const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}|${JSON.stringify(listFilters)}`, 10);
 
   const filterOptions = useMemo(() => {
     const base: Array<{ label: string; value: StockFilter }> = [
@@ -108,8 +123,11 @@ export default function ManagerInventoryScreen() {
     return base;
   }, [isMain]);
 
+  const listFiltersOn = countListFilters(listFilters) > 0;
   const empty =
-    filter === 'all' && !search.trim()
+    listFiltersOn
+      ? listFilterEmptyMessage(Boolean(search.trim()))
+      : filter === 'all' && !search.trim()
       ? {
           title: isMain ? 'No inventory found' : 'No inventory initialized',
           message: isMain ? 'Add products, then set opening stock.' : 'Received products will appear here.',
@@ -169,14 +187,12 @@ export default function ManagerInventoryScreen() {
             <View style={styles.searchField}>
               <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+            <FilterIconButton count={countListFilters(listFilters)} onPress={() => setFiltersOpen(true)} />
+            <SortIconButton
+              currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+              active={sort !== 'name-asc'}
               onPress={() => setSortOpen(true)}
-              style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-            </Pressable>
+            />
           </View>
           <FilterChipRow options={filterOptions} value={filter} onChange={setFilter} />
         </View>
@@ -187,9 +203,18 @@ export default function ManagerInventoryScreen() {
           <LoadingState label="Loading inventory…" />
         ) : (
           <>
-            <Text style={styles.resultsCount}>
-              {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
-            </Text>
+            {listFiltersOn ? (
+              <ListFilterSummary
+                countText={resultCountText(filtered.length, query.data?.length)}
+                filters={listFilters}
+                keys={ALL_LIST_FILTER_KEYS}
+                onChange={setListFilters}
+              />
+            ) : (
+              <Text style={styles.resultsCount}>
+                {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
+              </Text>
+            )}
             <FlatList
               data={pagination.pageItems}
               keyExtractor={(item) => item.product.id}
@@ -317,6 +342,13 @@ export default function ManagerInventoryScreen() {
         ) : null}
       </BottomSheet>
 
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={listFilters}
+        keys={ALL_LIST_FILTER_KEYS}
+        onChange={setListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
       <BottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
         <View style={styles.sortList}>
           {SORT_OPTIONS.map((option) => {
@@ -355,16 +387,6 @@ const styles = StyleSheet.create({
   filters: { gap: 12, marginBottom: 14 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: managerColors.cardSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pressed: { opacity: 0.75 },
   sortList: { gap: 8, paddingBottom: 8 },
   sortRow: {

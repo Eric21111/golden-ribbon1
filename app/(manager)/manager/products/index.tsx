@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
+import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
 import {
   CreateProductWizard,
@@ -29,7 +30,6 @@ import {
 } from '@/features/products/EditProductWizard';
 import { ProductFilterButton, ProductFilterSummary, ProductFiltersSheet } from '@/features/products/ProductFilterControls';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
-import type { KeepOff } from '@/features/products/branchPricingEdit';
 import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import {
   CATEGORY_CHIP_CHOICES,
@@ -59,7 +59,6 @@ import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
 import { confirmAction } from '@/lib/confirmAction';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
-import { configureBranchProducts, configureBranchProductVariants } from '@/services/branchProductService';
 import { setProductCategory, setProductNonReturnable, setProductSellInPos, setProductStatus } from '@/services/productService';
 import type { Product } from '@/types/models';
 
@@ -259,7 +258,7 @@ export default function ManagerProductListScreen() {
       });
   };
 
-  const submitEdit = (values: EditProductValues, catalogDrafts: EditBranchPricingDraft[], keepOff: KeepOff[]) => {
+  const submitEdit = (values: EditProductValues, catalogDrafts: EditBranchPricingDraft[]) => {
     if (!editProduct) return;
     if (!tryBeginSubmit(editSubmittingRef)) return;
     setIsEditSubmitting(true);
@@ -309,38 +308,6 @@ export default function ManagerProductListScreen() {
             await setProductCategory(productId, values.productCategory);
           } catch {
             setCreateNotice('Saved. Category was not saved, so it may not show under Drinks.');
-          }
-        }
-        // Saving a branch switches its product and options back on. Whatever was switched off there is switched off again with the
-        // existing branch functions. If one fails the branch is named, because those options may be on until it is fixed.
-        if (keepOff.length > 0) {
-          const failed: string[] = [];
-          for (const entry of keepOff) {
-            try {
-              if (entry.productOff) {
-                await configureBranchProducts(entry.branchId, [
-                  { product_id: productId, selling_price: Number(entry.productPrice), is_active: false },
-                ]);
-              }
-              if (entry.offOptions.length > 0) {
-                await configureBranchProductVariants(
-                  entry.branchId,
-                  productId,
-                  entry.offOptions.map((option) => ({ name: option.name, selling_price: Number(option.price), is_active: false })),
-                );
-              }
-            } catch {
-              failed.push(branchOptions.find((branch) => branch.id === entry.branchId)?.name ?? 'a branch');
-            }
-          }
-          await Promise.all([
-            client.invalidateQueries({ queryKey: ['branch-products'] }),
-            client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
-          ]);
-          if (failed.length > 0) {
-            setCreateNotice((current) =>
-              `${current ? `${current} ` : ''}Saved, but what was switched off at ${failed.join(', ')} may be on again. Check Branch Catalogs.`,
-            );
           }
         }
         editDirtyRef.current = false;
@@ -398,15 +365,11 @@ export default function ManagerProductListScreen() {
                 <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
               </View>
               <ProductFilterButton count={countSheetFilters(filters)} onPress={() => setFiltersOpen(true)} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
-                accessibilityHint="Opens the sort options"
+              <SortIconButton
+                currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+                active={sort !== DEFAULT_SORT}
                 onPress={() => setSortOpen(true)}
-                style={({ pressed }) => [styles.sortButton, sort !== DEFAULT_SORT && styles.sortButtonOn, pressed && styles.pressed]}
-              >
-                <Ionicons name="swap-vertical-outline" size={20} color={sort !== DEFAULT_SORT ? managerColors.royalBlue : managerColors.ink} />
-              </Pressable>
+              />
             </View>
             <FilterChipRow
               options={CATEGORY_CHIPS}
@@ -648,17 +611,6 @@ const styles = StyleSheet.create({
   createNotice: { color: '#92400E', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: managerColors.cardSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sortButtonOn: { borderColor: '#C9D7F2', backgroundColor: '#EAF0FB' },
   // One small fact (icon + words). Facts wrap onto the next line as whole items, never in the middle of a phrase.
   fact: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   factText: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },

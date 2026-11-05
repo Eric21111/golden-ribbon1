@@ -45,7 +45,7 @@ const pricingSrc = read('src/features/products/BranchPricingStep.tsx');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
     // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
-    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
+    const end = src.indexOf(name === 'edit' ? '      send,' : '      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
     for (const forbidden of ['previewNotice', 'stockSummaries']) {
@@ -66,8 +66,8 @@ const pricingSrc = read('src/features/products/BranchPricingStep.tsx');
   assert.equal(decideClose({ dirty: true, submitting: true }), 'close', 'a save in flight is never interrupted');
   assert.equal(decideClose({ dirty: false, submitting: true }), 'close');
 
-  assert.equal(DISCARD_DIALOG.cancel, 'Continue Editing');
-  assert.equal(DISCARD_DIALOG.confirm, 'Discard Changes');
+  assert.equal(DISCARD_DIALOG.cancel, 'Keep Editing');
+  assert.equal(DISCARD_DIALOG.confirm, 'Discard');
 
   const start = {
     name: '',
@@ -157,7 +157,9 @@ const pricingSrc = read('src/features/products/BranchPricingStep.tsx');
     const end = src.indexOf('\n  }\n', start);
     assert.ok(start > 0 && end > start, `${name}: switchPricingMode found`);
     const body = src.slice(start, end);
-    assert.doesNotMatch(body, /setPriceDrafts\(/, `${name}: switching mode must not clear branch prices`);
+    // the only thing it does to the drafts is start branches that have none from the same-for-all prices (nothing is cleared)
+    assert.doesNotMatch(body.replace(/setPriceDrafts\(\(current\) => \{[\s\S]*?\n      \}\);/, ''), /setPriceDrafts\(/, `${name}: switching mode must not clear branch prices`);
+    assert.match(body, /if \(!next\[branch\.id\]\) next\[branch\.id\] = \{ base: uniformBase, variantPrices: \{ \.\.\.uniformVariantPrices \} \};/, `${name}: only branches without a draft are seeded`);
     assert.doesNotMatch(body, /setUniformBase\(/, `${name}: switching mode must not clear the same-for-all price`);
     assert.doesNotMatch(body, /setUniformVariantPrices\(/, `${name}: switching mode must not clear same-for-all variant prices`);
     assert.match(body, /setPricingMode\(mode\)/);
@@ -172,11 +174,10 @@ const pricingSrc = read('src/features/products/BranchPricingStep.tsx');
     assert.match(src, /Enter a price for every variant\./);
     assert.match(src, /Enter a price for every variant on each selected branch\./);
     assert.match(src, /Complete the pricing for all selected branches\./);
-    // the pricing step is told when the other mode's prices are kept
-    assert.match(src, /otherModePricesKept=\{otherModePricesKept\}/);
+    // the pricing step no longer shows a "prices are kept" sentence
+    assert.doesNotMatch(src, /otherModePricesKept/);
   }
-  assert.match(pricingSrc, /Your per-branch prices are kept if you switch back\./);
-  assert.match(pricingSrc, /Your same-for-all prices are kept if you switch back\./);
+  assert.doesNotMatch(pricingSrc, /are kept if you switch back/);
   console.log('phase1 pricing mode switching: ok');
 }
 

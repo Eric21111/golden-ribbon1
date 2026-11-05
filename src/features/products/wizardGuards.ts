@@ -79,8 +79,8 @@ export function decideClose(options: { dirty: boolean; submitting: boolean }): C
 export const DISCARD_DIALOG = {
   title: 'Discard changes?',
   message: 'You have unsaved changes. If you close now, they will be lost.',
-  cancel: 'Continue Editing',
-  confirm: 'Discard Changes',
+  cancel: 'Keep Editing',
+  confirm: 'Discard',
 } as const;
 
 // ---- product-level "Stock Used Per Order" (products without variants)
@@ -171,6 +171,14 @@ export function defaultsForProductSetup(category: string): { enabled: boolean; s
   return { enabled: true, sellSeparately: true };
 }
 
+/**
+ * Keep Unsold Stock at Branch starts ON for Drinks (bottled water and the like do not spoil overnight) and OFF for every other
+ * setup type. Chosen from the setup type only, never from the product name. A manual change to the switch is kept.
+ */
+export function defaultKeepUnsoldStock(category: string): boolean {
+  return category === 'drinks';
+}
+
 /** Applies those defaults unless the user has already moved that switch themselves. */
 export function applySetupDefaults(options: {
   category: string;
@@ -194,18 +202,22 @@ export function isSaveSupported(_flow: WizardFlow): boolean {
 // ---- price field feedback (Step 3)
 
 /**
- * Whether one price field should be flagged as "missing". Only once an error is showing, and only when the
- * same list already has some prices entered (a list the user hasn't started yet isn't flagged field by field).
+ * Whether one price field should be flagged as "missing". Only once an error is showing. A list that must be priced (the same
+ * prices for all branches, or per branch with no branch priced yet) flags every empty field. Otherwise (a branch the user
+ * chose to leave unpriced) only a list that already has some prices entered is flagged field by field.
  */
 export function isPriceMissing(options: {
   showErrors: boolean;
   prices: Record<string, string>;
   keys: string[];
   key: string;
+  /** True when this list has to be priced for the save to go through. */
+  required?: boolean;
 }): boolean {
   if (!options.showErrors) return false;
+  if ((options.prices[options.key] ?? '').trim() !== '') return false;
   const anyFilled = options.keys.some((key) => (options.prices[key] ?? '').trim() !== '');
-  return anyFilled && (options.prices[options.key] ?? '').trim() === '';
+  return Boolean(options.required) || anyFilled;
 }
 
 // ---- first option card (Create, Meals and Snacks)

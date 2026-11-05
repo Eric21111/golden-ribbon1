@@ -14,6 +14,7 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
+import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -22,6 +23,14 @@ import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductRow } from '@/features/pos/PosProductRow';
 import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import {
+  DEFAULT_LIST_FILTERS,
+  countListFilters,
+  matchesListFilters,
+  type ListFilterKey,
+  type ListFilters,
+} from '@/features/products/listFilters';
 import { buildStockContext, maxLineQuantity, withCartLimits } from '@/features/pos/posAvailability';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCashierPosInventory } from '@/hooks/useInventory';
@@ -35,12 +44,17 @@ import type { PosDrinkChoice } from '@/stores/cartStore';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 const POS_PAGE_SIZE = 10;
+// The cashier catalog only holds products that are sold in the POS and the cashier cannot see their close-of-day setting, so
+// the only filter that means something here is the category.
+const POS_FILTER_KEYS: ListFilterKey[] = ['category'];
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
   const { posSplit } = useLayout();
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
+  const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const shiftQuery = useActiveShift(cashierId);
@@ -82,11 +96,12 @@ export default function CashierPosScreen() {
   }, [items, stockContext]);
 
   const filteredInventory = useMemo(
-    () => filterPosInventory(limitedInventory, search),
-    [limitedInventory, search],
+    () => filterPosInventory(limitedInventory.filter((item) => matchesListFilters(item.product, listFilters)), search),
+    [limitedInventory, search, listFilters],
   );
+  const filtersOn = countListFilters(listFilters, POS_FILTER_KEYS) > 0;
 
-  const pagination = useClientPagination(filteredInventory, search, POS_PAGE_SIZE);
+  const pagination = useClientPagination(filteredInventory, `${search}|${listFilters.category}`, POS_PAGE_SIZE);
 
   const quantitiesByProduct = useMemo(() => {
     const map = new Map<string, Map<string | null, number>>();
@@ -194,10 +209,10 @@ export default function CashierPosScreen() {
       }
       ListEmptyComponent={
         <EmptyState
-          title={search.trim() ? 'No products found' : 'No products in stock'}
+          title={search.trim() || filtersOn ? 'No products found' : 'No products in stock'}
           message={
-            search.trim()
-              ? 'Try another product name or SKU.'
+            search.trim() || filtersOn
+              ? 'Try another name, SKU or category.'
               : 'In-stock items appear here. Search by name or SKU to find out-of-stock products.'
           }
         />
@@ -227,11 +242,20 @@ export default function CashierPosScreen() {
   );
 
   const searchField = (
-    <SearchInput
-      value={search}
-      onChangeText={setSearch}
-      placeholder="Search product name or SKU"
-    />
+    <View style={styles.searchBlock}>
+      <View style={styles.searchRow}>
+        <View style={styles.searchGrow}>
+          <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
+        </View>
+        <FilterIconButton count={countListFilters(listFilters, POS_FILTER_KEYS)} onPress={() => setFiltersOpen(true)} />
+      </View>
+      <ListFilterSummary
+        countText={`${filteredInventory.length} ${filteredInventory.length === 1 ? 'product' : 'products'}`}
+        filters={listFilters}
+        keys={POS_FILTER_KEYS}
+        onChange={setListFilters}
+      />
+    </View>
   );
 
   const changeCartQuantity = (productId: string, variantId: string | null, quantity: number, drinkId: string | null = null) => {
@@ -305,6 +329,13 @@ export default function CashierPosScreen() {
           {mobileFooter}
         </View>
       )}
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={listFilters}
+        keys={POS_FILTER_KEYS}
+        onChange={setListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
       <PosItemSheet
         item={activeSheetItem}
         quantityByVariant={sheetItem ? quantitiesByProduct.get(sheetItem.product.id) ?? new Map() : new Map()}
@@ -344,6 +375,9 @@ const styles = StyleSheet.create({
   orderPane: { flex: 1, minWidth: 280, maxWidth: 420, minHeight: 0 },
   top: { gap: spacing.sm },
   searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
+  searchBlock: { gap: spacing.sm },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchGrow: { flex: 1 },
   list: { flex: 1, minHeight: 0 },
   listContent: {
     paddingHorizontal: 20,

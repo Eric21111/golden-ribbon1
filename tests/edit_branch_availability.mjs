@@ -1,14 +1,13 @@
-// Edit Product must not silently switch things back on. update_complete_product writes every branch it is SENT and sets the
-// branch product and each option ON; it never touches a branch it is not sent. The wizard therefore sends only the branches whose
-// prices actually changed (planBranchSave) and switches back off, with the existing configure_* functions, whatever was off at a
-// branch it did send. Real RPCs on PGlite (Postgres WASM, not a native PostgreSQL), mirroring what the products screen does.
+// Edit Product keeps what is switched off. update_complete_product (20261027100000) writes every branch it is SENT without
+// switching existing rows back on, so the wizard has no restore step: it only skips the branches whose prices did not change
+// (branchesToSend). Real RPCs on PGlite (Postgres WASM, not a native PostgreSQL), mirroring what the products screen does.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { loadTs } from './_load_ts.mjs';
 
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-const { planBranchSave, keptOffNotes, branchesToAdd } = loadTs('src/features/products/branchPricingEdit.ts');
+const { branchesToSend, branchesToAdd, branchesCarrying, switchedOffAtBranches } = loadTs('src/features/products/branchPricingEdit.ts');
 const J = JSON.stringify;
 
 const db = new PGlite();
@@ -18,9 +17,8 @@ await db.exec(`
   create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema public, auth to authenticated; grant execute on function auth.uid() to authenticated;
 `);
-// the DEPLOYED backend: this file shows the current app against it. The follow-up migration that makes Edit keep availability
-// atomically (20261027100000) is tested in edit_product_atomic_availability.mjs.
-for (const f of readdirSync('supabase/migrations').filter((n) => n.endsWith('.sql')).sort().filter((n) => n < '20261027100000')) await db.exec(read(`supabase/migrations/${f}`).replace(/create extension if not exists pgcrypto;/g, ''));
+// the backend with the edit-keeps-availability migration (20261027100000); later migrations are covered in edit_product_atomic_availability.mjs.
+for (const f of readdirSync('supabase/migrations').filter((n) => n.endsWith('.sql')).sort().filter((n) => n < '20261028')) await db.exec(read(`supabase/migrations/${f}`).replace(/create extension if not exists pgcrypto;/g, ''));
 const id = (n) => `85000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const [mgr, c1, main, sm1, sm2] = [id(2), id(4), id(10), id(11), id(12)];
 const BRANCHES = [{ id: sm1, name: 'SM1' }, { id: sm2, name: 'SM2' }];
@@ -92,13 +90,6 @@ const saveCombo = (variants, send) =>
       [combo.id, J(variants.map((v) => ({ id: v.id, name: v.name, default_price: v.default_price }))), J(send.map((d) => ({ branch_id: d.branchId, variants: d.variants })))],
     ),
   );
-// exactly what the products screen does after a successful save (app/(manager)/manager/products/index.tsx)
-const applyKeepOff = async (productId, keepOff) => {
-  for (const entry of keepOff) {
-    if (entry.productOff) await as(mgr, () => db.query('select public.configure_branch_products($1,$2::jsonb)', [entry.branchId, J([{ product_id: productId, selling_price: Number(entry.productPrice), is_active: false }])]));
-    if (entry.offOptions.length > 0) await as(mgr, () => db.query('select public.configure_branch_product_variants($1,$2,$3::jsonb)', [entry.branchId, productId, J(entry.offOptions.map((o) => ({ name: o.name, selling_price: Number(o.price), is_active: false })))]));
-  }
-};
 const optionRow = async (b, name) => (await db.query('select selling_price::numeric p, is_active from public.branch_product_variants where branch_id=$1 and product_id=$2 and name=$3', [b, combo.id, name])).rows[0];
 const productRow = async (b, product = combo) => (await db.query('select selling_price::numeric p, is_active from public.branch_products where branch_id=$1 and product_id=$2', [b, product.id])).rows[0];
 
@@ -112,27 +103,23 @@ const startHistory = await history();
   const src = await source(combo.id);
   const variants = await variantValues();
   const pricing = [optionDraft(sm1, { Small: '30', Large: '50' }), optionDraft(sm2, { Small: '30', Large: '50' })]; // what "Same for All" would submit untouched
-  const plan = planBranchSave({ pricing, variants, ...src });
-  assert.deepEqual(plan, { send: [], keepOff: [] });
-  await saveCombo(variants, plan.send); // an empty branch list is accepted
+  const send = branchesToSend({ pricing, variants, ...src });
+  assert.deepEqual(send, []);
+  await saveCombo(variants, send); // an empty branch list is accepted
   assert.equal(await snapshot(combo.id), startState, 'prices, options, off switches, recipes and master options are all unchanged');
   assert.equal(await history(), startHistory);
   console.log('1. untouched save: ok');
 }
 
-// ---------------------------------------------------------------- 2. one branch's price changed: only that branch is sent, what was off there is switched off again
+// ---------------------------------------------------------------- 2. one branch's price changed: only that branch is sent, what was off there stays off
 {
   const src = await source(combo.id);
   const variants = (await variantValues()).map((v) => (v.name === 'Small' ? { ...v, default_price: '32' } : v));
   const pricing = [optionDraft(sm1, { Small: '32', Large: '50' }), optionDraft(sm2, { Small: '30', Large: '50' })];
-  const plan = planBranchSave({ pricing, variants, ...src });
-  assert.deepEqual(plan.send.map((d) => d.branchId), [sm1], 'SM2 is not sent');
-  assert.deepEqual(plan.keepOff, [{ branchId: sm1, productOff: false, productPrice: '32', offOptions: [{ name: 'Large', price: '50' }] }]);
-  await saveCombo(variants, plan.send);
-  // the backend, as it is: a branch that was sent comes back fully ON
-  assert.equal((await optionRow(sm1, 'Large')).is_active, true, 'update_complete_product switched Large back on at the branch it was sent');
-  await applyKeepOff(combo.id, plan.keepOff);
-  assert.equal((await optionRow(sm1, 'Large')).is_active, false, 'switched off again');
+  const send = branchesToSend({ pricing, variants, ...src });
+  assert.deepEqual(send.map((d) => d.branchId), [sm1], 'SM2 is not sent');
+  await saveCombo(variants, send);
+  assert.equal((await optionRow(sm1, 'Large')).is_active, false, 'Large stays off at the branch that was sent, with no second request');
   assert.deepEqual([Number((await optionRow(sm1, 'Small')).p), (await optionRow(sm1, 'Small')).is_active], [32, true], 'the new price is saved and Small is on');
   assert.equal(Number((await optionRow(sm1, 'Large')).p), 50, 'the off option keeps its price');
   assert.deepEqual([Number((await productRow(sm2)).p), (await productRow(sm2)).is_active], [30, false], 'SM2 untouched (still off)');
@@ -146,10 +133,10 @@ const startHistory = await history();
   const src = await source(combo.id);
   const variants = await variantValues({ Large: 'Big' });
   const pricing = [optionDraft(sm1, { Small: '32', Big: '50' }), optionDraft(sm2, { Small: '30', Big: '50' })];
-  const plan = planBranchSave({ pricing, variants, ...src });
-  assert.deepEqual(plan.send, [], 'a rename is not a price change');
+  const send = branchesToSend({ pricing, variants, ...src });
+  assert.deepEqual(send, [], 'a rename is not a price change');
   const usesBefore = (await snapshot(combo.id)).includes('"uses"');
-  await saveCombo(variants.map((v) => (v.name === 'Small' ? { ...v, default_price: '32' } : v)), plan.send);
+  await saveCombo(variants.map((v) => (v.name === 'Small' ? { ...v, default_price: '32' } : v)), send);
   assert.deepEqual((await optionRow(sm1, 'Big')).is_active, false, 'renamed AND still off at SM1');
   assert.equal(Number((await optionRow(sm2, 'Big')).p), 50, 'renamed at SM2 too, although SM2 was not sent');
   assert.equal((await db.query(`select count(*)::int n from public.product_stock_uses u join public.product_variants v on v.id = u.variant_id where v.name = 'Big'`)).rows[0].n, 2, 'its recipe (meal + Rice) followed the rename');
@@ -158,18 +145,15 @@ const startHistory = await history();
   console.log('3. rename: ok');
 }
 
-// ---------------------------------------------------------------- 4. a branch with the WHOLE product off is changed: it is switched off again
+// ---------------------------------------------------------------- 4. a branch with the WHOLE product off is changed: it stays off, at the new price
 {
   const src = await source(combo.id);
   const variants = (await variantValues({ Large: 'Big' })).map((v) => (v.name === 'Small' ? { ...v, default_price: '32' } : v));
   const pricing = [optionDraft(sm1, { Small: '32', Big: '50' }), optionDraft(sm2, { Small: '33', Big: '50' })];
-  const plan = planBranchSave({ pricing, variants, ...src });
-  assert.deepEqual(plan.send.map((d) => d.branchId), [sm2]);
-  assert.deepEqual(plan.keepOff, [{ branchId: sm2, productOff: true, productPrice: '33', offOptions: [] }]);
-  await saveCombo(variants, plan.send);
-  assert.equal((await productRow(sm2)).is_active, true, 'backend: the branch product came back on');
-  await applyKeepOff(combo.id, plan.keepOff);
-  assert.deepEqual([Number((await productRow(sm2)).p), (await productRow(sm2)).is_active], [33, false], 'off again, at the new price');
+  const send = branchesToSend({ pricing, variants, ...src });
+  assert.deepEqual(send.map((d) => d.branchId), [sm2]);
+  await saveCombo(variants, send);
+  assert.deepEqual([Number((await productRow(sm2)).p), (await productRow(sm2)).is_active], [33, false], 'still off, at the new price');
   assert.equal(Number((await optionRow(sm2, 'Small')).p), 33);
   console.log('4. branch product off: ok');
 }
@@ -180,56 +164,79 @@ const startHistory = await history();
   let src = await source(solo.id);
   assert.deepEqual(branchesToAdd(BRANCHES, src), ['SM2']);
   // untouched
-  assert.deepEqual(planBranchSave({ pricing: [{ branchId: sm1, selling_price: '40' }], variants: [], ...src }), { send: [], keepOff: [] });
+  assert.deepEqual(branchesToSend({ pricing: [{ branchId: sm1, selling_price: '40' }], variants: [], ...src }), []);
   // "Same for All" 40: SM1 already has it (not sent); SM2 is new, so it IS sent and gets the product
-  const plan = planBranchSave({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '40' }], variants: [], ...src });
-  assert.deepEqual(plan.send.map((d) => d.branchId), [sm2]);
-  await as(mgr, () => db.query(`select * from public.update_complete_product(p_product_id:=$1,p_name:='Solo',p_sku:='SOLO-EB',p_description:=null,p_is_active:=true,p_variants:='[]'::jsonb,p_deleted_variant_ids:='[]'::jsonb,p_branches:=$2::jsonb,p_selling_price:='40')`, [solo.id, J(plan.send.map((d) => ({ branch_id: d.branchId, selling_price: d.selling_price })))]));
+  const send = branchesToSend({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '40' }], variants: [], ...src });
+  assert.deepEqual(send.map((d) => d.branchId), [sm2]);
+  await as(mgr, () => db.query(`select * from public.update_complete_product(p_product_id:=$1,p_name:='Solo',p_sku:='SOLO-EB',p_description:=null,p_is_active:=true,p_variants:='[]'::jsonb,p_deleted_variant_ids:='[]'::jsonb,p_branches:=$2::jsonb,p_selling_price:='40')`, [solo.id, J(send.map((d) => ({ branch_id: d.branchId, selling_price: d.selling_price })))]));
   assert.deepEqual([Number((await productRow(sm2, solo)).p), (await productRow(sm2, solo)).is_active], [40, true], 'SM2 now carries it');
   // different prices per branch open as different prices and an untouched save sends nothing
   await as(mgr, () => db.query(`select * from public.update_complete_product(p_product_id:=$1,p_name:='Solo',p_sku:='SOLO-EB',p_description:=null,p_is_active:=true,p_variants:='[]'::jsonb,p_deleted_variant_ids:='[]'::jsonb,p_branches:=$2::jsonb,p_selling_price:='40')`, [solo.id, J([{ branch_id: sm2, selling_price: '45' }])]));
   src = await source(solo.id);
   assert.deepEqual(src.sourceBranchPrices.map((r) => [r.branch_id === sm1 ? 'SM1' : 'SM2', r.selling_price]).sort(), [['SM1', 40], ['SM2', 45]]);
-  assert.deepEqual(planBranchSave({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '45' }], variants: [], ...src }), { send: [], keepOff: [] }, 'different prices, untouched: nothing sent');
+  assert.deepEqual(branchesToSend({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '45' }], variants: [], ...src }), [], 'different prices, untouched: nothing sent');
   // changing one branch sends only that one and leaves the other price alone
-  const one = planBranchSave({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '50' }], variants: [], ...src });
-  assert.deepEqual(one.send.map((d) => d.branchId), [sm2]);
+  const one = branchesToSend({ pricing: [{ branchId: sm1, selling_price: '40' }, { branchId: sm2, selling_price: '50' }], variants: [], ...src });
+  assert.deepEqual(one.map((d) => d.branchId), [sm2]);
   console.log('5. single price: ok');
 }
 
-// ---------------------------------------------------------------- 6. the Step 3 notes
-{
-  const src = await source(combo.id);
-  const variants = (await source(combo.id)).sourceVariants.map((v) => ({ id: v.id, name: v.name, default_price: '' }));
-  assert.deepEqual(keptOffNotes(BRANCHES, { variants, ...src }), ['Big is switched off at SM1.', 'The product is switched off at SM2.']);
-  console.log('6. notes: ok');
-}
-
-// ---------------------------------------------------------------- 7. control: what the OLD wizard did (sent every branch) switched everything back on
+// ---------------------------------------------------------------- 6. sending EVERY branch (a stale or older client) no longer switches anything back on
 {
   const variants = await variantValues({ Large: 'Big' });
   await saveCombo(variants, [optionDraft(sm1, { Small: '32', Big: '50' }), optionDraft(sm2, { Small: '33', Big: '50' })]);
-  assert.equal((await optionRow(sm1, 'Big')).is_active, true, 'old behavior: the option that was off is on again');
-  assert.equal((await productRow(sm2)).is_active, true, 'old behavior: the branch product that was off is on again');
-  console.log('7. control (old behavior): ok');
+  assert.equal((await optionRow(sm1, 'Big')).is_active, false, 'the option that was off stays off');
+  assert.equal((await productRow(sm2)).is_active, false, 'the branch product that was off stays off');
+  assert.equal(await history(), startHistory);
+  console.log('6. every branch sent: ok');
 }
 
-// ---------------------------------------------------------------- 8. wiring
+// ---------------------------------------------------------------- 6b. Edit shows the existing branches as they are, including what is switched off
+{
+  const src = await source(combo.id);
+  const wizardVariants = (await variantValues({ Large: 'Big' })).map((v) => ({ key: v.id, id: v.id }));
+  assert.deepEqual(branchesCarrying(src).sort(), [sm1, sm2].sort(), 'both branches have option rows: both carry it');
+  const off = switchedOffAtBranches(src, wizardVariants);
+  assert.deepEqual(off.productOff, [sm2], 'the whole product is off at SM2');
+  const bigKey = (await source(combo.id)).sourceVariants.find((v) => v.name === 'Big').id;
+  assert.deepEqual(off.optionsOff, { [sm1]: [bigKey] }, 'Big is off at SM1, matched through the option id (works after a rename too)');
+  // a branch row with NO option rows is not "carried" yet: it keeps its switch and starts off
+  const partial = {
+    sourceVariants: [{ id: 'v1', name: 'Small', default_price: 30 }],
+    sourceBranchPrices: [{ branch_id: sm1, selling_price: 30, is_active: true }, { branch_id: sm2, selling_price: 30, is_active: true }],
+    sourceBranchVariantPrices: [{ branch_id: sm1, name: 'Small', selling_price: 30, is_active: true }],
+  };
+  assert.deepEqual(branchesCarrying(partial), [sm1]);
+  // without options it is the branch rows that count (switched-off rows count too: the product is still listed there)
+  assert.deepEqual(branchesCarrying({ sourceVariants: [], sourceBranchPrices: partial.sourceBranchPrices.map((r) => ({ ...r, is_active: false })), sourceBranchVariantPrices: [] }).sort(), [sm1, sm2].sort());
+  // nothing is written for a branch that is only being shown: an untouched save still sends nothing and changes nothing
+  const before = await snapshot(combo.id);
+  const variants = await variantValues({ Large: 'Big' });
+  const none = branchesToSend({ pricing: [optionDraft(sm1, { Small: String(Number((await optionRow(sm1, 'Small')).p)), Big: '50' }), optionDraft(sm2, { Small: String(Number((await optionRow(sm2, 'Small')).p)), Big: '50' })], variants, ...src });
+  assert.deepEqual(none, [], 'prices as saved: nothing to send');
+  assert.equal(await snapshot(combo.id), before);
+  console.log('6b. existing branches: ok');
+}
+
+// ---------------------------------------------------------------- 7. wiring: the restore step and its warnings are gone
 {
   const wizard = read('src/features/products/EditProductWizard.tsx');
   const screen = read('app/(manager)/manager/products/index.tsx');
-  assert.match(wizard, /const plan = planBranchSave\(\{/);
-  assert.match(wizard, /\n      plan\.send,\n      plan\.keepOff,\n/);
+  const step = read('src/features/products/BranchPricingStep.tsx');
+  assert.match(wizard, /const send = branchesToSend\(\{/);
+  assert.match(wizard, /\n      send,\n/);
   assert.match(wizard, /mode: \(pricedBranchIds\.length > 0 \? 'different' : 'same'\) as PricingMode,/, 'prefill: not the same everywhere opens as Different per Branch');
   assert.match(screen, /is_active: row\.is_active,/, 'the screen passes the off flags to the wizard');
-  assert.match(screen, /await configureBranchProducts\(entry\.branchId,/);
-  assert.match(screen, /await configureBranchProductVariants\(/);
-  assert.match(screen, /what was switched off at \$\{failed\.join\(', '\)\} may be on again\. Check Branch Catalogs\./, 'a failed re-switch-off is reported by branch');
-  const step = read('src/features/products/BranchPricingStep.tsx');
-  assert.match(step, /Saving adds this product to every selling branch that does not carry it yet/);
-  assert.match(step, /A branch you leave unpriced is not added or changed\./);
-  assert.match(step, /It stays off when you save\./);
-  console.log('8. wiring: ok');
+  for (const [name, src] of [['wizard', wizard], ['screen', screen], ['step', step], ['module', read('src/features/products/branchPricingEdit.ts')]]) {
+    assert.doesNotMatch(src, /keepOff|KeepOff|keptOffNotes|planBranchSave|It stays off when you save|may be on again/, `${name}: no restore workaround left`);
+  }
+  assert.doesNotMatch(screen, /configureBranchProducts|configureBranchProductVariants/, 'the products screen no longer re-switches anything off');
+  assert.match(step, /Adds it to \$\{toAdd\.join\(', '\)\}\./, 'Same for All names the branches it would add the product to');
+  assert.match(step, /'Add to branch'/, 'the switch says what it does: it adds the product to the branch');
+  assert.doesNotMatch(step, /Sell here|Sell at/, 'no "sell" promise: stock and the POS switches still decide whether it can be sold');
+  assert.match(step, /Already added/, 'a branch that already carries the product is shown as added');
+  assert.match(step, /lockedOnIds\.includes\(branch\.id\)/, 'a branch that already carries the product has no switch');
+  console.log('7. wiring: ok');
 }
 
 console.log('edit_branch_availability: ALL PASS');

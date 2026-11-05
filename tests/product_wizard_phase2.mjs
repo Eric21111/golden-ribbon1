@@ -142,7 +142,7 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
     // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
-    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
+    const end = src.indexOf(name === 'edit' ? '      send,' : '      pricing,', start);
     const block = src.slice(start, end);
     assert.ok(!block.includes('PRODUCT_STOCK_KEY'), `${name}: saved values must not include PRODUCT_STOCK_KEY`);
     assert.match(block, /productCategory:/, `${name}: category is saved for the stock and drink pickers`);
@@ -182,7 +182,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
     const start = src.indexOf('function switchPricingMode');
     const end = src.indexOf('\n  }\n', start);
     const body = src.slice(start, end);
-    assert.doesNotMatch(body, /setPriceDrafts\(|setUniformBase\(|setUniformVariantPrices\(/, `${name}: pricing inputs still preserved`);
+    assert.doesNotMatch(body, /setUniformBase\(|setUniformVariantPrices\(/, `${name}: pricing inputs still preserved`);
+    assert.match(body, /if \(!next\[branch\.id\]\)/, `${name}: per-branch prices are only ever added to, never cleared`);
   }
   console.log('phase2 step labels: ok');
 }
@@ -235,7 +236,7 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
     // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
-    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
+    const end = src.indexOf(name === 'edit' ? '      send,' : '      pricing,', start);
     const block = src.slice(start, end);
     for (const forbidden of ['startsWithOption', 'firstOption', 'shownName']) {
       assert.ok(!block.includes(forbidden), `${name}: saved values must not include ${forbidden}`);

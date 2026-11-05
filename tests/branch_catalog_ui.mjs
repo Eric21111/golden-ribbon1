@@ -15,9 +15,9 @@ const { buildCatalogRows, formatPriceRange, catalogSummary, posLines, catalogEmp
   assert.equal(formatPriceRange(20, 20), '₱20.00');
   assert.equal(formatPriceRange(70, 85), '₱70–₱85', 'whole pesos are shortened');
   assert.equal(formatPriceRange(20.5, 35), '₱20.50–₱35.00', 'with centavos both ends keep them');
-  assert.equal(catalogEmptyState('SM1', false).title, 'Nothing listed at SM1');
+  assert.equal(catalogEmptyState('SM1', false).title, 'Nothing at SM1');
   assert.doesNotMatch(JSON.stringify(catalogEmptyState('SM1', false)), /available/i, 'a listing is not availability');
-  assert.match(catalogEmptyState('SM1', false).message, /price at this branch, or once stock of a priced product that is sold in POS is sent to it/);
+  assert.equal(catalogEmptyState('SM1', false).message, 'Set a price in Products to list it here.');
   assert.doesNotMatch(JSON.stringify(catalogEmptyState('SM1', false)), /sellable/i);
   assert.deepEqual(catalogEmptyState('SM1', true), { title: 'No matches', message: 'Try another name or SKU.' });
   console.log('1. wording and price text: ok');
@@ -122,7 +122,7 @@ console.log('3. listing rule: ok');
   assert.deepEqual(by.Fries.badges, [], 'a normal product carries no badge');
   assert.deepEqual(by.Combo.badges.map((b) => b.label), ['1 option off']);
   assert.equal(by.Fries.inPos && !by['Disabled Soup'].inPos && !by['Becomes Stock Only'].inPos, true);
-  assert.equal(catalogSummary(sm1Rows, 'SM1'), '8 products listed at SM1 · 3 not in POS');
+  assert.equal(catalogSummary(sm1Rows, 'SM1'), '8 products at SM1 · 3 not in POS');
   assert.deepEqual(posLines(by['Disabled Soup'], 'SM1'), ['The product is disabled, so it is not in the cashier POS.']);
   assert.deepEqual(posLines(by['Becomes Stock Only'], 'SM1'), ['It is stock only, so it is not in the cashier POS.']);
   // "in POS" is menu visibility only, and the details say so
@@ -217,18 +217,18 @@ console.log('3. listing rule: ok');
   // wording
   assert.doesNotMatch(screen, /No available products|available here/);
   assert.match(screen, /catalogEmptyState\(branchName, Boolean\(search\.trim\(\)\)\)/);
-  assert.match(screen, /Listed means priced at this branch\. "In POS" means it is on the cashier menu, which does not guarantee stock or recipe ingredients\./);
+  assert.doesNotMatch(screen, /Listed means priced|Stock levels are not shown here/, 'the long explainer is gone from the list screen');
+  assert.match(screen, /<ManagerActionButton label="Go to Products" variant="secondary" style=\{styles\.emptyAction\} onPress=\{\(\) => router\.push\('\/manager\/products'\)\} \/>/, 'empty state offers one way forward');
   assert.doesNotMatch(screen + read('src/features/products/branchCatalogRows.ts'), /sellable|can sell it|Sellab/i, 'no "sellable" wording is left');
   assert.match(screen, /label: 'Cashier menu', value: row\.inPos \? 'In POS' : 'Not in POS'/);
   assert.match(screen, /row\.inPos \? 'in POS' : 'not in POS'/, 'the spoken card says it');
-  assert.match(screen, /Stock levels are not shown here\./);
   // cards: one tappable control with a spoken description, the real price, blockers as badges
   assert.match(screen, /accessibilityRole="button"\s+accessibilityLabel=\{spokenCard\(item, branchName\)\}\s+accessibilityHint="Opens branch details"/);
   assert.match(screen, /\{item\.priceText\}/);
   assert.match(screen, /<ManagerBadge key=\{badge\.key\} label=\{badge\.label\} tone=\{badge\.tone\} \/>/);
   // a read-only details sheet: no edit, no navigation to a management screen
   assert.match(screen, /Read only\. Change prices and product settings in Products\./);
-  assert.doesNotMatch(screen, /router\.push|setEditProduct|configureBranch/, 'no management actions here');
+  assert.doesNotMatch(screen.replace("router.push('/manager/products')", ''), /router\.push|setEditProduct|configureBranch/, 'no management actions here (only the empty-state link to Products)');
   // the extra read is one bulk query, refreshed when a product is saved (that invalidates the whole prefix)
   assert.match(service, /export async function listBranchVariantsForBranch\(branchId: string\)/);
   assert.match(hook, /queryKey: \['branch-product-variants', branchId, 'all'\]/);

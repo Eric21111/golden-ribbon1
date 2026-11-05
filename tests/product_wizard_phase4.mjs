@@ -53,7 +53,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
 
   // pricing step controls
   assert.match(pricingSrc, /toggleButton: \{[^}]*minHeight: MIN_TOUCH_TARGET/);
-  assert.match(pricingSrc, /minHeight: MIN_TOUCH_TARGET,\n[\s\S]*?paddingHorizontal: 12/, 'branch chips');
+  assert.match(pricingSrc, /branchHead: \{[^}]*minHeight: MIN_TOUCH_TARGET/, 'branch card header (name + Add to branch switch)');
   assert.match(pricingSrc, /priceBox: \{[\s\S]*?height: MIN_TOUCH_TARGET/);
 
   // variant cards
@@ -125,7 +125,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
     assert.doesNotMatch(src, /\b(ScrollView|FlatList|SectionList)\b/, `${file}: no nested scroll container`);
   }
   // rows of chips wrap instead of overflowing horizontally
-  for (const [name, src] of [['stock list', recipeSrc], ['drinks', drinkSrc], ['pricing', pricingSrc]]) {
+  for (const [name, src] of [['stock list', recipeSrc], ['drinks', drinkSrc]]) {
     assert.match(src, /flexWrap: 'wrap'/, `${name}: chip rows wrap`);
   }
   console.log('phase4 wizard navigation: ok');
@@ -154,7 +154,8 @@ const count = (src, re) => (src.match(re) ?? []).length;
   assert.equal(isPriceMissing({ showErrors: true, prices: { v1: '80', v2: '90', v3: '1' }, keys, key: 'v2' }), false);
   assert.match(pricingSrc, /isPriceMissing\(\{/);
   assert.equal(count(pricingSrc, /highlightMissing=\{Boolean\(error\)\}/g), 2, 'both price lists');
-  assert.match(pricingSrc, /'Invalid price' : 'Enter a price'/);
+  assert.match(read('src/features/products/pricingReveal.ts'), /'Invalid price'[\s\S]*'Must be above ₱0'/, 'the field can say invalid or zero');
+  assert.match(pricingSrc, /\{problem \?\? 'Enter a price'\}/, 'and empty after a refused save');
   // existing inline validation near the fields is still there
   assert.match(editorSrc, /`Enter a \$\{noun\} name\.`/);
   assert.match(editorSrc, /'This name is already used\.'/);

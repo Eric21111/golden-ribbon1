@@ -1,7 +1,8 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useSheetReveal } from '@/components/BottomSheet';
 import { FormField } from '@/components/FormField';
 import { managerColors } from '@/components/dashboard/theme';
 import { confirmAction } from '@/lib/confirmAction';
@@ -44,6 +45,7 @@ export function VariantListEditor({
   ingredients,
   drinkOptions,
   error,
+  revealKey = 0,
   onChangeName,
   onChangeRecipe,
   onChangeDrinks,
@@ -64,6 +66,8 @@ export function VariantListEditor({
   /** Drinks a meal may include, including products that are not sold on their own. */
   drinkOptions?: InventoryItemOption[];
   error?: string;
+  /** Goes up by one each time Next is refused: scrolls to (and focuses) the first option that needs fixing. */
+  revealKey?: number;
   onChangeName: (index: number, name: string) => void;
   onChangeRecipe: (variantKey: string, lines: RecipeLine[]) => void;
   onChangeDrinks: (variantKey: string, choice: DrinkChoice) => void;
@@ -118,7 +122,7 @@ export function VariantListEditor({
   // A validation error (e.g. a blank name) must never hide the field it refers to.
   useEffect(() => {
     if (error) setExpanded(Object.fromEntries(variants.map((variant) => [variant.key, true])));
-  }, [error]);
+  }, [error, revealKey]);
 
   // One action at a time: while a card is open, finishing it ("Done") comes first, so the page-level add
   // button only shows once every card is collapsed.
@@ -126,6 +130,44 @@ export function VariantListEditor({
   const noun = config.noun.toLowerCase();
   const displayName = (variant: { name: string }, index: number) =>
     variant.name.trim() || `${config.noun} ${index + 1}`;
+  const nameProblemOf = (variant: { key: string; name: string }): string | undefined => {
+    const trimmed = variant.name.trim();
+    if (!trimmed) return `Enter a ${noun} name.`;
+    if (trimmed.length > 60) return 'Use 60 characters or fewer.';
+    return variants.some((other) => other.key !== variant.key && other.name.trim().toLowerCase() === trimmed.toLowerCase())
+      ? 'This name is already used.'
+      : undefined;
+  };
+
+  // After a refused Next: bring the first option that needs fixing into view and focus its name (a missing drink: just the card).
+  const reveal = useSheetReveal();
+  const cardRefs = useRef(new Map<string, View>());
+  const nameRefs = useRef(new Map<string, TextInput>());
+  const pendingReveal = useRef(false);
+  useEffect(() => {
+    if (revealKey) pendingReveal.current = true;
+  }, [revealKey]);
+  // Runs after every render. Once a refusal asked for a reveal and every card is open (the effect above opens them), show the
+  // first problem on the next frame: the cards above it have finished growing by then, so its position is final. (A fixed delay
+  // could measure too early on a slow phone and scroll to the wrong place.)
+  useEffect(() => {
+    if (!pendingReveal.current) return;
+    if (variants.some((variant) => !expanded[variant.key])) return;
+    pendingReveal.current = false;
+    requestAnimationFrame(() => {
+      const withProblem = variants.find((variant) => nameProblemOf(variant));
+      if (withProblem) {
+        const input = nameRefs.current.get(withProblem.key) ?? null;
+        reveal(cardRefs.current.get(withProblem.key) ?? input, { focus: input });
+        return;
+      }
+      const missingDrink = variants.find((variant) => {
+        const choice = drinks[variant.key] ?? NO_DRINK_CHOICE;
+        return choice.enabled && isDrinkChoiceVisible(category, choice.enabled) && choice.drinkIds.length === 0;
+      });
+      if (missingDrink) reveal(cardRefs.current.get(missingDrink.key) ?? null);
+    });
+  });
   // Items already used elsewhere in this product, offered as one-tap chips in the other lists.
   const suggestedIds = suggestedIngredientIds(recipes);
   // The product-level stock list: shown while the product has no options (sold one way, at one price).
@@ -227,15 +269,7 @@ export function VariantListEditor({
                 { confirm: 'Remove' },
               );
             };
-            const nameProblem = !trimmedName
-              ? `Enter a ${noun} name.`
-              : trimmedName.length > 60
-                ? 'Use 60 characters or fewer.'
-                : variants.some(
-                      (other) => other.key !== variant.key && other.name.trim().toLowerCase() === trimmedName.toLowerCase(),
-                    )
-                  ? 'This name is already used.'
-                  : undefined;
+            const nameProblem = nameProblemOf(variant);
             const drinkMissing =
               drinkVisible && drinkChoice.enabled && drinkChoice.drinkIds.length === 0;
             // Inline checks appear once the user has tried to continue (a step error is showing) or tried to
@@ -253,7 +287,15 @@ export function VariantListEditor({
             };
 
             return (
-              <View key={variant.key} style={styles.card}>
+              <View
+                key={variant.key}
+                ref={(node) => {
+                  if (node) cardRefs.current.set(variant.key, node);
+                  else cardRefs.current.delete(variant.key);
+                }}
+                collapsable={false}
+                style={styles.card}
+              >
                 <View style={styles.cardHeader}>
                   <Pressable
                     accessibilityRole="button"
@@ -293,6 +335,10 @@ export function VariantListEditor({
                 {isOpen ? (
                   <>
                     <FormField
+                      ref={(node) => {
+                        if (node) nameRefs.current.set(variant.key, node);
+                        else nameRefs.current.delete(variant.key);
+                      }}
                       label={config.nameLabel}
                       value={variant.name}
                       onChangeText={(text) => onChangeName(index, text)}

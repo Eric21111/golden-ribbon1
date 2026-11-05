@@ -120,7 +120,7 @@ function functionBody(src, signature) {
     // hidden variants / prices can no longer block saving: there is nothing to save in this mode, and they are kept
     // the shared Step 1 / variant checks keep the existing rules and messages
     assert.match(src, /function validateStep1\(\): boolean \{/);
-    assert.match(src, /return Object\.keys\(errors\)\.length === 0;/);
+    assert.match(src, /const valid = Object\.keys\(errors\)\.length === 0;\n    if \(!valid\) \{\n[^\n]*\n      const field = errors\.name \? nameFieldRef\.current : skuFieldRef\.current;\n      if \(field\) reveal\(field, \{ focus: field \}\);\n      else scrollToTop\(\);\n    \}\n    return valid;/);
     assert.match(src, /'Enter a name for each variant, or remove it\.'/);
     assert.match(src, /'Variant names must be unique\.'/);
     assert.match(src, /'Variant names must be 60 characters or fewer\.'/);
@@ -157,7 +157,7 @@ function functionBody(src, signature) {
     // saved values are unchanged: the sellable choice never reaches the payload
     const start = src.indexOf('onSubmit(\n      {');
     // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
-    const end = src.indexOf(name === 'edit' ? '      plan.send,' : '      pricing,', start);
+    const end = src.indexOf(name === 'edit' ? '      send,' : '      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
     assert.ok(!block.includes('inventoryOnly'), `${name}: saved values must not include inventoryOnly`);

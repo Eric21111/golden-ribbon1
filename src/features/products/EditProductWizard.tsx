@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/FormField';
+import { useSheetReveal, useSheetScrollToTop } from '@/components/BottomSheet';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { managerColors } from '@/components/dashboard/theme';
 
 import type { ClosingStockBehavior } from '@/types/models';
 
-import { BranchPricingStep, type BranchPriceStatus } from './BranchPricingStep';
+import { BranchPricingStep } from './BranchPricingStep';
 import { NonReturnableField } from './NonReturnableField';
 import { PosAvailabilityField } from './PosAvailabilityField';
 import { ProductStatusField } from './ProductStatusField';
@@ -17,7 +18,6 @@ import {
   activeUniformBase,
   activeUniformPrice,
   buildDraftSnapshot,
-  otherModeHasPrices,
   seedVariantPrices,
   flowSteps,
   getWizardFlow,
@@ -33,7 +33,7 @@ import {
   type CategoryChoice,
   isDrinkChoiceVisible,
 } from './productCategoryPreview';
-import { PRICE_PATTERN } from './productSchema';
+import { isSellingPrice } from './productSchema';
 import { VariantListEditor } from './VariantListEditor';
 import {
   ingredientOptionsFromProducts,
@@ -55,7 +55,7 @@ import {
 import { VariantRecipePreview } from './VariantRecipePreview';
 import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, savedDrinkChoicesToState, type DrinkChoicePayload, type SavedDrinkChoice } from './drinkChoiceMapping';
 
-import { branchesToAdd, keptOffNotes, planBranchSave, type KeepOff } from './branchPricingEdit';
+import { branchesCarrying, branchesToAdd, branchesToSend, switchedOffAtBranches } from './branchPricingEdit';
 
 type PricingMode = 'same' | 'different';
 type PriceDraft = { base: string; variantPrices: Record<string, string> };
@@ -122,18 +122,16 @@ interface EditProductWizardProps {
   loading?: boolean;
   error?: string;
   /**
-   * `pricing` is only the branches that need writing (new or changed prices); a branch left as it is is not sent, so what is
-   * switched off there stays off. `keepOff` lists what to switch off again afterwards at the branches that were sent.
+   * `pricing` is only the branches that need writing (new or changed prices). Saving keeps what is switched off at a branch.
    */
-  onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[], keepOff: KeepOff[]) => void;
+  onSubmit: (values: EditProductValues, pricing: BranchPricingDraft[]) => void;
   /** Reports whether the form has unsaved edits, so the screen can confirm before discarding them. */
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+// A price to save for a product sold in POS: more than ₱0 (never empty, never silently ₱0.00).
 function isValidPrice(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) return false;
-  return PRICE_PATTERN.test(trimmed);
+  return isSellingPrice(raw);
 }
 
 /** True when every branch id maps to the same fingerprint (e.g. same price for every variant). */
@@ -208,6 +206,17 @@ export function EditProductWizard({
   );
   const [step2Error, setStep2Error] = useState<string | undefined>();
   const [step3Error, setStep3Error] = useState<string | undefined>();
+  // Step 2 / Step 3: each refused save or Next also scrolls to the first thing to fix (see the options editor and the pricing step).
+  const [step2RevealKey, setStep2RevealKey] = useState(0);
+  const [step3RevealKey, setStep3RevealKey] = useState(0);
+  function failStep2(message: string) {
+    setStep2Error(message);
+    setStep2RevealKey((key) => key + 1);
+  }
+  function failStep3(message: string) {
+    setStep3Error(message);
+    setStep3RevealKey((key) => key + 1);
+  }
   // Saved as sell_in_pos. Existing products stay sellable unless that flag is off. The category never decides this.
   const [sellableChoice, setSellable] = useState(product.sell_in_pos !== false);
   // While POS availability is hidden this is always true, so it can never route to the inventory-only flow.
@@ -290,12 +299,26 @@ export function EditProductWizard({
   const [uniformVariantPrices, setUniformVariantPrices] = useState<Record<string, string>>(
     initialPricing.uniformVariantPrices,
   );
-  const [branchId, setBranchId] = useState(
-    Object.keys(initialPricing.priceDrafts)[0] ?? branchOptions[0]?.id ?? '',
-  );
   const [priceDrafts, setPriceDrafts] = useState<Record<string, PriceDraft>>(initialPricing.priceDrafts);
+  // Branches that already carry the product always stay on (this screen never removes a product from a branch). Of the others,
+  // only the ones the product was left out of start switched off, when the prices differ per branch.
+  const carriedBranchIds = useMemo(
+    () => branchesCarrying({ sourceVariants, sourceBranchPrices, sourceBranchVariantPrices }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [offBranchIds, setOffBranchIds] = useState<string[]>(() =>
+    initialPricing.mode === 'different'
+      ? branchOptions.filter((branch) => !(branch.id in initialPricing.priceDrafts)).map((branch) => branch.id)
+      : [],
+  );
 
-  const currentDraft = priceDrafts[branchId] ?? { base: '', variantPrices: {} };
+  // What is switched off today at the branches that carry the product (shown on the cards, never changed by this screen).
+  const switchedOff = useMemo(
+    () => switchedOffAtBranches({ sourceVariants, sourceBranchPrices, sourceBranchVariantPrices }, variants),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [variants],
+  );
 
   // Only one mode's pricing can exist at a time — switching clears the other so there's
   // never ambiguity about which prices apply.
@@ -304,41 +327,56 @@ export function EditProductWizard({
     // Both modes' entered prices are kept so switching back restores them. Only the selected mode is ever
     // submitted (see activeUniformBase / activeUniformPrice below and the mode checks in submit).
     setStep3Error(undefined);
+    if (mode === 'different') {
+      // every branch starts from the prices already entered for all of them
+      setPriceDrafts((current) => {
+        const next = { ...current };
+        for (const branch of branchOptions) {
+          if (!next[branch.id]) next[branch.id] = { base: uniformBase, variantPrices: { ...uniformVariantPrices } };
+        }
+        return next;
+      });
+    }
     setPricingMode(mode);
   }
 
-  const pricedBranchIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const branch of branchOptions) {
-      const draft = priceDrafts[branch.id];
-      if (!draft) continue;
-      const filled =
-        variants.length === 0
-          ? draft.base.trim() !== ''
-          : variants.some((variant) => (draft.variantPrices[variant.key] ?? '').trim() !== '');
-      if (filled) ids.add(branch.id);
-    }
-    return ids;
-  }, [branchOptions, priceDrafts, variants]);
+  // "Different per Branch": a branch that is switched off is not sold there and gets no price.
+  const pricedBranchIds = useMemo(
+    () => new Set(branchOptions.filter((branch) => !offBranchIds.includes(branch.id)).map((branch) => branch.id)),
+    [branchOptions, offBranchIds],
+  );
 
-  function setBase(value: string) {
-    if (!branchId) return;
+  function toggleBranch(id: string, on: boolean) {
+    setStep3Error(undefined);
+    setOffBranchIds((current) => (on ? current.filter((entry) => entry !== id) : [...current.filter((entry) => entry !== id), id]));
+  }
+
+  function setBase(id: string, value: string) {
     setPriceDrafts((current) => ({
       ...current,
-      [branchId]: { ...(current[branchId] ?? { base: '', variantPrices: {} }), base: value },
+      [id]: { ...(current[id] ?? { base: '', variantPrices: {} }), base: value },
     }));
   }
 
-  function setVariantPrice(variantKey: string, value: string) {
-    if (!branchId) return;
+  function setVariantPrice(id: string, variantKey: string, value: string) {
     setPriceDrafts((current) => {
-      const draft = current[branchId] ?? { base: '', variantPrices: {} };
+      const draft = current[id] ?? { base: '', variantPrices: {} };
       return {
         ...current,
-        [branchId]: { ...draft, variantPrices: { ...draft.variantPrices, [variantKey]: value } },
+        [id]: { ...draft, variantPrices: { ...draft.variantPrices, [variantKey]: value } },
       };
     });
   }
+
+  // Every step starts at the top of the sheet, not wherever the previous step was scrolled to.
+  const scrollToTop = useSheetScrollToTop();
+  useEffect(() => {
+    scrollToTop();
+  }, [step, scrollToTop]);
+
+  const reveal = useSheetReveal();
+  const nameFieldRef = useRef<TextInput>(null);
+  const skuFieldRef = useRef<TextInput>(null);
 
   function validateStep1(): boolean {
     const nameValue = name.trim();
@@ -349,7 +387,14 @@ export function EditProductWizard({
     else if (sku.trim().length > 40) errors.sku = 'SKU must be 40 characters or fewer.';
     else if (!/^[A-Za-z0-9-]+$/.test(sku.trim())) errors.sku = 'Use only letters, numbers, and hyphens.';
     setStep1Errors(errors);
-    return Object.keys(errors).length === 0;
+    const valid = Object.keys(errors).length === 0;
+    if (!valid) {
+      // the field error is up in the form, the button that was pressed is at the bottom: show the first field to fix
+      const field = errors.name ? nameFieldRef.current : skuFieldRef.current;
+      if (field) reveal(field, { focus: field });
+      else scrollToTop();
+    }
+    return valid;
   }
 
   function goToStep2() {
@@ -370,7 +415,7 @@ export function EditProductWizard({
   function goToStep3() {
     const variantError = getVariantNameError();
     if (variantError) {
-      setStep2Error(variantError);
+      failStep2(variantError);
       return;
     }
     // Drink choice: "Includes a drink" needs at least one eligible drink. Only applies where the drink choice is
@@ -380,7 +425,7 @@ export function EditProductWizard({
       return Boolean(choice?.enabled) && isDrinkChoiceVisible(category, true) && choice!.drinkIds.length === 0;
     });
     if (missingDrink) {
-      setStep2Error(`Select at least one drink for "${missingDrink.name.trim()}", or untick "Includes a drink".`);
+      failStep2(`Select at least one drink for "${missingDrink.name.trim()}", or untick "Includes a drink".`);
       return;
     }
     setStep2Error(undefined);
@@ -416,7 +461,6 @@ export function EditProductWizard({
           productCategory: category,
         },
         [],
-        [],
       );
       return;
     }
@@ -427,7 +471,7 @@ export function EditProductWizard({
       if (variants.length === 0) {
         const hasPrice = uniformBase.trim() !== '';
         if (hasPrice && !isValidPrice(uniformBase)) {
-          setStep3Error('Enter a valid selling price.');
+          failStep3('Enter a valid selling price.');
           return;
         }
         pricing = hasPrice ? branchIds.map((id) => ({ branchId: id, selling_price: uniformBase.trim() })) : [];
@@ -435,7 +479,7 @@ export function EditProductWizard({
         const anyFilled = variants.some((variant) => (uniformVariantPrices[variant.key] ?? '').trim() !== '');
         const missingPrice = variants.some((variant) => !isValidPrice(uniformVariantPrices[variant.key] ?? ''));
         if (anyFilled && missingPrice) {
-          setStep3Error('Enter a price for every variant.');
+          failStep3('Enter a price for every variant.');
           return;
         }
         pricing = anyFilled
@@ -450,15 +494,19 @@ export function EditProductWizard({
       }
     } else {
       const selectedIds = [...pricedBranchIds];
+      if (selectedIds.length === 0) {
+        failStep3('Turn on at least one branch.');
+        return;
+      }
       for (const id of selectedIds) {
         const draft = priceDrafts[id];
         if (variants.length === 0) {
           if (!draft || !isValidPrice(draft.base)) {
-            setStep3Error('Complete the pricing for all selected branches.');
+            failStep3('Complete the pricing for all selected branches.');
             return;
           }
         } else if (!draft || variants.some((variant) => !isValidPrice(draft.variantPrices[variant.key] ?? ''))) {
-          setStep3Error('Enter a price for every variant on each selected branch.');
+          failStep3('Enter a price for every variant on each selected branch.');
           return;
         }
       }
@@ -482,7 +530,7 @@ export function EditProductWizard({
     )?.selling_price;
     const topLevelPrice = variants.length === 0 ? (firstBasePrice || activeUniformBase(pricingMode, uniformBase).trim()) : '';
     if (variants.length === 0 && !isValidPrice(topLevelPrice)) {
-      setStep3Error('Enter a valid selling price.');
+      failStep3('Enter a valid selling price.');
       return;
     }
 
@@ -494,13 +542,12 @@ export function EditProductWizard({
       return { id: variant.id, name: variant.name.trim(), default_price: price };
     });
     if (variantValues.some((variant) => !isValidPrice(variant.default_price))) {
-      setStep3Error('Enter a price for every variant.');
+      failStep3('Enter a price for every variant.');
       return;
     }
 
-    // Branches that already carry the product with exactly these prices are not sent, so whatever is switched off there stays
-    // off. What is switched off at a branch that IS sent is switched off again after the save (the screen does that).
-    const plan = planBranchSave({
+    // Branches that already carry the product with exactly these prices are not sent.
+    const send = branchesToSend({
       pricing,
       variants: variantValues,
       sourceVariants,
@@ -529,8 +576,7 @@ export function EditProductWizard({
         sellInPos: true,
         productCategory: category,
       },
-      plan.send,
-      plan.keepOff,
+      send,
     );
   }
 
@@ -555,6 +601,7 @@ export function EditProductWizard({
     uniformBase,
     uniformVariantPrices,
     priceDrafts,
+    offBranches: [...offBranchIds].sort(),
     recipePreview: withoutDefaultProductStock(recipePreview),
     drinkPreview: drinkChoices, // (key name kept: it is the unsaved-changes snapshot of the drink choices)
     category,
@@ -566,12 +613,6 @@ export function EditProductWizard({
   useEffect(() => {
     onDirtyChange?.(isDirty);
   }, [isDirty]);
-
-  const otherModePricesKept = otherModeHasPrices(pricingMode, {
-    uniformBase,
-    uniformPrices: uniformVariantPrices,
-    branchDrafts: priceDrafts,
-  });
 
   // One-line "what it uses" under each variant name in Step 3.
   const stockSummaries: Record<string, string> = {};
@@ -586,21 +627,6 @@ export function EditProductWizard({
     }
   }
 
-  // How complete each branch's prices are, for the branch overview chips (display only).
-  const branchStatus: Record<string, BranchPriceStatus> = {};
-  for (const branch of branchOptions) {
-    const draft = priceDrafts[branch.id];
-    if (!draft) {
-      branchStatus[branch.id] = 'none';
-    } else if (variants.length === 0) {
-      branchStatus[branch.id] = draft.base.trim() === '' ? 'none' : isValidPrice(draft.base) ? 'full' : 'partial';
-    } else {
-      const filled = variants.filter((variant) => (draft.variantPrices[variant.key] ?? '').trim() !== '').length;
-      const allValid = variants.every((variant) => isValidPrice(draft.variantPrices[variant.key] ?? ''));
-      branchStatus[branch.id] = filled === 0 ? 'none' : allValid ? 'full' : 'partial';
-    }
-  }
-
   return (
     <View style={styles.wrap}>
       <StepIndicator step={step} flow={flow} middleLabel={getCategoryConfig(category).stepLabel} />
@@ -608,6 +634,7 @@ export function EditProductWizard({
       {step === 1 ? (
         <View style={styles.stepBody}>
           <FormField
+            ref={nameFieldRef}
             label="Product name"
             value={name}
             onChangeText={setName}
@@ -622,6 +649,7 @@ export function EditProductWizard({
             <Text style={styles.hint}>Each drink is its own product, like Coke Mismo.</Text>
           ) : null}
           <FormField
+            ref={skuFieldRef}
             label="SKU"
             value={sku}
             onChangeText={setSku}
@@ -677,6 +705,7 @@ export function EditProductWizard({
               setDrinkChoices((current) => ({ ...current, [variantKey]: choice }))
             }
             error={step2Error}
+            revealKey={step2RevealKey}
             onChangeName={(index, text) =>
               setVariants((current) => current.map((entry, i) => (i === index ? { ...entry, name: text } : entry)))
             }
@@ -707,7 +736,6 @@ export function EditProductWizard({
             onModeChange={switchPricingMode}
             variants={variants.map((variant) => ({ key: variant.key, name: variant.name }))}
             stockSummaries={stockSummaries}
-            otherModePricesKept={otherModePricesKept}
             branches={branchOptions}
             uniformBase={uniformBase}
             onUniformBaseChange={setUniformBase}
@@ -715,20 +743,17 @@ export function EditProductWizard({
             onUniformPriceChange={(key, text) =>
               setUniformVariantPrices((current) => ({ ...current, [key]: text }))
             }
-            selectedBranchId={branchId}
-            onSelectBranch={setBranchId}
-            branchStatus={branchStatus}
-            draft={currentDraft}
-            onDraftBaseChange={setBase}
-            onDraftVariantPriceChange={setVariantPrice}
+            branchOn={Object.fromEntries(branchOptions.map((branch) => [branch.id, pricedBranchIds.has(branch.id)]))}
+            lockedOnIds={carriedBranchIds}
+            offProductBranchIds={switchedOff.productOff}
+            offOptionKeysByBranch={switchedOff.optionsOff}
+            onToggleBranch={toggleBranch}
+            drafts={priceDrafts}
+            onBranchBaseChange={setBase}
+            onBranchVariantPriceChange={setVariantPrice}
             error={step3Error}
+            revealKey={step3RevealKey}
             notCarriedBranches={branchesToAdd(branchOptions, { sourceBranchPrices, sourceBranchVariantPrices })}
-            keptOffNotes={keptOffNotes(branchOptions, {
-              variants: variants.map((variant) => ({ id: variant.id, name: variant.name, default_price: '' })),
-              sourceVariants,
-              sourceBranchPrices,
-              sourceBranchVariantPrices,
-            })}
           />
         </View>
       ) : null}

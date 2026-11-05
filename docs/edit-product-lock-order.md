@@ -62,7 +62,7 @@ An earlier 60-round run of the fixed schema alone (before `update_branch_product
 
 ## Frontend
 
-None. The app does not need to change for this migration. (After `20261027100000` is applied the "switch it off again" step in the products screen can be removed; that is separate.)
+None. The app does not need to change for this migration. (The "switch it off again" step in the products screen was removed once `20261027100000` was deployed.)
 
 ## Limitations
 

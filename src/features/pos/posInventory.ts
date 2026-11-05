@@ -1,3 +1,4 @@
+import { productSearchText } from '@/features/products/listFilters';
 import type { InventoryItem, ProfileWithBranch, Shift } from '@/types/models';
 
 /** Shift branch wins. Profile branch is only a fallback before a shift exists. */
@@ -32,15 +33,11 @@ export function isOutOfStock(item: InventoryItem): boolean {
   return item.quantity_on_hand <= 0;
 }
 
-/** Default: in-stock only. Search: matches including OOS, with OOS sorted last. */
+/** Default: in-stock only. Search: matches name, SKU or category, including OOS, with OOS sorted last. */
 export function filterPosInventory(items: InventoryItem[], search: string): InventoryItem[] {
   const term = search.trim().toLowerCase();
   const matched = term
-    ? items.filter(
-        (item) =>
-          item.product.name.toLowerCase().includes(term) ||
-          item.product.sku.toLowerCase().includes(term),
-      )
+    ? items.filter((item) => productSearchText(item.product).includes(term))
     : items.filter((item) => !isOutOfStock(item));
 
   return [...matched].sort((a, b) => {

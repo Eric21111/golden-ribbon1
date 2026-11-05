@@ -13,7 +13,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { loadTs } from './_load_ts.mjs';
 
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-const { planBranchSave } = loadTs('src/features/products/branchPricingEdit.ts');
+const { branchesToSend } = loadTs('src/features/products/branchPricingEdit.ts');
 const J = JSON.stringify;
 const MIG = '20261027100000_edit_product_keeps_branch_availability.sql';
 const POS = '20261026100000_pos_require_active_branch_variant.sql';
@@ -252,19 +252,16 @@ async function suite(label, db, { fixed, pos }) {
   await save(await asVariants(), [opt(sm1)]);
   await steady('partial updates undone');
 
-  // ------------------------------------------------ J. the current app (send only changed branches, then restore) ends in the same state
+  // ------------------------------------------------ J. the current app (sends only the branches whose prices changed, no restore step)
   {
     const src = await source(combo.id);
     const variants = await asVariants({ Small: '34', Large: '50' });
-    const plan = planBranchSave({ pricing: [{ branchId: sm1, variants: [{ name: 'Small', selling_price: '34' }, { name: 'Large', selling_price: '50' }] }, { branchId: sm2, variants: [{ name: 'Small', selling_price: '30' }, { name: 'Large', selling_price: '50' }] }], variants, ...src });
-    await save(variants, plan.send.map((d) => ({ branch_id: d.branchId, variants: d.variants })));
-    const afterNew = await everything();
-    for (const entry of plan.keepOff) { // the old workaround, now redundant
-      if (entry.productOff) await as(mgr, () => db.query('select public.configure_branch_products($1,$2::jsonb)', [entry.branchId, J([{ product_id: combo.id, selling_price: Number(entry.productPrice), is_active: false }])]));
-      if (entry.offOptions.length) await as(mgr, () => db.query('select public.configure_branch_product_variants($1,$2,$3::jsonb)', [entry.branchId, combo.id, J(entry.offOptions.map((o) => ({ name: o.name, selling_price: Number(o.price), is_active: false })))]));
-    }
-    assert.equal(await everything(), afterNew, `${label}: the app's restore step is a no-op after this migration`);
-    assert.equal((await opRow(sm1, 'Large')).is_active, false);
+    const send = branchesToSend({ pricing: [{ branchId: sm1, variants: [{ name: 'Small', selling_price: '34' }, { name: 'Large', selling_price: '50' }] }, { branchId: sm2, variants: [{ name: 'Small', selling_price: '30' }, { name: 'Large', selling_price: '50' }] }], variants, ...src });
+    assert.deepEqual(send.map((d) => d.branchId), [sm1], `${label}: only the changed branch is sent`);
+    await save(variants, send.map((d) => ({ branch_id: d.branchId, variants: d.variants })));
+    assert.equal(Number((await opRow(sm1, 'Small')).p), 34, `${label}: the new price is saved`);
+    assert.equal((await opRow(sm1, 'Large')).is_active, false, `${label}: Large stays off at SM1 with no second request`);
+    assert.equal((await bpRow(sm2)).is_active, false, `${label}: the product stays off at SM2`);
   }
 
   // ------------------------------------------------ K. sales, recipes and history are untouched by all of the above
