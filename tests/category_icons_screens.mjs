@@ -54,7 +54,7 @@ const stubs = {
     'Review transfer: the icon sits left of the name and SKU',
   );
   const sheet = read('src/features/pos/PosItemSheet.tsx');
-  assert.match(sheet, /<CategoryIcon category=\{item\.product\.product_category\} size=\{48\} decorative \/>/, 'POS item sheet: the product\'s category');
+  assert.match(sheet, /<CategoryIcon category=\{item\.product\.product_category\} size=\{44\} decorative \/>/, 'POS item sheet: the product\'s category');
   assert.doesNotMatch(sheet, /fast-food-outline/, 'no one fixed food icon for every product');
 
   const details = read('src/features/inventory/InventoryProductDetails.tsx');

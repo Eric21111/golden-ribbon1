@@ -112,10 +112,12 @@ const only = (patch) => names(all.filter((p) => f.matchesListFilters(p, { ...f.D
   assert.match(opening, /\.map\(\(field, index\) => \(\{ field, index, item: itemsById\.get\(field\.product_id\) \}\)\)\n\s+\.filter\(/, 'rows are filtered after the form fields are built');
 
   const pos = read('app/(cashier)/cashier/pos.tsx');
-  assert.match(pos, /const POS_FILTER_KEYS: ListFilterKey\[\] = \['category'\];/, 'the POS offers the category only');
-  assert.match(pos, /<FilterIconButton count=\{countListFilters\(listFilters, POS_FILTER_KEYS\)\}/);
+  // the POS offers the category only, as a row of pills under the search box: no funnel button, no filter sheet
+  assert.match(pos, /<FilterChipRow\n\s+options=\{CATEGORY_CHIPS\}\n\s+value=\{listFilters\.category\}\n\s+onChange=\{\(category\) => setListFilters\(\{ \.\.\.listFilters, category \}\)\}\n\s+bleed=\{COLUMN_PADDING\}/, 'category pills');
+  assert.ok(pos.includes('<CategoryIcon category={choice.value} size={18} decorative />'), 'pills carry the category icon');
+  assert.doesNotMatch(pos, /FilterIconButton|ListFiltersSheet|ListFilterSummary|POS_FILTER_KEYS|filtersOpen/, 'no funnel and no sheet on the POS');
+  assert.ok(pos.includes("const filtersOn = listFilters.category !== 'all';"));
   assert.match(pos, /filterPosInventory\(limitedInventory\.filter\(\(item\) => matchesListFilters\(item\.product, listFilters\)\), search\)/, 'category first, then the in-stock / search rule');
-  assert.match(pos, /<ListFiltersSheet\n\s+visible=\{filtersOpen\}\n\s+filters=\{listFilters\}\n\s+keys=\{POS_FILTER_KEYS\}/);
   assert.match(read('src/features/products/ProductFilterControls.tsx'), /export function ListFiltersSheet/);
   // each category choice carries the same picture as the product rows and the Products chips; "All" gets a neutral one
   const controls = read('src/features/products/ProductFilterControls.tsx');

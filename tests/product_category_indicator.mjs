@@ -60,7 +60,8 @@ pin('app/(manager)/manager/inventory/index.tsx', /\{\.\.\.categoryRowProps\(sele
 pin('app/(manager)/manager/catalog.tsx', /<CategoryIcon category=\{item\.product\.product_category\}/, 'branch catalog');
 pin('src/features/pos/PosProductRow.tsx', /getCategoryIndicator\(item\.product\.product_category\)/, 'cashier POS rows');
 assert.doesNotMatch(read('src/features/pos/PosProductRow.tsx'), /name="fast-food-outline"/, 'the fixed POS icon is gone');
-pin('app/(cashier)/cashier/local-purchase.tsx', /<CategoryIcon category=\{row\.product_category\}/, 'cashier local purchase');
+pin('src/features/stock/QuantityListScreen.tsx', /<CategoryIcon category=\{row\.category\}/, 'cashier local purchase and create return');
+pin('app/(cashier)/cashier/local-purchase.tsx', /category: row\.product_category,/, 'local purchase hands the category to that list');
 pin('src/features/products/InventoryItemPickerModal.tsx', /<CategoryIcon category=\{item\.category\}/, 'stock picker');
 pin('src/features/products/VariantRecipePreview.tsx', /<CategoryIcon category=\{item\.category\}/, 'stock used lines');
 pin('src/features/products/ProductCategoryField.tsx', /<CategoryIcon category=\{category\.id\}/, 'category dropdown');

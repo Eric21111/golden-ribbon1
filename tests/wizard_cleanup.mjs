@@ -191,7 +191,10 @@ const data = read('src/features/products/recipePreviewData.ts');
     assert.doesNotMatch(src.slice(src.indexOf('body:')), new RegExp(label), `${label}: not repeated in its own info text`);
     assert.match(src, new RegExp(`title: '${label}'`), `${label}: the (i) button is labelled with the setting`);
   }
-  assert.match(read('app/(cashier)/cashier/local-purchase.tsx'), /Only enabled products set to Keep Unsold Stock at Branch/);
+  // Local purchase: the long intro paragraph is gone; the empty state still names the setting that puts a product on this list
+  const localPurchase = read('app/(cashier)/cashier/local-purchase.tsx');
+  assert.doesNotMatch(localPurchase, /Only enabled products set to Keep Unsold Stock at Branch/);
+  assert.match(localPurchase, /Ask Main to turn on Keep Unsold Stock at Branch for a product first\./);
 }
 
 console.log('wizard_cleanup: ALL PASS');

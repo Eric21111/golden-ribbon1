@@ -14,19 +14,21 @@ interface PosProductRowProps {
   onPress: () => void;
 }
 
-function priceLabel(item: InventoryItem): string {
+/** The price, and "From" above it when the options cost different amounts (the cheapest is shown). */
+function priceParts(item: InventoryItem): { from: boolean; value: string } {
   const variants = item.variants ?? [];
-  if (variants.length === 0) return formatProductPrice(item.product);
+  if (variants.length === 0) return { from: false, value: formatProductPrice(item.product) };
   const prices = variants.map((variant) => variant.selling_price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  return min === max ? formatMoney(min) : `From ${formatMoney(min)}`;
+  return { from: min !== max, value: formatMoney(min) };
 }
 
 export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProps) {
   const outOfStock = item.quantity_on_hand === 0;
   const indicator = getCategoryIndicator(item.product.product_category);
   const tint = statChipColors[indicator.color];
+  const price = priceParts(item);
 
   const content = (
     <View style={styles.row}>
@@ -44,12 +46,15 @@ export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProp
             {item.product.name}
           </Text>
           <View style={styles.priceGroup}>
-            <Text style={[styles.price, outOfStock && styles.priceMuted]}>{priceLabel(item)}</Text>
             {cartQuantity > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeLabel}>×{cartQuantity}</Text>
               </View>
             ) : null}
+            <View style={styles.priceStack}>
+              {price.from ? <Text style={styles.priceFrom}>From</Text> : null}
+              <Text style={[styles.price, outOfStock && styles.priceMuted]}>{price.value}</Text>
+            </View>
           </View>
         </View>
         <Text style={[styles.stock, outOfStock && styles.stockOut]}>
@@ -112,7 +117,9 @@ const styles = StyleSheet.create({
   name: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15.5 },
   nameMuted: { color: managerColors.subtext },
   priceGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-  price: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  priceStack: { alignItems: 'flex-end' },
+  priceFrom: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11, lineHeight: 14 },
+  price: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   priceMuted: { color: managerColors.subtext },
   badge: {
     backgroundColor: '#CFF3E8',

@@ -13,8 +13,8 @@ import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { SearchInput } from '@/components/dashboard/SearchInput';
-import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -25,12 +25,11 @@ import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
 import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
 import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
-import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import { CATEGORY_CHIP_CHOICES } from '@/features/products/productFilters';
 import {
   DEFAULT_LIST_FILTERS,
-  countListFilters,
   matchesListFilters,
-  type ListFilterKey,
   type ListFilters,
 } from '@/features/products/listFilters';
 import { buildStockContext, maxLineQuantity, withCartLimits } from '@/features/pos/posAvailability';
@@ -47,8 +46,14 @@ import type { InventoryItem, PosVariant } from '@/types/models';
 
 const POS_PAGE_SIZE = 10;
 // The cashier catalog only holds products that are sold in the POS and the cashier cannot see their close-of-day setting, so
-// the only filter that means something here is the category.
-const POS_FILTER_KEYS: ListFilterKey[] = ['category'];
+// the only filter that means something here is the category: a row of pills under the search box (no funnel button).
+// The pills carry the same icon as the rows; "All" is not a category, so it has none.
+const CATEGORY_CHIPS = CATEGORY_CHIP_CHOICES.map((choice) => ({
+  ...choice,
+  leading: choice.value === 'all' ? undefined : <CategoryIcon category={choice.value} size={18} decorative />,
+}));
+// Side padding of the screen column; the pill row runs out to the screen edges by this much.
+const COLUMN_PADDING = 20;
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
@@ -56,7 +61,6 @@ export default function CashierPosScreen() {
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
   const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const shiftQuery = useActiveShift(cashierId);
@@ -103,7 +107,7 @@ export default function CashierPosScreen() {
     [limitedInventory, search, listFilters],
   );
   const groupSizes = useMemo(() => groupCounts(filteredInventory, (item) => item.product), [filteredInventory]);
-  const filtersOn = countListFilters(listFilters, POS_FILTER_KEYS) > 0;
+  const filtersOn = listFilters.category !== 'all';
 
   const pagination = useClientPagination(filteredInventory, `${search}|${listFilters.category}`, POS_PAGE_SIZE);
 
@@ -262,17 +266,13 @@ export default function CashierPosScreen() {
 
   const searchField = (
     <View style={styles.searchBlock}>
-      <View style={styles.searchRow}>
-        <View style={styles.searchGrow}>
-          <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
-        </View>
-        <FilterIconButton count={countListFilters(listFilters, POS_FILTER_KEYS)} onPress={() => setFiltersOpen(true)} />
-      </View>
-      <ListFilterSummary
-        countText={`${filteredInventory.length} ${filteredInventory.length === 1 ? 'product' : 'products'}`}
-        filters={listFilters}
-        keys={POS_FILTER_KEYS}
-        onChange={setListFilters}
+      <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
+      <FilterChipRow
+        options={CATEGORY_CHIPS}
+        value={listFilters.category}
+        onChange={(category) => setListFilters({ ...listFilters, category })}
+        bleed={COLUMN_PADDING}
+        keepSelectedVisible
       />
     </View>
   );
@@ -349,13 +349,6 @@ export default function CashierPosScreen() {
           {mobileFooter}
         </View>
       )}
-      <ListFiltersSheet
-        visible={filtersOpen}
-        filters={listFilters}
-        keys={POS_FILTER_KEYS}
-        onChange={setListFilters}
-        onClose={() => setFiltersOpen(false)}
-      />
       <PosItemSheet
         item={activeSheetItem}
         quantityByVariant={sheetItem ? quantitiesByProduct.get(sheetItem.product.id) ?? new Map() : new Map()}
@@ -395,10 +388,8 @@ const styles = StyleSheet.create({
   catalog: { flex: 1.65, minWidth: 0, minHeight: 0 },
   orderPane: { flex: 1, minWidth: 280, maxWidth: 420, minHeight: 0 },
   top: { gap: spacing.sm },
-  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
+  searchWrap: { paddingHorizontal: COLUMN_PADDING, paddingBottom: spacing.sm },
   searchBlock: { gap: spacing.sm },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  searchGrow: { flex: 1 },
   list: { flex: 1, minHeight: 0 },
   listContent: {
     paddingHorizontal: 20,
