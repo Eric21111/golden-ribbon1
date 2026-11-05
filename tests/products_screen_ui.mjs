@@ -37,16 +37,20 @@ const card = read('src/components/dashboard/ListRowCard.tsx');
   // no saved category is said out loud, never guessed
   assert.equal(productRowText(p({ product_category: null })).category, 'Category not set');
   assert.equal(productRowText(p({ is_active: false })).spoken.endsWith('disabled'), true);
+  // the short forms for the one-line row; the full sentence is still what is read out
+  assert.deepEqual([rice.posShort, rice.closingShort], ['Stock only', 'Unsold']);
+  assert.deepEqual([kept.posShort, kept.closingShort], ['POS', 'At branch']);
+  assert.deepEqual([legacy.posShort, legacy.closingShort], ['POS', 'Next day']);
   console.log('1. card text: ok');
 }
 
 // ---------------------------------------------------------------- 2. the screen uses it, and the whole card is one control
 {
   assert.match(screen, /const text = productRowText\(item\);/);
-  // name + SKU tag on the first line, the category on its own line, then POS visibility and shift close side by side
+  // name + SKU tag on the first line, then ONE short line: the category word, POS visibility and shift close, each fact with its icon
   assert.match(screen, /titleTag=\{text\.sku\}/);
-  assert.match(screen, /meta=\{text\.category\}/);
-  assert.match(screen, /metaRow=\{[\s\S]*?\{text\.pos\}[\s\S]*?\{text\.closing\}/);
+  assert.doesNotMatch(screen, /meta=\{text\.category\}/, 'the category no longer takes a line of its own');
+  assert.match(screen, /metaRow=\{[\s\S]*?\{text\.category\}[\s\S]*?\{text\.posShort\}[\s\S]*?\{text\.closingShort\}/);
   assert.match(screen, /text\.stockOnly \? 'eye-off-outline' : 'eye-outline'/);
   assert.doesNotMatch(screen, /text\.meta\b|subtitleTag/, 'no more category-and-POS joined on one line');
   // each fact is one whole item that may shrink and wrap as a unit, so a phrase is never broken mid-way by the next fact
@@ -109,7 +113,7 @@ const card = read('src/components/dashboard/ListRowCard.tsx');
     return 2 * (PAD + BORDER) + label + (hasIcon ? ICON + GAP : 0);
   });
   const total = widths.reduce((a, b) => a + b, 0) + ROW_GAP * (widths.length - 1);
-  assert.equal(CATEGORY_CHIP_CHOICES.length, 7, 'All + five categories + Not set');
+  assert.equal(CATEGORY_CHIP_CHOICES.length, 6, 'All + five categories');
   for (const screenWidth of [320, 360, 393, 411]) {
     const content = total + 2 * 20; // bleed inset on both ends
     assert.ok(content > screenWidth, `at ${screenWidth}dp the chips do not all fit, so the row scrolls (${content.toFixed(0)}dp of chips)`);

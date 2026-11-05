@@ -3,12 +3,15 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
 
 type OrderLineProps = {
   item: CartItem;
+  /** The product's saved category, for the picture. Missing means "Category not set". */
+  category?: string | null;
   label: string;
   atLimit: boolean;
   maxQuantity: number;
@@ -20,6 +23,7 @@ type OrderLineProps = {
 
 export function OrderLine({
   item,
+  category,
   label,
   atLimit,
   maxQuantity,
@@ -46,6 +50,7 @@ export function OrderLine({
 
   return (
     <View style={styles.line}>
+      <CategoryIcon category={category} size={32} decorative />
       <View style={styles.leftCol}>
         <Text style={styles.name} numberOfLines={2}>
           {label}

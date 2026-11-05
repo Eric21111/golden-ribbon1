@@ -38,10 +38,9 @@ for (const [category, expected] of [
   ['drinks', ['Coke', 'Royal']],
   ['extras', ['Extra Rice']],
   ['supplies', ['rice', 'Egg']],
-  ['unset', ['Old Product', 'Legacy', 'Odd']],
 ]) assert.deepEqual(names(only({ category })), expected, `category ${category}`);
-assert.deepEqual(CATEGORY_FILTER_CHOICES.map((c) => c.value), ['all', 'meals', 'snacks', 'drinks', 'extras', 'supplies', 'unset']);
-assert.deepEqual(CATEGORY_FILTER_CHOICES.map((c) => c.label), ['All', 'Meals & Viands', 'Snacks & Finger Foods', 'Drinks', 'Extras & Sides', 'Inventory Supplies', 'Not set']);
+assert.deepEqual(CATEGORY_FILTER_CHOICES.map((c) => c.value), ['all', 'meals', 'snacks', 'drinks', 'extras', 'supplies'], 'no "Not set" filter: every new product has a category');
+assert.deepEqual(CATEGORY_FILTER_CHOICES.map((c) => c.label), ['All', 'Meals & Viands', 'Snacks & Finger Foods', 'Drinks', 'Extras & Sides', 'Inventory Supplies']);
 assert.equal(categoryOf(p('x', { product_category: 'something-new' })), 'unset', 'an unknown value counts as Not set');
 assert.equal(categoryLabelOf(p('x', { product_category: 'supplies' })), 'Inventory Supplies');
 assert.equal(categoryLabelOf(p('x')), null);
@@ -81,7 +80,7 @@ assert.deepEqual(activeFilterTags(only({ category: 'drinks' })), []);
 
 // ---- choices
 assert.deepEqual(CATEGORY_CHIP_CHOICES.map((c) => c.value), CATEGORY_FILTER_CHOICES.map((c) => c.value), 'same choices as the full list');
-assert.deepEqual(CATEGORY_CHIP_CHOICES.map((c) => c.label), ['All', 'Meals', 'Snacks', 'Drinks', 'Extras', 'Supplies', 'Not set'], 'short names on the chips');
+assert.deepEqual(CATEGORY_CHIP_CHOICES.map((c) => c.label), ['All', 'Meals', 'Snacks', 'Drinks', 'Extras', 'Supplies'], 'short names on the chips');
 assert.deepEqual(PRODUCT_FILTER_CHOICES.map((c) => c.value), ['all', 'active', 'inactive']);
 assert.deepEqual(POS_FILTER_CHOICES.map((c) => c.value), ['all', 'pos', 'stock_only']);
 assert.deepEqual(RETURN_FILTER_CHOICES.map((c) => c.value), ['all', 'non_returnable', 'returnable']);

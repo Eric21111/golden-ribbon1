@@ -24,7 +24,8 @@ export function matchesProductFilter(isActive: boolean, filter: ProductFilter): 
 
 // ---- the four product list filters: Category, Enable Product, Show in Cashier POS, Keep Unsold Stock at Branch
 
-export type CategoryFilter = 'all' | ProductCategory | 'unset';
+// "Not set" is not a filter: every new product has a category. A product from before that still shows in All, under its own heading.
+export type CategoryFilter = 'all' | ProductCategory;
 export type PosFilter = 'all' | 'pos' | 'stock_only';
 export type ReturnFilter = 'all' | 'non_returnable' | 'returnable';
 
@@ -45,7 +46,6 @@ export const DEFAULT_PRODUCT_FILTERS: ProductListFilters = {
 export const CATEGORY_FILTER_CHOICES: Array<{ label: string; value: CategoryFilter }> = [
   { label: 'All', value: 'all' },
   ...PRODUCT_CATEGORIES.map((category) => ({ label: category.label, value: category.id as CategoryFilter })),
-  { label: 'Not set', value: 'unset' },
 ];
 
 /** Short names for the quick chips on the Products screen (the full names are used everywhere else). */
@@ -60,7 +60,6 @@ const CATEGORY_CHIP_LABELS: Record<ProductCategory, string> = {
 export const CATEGORY_CHIP_CHOICES: Array<{ label: string; value: CategoryFilter }> = [
   { label: 'All', value: 'all' },
   ...PRODUCT_CATEGORIES.map((category) => ({ label: CATEGORY_CHIP_LABELS[category.id], value: category.id as CategoryFilter })),
-  { label: 'Not set', value: 'unset' },
 ];
 
 export const POS_FILTER_CHOICES: Array<{ label: string; value: PosFilter }> = [
@@ -183,6 +182,9 @@ export type ProductRowText = {
   stockOnly: boolean;
   /** What happens to its remaining stock when a shift closes. A separate fact so it is never read as a category or POS fact. */
   closing: string;
+  /** Short forms of the two facts above for the one-line row of the Products card (the icon next to each carries the meaning). */
+  posShort: string;
+  closingShort: string;
   /** The whole card read out loud. */
   spoken: string;
 };
@@ -197,6 +199,7 @@ export function productRowText(product: ProductRowSource & { is_active: boolean 
   const category = categoryLabelOf(product) ?? 'Category not set';
   const pos = product.sell_in_pos === false ? 'Stock only' : 'Shown in POS';
   const closing = product.is_non_returnable ? 'Stays at branch' : closingStockBehaviorLabel(product.closing_stock_behavior);
+  const closingShort = product.is_non_returnable ? 'At branch' : product.closing_stock_behavior === 'record_as_unsold' ? 'Unsold' : 'Next day';
   const closingSpoken = product.is_non_returnable
     ? 'stays at the branch and cannot be returned to Main'
     : product.closing_stock_behavior === 'record_as_unsold'
@@ -208,6 +211,8 @@ export function productRowText(product: ProductRowSource & { is_active: boolean 
     pos,
     stockOnly: pos === 'Stock only',
     closing,
+    posShort: pos === 'Stock only' ? 'Stock only' : 'POS',
+    closingShort,
     spoken: `${product.name}, ${category}, ${pos === 'Stock only' ? 'stock only, not shown in the cashier POS' : 'shown in the cashier POS'}, at shift close ${closingSpoken}, ${product.is_active ? 'enabled' : 'disabled'}`,
   };
 }

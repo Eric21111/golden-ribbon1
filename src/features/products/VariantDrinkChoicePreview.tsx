@@ -1,5 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
@@ -33,11 +33,17 @@ export function VariantDrinkChoicePreview({
   onChange: (choice: DrinkChoice) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The picker stays open while drinks are added, so each add must build on the drinks as they are right now (two quick taps
+  // on two drinks would otherwise both start from the same, older list).
+  const latestChoice = useRef(choice);
+  latestChoice.current = choice;
   const selected = choice.drinkIds
     .map((id) => drinks.find((drink) => drink.id === id))
     .filter((drink): drink is InventoryItemOption => drink !== undefined);
   const selectedCount = choice.drinkIds.length;
   const missing = selectedCount === 0;
+  // the database offers only enabled drinks: when every picked drink is disabled the option cannot be sold
+  const allDisabled = selected.length > 0 && selected.every((drink) => drink.inactive);
 
   return (
     <View style={styles.wrap}>
@@ -68,7 +74,7 @@ export function VariantDrinkChoicePreview({
                 style={({ pressed }) => [styles.chipTouch, pressed && styles.pressed]}
               >
                 <View style={[styles.chip, styles.chipSelected]}>
-                  <Text style={[styles.chipText, styles.chipTextSelected]}>{drink.name}</Text>
+                  <Text style={[styles.chipText, styles.chipTextSelected]}>{drink.inactive ? `${drink.name} · Disabled` : drink.name}</Text>
                   <Ionicons name="close" size={14} color={managerColors.royalBlue} />
                 </View>
               </Pressable>
@@ -79,16 +85,18 @@ export function VariantDrinkChoicePreview({
               onPress={() => setPickerOpen(true)}
               style={({ pressed }) => [styles.chipTouch, pressed && styles.pressed]}
             >
-              <View style={styles.allChip}>
-                <Ionicons name="add" size={14} color={managerColors.royalBlue} />
-                <Text style={styles.allChipText}>Add drink</Text>
+              <View style={[styles.allChip, missing && styles.allChipNeeded]}>
+                <Ionicons name="add" size={14} color={missing ? '#FFFFFF' : managerColors.royalBlue} />
+                <Text style={[styles.allChipText, missing && styles.allChipTextNeeded]}>Add drink</Text>
               </View>
             </Pressable>
           </View>
-          <Text style={[styles.hint, missing && showValidation && styles.hintError]}>
+          <Text style={[styles.hint, (missing || allDisabled) && styles.hintNeeded, missing && showValidation && styles.hintError]}>
             {missing
               ? 'Select at least one drink.'
-              : selectedCount === 1
+              : allDisabled
+                ? 'Every picked drink is disabled. Enable one or add another.'
+                : selectedCount === 1
                 ? 'Only 1 drink, so the cashier cannot choose.'
                 : `Cashier picks 1 of ${selectedCount}.`}
           </Text>
@@ -103,9 +111,13 @@ export function VariantDrinkChoicePreview({
         productName={productName}
         ingredients={drinks}
         addedItemIds={choice.drinkIds}
+        // Adding a drink does not close the sheet, so several drinks can be added in one go; Close finishes.
         onSelect={(drinkId) => {
-          if (!choice.drinkIds.includes(drinkId)) onChange({ ...choice, drinkIds: [...choice.drinkIds, drinkId] });
-          setPickerOpen(false);
+          const current = latestChoice.current;
+          if (current.drinkIds.includes(drinkId)) return;
+          const next = { ...current, drinkIds: [...current.drinkIds, drinkId] };
+          latestChoice.current = next;
+          onChange(next);
         }}
         onClose={() => setPickerOpen(false)}
       />
@@ -148,6 +160,8 @@ const styles = StyleSheet.create({
   chipText: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   chipTextSelected: { color: managerColors.royalBlue },
   hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  // an included drink with none picked is unfinished: amber at once, red once the user tried to continue
+  hintNeeded: { color: '#92400E', fontFamily: 'Inter_600SemiBold' },
   hintError: { color: '#B91C1C', fontFamily: 'Inter_600SemiBold' },
   allChip: {
     flexDirection: 'row',
@@ -159,5 +173,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   allChipText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  allChipNeeded: { backgroundColor: managerColors.royalBlue },
+  allChipTextNeeded: { color: '#FFFFFF' },
   pressed: { opacity: 0.7 },
 });

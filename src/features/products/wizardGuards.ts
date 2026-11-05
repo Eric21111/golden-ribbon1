@@ -124,8 +124,8 @@ export function withoutDefaultProductStock<T extends Record<string, Array<{ item
 
 /**
  * full: Product Info → category-specific Step 2 → Branch Pricing.
- * simple: Product Info → Branch Pricing. Drinks, Extras & Sides and Inventory Supplies without variants are sold
- *   at one price and have nothing to set up in Step 2.
+ * simple: Product Info → Branch Pricing. Drinks and Inventory Supplies without variants are sold at one price and have
+ *   nothing to set up in Step 2. (Extras & Sides always get Step 2: it is where what they use from stock is chosen.)
  * inventory: Product Info only (not sold in POS: no selling variants, no branch prices to configure).
  *
  * POS availability is its own choice: the flow is never inferred from the category, only from that choice.
@@ -133,7 +133,7 @@ export function withoutDefaultProductStock<T extends Record<string, Array<{ item
 export type WizardFlow = 'full' | 'simple' | 'inventory';
 
 /** Categories that skip Step 2 while they have no variants. An existing one with variants keeps all three steps. */
-const SIMPLE_CATEGORIES: readonly string[] = ['drinks', 'extras', 'supplies'];
+const SIMPLE_CATEGORIES: readonly string[] = ['drinks', 'supplies'];
 
 export function getWizardFlow(options: { sellable: boolean; category: string; variantCount: number }): WizardFlow {
   if (!options.sellable) return 'inventory';
@@ -192,6 +192,23 @@ export function applySetupDefaults(options: {
     enabled: options.enabledOverridden ? options.enabled : defaults.enabled,
     sellSeparately: options.sellOverridden ? options.sellSeparately : defaults.sellSeparately,
   };
+}
+
+/**
+ * Extras & Sides (Create): a new extra starts on "Take from other items", which cannot be saved empty, because an empty list
+ * would silently mean "this product's own stock". Returns the keys of the stock lists that still have nothing in them: the
+ * options whose effective list (their own, else the product-level one) is empty, or the product-level list when the product
+ * has no options. Choosing "Count its own stock" writes an explicit list, so it never shows up here.
+ */
+export function extrasStockMissing(input: {
+  category: string;
+  variants: Array<{ key: string }>;
+  recipes: Record<string, unknown[] | undefined>;
+}): string[] {
+  if (input.category !== 'extras') return [];
+  const productLevel = input.recipes[PRODUCT_STOCK_KEY]?.length ?? 0;
+  if (input.variants.length === 0) return productLevel === 0 ? [PRODUCT_STOCK_KEY] : [];
+  return input.variants.filter((variant) => (input.recipes[variant.key]?.length ?? 0) === 0 && productLevel === 0).map((variant) => variant.key);
 }
 
 /** Whether a flow may be saved. Stock-only products are saved without a selling price. */

@@ -33,7 +33,7 @@ const THIS = THIS_PRODUCT_ID;
   );
   assert.deepEqual(
     describeOrderDeduction({ ...base, lines: withRice, drink: { enabled: true, drinkIds: [] } }),
-    ['Each order uses Beef Curry ×1, Rice ×1.', 'Plus 1 drink, chosen at checkout (none selected yet).'],
+    ['Each order uses Beef Curry ×1, Rice ×1.', 'Plus 1 drink, but none is selected yet. Add at least one drink above.'],
   );
   assert.deepEqual(describeOrderDeduction({ ...base, lines: withRice, drink: { enabled: false, drinkIds: ['coke'] } }), ['Each order uses Beef Curry ×1, Rice ×1.'], 'a drink that is switched off deducts nothing');
   assert.deepEqual(describeOrderDeduction({ ...base, lines: withRice, drink: null }), ['Each order uses Beef Curry ×1, Rice ×1.']);
@@ -209,9 +209,7 @@ console.log('2. preview = database: ok');
   assert.equal(getCategoryConfig('extras').stockModeChoice, true);
 
   const editor = read('src/features/products/VariantListEditor.tsx');
-  assert.match(editor, /config\.id === 'meals' && config\.showIngredients/, 'the order preview is Meals only');
-  assert.match(editor, /drink: drinkVisible \? drinkChoice : null,/, 'a hidden drink choice never appears in the preview');
-  assert.match(editor, /<DeductionPreview sentences=\{orderPreview\} \/>/);
+  assert.doesNotMatch(editor, /orderPreview/, 'the "Each order uses ... Plus 1 drink" box is gone from the option card');
   assert.match(editor, /summarizeDrinkLine\(drinkChoice, drinkOptions \?\? ingredients\)/, 'the collapsed card line counts only enabled drinks');
   assert.match(read('app/(manager)/manager/products/index.tsx'), /isActive: product\.is_active,/, 'the products screen tells the wizard which products are disabled');
   assert.match(editor, /describeOrderDeduction\(\{ lines: recipes\[PRODUCT_STOCK_KEY\] \?\? \[\], productName, ingredients \}\)/, 'a meal sold at one price shows it too (no drink: drinks belong to options)');
@@ -223,7 +221,7 @@ console.log('2. preview = database: ok');
   assert.match(recipe, /<Text style=\{styles\.chipText\}>Add Stock Item<\/Text>/);
   assert.doesNotMatch(recipe, /Browse all/, 'the chip is "Add Stock Item"');
   assert.match(recipe, /accessibilityLabel="Add Stock Item"/);
-  assert.match(recipe, /<DeductionPreview/, 'Extras uses the same shared box');
+  assert.doesNotMatch(recipe, /DeductionPreview/, 'the stock choice shows no "Each order uses" box (Extras & Sides)');
 
   // Done closes one card; Next goes to Branch Pricing
   assert.match(editor, /<Text style=\{styles\.doneButtonText\}>Done editing<\/Text>/);

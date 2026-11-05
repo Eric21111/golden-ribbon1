@@ -159,7 +159,9 @@ const count = (s, needle) => s.split(needle).length - 1;
   // after a failed save: every empty price says so; a typed 0 and a typo say what is wrong
   out = text({ error: 'Complete the pricing for all selected branches.' });
   assert.equal(count(out, 'Enter a price'), 2, 'both empty prices are flagged');
-  assert.match(out, /Complete the pricing for all selected branches\./);
+  assert.doesNotMatch(out, /Complete the pricing for all selected branches/, 'a price that needs fixing is flagged on its field, so the sentence is not repeated at the bottom');
+  out = text({ branchOn: { a: false, b: false }, error: 'Turn on at least one branch.' });
+  assert.match(out, /Turn on at least one branch\./, 'but a problem no field can show still gets its sentence');
   out = text({ drafts: { a: { base: '0', variantPrices: {} }, b: { base: '4x', variantPrices: {} } } });
   assert.match(out, /Must be above ₱0/);
   assert.match(out, /Invalid price/);
@@ -177,9 +179,10 @@ const count = (s, needle) => s.split(needle).length - 1;
   assert.equal(count(out, 'Add to branch'), 1, 'only the branch that does not carry it has a switch');
   // same for all: the hint names the branches that would be added
   out = text({ mode: 'same', uniformBase: '45', notCarriedBranches: ['SM 2'] });
-  assert.match(out, /For all 2 branches\. Adds it to SM 2\./);
+  assert.match(out, /Adds it to SM 2\./);
+  assert.doesNotMatch(out, /For all 2 branches/, 'no "For all N branches" line');
   out = text({ mode: 'same', uniformBase: '45' });
-  assert.match(out, /For all 2 branches\.\|/);
+  assert.doesNotMatch(out, /For all|Adds it to/, 'nothing to add: no hint at all');
   // a single selling branch
   out = text({ branches: [{ id: 'a', name: 'SM 1' }], branchOn: { a: true } });
   assert.equal(count(out, 'Add to branch'), 1);

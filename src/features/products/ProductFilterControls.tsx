@@ -232,7 +232,7 @@ export function categoryOptionsWithIcons() {
           <Ionicons name="apps-outline" size={14} color={managerColors.subtext} />
         </View>
       ) : (
-        <CategoryIcon category={option.value === 'unset' ? null : option.value} size={24} decorative />
+        <CategoryIcon category={option.value} size={24} decorative />
       ),
   }));
 }
@@ -245,21 +245,25 @@ export function ListFiltersSheet({
   visible,
   filters,
   keys,
+  extra,
   onChange,
   onClose,
 }: {
   visible: boolean;
   filters: ListFilters;
   keys: ListFilterKey[];
+  /** A row only this screen has (Opening stock: Stock = All / Not set / Has stock), shown after `keys`. "all" is its off state. */
+  extra?: ExtraListFilter;
   onChange: (next: ListFilters) => void;
   onClose: () => void;
 }) {
-  const [openKey, setOpenKey] = useState<ListFilterKey | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   useEffect(() => {
     if (!visible) setOpenKey(null);
   }, [visible]);
-  const on = countListFilters(filters, keys);
+  const on = countListFilters(filters, keys) + (extra && extra.value !== 'all' ? 1 : 0);
   const categoryOptions = categoryOptionsWithIcons();
+  const rowCount = keys.length + (extra ? 1 : 0);
 
   return (
     <ManagerBottomSheet visible={visible} title="Filters" onClose={onClose}>
@@ -272,7 +276,7 @@ export function ListFiltersSheet({
               options={key === 'category' ? categoryOptions : LIST_FILTER_ROWS[key].options}
               value={filters[key]}
               open={openKey === key}
-              isLast={index === keys.length - 1}
+              isLast={index === rowCount - 1}
               onToggle={() => setOpenKey((current) => (current === key ? null : key))}
               onPick={(value) => {
                 onChange({ ...filters, [key]: value } as ListFilters);
@@ -280,6 +284,20 @@ export function ListFiltersSheet({
               }}
             />
           ))}
+          {extra ? (
+            <FilterRow
+              title={extra.title}
+              options={extra.options}
+              value={extra.value}
+              open={openKey === 'extra'}
+              isLast
+              onToggle={() => setOpenKey((current) => (current === 'extra' ? null : 'extra'))}
+              onPick={(value) => {
+                extra.onChange(value);
+                setOpenKey(null);
+              }}
+            />
+          ) : null}
         </View>
         <View style={styles.actions}>
           {on > 0 ? (
@@ -289,6 +307,7 @@ export function ListFiltersSheet({
                 variant="secondary"
                 onPress={() => {
                   onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
+                  extra?.onChange('all');
                   setOpenKey(null);
                 }}
               />
@@ -303,22 +322,37 @@ export function ListFiltersSheet({
   );
 }
 
+/** A filter row that belongs to one screen only. `value` "all" means it is off. */
+export type ExtraListFilter = {
+  title: string;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+  onChange: (value: string) => void;
+};
+
 /** Only while a filter is on: "3 of 12 products", a removable tag for each filter, and Clear all. Nothing otherwise. */
 export function ListFilterSummary({
   countText,
   filters,
   keys,
+  extra,
   onChange,
 }: {
   /** Already worded for the screen, e.g. "3 of 12 products". */
   countText: string;
   filters: ListFilters;
   keys: ListFilterKey[];
+  /** The screen's own sheet row (see ListFiltersSheet): a tag while it is on, cleared by "Clear all" too. */
+  extra?: ExtraListFilter;
   onChange: (next: ListFilters) => void;
 }) {
-  const tags = listFilterTags(filters, keys);
+  const extraLabel = extra && extra.value !== 'all' ? extra.options.find((option) => option.value === extra.value)?.label ?? 'Filter' : null;
+  const tags: Array<{ key: string; label: string }> = [...listFilterTags(filters, keys), ...(extraLabel ? [{ key: 'extra', label: extraLabel }] : [])];
   if (tags.length === 0) return null;
-  const clearAll = () => onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
+  const clearAll = () => {
+    onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
+    extra?.onChange('all');
+  };
   return (
     <View style={styles.summary}>
       <View style={styles.summaryTop}>
@@ -335,7 +369,7 @@ export function ListFilterSummary({
             key={tag.key}
             accessibilityRole="button"
             accessibilityLabel={`Remove filter ${tag.label}`}
-            onPress={() => onChange({ ...filters, [tag.key]: DEFAULT_LIST_FILTERS[tag.key] })}
+            onPress={() => (tag.key === 'extra' ? extra?.onChange('all') : onChange({ ...filters, [tag.key]: DEFAULT_LIST_FILTERS[tag.key as ListFilterKey] }))}
             style={({ pressed }) => [styles.tag, pressed && styles.pressed]}
           >
             <Text style={styles.tagText}>{tag.label}</Text>

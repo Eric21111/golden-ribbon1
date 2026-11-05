@@ -211,6 +211,7 @@ export function BranchPricingStep({
 }) {
   const hasVariants = variants.length > 0;
   const toAdd = notCarriedBranches ?? [];
+  const priceFieldFlagged = firstPriceToFix({ mode, variants, uniformBase, uniformPrices, branches, branchOn, drafts }) !== null;
 
   // After a refused save: bring the first price that needs fixing into view (its branch card, when there are cards) and focus it.
   const reveal = useSheetReveal();
@@ -283,10 +284,7 @@ export function BranchPricingStep({
               fieldRef={fieldRef('same:base')}
             />
           )}
-          <Text style={styles.hint}>
-            {`For all ${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}.`}
-            {toAdd.length > 0 ? ` Adds it to ${toAdd.join(', ')}.` : ''}
-          </Text>
+          {toAdd.length > 0 ? <Text style={styles.hint}>{`Adds it to ${toAdd.join(', ')}.`}</Text> : null}
         </>
       ) : (
         <>
@@ -346,7 +344,8 @@ export function BranchPricingStep({
         </>
       )}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* a price that needs fixing is flagged on its own field; the message is only for a problem no field shows (every branch off) */}
+      {error && !priceFieldFlagged ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }

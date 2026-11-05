@@ -114,7 +114,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
   }
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: false, category: 'meals', variantCount: 0 })), [1]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'drinks', variantCount: 0 })), [1, 3]);
-  assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 })), [1, 3]);
+  assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 })), [1, 2, 3]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'supplies', variantCount: 0 })), [1, 3]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'meals', variantCount: 0 })), [1, 2, 3]);
 

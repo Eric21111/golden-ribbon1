@@ -23,6 +23,8 @@ import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductRow } from '@/features/pos/PosProductRow';
 import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
+import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
+import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
 import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
 import {
   DEFAULT_LIST_FILTERS,
@@ -96,12 +98,20 @@ export default function CashierPosScreen() {
   }, [items, stockContext]);
 
   const filteredInventory = useMemo(
-    () => filterPosInventory(limitedInventory.filter((item) => matchesListFilters(item.product, listFilters)), search),
+    // grouped by category in a fixed order; the in-stock / search order applies inside each group
+    () => groupByCategory(filterPosInventory(limitedInventory.filter((item) => matchesListFilters(item.product, listFilters)), search), (item) => item.product),
     [limitedInventory, search, listFilters],
   );
+  const groupSizes = useMemo(() => groupCounts(filteredInventory, (item) => item.product), [filteredInventory]);
   const filtersOn = countListFilters(listFilters, POS_FILTER_KEYS) > 0;
 
   const pagination = useClientPagination(filteredInventory, `${search}|${listFilters.category}`, POS_PAGE_SIZE);
+
+  // a heading in front of each category on the page; none while one category is picked
+  const listRows = useMemo(
+    () => buildListRows(pagination.pageItems, groupSizes, listFilters.category === 'all', (item) => item.product),
+    [pagination.pageItems, groupSizes, listFilters.category],
+  );
 
   const quantitiesByProduct = useMemo(() => {
     const map = new Map<string, Map<string | null, number>>();
@@ -117,6 +127,11 @@ export default function CashierPosScreen() {
     for (const item of limitedInventory) map.set(item.product.id, item);
     return map;
   }, [limitedInventory]);
+
+  const categoryByProductId = useMemo(
+    () => new Map(limitedInventory.map((item) => [item.product.id, item.product.product_category])),
+    [limitedInventory],
+  );
 
   const stockByProductId = useMemo(() => {
     const map = new Map<string, number>();
@@ -197,13 +212,13 @@ export default function CashierPosScreen() {
 
   const productList = (
     <FlatList
-      data={pagination.pageItems}
-      keyExtractor={(item) => item.product.id}
+      data={listRows}
+      keyExtractor={(row) => row.key}
       style={styles.list}
       contentContainerStyle={styles.listContent}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      ItemSeparatorComponent={({ leadingItem }) => <View style={leadingItem.type === 'header' ? styles.separatorAfterHeading : styles.separator} />}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={managerColors.royalBlue} />
       }
@@ -228,16 +243,20 @@ export default function CashierPosScreen() {
           </View>
         ) : null
       }
-      renderItem={({ item }) => (
-        <PosProductRow
-          item={item}
-          cartQuantity={[...(quantitiesByProduct.get(item.product.id) ?? new Map()).values()].reduce(
-            (sum, qty) => sum + qty,
-            0,
-          )}
-          onPress={() => setSheetItem(item)}
-        />
-      )}
+      renderItem={({ item: row }) => {
+        if (row.type === 'header') return <CategoryGroupHeading title={row.title} count={row.count} />;
+        const item = row.item;
+        return (
+          <PosProductRow
+            item={item}
+            cartQuantity={[...(quantitiesByProduct.get(item.product.id) ?? new Map()).values()].reduce(
+              (sum, qty) => sum + qty,
+              0,
+            )}
+            onPress={() => setSheetItem(item)}
+          />
+        );
+      }}
     />
   );
 
@@ -304,6 +323,7 @@ export default function CashierPosScreen() {
               items={items}
               stockByProductId={stockByProductId}
               maxByLine={maxByLine}
+              categoryByProductId={categoryByProductId}
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
               onQuantityChange={changeCartQuantity}
@@ -349,6 +369,7 @@ export default function CashierPosScreen() {
           items={items}
           stockByProductId={stockByProductId}
           maxByLine={maxByLine}
+          categoryByProductId={categoryByProductId}
           onIncrease={increaseFromCart}
           onDecrease={decreaseProduct}
           onQuantityChange={changeCartQuantity}
@@ -386,6 +407,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   separator: { height: spacing.sm },
+  separatorAfterHeading: { height: 6 },
   pager: { alignItems: 'center', gap: 8, paddingTop: spacing.sm },
   footer: {
     borderTopWidth: 1,

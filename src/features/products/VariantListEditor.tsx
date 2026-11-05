@@ -24,7 +24,7 @@ import {
   type InventoryItemOption,
   type RecipeLine,
 } from './recipePreviewData';
-import { PRODUCT_STOCK_KEY, shouldSeedProductStock } from './wizardGuards';
+import { PRODUCT_STOCK_KEY, extrasStockMissing, shouldSeedProductStock } from './wizardGuards';
 
 const BORDER = '#D9DFEA';
 const BLUE_TINT = '#EAF0FB';
@@ -46,6 +46,7 @@ export function VariantListEditor({
   drinkOptions,
   error,
   revealKey = 0,
+  preferOtherStock = false,
   onChangeName,
   onChangeRecipe,
   onChangeDrinks,
@@ -68,6 +69,8 @@ export function VariantListEditor({
   error?: string;
   /** Goes up by one each time Next is refused: scrolls to (and focuses) the first option that needs fixing. */
   revealKey?: number;
+  /** Create only: Extras & Sides start on "Take from other items", so a list with nothing in it is unfinished. */
+  preferOtherStock?: boolean;
   onChangeName: (index: number, name: string) => void;
   onChangeRecipe: (variantKey: string, lines: RecipeLine[]) => void;
   onChangeDrinks: (variantKey: string, choice: DrinkChoice) => void;
@@ -143,6 +146,10 @@ export function VariantListEditor({
   const reveal = useSheetReveal();
   const cardRefs = useRef(new Map<string, View>());
   const nameRefs = useRef(new Map<string, TextInput>());
+  const productStockRef = useRef<View>(null);
+  const stockMissingKeys = preferOtherStock
+    ? extrasStockMissing({ category, variants, recipes })
+    : [];
   const pendingReveal = useRef(false);
   useEffect(() => {
     if (revealKey) pendingReveal.current = true;
@@ -165,13 +172,40 @@ export function VariantListEditor({
         const choice = drinks[variant.key] ?? NO_DRINK_CHOICE;
         return choice.enabled && isDrinkChoiceVisible(category, choice.enabled) && choice.drinkIds.length === 0;
       });
-      if (missingDrink) reveal(cardRefs.current.get(missingDrink.key) ?? null);
+      if (missingDrink) {
+        reveal(cardRefs.current.get(missingDrink.key) ?? null);
+        return;
+      }
+      const noStock = stockMissingKeys[0];
+      if (noStock) reveal(noStock === PRODUCT_STOCK_KEY ? productStockRef.current : cardRefs.current.get(noStock) ?? null);
     });
   });
   // Items already used elsewhere in this product, offered as one-tap chips in the other lists.
   const suggestedIds = suggestedIngredientIds(recipes);
   // The product-level stock list: shown while the product has no options (sold one way, at one price).
   const showProductStock = variants.length === 0 && config.productLevelStock && config.showIngredients;
+
+  const productStockBlock = showProductStock ? (
+    <View ref={productStockRef} collapsable={false} style={[styles.productStock, config.stockModeChoice && styles.productStockPlain]}>
+      <VariantRecipePreview
+        label={config.ingredientsLabel}
+        stockModeChoice={config.stockModeChoice}
+        lockMainProduct={config.id === 'meals' || config.id === 'snacks'}
+        startOnOtherItems={preferOtherStock}
+        mainOnly={!config.allowOtherStock}
+        lines={recipes[PRODUCT_STOCK_KEY] ?? []}
+        productName={productName}
+        ingredients={ingredients}
+        suggestedIds={suggestedIds}
+        onChange={(next) => onChangeRecipe(PRODUCT_STOCK_KEY, next)}
+      />
+      {config.id === 'meals' ? (
+        <DeductionPreview
+          sentences={describeOrderDeduction({ lines: recipes[PRODUCT_STOCK_KEY] ?? [], productName, ingredients })}
+        />
+      ) : null}
+    </View>
+  ) : null;
 
   return (
     <View style={styles.wrap}>
@@ -184,7 +218,22 @@ export function VariantListEditor({
         ) : null}
       </View>
 
-      {variants.length === 0 && config.simpleEmpty ? (
+      {config.stockModeChoice ? productStockBlock : null}
+
+      {variants.length === 0 && config.simpleEmpty && config.stockModeChoice ? (
+        <View style={styles.addOption}>
+          <Text style={styles.addOptionLabel}>SELLING OPTIONS · OPTIONAL</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={config.simpleEmpty.link}
+            onPress={onAdd}
+            style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="add" size={18} color={managerColors.royalBlue} />
+            <Text style={styles.addButtonText}>{config.simpleEmpty.link}</Text>
+          </Pressable>
+        </View>
+      ) : variants.length === 0 && config.simpleEmpty ? (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
             <Ionicons name="cube-outline" size={20} color={managerColors.royalBlue} />
@@ -222,18 +271,6 @@ export function VariantListEditor({
               ? summarizeVariantStock(effectiveLines(lines, recipes[PRODUCT_STOCK_KEY] ?? []), productName, ingredients)
               : '';
             const drinkVisible = isDrinkChoiceVisible(category, drinkChoice.enabled);
-            // Meals & Viands only: what one order of this option deducts, including the drink when it includes one.
-            const orderPreview =
-              config.id === 'meals' && config.showIngredients
-                ? describeOrderDeduction({
-                    lines,
-                    inheritedLines: recipes[PRODUCT_STOCK_KEY] ?? [],
-                    productName,
-                    ingredients,
-                    drink: drinkVisible ? drinkChoice : null,
-                    drinks: drinkOptions ?? ingredients,
-                  })
-                : [];
             const drinkLine = drinkVisible ? summarizeDrinkLine(drinkChoice, drinkOptions ?? ingredients) : '';
             const collapsedLine = [
               extras || (config.showIngredients && lines.length > 0 ? 'Main item only' : ''),
@@ -247,7 +284,17 @@ export function VariantListEditor({
             // "Stock items don't apply", "Drink choice doesn't apply", "Stock items and drink choice don't apply"
             const trimmedName = variant.name.trim();
             const hasMainProduct = lines.some((line) => line.itemId === THIS_PRODUCT_ID);
-            const status = !config.showStatus || !trimmedName
+            // "Includes a drink" is ticked but no drink is picked (or every picked drink is disabled): the option is not finished
+            const offeredDrinks = drinkChoice.drinkIds
+              .map((id) => (drinkOptions ?? ingredients).find((item) => item.id === id))
+              .filter((item): item is InventoryItemOption => item !== undefined);
+            const drinkNeedsPick =
+              drinkVisible && drinkChoice.enabled && (offeredDrinks.length === 0 || offeredDrinks.every((item) => item.inactive));
+            const status = drinkNeedsPick
+              ? { label: 'Pick a drink', style: styles.statusWarn, textStyle: styles.statusWarnText }
+              : stockMissingKeys.includes(variant.key)
+              ? { label: 'Add items', style: styles.statusWarn, textStyle: styles.statusWarnText }
+              : !config.showStatus || !trimmedName
               ? null
               : lines.length === 0
                 ? { label: 'No items yet', style: styles.statusMuted, textStyle: styles.statusMutedText }
@@ -356,7 +403,8 @@ export function VariantListEditor({
                           label={config.ingredientsLabel}
                           stockModeChoice={config.stockModeChoice}
                           inheritedLines={recipes[PRODUCT_STOCK_KEY] ?? []}
-                          lockMainProduct={config.id === 'meals'}
+                          lockMainProduct={config.id === 'meals' || config.id === 'snacks'}
+                          startOnOtherItems={preferOtherStock}
                           mainOnly={!config.allowOtherStock}
                           lines={lines}
                           productName={productName}
@@ -378,7 +426,6 @@ export function VariantListEditor({
                         />
                       </>
                     ) : null}
-                    {orderPreview.length > 0 ? <DeductionPreview sentences={orderPreview} /> : null}
                     {hasHiddenData ? (
                       <Text style={styles.hiddenNote}>
                         {[
@@ -411,7 +458,7 @@ export function VariantListEditor({
                         onPress={finishVariant}
                         style={({ pressed }) => [styles.doneButton, pressed && styles.pressed]}
                       >
-                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                        <Ionicons name="checkmark" size={18} color={managerColors.royalBlue} />
                         <Text style={styles.doneButtonText}>Done editing</Text>
                       </Pressable>
                     </View>
@@ -423,26 +470,7 @@ export function VariantListEditor({
         </View>
       )}
 
-      {showProductStock ? (
-        <View style={styles.productStock}>
-          <VariantRecipePreview
-            label={config.ingredientsLabel}
-            stockModeChoice={config.stockModeChoice}
-            lockMainProduct={config.id === 'meals'}
-                          mainOnly={!config.allowOtherStock}
-            lines={recipes[PRODUCT_STOCK_KEY] ?? []}
-            productName={productName}
-            ingredients={ingredients}
-            suggestedIds={suggestedIds}
-            onChange={(next) => onChangeRecipe(PRODUCT_STOCK_KEY, next)}
-          />
-          {config.id === 'meals' ? (
-            <DeductionPreview
-              sentences={describeOrderDeduction({ lines: recipes[PRODUCT_STOCK_KEY] ?? [], productName, ingredients })}
-            />
-          ) : null}
-        </View>
-      ) : null}
+      {config.stockModeChoice ? null : productStockBlock}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -470,6 +498,8 @@ const styles = StyleSheet.create({
   title: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   sectionDivider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER },
   list: { gap: 10 },
+  // Extras & Sides: the two choices are cards themselves, so no card around them
+  productStockPlain: { borderWidth: 0, padding: 0, backgroundColor: 'transparent', borderRadius: 0 },
   productStock: {
     borderWidth: 1,
     borderColor: BORDER,
@@ -555,6 +585,8 @@ const styles = StyleSheet.create({
   unsetHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   hiddenNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
   error: { color: DANGER, fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  addOption: { gap: 8, paddingTop: 4 },
+  addOptionLabel: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.6 },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -575,11 +607,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: managerColors.royalBlue,
+    // quiet on purpose: it only closes this card, so it must not look like the step's main button (Next)
+    backgroundColor: BLUE_TINT,
     borderRadius: 12,
     paddingVertical: 12,
     minHeight: 48,
   },
-  doneButtonText: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 14 },
+  doneButtonText: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
   pressed: { opacity: 0.7 },
 });

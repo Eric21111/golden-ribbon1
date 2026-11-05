@@ -128,8 +128,8 @@ const indexSrc = read('app/(manager)/manager/products/index.tsx');
   assert.match(editorSrc, /variantCount: variants\.length/);
   assert.match(editorSrc, /autoAdd: config\.autoAddMainProduct/);
   // (the stock-list condition is asserted in section 4)
-  assert.match(editorSrc, /\{showProductStock \? \(/);
-  assert.match(editorSrc, /lockMainProduct=\{config\.id === 'meals'\}\n\s*mainOnly=\{!config\.allowOtherStock\}\n\s*lines=\{recipes\[PRODUCT_STOCK_KEY\]/);
+  assert.match(editorSrc, /const productStockBlock = showProductStock \? \(/);
+  assert.match(editorSrc, /lockMainProduct=\{config\.id === 'meals' \|\| config\.id === 'snacks'\}\n\s*startOnOtherItems=\{preferOtherStock\}\n\s*mainOnly=\{!config\.allowOtherStock\}\n\s*lines=\{recipes\[PRODUCT_STOCK_KEY\]/);
   for (const src of [createSrc, editSrc]) {
     assert.match(src, /recipePreview: withoutDefaultProductStock\(recipePreview\)/, 'seed is excluded from unsaved-change detection');
   }

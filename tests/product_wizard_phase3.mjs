@@ -41,12 +41,13 @@ function functionBody(src, signature) {
     }
   }
   // sellable: the category-specific flows are untouched
-  // Drinks, Extras & Sides and Inventory Supplies without variants go straight from Product Info to Branch Pricing
-  for (const category of ['drinks', 'extras', 'supplies']) {
+  // Drinks and Inventory Supplies without variants go straight from Product Info to Branch Pricing
+  for (const category of ['drinks', 'supplies']) {
     assert.equal(getWizardFlow({ sellable: true, category, variantCount: 0 }), 'simple', `${category}: two-step flow`);
     assert.equal(getWizardFlow({ sellable: true, category, variantCount: 2 }), 'full', `an existing ${category} product with variants keeps all three steps`);
   }
-  for (const category of ['meals', 'snacks', 'unset']) {
+  // Extras & Sides always get Selling Options (that is where what they use from stock is chosen), like Meals and Snacks
+  for (const category of ['meals', 'snacks', 'extras', 'unset']) {
     assert.equal(getWizardFlow({ sellable: true, category, variantCount: 0 }), 'full');
   }
 

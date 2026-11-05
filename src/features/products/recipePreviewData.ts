@@ -271,7 +271,7 @@ export function describeOrderDeduction(options: {
     const offered = chosen.filter((item) => !item.inactive).map((item) => item.name);
     const disabled = chosen.filter((item) => item.inactive).map((item) => item.name);
     if (chosen.length === 0) {
-      sentences.push('Plus 1 drink, chosen at checkout (none selected yet).');
+      sentences.push('Plus 1 drink, but none is selected yet. Add at least one drink above.');
     } else if (offered.length === 0) {
       // the database offers only enabled drinks, and an option whose drinks are all disabled cannot be sold
       sentences.push(`Plus 1 drink, but every selected drink is disabled, so this option can't be sold until one is enabled.`);

@@ -30,6 +30,8 @@ import {
 } from '@/features/products/EditProductWizard';
 import { ProductFilterButton, ProductFilterSummary, ProductFiltersSheet } from '@/features/products/ProductFilterControls';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
+import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
+import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
 import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import {
   CATEGORY_CHIP_CHOICES,
@@ -76,7 +78,7 @@ const CATEGORY_CHIPS = CATEGORY_CHIP_CHOICES.map((choice) => ({
   ...choice,
   leading:
     choice.value === 'all' ? undefined : (
-      <CategoryIcon category={choice.value === 'unset' ? null : choice.value} size={18} decorative />
+      <CategoryIcon category={choice.value} size={18} decorative />
     ),
 }));
 
@@ -146,7 +148,7 @@ export default function ManagerProductListScreen() {
 
   const filtered = useMemo(() => {
     const rows = (query.data ?? []).filter((product) => matchesProductFilters(product, filters));
-    return [...rows].sort((a, b) => {
+    const sorted = [...rows].sort((a, b) => {
       switch (sort) {
         case 'name-desc':
           return b.name.localeCompare(a.name);
@@ -158,7 +160,10 @@ export default function ManagerProductListScreen() {
           return a.name.localeCompare(b.name);
       }
     });
+    // grouped by category in a fixed order; the sort above applies inside each group
+    return groupByCategory(sorted);
   }, [query.data, filters, sort]);
+  const counts = useMemo(() => groupCounts(filtered), [filtered]);
 
   const pagination = useClientPagination(
     filtered,
@@ -166,6 +171,11 @@ export default function ManagerProductListScreen() {
     10,
   );
 
+  // a heading in front of each category on the page; none while one category is picked (it would say the same everywhere)
+  const rows = useMemo(
+    () => buildListRows(pagination.pageItems, counts, filters.category === 'all'),
+    [pagination.pageItems, counts, filters.category],
+  );
   const anyFilterOn = countActiveFilters(filters) > 0;
   const clearAll = () => {
     setFilters(DEFAULT_PRODUCT_FILTERS);
@@ -395,10 +405,10 @@ export default function ManagerProductListScreen() {
             <LoadingState label="Loading products…" />
           ) : (
             <FlatList
-              data={pagination.pageItems}
-              keyExtractor={(item) => item.id}
+              data={rows}
+              keyExtractor={(row) => row.key}
               contentContainerStyle={styles.listContent}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ItemSeparatorComponent={({ leadingItem }) => <View style={leadingItem.type === 'header' ? styles.separatorAfterHeading : styles.separator} />}
               ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
               ListFooterComponent={
                 pagination.showPagination ? (
@@ -411,7 +421,11 @@ export default function ManagerProductListScreen() {
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => {
+              renderItem={({ item: row }) => {
+                if (row.type === 'header') {
+                  return <CategoryGroupHeading title={row.title} count={row.count} />;
+                }
+                const item = row.item;
                 const text = productRowText(item);
                 return (
                 <ListRowCard
@@ -419,16 +433,16 @@ export default function ManagerProductListScreen() {
                   title={item.name}
                   titleLines={titleLines}
                   titleTag={text.sku}
-                  meta={text.category}
                   metaRow={
                     <>
+                      <Text style={styles.factText}>{text.category}</Text>
                       <View style={styles.fact}>
                         <Ionicons name={text.stockOnly ? 'eye-off-outline' : 'eye-outline'} size={13} color={managerColors.subtext} />
-                        <Text style={styles.factText}>{text.pos}</Text>
+                        <Text style={styles.factText}>{text.posShort}</Text>
                       </View>
                       <View style={styles.fact}>
                         <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
-                        <Text style={styles.factText}>{text.closing}</Text>
+                        <Text style={styles.factText}>{text.closingShort}</Text>
                       </View>
                     </>
                   }
@@ -633,6 +647,7 @@ const styles = StyleSheet.create({
   sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
+  separatorAfterHeading: { height: 8 },
   pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   footer: {
     marginHorizontal: -COLUMN_PADDING,

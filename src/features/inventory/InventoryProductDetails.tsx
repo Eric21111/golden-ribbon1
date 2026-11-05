@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { colors, spacing } from '@/constants/theme';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { formatDate, formatLiveStock, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
@@ -17,8 +18,13 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
 
   return (
     <View style={styles.body}>
-      <Text style={styles.name}>{item.product.name}</Text>
-      <Text style={styles.meta}>{item.product.sku}</Text>
+      <View style={styles.heading}>
+        <CategoryIcon category={item.product.product_category} size={40} />
+        <View style={styles.headingCopy}>
+          <Text style={styles.name}>{item.product.name}</Text>
+          <Text style={styles.meta}>{item.product.sku}</Text>
+        </View>
+      </View>
       <View style={styles.statRow}>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>On hand</Text>
@@ -52,6 +58,8 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
 
 const styles = StyleSheet.create({
   body: { gap: spacing.sm, paddingBottom: spacing.sm },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headingCopy: { flex: 1, minWidth: 0 },
   name: { color: colors.text, fontSize: 22, fontWeight: '800' },
   meta: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   statRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },

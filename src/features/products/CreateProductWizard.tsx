@@ -21,6 +21,7 @@ import {
   applySetupDefaults,
   defaultKeepUnsoldStock,
   defaultsForProductSetup,
+  extrasStockMissing,
   flowSteps,
   getWizardFlow,
   PRODUCT_STOCK_KEY,
@@ -42,7 +43,6 @@ import { VariantListEditor } from './VariantListEditor';
 import {
   THIS_PRODUCT_ID,
   ingredientOptionsFromProducts,
-  suggestedIngredientIds,
   effectiveLines,
   summarizeVariantStock,
   type DrinkChoice,
@@ -50,7 +50,6 @@ import {
   type RecipeLine,
 } from './recipePreviewData';
 import { buildStockUsePayload, type StockUsePayload } from './stockUseMapping';
-import { VariantRecipePreview } from './VariantRecipePreview';
 import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, savedDrinkChoicesToState, type DrinkChoicePayload, type SavedDrinkChoice } from './drinkChoiceMapping';
 
 export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
@@ -295,6 +294,12 @@ export function CreateProductWizard({
     });
     if (missingDrink) {
       failStep2(`Select at least one drink for "${missingDrink.name.trim()}", or untick "Includes a drink".`);
+      return;
+    }
+    // Extras & Sides start on "Take from other items": it needs at least one item (or "Count its own stock")
+    const noStock = extrasStockMissing({ category, variants: variants.map((variant) => ({ key: variant.id })), recipes: recipePreview });
+    if (noStock.length > 0) {
+      failStep2('Add the items each order uses, or choose "Count its own stock".');
       return;
     }
     setStep2Error(undefined);
@@ -550,19 +555,6 @@ export function CreateProductWizard({
             <ProductCategoryField value={category} onChange={changeCategory} />
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
-          {simpleFlow && getCategoryConfig(category).productLevelStock ? (
-            <View style={styles.group}>
-              <VariantRecipePreview
-                label={getCategoryConfig(category).ingredientsLabel}
-                stockModeChoice={getCategoryConfig(category).stockModeChoice}
-                lines={recipePreview[PRODUCT_STOCK_KEY] ?? []}
-                productName={name}
-                ingredients={ingredients}
-                suggestedIds={suggestedIngredientIds(recipePreview)}
-                onChange={(next) => setRecipePreview((current) => ({ ...current, [PRODUCT_STOCK_KEY]: next }))}
-              />
-            </View>
-          ) : null}
           <View style={styles.group}>
             <SectionHeader title="Other settings" />
             <SettingsCard>
@@ -591,6 +583,7 @@ export function CreateProductWizard({
             }
             error={step2Error}
             revealKey={step2RevealKey}
+            preferOtherStock
             onChangeName={(index, text) =>
               setVariants((current) => current.map((entry, i) => (i === index ? { ...entry, name: text } : entry)))
             }

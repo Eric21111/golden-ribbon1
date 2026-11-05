@@ -17,6 +17,8 @@ type PosOrderPaneProps = {
   stockByProductId: Map<string, number>;
   /** Cart-aware cap per cart line (shared ingredient stock). When a line is missing, the per-product limit applies. */
   maxByLine?: Map<string, number>;
+  /** Saved category per product id, for the picture on each line. */
+  categoryByProductId?: Map<string, string | null | undefined>;
   onIncrease: (productId: string, variantId: string | null, drinkId?: string | null) => void;
   onDecrease: (productId: string, variantId: string | null, drinkId?: string | null) => void;
   onQuantityChange: (productId: string, variantId: string | null, quantity: number, drinkId?: string | null) => void;
@@ -28,6 +30,7 @@ export function PosOrderPane({
   items,
   stockByProductId,
   maxByLine,
+  categoryByProductId,
   onIncrease,
   onDecrease,
   onQuantityChange,
@@ -63,6 +66,7 @@ export function PosOrderPane({
               <OrderLine
                 key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)}
                 item={item}
+                category={categoryByProductId?.get(item.product_id)}
                 label={label}
                 atLimit={atLimit}
                 maxQuantity={maxQuantity}

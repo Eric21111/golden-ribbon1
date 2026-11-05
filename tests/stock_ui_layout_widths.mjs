@@ -93,7 +93,7 @@ const MARGIN = 6; // approximation safety margin, dp
 
 // ---- 4. Extras mode rows and the add chip
 {
-  const radio = 20 + 10 + textWidth('Use other stock items', 'Inter_500Medium', 14);
+  const radio = 20 + 10 + textWidth('Take from other items', 'Inter_500Medium', 14);
   const chip = 8 + 14 + 2 + textWidth('Add Stock Item', 'Inter_600SemiBold', 13) + 12; // padding + icon + gap + label + padding (approx.)
   for (const w of WIDTHS) {
     assert.ok(radio + MARGIN <= cardInner(w), `the mode row fits at ${w}dp`);

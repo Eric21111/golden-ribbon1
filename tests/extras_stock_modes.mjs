@@ -284,18 +284,24 @@ assert.deepEqual(moves, [['Egg', -15], ['Fries', -2], ['Fries With Egg', -5], ['
   const component = read('src/features/products/VariantRecipePreview.tsx');
   assert.match(component, /stockModeChoice = false,/, 'off by default: every other category renders as before');
   assert.match(component, /accessibilityRole="radio"/);
-  assert.match(component, /"Use this product's stock"/);
-  assert.match(component, /'Use other stock items'/);
+  assert.ok(component.includes("['other', 'Take from other items',"), 'the ingredient choice comes first');
+  assert.ok(component.includes("['own', 'Count its own stock',"));
+  assert.doesNotMatch(component, /Use this product's stock|Use other stock items/, 'the old, confusing labels are gone');
   assert.match(component, /stashedOtherLines/, 'switching to own and back keeps the items that were picked');
   assert.match(component, /onChange\(OWN_STOCK_LINES\)/);
   // an "other items" list can never be empty: tapping it opens the item sheet first, and closing the sheet changes nothing
   assert.match(component, /setStartingOther\(true\);\n\s*setPickerOpen\(true\);/);
-  assert.match(component, /if \(startingOther\) onChange\(\[\{ itemId, quantity: 1 \}\]\);/, 'the first pick STARTS the list (does not pile onto this product)');
+  assert.match(component, /if \(startingOther\) \{\n\s+const first = \[\{ itemId, quantity: 1 \}\];/, 'the first pick STARTS the list (does not pile onto this product)');
   assert.match(component, /onChange\(stockModeChoice && next\.length === 0 \? OWN_STOCK_LINES : next\);/, 'removing the last item goes back to own stock explicitly');
-  assert.doesNotMatch(component, /Nothing selected yet/, 'no empty-other state exists to warn about');
-  // switching to own stock says what is needed
-  assert.match(component, /This product needs its own stock balance at the branch before it can sell\. The other items are no longer used\./);
-  assert.match(component, /stockModeChoice && mode === 'own' && switchedToOwn/);
+  // Create, Extras & Sides: a new extra starts on "Take from other items" with NOTHING chosen yet. That empty state is held in the
+  // component only (a saved empty list would mean "own stock" to the database), nothing is deducted for it, and Next is refused.
+  assert.ok(component.includes('startOnOtherItems && effectiveLines(lines, inheritedLines ?? []).length === 0'), 'only when asked, and only while the list is empty');
+  assert.ok(component.includes("const mode: StockMode = waitingForItems ? 'other' : stockModeOf(effective);"));
+  assert.doesNotMatch(component, /Each order uses|DeductionPreview/, 'no "Each order uses Extra Rice x1" box at all');
+  assert.match(read('src/features/products/CreateProductWizard.tsx'), /preferOtherStock\n/, 'only Create asks for it');
+  assert.doesNotMatch(read('src/features/products/EditProductWizard.tsx'), /preferOtherStock/, 'Edit shows what is saved');
+  // the choice shows no summary or warning boxes (both were removed)
+  assert.doesNotMatch(component, /needs its own stock balance|switchedToOwn/);
   // the preview reads the EFFECTIVE list (inherited product-level list included), the same one the database resolves
   assert.match(component, /summarizeDeduction\(effective, productName, ingredients\)/);
   assert.match(component, /const effective = effectiveLines\(lines, inheritedLines \?\? \[\]\);/);
@@ -304,7 +310,7 @@ assert.deepEqual(moves, [['Egg', -15], ['Fries', -2], ['Fries With Egg', -5], ['
     assert.match(read(`src/features/products/${f}.tsx`), new RegExp(`effectiveLines\\(recipePreview\\[${key}\\] \\?\\? \\[\\], recipePreview\\[PRODUCT_STOCK_KEY\\] \\?\\? \\[\\]\\)`), `${f}: pricing-step summary uses the effective list`);
   }
   for (const f of ['CreateProductWizard', 'EditProductWizard']) {
-    assert.match(read(`src/features/products/${f}.tsx`), /stockModeChoice=\{getCategoryConfig\(category\)\.stockModeChoice\}/, f);
+    assert.doesNotMatch(read(`src/features/products/${f}.tsx`), /stockModeChoice=/, `${f}: the choice is rendered by the Step 2 editor now, not by Step 1`);
   }
   assert.equal((read('src/features/products/VariantListEditor.tsx').match(/stockModeChoice=\{config\.stockModeChoice\}/g) ?? []).length, 2, 'option lists and the product-level list');
   // the picker already refuses an item that is in the list, so one item can never be added twice

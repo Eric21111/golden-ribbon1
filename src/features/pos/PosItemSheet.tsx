@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { sortMealVariants, STANDARD_MEAL_VARIANT_NAMES } from '@/features/pos/pricingPrograms';
 import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
@@ -110,9 +111,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
       {item ? (
         <View style={styles.body}>
           <View style={styles.heading}>
-            <View style={styles.iconChip}>
-              <Ionicons name="fast-food-outline" size={22} color={managerColors.royalBlue} />
-            </View>
+            <CategoryIcon category={item.product.product_category} size={48} decorative />
             <View style={styles.headingCopy}>
               <Text style={styles.name} numberOfLines={2}>{item.product.name}</Text>
               <Text style={styles.price}>{formatMoney(price)}</Text>
@@ -283,14 +282,6 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
 const styles = StyleSheet.create({
   body: { gap: 16, paddingBottom: 4 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  iconChip: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EAF0FB',
-  },
   headingCopy: { flex: 1, minWidth: 0, gap: 2 },
   name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 21 },
   price: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 24 },

@@ -22,6 +22,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useBranchProducts } from '@/hooks/useBranchProducts';
 import { useBranches } from '@/hooks/useBranches';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
 import {
   ALL_LIST_FILTER_KEYS,
@@ -87,7 +88,7 @@ export function CreateTransferScreen() {
   const destinations = branches.data?.filter((branch) => !branch.is_main_branch && branch.is_active) ?? [];
   const inventory = useInventory(mainBranch, true);
   const mutation = useSendTransfer();
-  const { control, handleSubmit, reset, setValue, watch, formState } = useForm<Values>({
+  const { control, getValues, handleSubmit, reset, setValue, watch, formState } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { destinationBranchId: '', items: [], notes: '' },
   });
@@ -215,6 +216,7 @@ export function CreateTransferScreen() {
               return (
                 <View key={item.product.id} style={styles.reviewCard}>
                   <View style={styles.reviewTop}>
+                    <CategoryIcon category={item.product.product_category} size={36} decorative />
                     <View style={styles.reviewInfo}>
                       <Text style={styles.name} numberOfLines={2}>
                         {item.product.name}
@@ -240,53 +242,75 @@ export function CreateTransferScreen() {
                 </View>
               );
             })}
-            {review.notes ? <Text style={styles.body}>Notes: {review.notes}</Text> : null}
+            <Controller
+              control={control}
+              name="notes"
+              render={({ field, fieldState }) => (
+                <FormField
+                  label="Notes (optional)"
+                  value={field.value ?? ''}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  multiline
+                  labelStyle={styles.fieldLabel}
+                  errorStyle={styles.fieldError}
+                  accentColor={managerColors.royalBlue}
+                  style={styles.fieldInput}
+                />
+              )}
+            />
             {mutation.error ? (
               <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
             ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
-            <ManagerActionButton
-              label="Confirm and send"
-              icon="checkmark-circle-outline"
-              loading={mutation.isPending}
-              disabled={
-                selectedItems.length === 0 ||
-                selectedItems.some((item) => item.quantity > item.quantity_on_hand)
-              }
-              onPress={() =>
-                mutation.mutate(
-                  {
-                    destinationBranchId: review.destinationBranchId,
-                    items: selectedItems.map((item) => ({
-                      product_id: item.product.id,
-                      quantity_sent: item.quantityText,
-                    })),
-                    notes: review.notes?.trim() || null,
-                    idempotencyKey: requestKey.current,
-                  },
-                  {
-                    onSuccess: (id) => {
-                      requestKey.current = makeIdempotencyKey('send');
-                      router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never);
-                    },
-                    onError: () => {
-                      requestKey.current = makeIdempotencyKey('send');
-                    },
-                  },
-                )
-              }
-            />
-            <ManagerActionButton
-              label="Back to edit"
-              variant="secondary"
-              disabled={mutation.isPending}
-              onPress={() => {
-                requestKey.current = makeIdempotencyKey('send');
-                setReview(null);
-              }}
-            />
+            <View style={styles.footerButtonRow}>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Back to edit"
+                  variant="secondary"
+                  disabled={mutation.isPending}
+                  onPress={() => {
+                    requestKey.current = makeIdempotencyKey('send');
+                    setReview(null);
+                  }}
+                />
+              </View>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Confirm"
+                  icon="checkmark-circle-outline"
+                  loading={mutation.isPending}
+                  disabled={
+                    selectedItems.length === 0 ||
+                    selectedItems.some((item) => item.quantity > item.quantity_on_hand)
+                  }
+                  onPress={() =>
+                    mutation.mutate(
+                      {
+                        destinationBranchId: review.destinationBranchId,
+                        items: selectedItems.map((item) => ({
+                          product_id: item.product.id,
+                          quantity_sent: item.quantityText,
+                        })),
+                        notes: getValues('notes')?.trim() || null,
+                        idempotencyKey: requestKey.current,
+                      },
+                      {
+                        onSuccess: (id) => {
+                          requestKey.current = makeIdempotencyKey('send');
+                          router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never);
+                        },
+                        onError: () => {
+                          requestKey.current = makeIdempotencyKey('send');
+                        },
+                      },
+                    )
+                  }
+                />
+              </View>
+            </View>
           </View>
         </View>
       </Screen>
@@ -409,6 +433,7 @@ export function CreateTransferScreen() {
                   return (
                     <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
                       <View style={styles.cardTop}>
+                        <CategoryIcon category={item.product.product_category} size={36} decorative />
                         <View style={styles.cardInfo}>
                           <Text style={styles.name} numberOfLines={2}>
                             {item.product.name}
@@ -545,23 +570,6 @@ export function CreateTransferScreen() {
               </View>
             </View>
           ) : null}
-          <Controller
-            control={control}
-            name="notes"
-            render={({ field, fieldState }) => (
-              <FormField
-                label="Notes (optional)"
-                value={field.value ?? ''}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                multiline
-                labelStyle={styles.fieldLabel}
-                errorStyle={styles.fieldError}
-                accentColor={managerColors.royalBlue}
-                style={styles.fieldInput}
-              />
-            )}
-          />
           <ManagerActionButton
             label="Review transfer"
             disabled={
@@ -803,6 +811,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
+  footerButtonRow: { flexDirection: 'row', gap: 10 },
+  footerButton: { flex: 1 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,

@@ -226,9 +226,11 @@ let sale1;
   assert.equal(extras.autoAddMainProduct, false, 'Extras do not start with This Product');
   assert.equal(extras.allowOtherStock, true, 'and may use other stock such as Rice');
   const { getWizardFlow } = loadTs('src/features/products/wizardGuards.ts');
-  assert.equal(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 }), 'simple');
-  assert.match(read('src/features/products/CreateProductWizard.tsx'), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock \?/, 'the Rice list is on Step 1 of the simple flow');
-  assert.match(read('src/features/products/EditProductWizard.tsx'), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock \?/);
+  assert.equal(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 }), 'full', 'Extras & Sides have the Selling Options step');
+  for (const f of ['CreateProductWizard', 'EditProductWizard']) {
+    assert.doesNotMatch(read(`src/features/products/${f}.tsx`), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock/, `${f}: the Rice list is no longer on Step 1`);
+  }
+  assert.ok(read('src/features/products/VariantListEditor.tsx').includes('{config.stockModeChoice ? productStockBlock : null}'), 'it leads Step 2');
   console.log('6. wizard payload: ok');
 }
 

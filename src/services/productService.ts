@@ -303,3 +303,31 @@ export async function listProductIdsWithOptions(): Promise<string[]> {
   if (error) throw error;
   return [...new Set((data ?? []).map((row) => row.product_id as string))];
 }
+
+const SETUP_PAGE = 1000;
+
+/** Reads every row of a table in pages, so the default 1000-row limit can never cut the list short (a cut list could hide a product that needs stock). */
+async function readAllRows<T>(table: string, columns: string): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += SETUP_PAGE) {
+    const { data, error } = await supabase.from(table).select(columns).order('id').range(from, from + SETUP_PAGE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as unknown as T[];
+    rows.push(...page);
+    if (page.length < SETUP_PAGE) return rows;
+  }
+}
+
+/** What every product's sales take from stock, for working out which products have no stock of their own to count. Read only. */
+export async function listStockSetupData(): Promise<{
+  variants: Array<{ id: string; product_id: string; name: string; sort_order: number }>;
+  stockUses: Array<{ product_id: string; variant_id: string | null; ingredient_product_id: string; quantity: number }>;
+  drinkChoices: Array<{ product_id: string; variant_id: string; drink_product_id: string }>;
+}> {
+  const [variants, stockUses, drinkChoices] = await Promise.all([
+    readAllRows<{ id: string; product_id: string; name: string; sort_order: number }>('product_variants', 'id, product_id, name, sort_order'),
+    readAllRows<{ id: string; product_id: string; variant_id: string | null; ingredient_product_id: string; quantity: number | string }>('product_stock_uses', 'id, product_id, variant_id, ingredient_product_id, quantity'),
+    readAllRows<{ id: string; product_id: string; variant_id: string; drink_product_id: string }>('product_drink_choices', 'id, product_id, variant_id, drink_product_id'),
+  ]);
+  return { variants, stockUses: stockUses.map((row) => ({ ...row, quantity: Number(row.quantity) })), drinkChoices };
+}

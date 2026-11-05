@@ -71,7 +71,7 @@ const { firstPriceToFix, priceProblem } = loadTs('src/features/products/pricingR
   assert.match(editor, /if \(revealKey\) pendingReveal\.current = true;/);
   assert.match(editor, /if \(variants\.some\(\(variant\) => !expanded\[variant\.key\]\)\) return;\n\s+pendingReveal\.current = false;\n\s+requestAnimationFrame\(/, 'waits until every card is open, then measures on the next frame (no fixed delay)');
   assert.doesNotMatch(editor, /setTimeout\(/, 'no timer guess');
-  assert.match(editor, /if \(missingDrink\) reveal\(cardRefs\.current\.get\(missingDrink\.key\) \?\? null\);/, 'a missing drink shows the card, no keyboard');
+  assert.match(editor, /if \(missingDrink\) \{\n\s+reveal\(cardRefs\.current\.get\(missingDrink\.key\) \?\? null\);\n\s+return;\n\s+\}/, 'a missing drink shows the card, no keyboard');
   assert.match(editor, /\}, \[error, revealKey\]\);/, 'the cards open again for a repeated refusal');
 
   for (const [name, src] of [['create', read('src/features/products/CreateProductWizard.tsx')], ['edit', read('src/features/products/EditProductWizard.tsx')]]) {

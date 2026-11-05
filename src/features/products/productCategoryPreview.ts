@@ -56,7 +56,7 @@ type CategoryConfigFields = {
    */
   startsWithOption: boolean;
   /**
-   * Offer the "Use this product's stock / Use other stock items" choice above the stock list, with a preview of what one
+   * Offer the "Take from other items / Count its own stock" choice above the stock list, with a preview of what one
    * order deducts. Only Extras & Sides: a side is either its own stock (Fries) or borrows another item's (Extra Rice = Rice).
    * It changes how the same list is edited, never what is saved.
    */
@@ -136,7 +136,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
   {
     id: 'extras',
     label: 'Extras & Sides',
-    step2Title: 'Simple Selling Options',
+    step2Title: 'What it uses from stock',
     stepLabel: 'Selling Options',
     noun: 'Option',
     nameLabel: 'Option name',
@@ -148,7 +148,7 @@ export const PRODUCT_CATEGORIES: ProductCategoryConfig[] = [
     showStatus: false,
     simpleEmpty: {
       title: 'Sold at one fixed price',
-      body: 'Skip this step, or list the stock it uses below.',
+      body: 'Only for sizes or kinds with their own price, like Small and Large.',
       link: 'Add a selling option',
     },
     emptyBody: STANDARD_EMPTY_BODY,

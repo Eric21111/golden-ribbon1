@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -25,6 +25,11 @@ import {
   matchesStockFilter,
   type StockFilter,
 } from '@/features/inventory/inventoryStatus';
+import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
+import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
+import { MainStockDetails } from '@/features/inventory/MainStockDetails';
+import { buildStockSetup } from '@/features/inventory/sharedStock';
+import { useStockSetupData } from '@/hooks/useStockSetup';
 import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
 import {
@@ -86,17 +91,36 @@ export default function ManagerInventoryScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
+  // names for the recipe lines (every product Main lists) and the selling branches for the price lines
+  const productNames = useMemo(() => new Map((query.data ?? []).map((entry) => [entry.product.id, entry.product.name])), [query.data]);
+  const nameOf = useCallback((productId: string) => productNames.get(productId) ?? 'Unknown item', [productNames]);
+  // which products have no stock of their own (their sales take only from other products): the same rule Opening stock uses
+  const stockSetupData = useStockSetupData();
+  const stockSetup = useMemo(
+    () => (query.data && stockSetupData.data ? buildStockSetup({ products: query.data.map((entry) => entry.product), ...stockSetupData.data }) : null),
+    [query.data, stockSetupData.data],
+  );
+  // A product with no stock of its own is not "Not set": there is nothing to count for it (see Opening stock)
+  const pillFor = (item: InventoryItem): { label: string; tone: ManagerBadgeTone } =>
+    stockSetup?.shared.has(item.product.id) && getStockStatus(item) === 'not_set'
+      ? { label: 'Shared stock', tone: 'neutral' }
+      : { label: stockPillLabel(item), tone: badgeToneForStatus[getStockStatus(item)] };
+  const sellingBranches = useMemo(
+    () => (branches.data ?? []).filter((entry) => entry.is_active && !entry.is_main_branch).map((entry) => ({ id: entry.id, name: entry.name })),
+    [branches.data],
+  );
 
   const filtered = useMemo(() => {
     const items = query.data ?? [];
     const term = search.trim().toLowerCase();
     const rows = items.filter((item) => {
       if (!matchesStockFilter(item, filter)) return false;
+      if (filter === 'not_set' && stockSetup?.shared.has(item.product.id)) return false;
       if (!matchesListFilters(item.product, listFilters)) return false;
       if (!term) return true;
       return productSearchText(item.product).includes(term);
     });
-    return [...rows].sort((a, b) => {
+    const sorted = [...rows].sort((a, b) => {
       switch (sort) {
         case 'name-desc':
           return b.product.name.localeCompare(a.product.name);
@@ -108,9 +132,18 @@ export default function ManagerInventoryScreen() {
           return a.product.name.localeCompare(b.product.name);
       }
     });
+    // grouped by category in a fixed order; the sort above applies inside each group
+    return groupByCategory(sorted, (item) => item.product);
   }, [query.data, filter, search, sort, listFilters]);
+  const counts = useMemo(() => groupCounts(filtered, (item) => item.product), [filtered]);
 
   const pagination = useClientPagination(filtered, `${search}|${filter}|${sort}|${JSON.stringify(listFilters)}`, 10);
+
+  // a heading in front of each category on the page; none while one category is picked (it would say the same everywhere)
+  const listRows = useMemo(
+    () => buildListRows(pagination.pageItems, counts, listFilters.category === 'all', (item) => item.product),
+    [pagination.pageItems, counts, listFilters.category],
+  );
 
   const filterOptions = useMemo(() => {
     const base: Array<{ label: string; value: StockFilter }> = [
@@ -216,11 +249,11 @@ export default function ManagerInventoryScreen() {
               </Text>
             )}
             <FlatList
-              data={pagination.pageItems}
-              keyExtractor={(item) => item.product.id}
+              data={listRows}
+              keyExtractor={(row) => row.key}
               contentContainerStyle={styles.listContent}
               refreshControl={<RefreshControl refreshing={Boolean(refreshing)} onRefresh={refresh} tintColor={managerColors.royalBlue} />}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ItemSeparatorComponent={({ leadingItem }) => <View style={leadingItem.type === 'header' ? styles.separatorAfterHeading : styles.separator} />}
               ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
               ListFooterComponent={
                 pagination.showPagination ? (
@@ -233,7 +266,9 @@ export default function ManagerInventoryScreen() {
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => {
+              renderItem={({ item: row }) => {
+                if (row.type === 'header') return <CategoryGroupHeading title={row.title} count={row.count} />;
+                const item = row.item;
                 const status = getStockStatus(item);
                 return (
                   <ListRowCard
@@ -246,7 +281,7 @@ export default function ManagerInventoryScreen() {
                     }`}
                     subtitleTag
                     trailing={
-                      <ManagerBadge label={stockPillLabel(item)} tone={badgeToneForStatus[status]} size="md" />
+                      <ManagerBadge label={pillFor(item).label} tone={pillFor(item).tone} size="md" />
                     }
                     onPress={() => setSelected(item)}
                   />
@@ -284,7 +319,7 @@ export default function ManagerInventoryScreen() {
         </View>
       </ConstrainedWidth>
 
-      <BottomSheet visible={selected != null} title="Stock details" onClose={() => setSelected(null)}>
+      <BottomSheet visible={selected != null} title="Stock details" scroll onClose={() => setSelected(null)}>
         {selected ? (
           <View style={styles.detail}>
             <ListRowCard
@@ -298,45 +333,60 @@ export default function ManagerInventoryScreen() {
               subtitleTag
               trailing={
                 <ManagerBadge
-                  label={stockPillLabel(selected)}
-                  tone={badgeToneForStatus[getStockStatus(selected)]}
+                  label={pillFor(selected).label}
+                  tone={pillFor(selected).tone}
                   size="md"
                 />
               }
             />
-            <SummaryCard
-              rows={[
-                { label: 'On hand', value: onHandLabel(selected), emphasis: true },
-                {
-                  label: isMain ? 'Base price' : 'Branch price',
-                  value: selected.branch_product
-                    ? formatMoney(selected.branch_product.selling_price)
-                    : 'Not assigned',
-                },
-                {
-                  label: 'Last updated',
-                  value: selected.updated_at ? formatDate(selected.updated_at) : 'Not initialized',
-                },
-              ]}
-            />
             {isMain ? (
-              <ManagerActionButton
-                label="Send stock"
-                icon="paper-plane-outline"
-                onPress={() => {
+              <MainStockDetails
+                key={selected.product.id}
+                item={selected}
+                sellingBranches={sellingBranches}
+                nameOf={nameOf}
+                onSend={() => {
                   setSelected(null);
                   router.push('/manager/transfers/create' as never);
                 }}
-              />
-            ) : (
-              <ManagerActionButton
-                label="View returns"
-                icon="return-up-back-outline"
-                onPress={() => {
+                sharedSources={stockSetup?.sources.get(selected.product.id) ?? null}
+                setupReady={!stockSetupData.isLoading}
+                onOpening={() => {
+                  const productId = selected.product.id;
                   setSelected(null);
-                  router.push('/manager/returns');
+                  // Opening stock opens on this product
+                  router.push({ pathname: '/manager/inventory/setup', params: { product: productId } } as never);
+                }}
+                // a product that takes its stock from another one (Extra Rice -> Rice): show that product's stock instead
+                onOpenProduct={(productId) => {
+                  const target = (query.data ?? []).find((entry) => entry.product.id === productId);
+                  if (target) setSelected(target);
                 }}
               />
+            ) : (
+              <>
+                <SummaryCard
+                  rows={[
+                    { label: 'On hand', value: onHandLabel(selected), emphasis: true },
+                    {
+                      label: 'Branch price',
+                      value: selected.branch_product ? formatMoney(selected.branch_product.selling_price) : 'Not assigned',
+                    },
+                    {
+                      label: 'Last updated',
+                      value: selected.updated_at ? formatDate(selected.updated_at) : 'Not initialized',
+                    },
+                  ]}
+                />
+                <ManagerActionButton
+                  label="View returns"
+                  icon="return-up-back-outline"
+                  onPress={() => {
+                    setSelected(null);
+                    router.push('/manager/returns');
+                  }}
+                />
+              </>
             )}
           </View>
         ) : null}
@@ -412,6 +462,7 @@ const styles = StyleSheet.create({
   },
   listContent: { paddingBottom: 12, flexGrow: 1 },
   separator: { height: 12 },
+  separatorAfterHeading: { height: 8 },
   pager: { alignItems: 'center', gap: 4, paddingTop: 8 },
   footer: {
     marginHorizontal: -20,

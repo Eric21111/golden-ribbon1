@@ -37,7 +37,6 @@ import { isSellingPrice } from './productSchema';
 import { VariantListEditor } from './VariantListEditor';
 import {
   ingredientOptionsFromProducts,
-  suggestedIngredientIds,
   effectiveLines,
   summarizeVariantStock,
   type DrinkChoice,
@@ -52,7 +51,6 @@ import {
   type SavedStockUse,
   type StockUsePayload,
 } from './stockUseMapping';
-import { VariantRecipePreview } from './VariantRecipePreview';
 import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, savedDrinkChoicesToState, type DrinkChoicePayload, type SavedDrinkChoice } from './drinkChoiceMapping';
 
 import { branchesCarrying, branchesToAdd, branchesToSend, switchedOffAtBranches } from './branchPricingEdit';
@@ -665,19 +663,6 @@ export function EditProductWizard({
             <ProductCategoryField value={category} onChange={setCategory} allowUnset />
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
-          {simpleFlow && getCategoryConfig(category).productLevelStock ? (
-            <View style={styles.group}>
-              <VariantRecipePreview
-                label={getCategoryConfig(category).ingredientsLabel}
-                stockModeChoice={getCategoryConfig(category).stockModeChoice}
-                lines={recipePreview[PRODUCT_STOCK_KEY] ?? []}
-                productName={name}
-                ingredients={ingredients}
-                suggestedIds={suggestedIngredientIds(recipePreview)}
-                onChange={(next) => setRecipePreview((current) => ({ ...current, [PRODUCT_STOCK_KEY]: next }))}
-              />
-            </View>
-          ) : null}
           <View style={styles.group}>
             <SectionHeader title="Other settings" />
             <SettingsCard>
