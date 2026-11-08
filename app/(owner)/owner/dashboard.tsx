@@ -11,12 +11,15 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
-import { managerColors } from '@/components/dashboard/theme';
+import { managerColors, type StatChipColor } from '@/components/dashboard/theme';
+import type { GlyphName } from '@/components/GlyphIcon';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { describeActivity, sortActivitiesNewestFirst } from '@/features/reports/todayLog';
 import { buildTodayQuickview, todayQuickviewStatus } from '@/features/reports/todayQuickview';
 import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive';
 import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
+import { useOwnerTodayActivityLog } from '@/hooks/useOwnerTodayLog';
 import {
   useOwnerDailyProductSummary,
   useOwnerDashboardMetrics,
@@ -24,6 +27,7 @@ import {
 } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
+import type { OwnerActivityAction } from '@/types/models';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -44,10 +48,31 @@ function chunkPairs<T>(items: readonly T[]): T[][] {
   return rows;
 }
 
-function QuickviewError({ message, retrying, onRetry }: { message: string; retrying: boolean; onRetry: () => void }) {
+const ACTIVITY_ICONS: Record<OwnerActivityAction, { icon: GlyphName; color: StatChipColor }> = {
+  opening_stock_set: { icon: 'layers-outline', color: 'gold' },
+  transfer_sent: { icon: 'car-outline', color: 'blue' },
+  shift_started: { icon: 'play-circle-outline', color: 'green' },
+  transfer_received: { icon: 'download-outline', color: 'teal' },
+  shift_ended: { icon: 'stop-circle-outline', color: 'gray' },
+  return_sent: { icon: 'return-up-back-outline', color: 'orange' },
+  return_received: { icon: 'archive-outline', color: 'lilac' },
+};
+const TODAY_LOG_PREVIEW = 8;
+
+function InlineError({
+  title,
+  message,
+  retrying,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
   return (
     <View style={styles.inlineErrorCard} accessibilityLiveRegion="polite">
-      <Text style={styles.inlineErrorTitle}>Couldn&apos;t load today&apos;s branch revenue.</Text>
+      <Text style={styles.inlineErrorTitle}>{title}</Text>
       <Text style={styles.inlineErrorBody}>{message}</Text>
       <ManagerActionButton label="Retry" icon="refresh-outline" variant="secondary" loading={retrying} onPress={onRetry} />
     </View>
@@ -59,9 +84,11 @@ export default function OwnerDashboard() {
   const metricsQuery = useOwnerDashboardMetrics();
   const summaryQuery = useOwnerDailyProductSummary();
   const branchSalesQuery = useOwnerTodayBranchSales();
+  const todayLogQuery = useOwnerTodayActivityLog();
   const archiveQuery = useArchiveStatus();
   const dismissReminder = useDismissArchiveReminder();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [showFullLog, setShowFullLog] = useState(false);
 
   const metrics = metricsQuery.data;
   const summary = summaryQuery.data ?? [];
@@ -75,16 +102,24 @@ export default function OwnerDashboard() {
   const retryQuickview = () => void branchSalesQuery.refetch();
   const quickviewError =
     quickviewStatus === 'error' ? (
-      <QuickviewError
+      <InlineError
+        title="Couldn't load today's branch revenue."
         message={getErrorMessage(branchSalesQuery.error)}
         retrying={branchSalesQuery.isFetching}
         onRetry={retryQuickview}
       />
     ) : null;
+  const todayLogStatus = todayQuickviewStatus(todayLogQuery);
+  const todayLog = useMemo(
+    () => sortActivitiesNewestFirst(todayLogQuery.data?.activities ?? []),
+    [todayLogQuery.data],
+  );
+  const visibleLog = showFullLog ? todayLog : todayLog.slice(0, TODAY_LOG_PREVIEW);
   const refreshing =
     metricsQuery.isRefetching ||
     summaryQuery.isRefetching ||
     branchSalesQuery.isRefetching ||
+    todayLogQuery.isRefetching ||
     archiveQuery.isRefetching;
   const ownerName = profile?.full_name ?? 'Owner';
 
@@ -92,6 +127,7 @@ export default function OwnerDashboard() {
     void metricsQuery.refetch();
     void summaryQuery.refetch();
     void branchSalesQuery.refetch();
+    void todayLogQuery.refetch();
     void archiveQuery.refetch();
   };
 
@@ -99,6 +135,7 @@ export default function OwnerDashboard() {
     void metricsQuery.refetch();
     void summaryQuery.refetch();
     void branchSalesQuery.refetch();
+    void todayLogQuery.refetch();
   });
 
   const openReport = (path: '/owner/reports/sales-by-branch' | '/owner/reports/product-sales') => {
@@ -249,6 +286,54 @@ export default function OwnerDashboard() {
                     trailing={<Text style={styles.revenue}>{formatMoney(row.revenue)}</Text>}
                   />
                 ))
+              )}
+            </Section>
+
+            <Section title="Today Log">
+              {todayLogStatus === 'loading' ? (
+                <LoadingState label="Loading today's activity…" />
+              ) : todayLogStatus === 'error' ? (
+                <InlineError
+                  title="Couldn't load today's activity."
+                  message={getErrorMessage(todayLogQuery.error)}
+                  retrying={todayLogQuery.isFetching}
+                  onRetry={() => void todayLogQuery.refetch()}
+                />
+              ) : todayLog.length === 0 ? (
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>No employee activity yet today.</Text>
+                </View>
+              ) : (
+                <>
+                  {visibleLog.map((activity) => {
+                    const row = describeActivity(activity);
+                    const look = ACTIVITY_ICONS[activity.action] ?? { icon: 'time-outline', color: 'gray' };
+                    return (
+                      <ListRowCard
+                        key={activity.id}
+                        icon={look.icon}
+                        iconColor={look.color}
+                        title={row.action}
+                        subtitle={row.employee}
+                        meta={row.detail ? `${row.branch} · ${row.detail}` : row.branch}
+                        trailing={<Text style={styles.logTime}>{row.time}</Text>}
+                      />
+                    );
+                  })}
+                  {todayLog.length > TODAY_LOG_PREVIEW ? (
+                    <ManagerActionButton
+                      label={showFullLog ? 'Show fewer' : `Show all ${todayLog.length}`}
+                      icon={showFullLog ? 'chevron-up-outline' : 'chevron-down-outline'}
+                      variant="secondary"
+                      onPress={() => setShowFullLog((value) => !value)}
+                    />
+                  ) : null}
+                  {todayLogQuery.data?.truncated ? (
+                    <Text style={styles.quiet}>
+                      Showing the latest {todayLog.length} of {todayLogQuery.data.total_count} activities.
+                    </Text>
+                  ) : null}
+                </>
               )}
             </Section>
 
@@ -419,6 +504,7 @@ const styles = StyleSheet.create({
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
   revenue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  logTime: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   alertCard: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',

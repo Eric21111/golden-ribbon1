@@ -56,6 +56,10 @@ const stubs = {
     export const useOwnerDailyProductSummary = () => state.summary;
     export const useOwnerTodayBranchSales = () => state.branchSales;
   `,
+  '@/hooks/useOwnerTodayLog': `
+    export const state = {};
+    export const useOwnerTodayActivityLog = () => state.log;
+  `,
 };
 
 const stubNames = Object.keys(stubs);
@@ -115,6 +119,7 @@ const sales = await import('@/hooks/useSales');
 const archive = await import('@/hooks/useArchive');
 const actions = await import('@/components/dashboard/ManagerActionButton');
 const routing = await import('expo-router');
+const todayLogHook = await import('@/hooks/useOwnerTodayLog');
 
 const query = (overrides) => ({
   data: undefined,
@@ -171,6 +176,7 @@ const assertUnrelatedSections = (t) => {
 };
 
 archive.state.archive = { reminder_visible: true, retention_days: 90 };
+todayLogHook.state.log = query({ data: { business_date: '2026-11-08', total_count: 0, truncated: false, activities: [] } });
 sales.state.metrics = query({ data: metricsData });
 sales.state.summary = query({ data: summaryData });
 
@@ -280,7 +286,123 @@ sales.state.metrics = query({ data: metricsData });
   client.clear();
 }
 
+// 9. Today Log: loading, error + retry, empty, rows (newest first, Manila time), preview cap, truncation note.
+{
+  const logSlice = (t) => t.slice(t.indexOf('Today Log'), t.indexOf('REPORTS'));
+  const logData = (activities, extra = {}) => ({
+    business_date: '2026-11-08',
+    total_count: activities.length,
+    truncated: false,
+    activities,
+    ...extra,
+  });
+  const activity = (id, action, occurred_at, actor_name, actor_role, branch_name, detail = null) => ({
+    id,
+    action,
+    occurred_at,
+    actor_id: `u-${id}`,
+    actor_name,
+    actor_role,
+    branch_id: `b-${branch_name}`,
+    branch_name,
+    detail,
+  });
+
+  todayLogHook.state.log = query({ isLoading: true, isFetching: true });
+  {
+    const t = text(render());
+    assertUnrelatedSections(t);
+    assert.match(logSlice(t), /Loading today's activity…/);
+  }
+
+  let logRefetches = 0;
+  todayLogHook.state.log = query({
+    error: new Error('Network request failed'),
+    isError: true,
+    refetch: async () => void (logRefetches += 1),
+  });
+  {
+    const t = text(render());
+    assertUnrelatedSections(t);
+    assert.match(quickviewSlice(t), /₱\s*560\.00/, 'Quickview unaffected by a Today Log failure');
+    const log = logSlice(t);
+    assert.match(log, /Couldn't load today's activity\./);
+    assert.match(log, /\[button:Retry\]/);
+    actions.buttons.find((b) => b.label === 'Retry').onPress();
+    assert.equal(logRefetches, 1, 'Retry refetches only the Today Log query');
+  }
+
+  todayLogHook.state.log = query({ data: logData([]) });
+  assert.match(logSlice(text(render())), /No employee activity yet today\./);
+
+  // Server order deliberately scrambled to prove the dashboard sorts newest first.
+  const rows = [
+    activity('a', 'opening_stock_set', '2026-11-07T22:30:00Z', 'Mara Main', 'manager', 'Main', { product_count: 2 }),
+    activity('c', 'shift_started', '2026-11-08T01:00:00Z', 'Cara One', 'cashier', 'SM1'),
+    activity('b', 'transfer_sent', '2026-11-08T00:15:00Z', 'Mara Main', 'manager', 'Main', {
+      reference: 'TR-000001',
+      counterpart_branch_name: 'SM1',
+      item_count: 3,
+    }),
+    activity('d', 'transfer_received', '2026-11-08T01:30:00Z', 'Cara One', 'cashier', 'SM1', {
+      reference: 'TR-000001',
+      counterpart_branch_name: 'Main',
+      item_count: 3,
+      with_issue: true,
+    }),
+    activity('g', 'return_received', '2026-11-08T10:45:00Z', 'Mara Main', 'manager', 'Main', {
+      reference: 'RT-000001',
+      counterpart_branch_name: 'SM1',
+    }),
+    activity('f', 'return_sent', '2026-11-08T10:00:00Z', 'Cara One', 'cashier', 'SM1', {
+      reference: 'RT-000001',
+      counterpart_branch_name: 'Main',
+    }),
+    activity('e', 'shift_ended', '2026-11-08T09:55:00Z', 'Cara One', 'cashier', 'SM1'),
+  ];
+  todayLogHook.state.log = query({ data: logData(rows) });
+  {
+    const t = text(render());
+    assertUnrelatedSections(t);
+    const log = logSlice(t);
+    const expected = [
+      ['Received returned stock', 'Mara Main · Manager', 'Main · RT-000001 · from SM1', '6:45 PM'],
+      ['Returned stock', 'Cara One · Cashier', 'SM1 · RT-000001 · to Main', '6:00 PM'],
+      ['Ended shift', 'Cara One · Cashier', 'SM1', '5:55 PM'],
+      ['Received stock', 'Cara One · Cashier', 'SM1 · TR-000001 · from Main · 3 items · with discrepancy', '9:30 AM'],
+      ['Started shift', 'Cara One · Cashier', 'SM1', '9:00 AM'],
+      ['Sent stock out for delivery', 'Mara Main · Manager', 'Main · TR-000001 · to SM1 · 3 items', '8:15 AM'],
+      ['Set opening stock', 'Mara Main · Manager', 'Main · 2 products', '6:30 AM'],
+    ];
+    let cursor = 0;
+    for (const [action, employee, meta, time] of expected) {
+      const at = log.indexOf(action, cursor);
+      assert.ok(at >= cursor, `${action} appears after the previous (newer) row`);
+      const segment = log.slice(at, at + action.length + employee.length + meta.length + time.length + 10);
+      assert.ok(segment.includes(employee), `${action}: employee shown`);
+      assert.ok(segment.includes(meta), `${action}: branch/detail shown (${segment})`);
+      assert.ok(segment.includes(time), `${action}: Manila time shown (${segment})`);
+      cursor = at + action.length;
+    }
+    assert.doesNotMatch(log, /Show all|Show fewer|Showing the latest/, 'no toggle or note for a short log');
+  }
+
+  const many = Array.from({ length: 10 }, (_, i) =>
+    activity(`s${i}`, 'shift_started', `2026-11-08T0${i}:00:00Z`, `Cashier ${i}`, 'cashier', 'SM2'),
+  );
+  todayLogHook.state.log = query({ data: logData(many, { total_count: 650, truncated: true }) });
+  {
+    const log = logSlice(text(render()));
+    assert.equal((log.match(/Started shift/g) ?? []).length, 8, 'preview shows the 8 newest');
+    assert.match(log, /Cashier 9 /);
+    assert.doesNotMatch(log, /Cashier 0 |Cashier 1 /, 'oldest rows hidden behind the toggle');
+    assert.match(log, /\[button:Show all 10\]/);
+    assert.match(log, /Showing the latest 10 of 650 activities\./);
+  }
+  todayLogHook.state.log = query({ data: logData([]) });
+}
+
 assert.ok(routing.pushed.length === 0, 'rendering does not navigate');
 console.log(
-  'Owner dashboard quickview error tests passed: inline error + retry, unrelated sections render, recovery, stale data hidden, loading isolated.',
+  'Owner dashboard quickview error tests passed: inline error + retry, unrelated sections render, recovery, stale data hidden, loading isolated; Today Log states, ordering, attribution and preview.',
 );

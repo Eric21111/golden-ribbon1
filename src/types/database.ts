@@ -33,6 +33,7 @@ import type {
   ProductSalesReportItem,
   OwnerDashboardMetrics,
   OwnerTodayBranchSales,
+  OwnerTodayActivityLog,
   ManagerDashboardMetrics,
   BranchPerformanceItem,
   BranchPerformanceDetails,
@@ -566,6 +567,7 @@ export type Database = {
       get_owner_dashboard_metrics: { Args: Record<string, never>; Returns: OwnerDashboardMetrics };
       get_owner_daily_product_summary: { Args: Record<string, never>; Returns: OwnerDailyProductSummaryItem[] };
       get_owner_today_branch_sales: { Args: Record<string, never>; Returns: OwnerTodayBranchSales };
+      get_owner_today_activity_log: { Args: Record<string, never>; Returns: OwnerTodayActivityLog };
       get_manager_dashboard_metrics: { Args: Record<string, never>; Returns: ManagerDashboardMetrics };
       get_manager_recent_sales: { Args: { p_limit?: number }; Returns: SaleWithRelations[] };
       list_employees: { Args: Record<string, never>; Returns: EmployeeRecord[] };

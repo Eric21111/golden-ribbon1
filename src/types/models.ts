@@ -597,6 +597,45 @@ export type OwnerTodayBranchSales = {
   branches: (BranchSalesReportItem & { is_active?: boolean })[];
 };
 
+export type OwnerActivityAction =
+  | 'opening_stock_set'
+  | 'transfer_sent'
+  | 'shift_started'
+  | 'transfer_received'
+  | 'shift_ended'
+  | 'return_sent'
+  | 'return_received';
+
+export type OwnerTodayActivity = {
+  id: string;
+  action: OwnerActivityAction;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_name: string;
+  actor_role: string | null;
+  branch_id: string | null;
+  branch_name: string;
+  detail: {
+    product_count?: number;
+    /** Opening stock: products added on top of an earlier opening (repeat stock addition). */
+    added_count?: number;
+    reference?: string;
+    counterpart_branch_name?: string | null;
+    item_count?: number;
+    with_issue?: boolean;
+    reopened?: boolean;
+    /** Shift end: closed at or after the 9 PM cutoff, so it may be the automatic close (not recorded). */
+    possibly_automatic?: boolean;
+  } | null;
+};
+
+export type OwnerTodayActivityLog = {
+  business_date: string;
+  total_count: number;
+  truncated: boolean;
+  activities: OwnerTodayActivity[];
+};
+
 export type BranchDailySalesItem = {
   business_date: string;
   transaction_count: number;
