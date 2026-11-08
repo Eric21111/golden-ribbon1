@@ -13,6 +13,8 @@ export function useReturns(branchId = '', status: ReturnStatus | '' = '') {
   return useQuery({
     queryKey: queryKeys.returns(branchId, status),
     queryFn: () => listReturns({ branchId, status }),
+    // Returns are created on cashier devices; poll so Main sees them without a manual refresh.
+    refetchInterval: 15_000,
   });
 }
 

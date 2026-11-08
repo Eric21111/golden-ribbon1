@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -74,6 +74,12 @@ export default function ManagerReturnsScreen() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const query = useReturns(profile?.branch_id ?? '', status);
+  const refetchReturns = query.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchReturns();
+    }, [refetchReturns]),
+  );
   const returns = (query.data as StockReturnSummary[] | undefined) ?? [];
 
   const filtered = useMemo(() => {
