@@ -1,12 +1,15 @@
-import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { GlyphIcon, type GlyphName } from '../GlyphIcon';
 import { managerColors, statChipColors, type StatChipColor } from './theme';
 
 interface ListRowCardProps {
-  icon?: IoniconsIconName;
+  icon?: GlyphName;
   iconColor?: StatChipColor;
+  /** Spoken name of the icon when it carries meaning (e.g. a product category). Without it the icon is decorative. */
+  iconLabel?: string;
   title: string;
   subtitle?: string;
   /** Renders subtitle as a small code-style chip instead of plain text (good for SKUs/IDs). */
@@ -18,11 +21,19 @@ interface ListRowCardProps {
   metaRow?: ReactNode;
   trailing?: ReactNode;
   onPress?: () => void;
+  /** Spoken description of the whole card when it is tappable. Without it the card reads its text in order. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  /** How many lines the title may take before it is cut off with an ellipsis. Two unless a screen needs more room. */
+  titleLines?: number;
+  /** A small code-style tag (e.g. the SKU) right after the title. It drops to the next line when the name is long. */
+  titleTag?: string;
 }
 
 export function ListRowCard({
   icon,
   iconColor = 'blue',
+  iconLabel,
   title,
   subtitle,
   subtitleTag = false,
@@ -30,20 +41,42 @@ export function ListRowCard({
   metaRow,
   trailing,
   onPress,
+  accessibilityLabel,
+  accessibilityHint,
+  titleLines = 2,
+  titleTag,
 }: ListRowCardProps) {
   const chip = statChipColors[iconColor];
 
   const content = (
     <View style={styles.row}>
       {icon ? (
-        <View style={[styles.iconChip, { backgroundColor: chip.chip }]}>
-          <Ionicons name={icon} size={18} color={chip.icon} />
+        <View
+          accessible={iconLabel != null}
+          accessibilityRole={iconLabel != null ? 'image' : undefined}
+          accessibilityLabel={iconLabel}
+          style={[styles.iconChip, { backgroundColor: chip.chip }]}
+        >
+          <GlyphIcon name={icon} size={18} color={chip.icon} />
         </View>
       ) : null}
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
+        {titleTag ? (
+          <View style={styles.titleLine}>
+            <Text style={[styles.title, styles.titleInline]} numberOfLines={titleLines}>
+              {title}
+            </Text>
+            <View style={styles.subtitleTag}>
+              <Text style={styles.subtitleTagLabel} numberOfLines={1}>
+                {titleTag}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.title} numberOfLines={titleLines}>
+            {title}
+          </Text>
+        )}
         {subtitle ? (
           subtitleTag ? (
             <View style={styles.subtitleTag}>
@@ -72,6 +105,8 @@ export function ListRowCard({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
@@ -104,6 +139,8 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, gap: 6 },
   title: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20 },
+  titleLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4 },
+  titleInline: { flexShrink: 1 },
   subtitle: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13 },
   subtitleTag: {
     alignSelf: 'flex-start',

@@ -1,5 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ManagerBottomSheet as BottomSheet } from '@/components/dashboard/ManagerBottomSheet';
@@ -8,6 +8,8 @@ import { managerColors } from '@/components/dashboard/theme';
 export type FilterOption<T extends string> = {
   label: string;
   value: T;
+  /** Small decoration before the label (e.g. a category icon). */
+  leading?: ReactNode;
 };
 
 type FilterDropdownProps<T extends string> = {
@@ -36,6 +38,7 @@ export function FilterDropdown<T extends string>({
         onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
       >
+        {selected?.leading}
         <Text style={styles.triggerLabel} numberOfLines={1}>
           {selected?.label ?? label}
         </Text>
@@ -61,6 +64,7 @@ export function FilterDropdown<T extends string>({
                   pressed && styles.pressed,
                 ]}
               >
+                {option.leading}
                 <Text style={[styles.rowLabel, isSelected && styles.rowLabelSelected]}>
                   {option.label}
                 </Text>

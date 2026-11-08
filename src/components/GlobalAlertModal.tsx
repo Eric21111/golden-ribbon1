@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { managerColors } from '@/components/dashboard/theme';
@@ -15,6 +15,13 @@ export function GlobalAlertModal() {
     dismiss();
     if (current?.kind === 'confirm') current.onConfirm();
   };
+
+  // react-native-web adds a Modal's DOM node when the Modal MOUNTS (not when it becomes visible) and every modal shares
+  // the same z-index, so DOM order decides what is on top. This modal mounts at app start, so a sheet opened later
+  // would sit above it and hide every confirm/alert raised from inside that sheet (e.g. "Discard changes?" when Close
+  // is pressed), which made Close look dead. On web, mount it only while a request is showing so it is always the
+  // newest modal. Native keeps the always-mounted Modal (unmounting a visible native Modal can leave a touch blocker).
+  if (Platform.OS === 'web' && request == null) return null;
 
   return (
     <Modal transparent animationType="fade" visible={request != null} onRequestClose={dismiss}>

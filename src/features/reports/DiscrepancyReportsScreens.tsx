@@ -15,6 +15,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
+import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
@@ -107,22 +108,11 @@ export function TransferDiscrepanciesReportScreen({
           <View style={styles.searchField}>
             <SearchInput value={search} onChangeText={setSearch} placeholder="Search transfer # or branch" />
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Type: ${TYPE_OPTIONS.find((option) => option.value === discrepancyType)?.label}`}
+          <FilterIconButton
+            label={`Type: ${TYPE_OPTIONS.find((option) => option.value === discrepancyType)?.label}`}
+            count={discrepancyType !== 'all' ? 1 : 0}
             onPress={() => setTypeOpen(true)}
-            style={({ pressed }) => [
-              styles.iconButton,
-              discrepancyType !== 'all' && styles.iconButtonActive,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons
-              name="options-outline"
-              size={20}
-              color={discrepancyType !== 'all' ? managerColors.royalBlue : managerColors.ink}
-            />
-          </Pressable>
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Date range: ${DATE_RANGE_LABELS[rangeType]}`}
@@ -311,22 +301,11 @@ export function ReturnDiscrepanciesReportScreen({
           <View style={styles.searchField}>
             <SearchInput value={search} onChangeText={setSearch} placeholder="Search return # or branch" />
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Type: ${TYPE_OPTIONS.find((option) => option.value === discrepancyType)?.label}`}
+          <FilterIconButton
+            label={`Type: ${TYPE_OPTIONS.find((option) => option.value === discrepancyType)?.label}`}
+            count={discrepancyType !== 'all' ? 1 : 0}
             onPress={() => setTypeOpen(true)}
-            style={({ pressed }) => [
-              styles.iconButton,
-              discrepancyType !== 'all' && styles.iconButtonActive,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons
-              name="options-outline"
-              size={20}
-              color={discrepancyType !== 'all' ? managerColors.royalBlue : managerColors.ink}
-            />
-          </Pressable>
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Date range: ${DATE_RANGE_LABELS[rangeType]}`}
@@ -467,7 +446,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconButtonActive: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  iconButtonActive: { borderColor: '#C9D7F2', backgroundColor: '#EAF0FB' },
   pressed: { opacity: 0.75 },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },

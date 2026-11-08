@@ -16,6 +16,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashboard/statusTone';
 import { managerColors } from '@/components/dashboard/theme';
+import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
@@ -179,14 +180,11 @@ export default function TransferHistoryScreen() {
             <View style={styles.searchField}>
               <SearchInput value={search} onChangeText={setSearch} placeholder="Search transfer # or branch" />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+            <SortIconButton
+              currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+              active={sort !== 'newest'}
               onPress={() => setSortOpen(true)}
-              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-            </Pressable>
+            />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Date range: ${DATE_RANGE_LABELS[dateRange]}`}
@@ -336,7 +334,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconButtonActive: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  iconButtonActive: { borderColor: '#C9D7F2', backgroundColor: '#EAF0FB' },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   filterItem: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
   filterItemFull: { flex: 1 },

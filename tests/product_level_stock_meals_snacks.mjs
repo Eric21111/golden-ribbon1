@@ -299,12 +299,12 @@ const open = {};
   assert.match(editor, /shouldSeedProductStock\(\{\s*variantCount: variants\.length,\s*autoAdd: config\.autoAddMainProduct,/);
   const map = read('src/features/products/stockUseMapping.ts');
   assert.match(map, /if \(!isDefaultProductLevel\(productLevel\)\) for \(const line of productLevel\) push\(\{\}, line\);/);
-  // the Step 1 list is still only for the simple (Extras) flow; Meals and Snacks keep their Step 2 flow
+  // every product-level list lives on Step 2 now (Extras & Sides too); Step 1 carries none
   for (const f of ['CreateProductWizard.tsx', 'EditProductWizard.tsx']) {
-    assert.match(read(`src/features/products/${f}`), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock/);
+    assert.doesNotMatch(read(`src/features/products/${f}`), /simpleFlow && getCategoryConfig\(category\)\.productLevelStock/);
   }
   const guardsSrc = read('src/features/products/wizardGuards.ts');
-  assert.match(guardsSrc, /if \(state\.category !== state\.defaultCategory\) items\.push\('Product Category'\);/);
+  assert.doesNotMatch(guardsSrc, /items\.push\('Product Category'\)/, 'the category is saved, so it is never reported as unsaved');
   console.log('wiring: ok');
 }
 

@@ -13,6 +13,7 @@ import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
@@ -22,6 +23,15 @@ import { PosOrderPane } from '@/features/pos/PosOrderPane';
 import { PosProductRow } from '@/features/pos/PosProductRow';
 import { PosViewOrderSheet } from '@/features/pos/PosViewOrderSheet';
 import { filterPosInventory } from '@/features/pos/posInventory';
+import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
+import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import { CATEGORY_CHIP_CHOICES } from '@/features/products/productFilters';
+import {
+  DEFAULT_LIST_FILTERS,
+  matchesListFilters,
+  type ListFilters,
+} from '@/features/products/listFilters';
 import { buildStockContext, maxLineQuantity, withCartLimits } from '@/features/pos/posAvailability';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCashierPosInventory } from '@/hooks/useInventory';
@@ -35,12 +45,22 @@ import type { PosDrinkChoice } from '@/stores/cartStore';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 const POS_PAGE_SIZE = 10;
+// The cashier catalog only holds products that are sold in the POS and the cashier cannot see their close-of-day setting, so
+// the only filter that means something here is the category: a row of pills under the search box (no funnel button).
+// The pills carry the same icon as the rows; "All" is not a category, so it has none.
+const CATEGORY_CHIPS = CATEGORY_CHIP_CHOICES.map((choice) => ({
+  ...choice,
+  leading: choice.value === 'all' ? undefined : <CategoryIcon category={choice.value} size={18} decorative />,
+}));
+// Side padding of the screen column; the pill row runs out to the screen edges by this much.
+const COLUMN_PADDING = 20;
 
 export default function CashierPosScreen() {
   const { profile } = useAuth();
   const { posSplit } = useLayout();
   const cashierId = profile?.id ?? '';
   const [search, setSearch] = useState('');
+  const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
   const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const shiftQuery = useActiveShift(cashierId);
@@ -82,11 +102,20 @@ export default function CashierPosScreen() {
   }, [items, stockContext]);
 
   const filteredInventory = useMemo(
-    () => filterPosInventory(limitedInventory, search),
-    [limitedInventory, search],
+    // grouped by category in a fixed order; the in-stock / search order applies inside each group
+    () => groupByCategory(filterPosInventory(limitedInventory.filter((item) => matchesListFilters(item.product, listFilters)), search), (item) => item.product),
+    [limitedInventory, search, listFilters],
   );
+  const groupSizes = useMemo(() => groupCounts(filteredInventory, (item) => item.product), [filteredInventory]);
+  const filtersOn = listFilters.category !== 'all';
 
-  const pagination = useClientPagination(filteredInventory, search, POS_PAGE_SIZE);
+  const pagination = useClientPagination(filteredInventory, `${search}|${listFilters.category}`, POS_PAGE_SIZE);
+
+  // a heading in front of each category on the page; none while one category is picked
+  const listRows = useMemo(
+    () => buildListRows(pagination.pageItems, groupSizes, listFilters.category === 'all', (item) => item.product),
+    [pagination.pageItems, groupSizes, listFilters.category],
+  );
 
   const quantitiesByProduct = useMemo(() => {
     const map = new Map<string, Map<string | null, number>>();
@@ -102,6 +131,11 @@ export default function CashierPosScreen() {
     for (const item of limitedInventory) map.set(item.product.id, item);
     return map;
   }, [limitedInventory]);
+
+  const categoryByProductId = useMemo(
+    () => new Map(limitedInventory.map((item) => [item.product.id, item.product.product_category])),
+    [limitedInventory],
+  );
 
   const stockByProductId = useMemo(() => {
     const map = new Map<string, number>();
@@ -182,22 +216,22 @@ export default function CashierPosScreen() {
 
   const productList = (
     <FlatList
-      data={pagination.pageItems}
-      keyExtractor={(item) => item.product.id}
+      data={listRows}
+      keyExtractor={(row) => row.key}
       style={styles.list}
       contentContainerStyle={styles.listContent}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      ItemSeparatorComponent={({ leadingItem }) => <View style={leadingItem.type === 'header' ? styles.separatorAfterHeading : styles.separator} />}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={managerColors.royalBlue} />
       }
       ListEmptyComponent={
         <EmptyState
-          title={search.trim() ? 'No products found' : 'No products in stock'}
+          title={search.trim() || filtersOn ? 'No products found' : 'No products in stock'}
           message={
-            search.trim()
-              ? 'Try another product name or SKU.'
+            search.trim() || filtersOn
+              ? 'Try another name, SKU or category.'
               : 'In-stock items appear here. Search by name or SKU to find out-of-stock products.'
           }
         />
@@ -213,25 +247,34 @@ export default function CashierPosScreen() {
           </View>
         ) : null
       }
-      renderItem={({ item }) => (
-        <PosProductRow
-          item={item}
-          cartQuantity={[...(quantitiesByProduct.get(item.product.id) ?? new Map()).values()].reduce(
-            (sum, qty) => sum + qty,
-            0,
-          )}
-          onPress={() => setSheetItem(item)}
-        />
-      )}
+      renderItem={({ item: row }) => {
+        if (row.type === 'header') return <CategoryGroupHeading title={row.title} count={row.count} />;
+        const item = row.item;
+        return (
+          <PosProductRow
+            item={item}
+            cartQuantity={[...(quantitiesByProduct.get(item.product.id) ?? new Map()).values()].reduce(
+              (sum, qty) => sum + qty,
+              0,
+            )}
+            onPress={() => setSheetItem(item)}
+          />
+        );
+      }}
     />
   );
 
   const searchField = (
-    <SearchInput
-      value={search}
-      onChangeText={setSearch}
-      placeholder="Search product name or SKU"
-    />
+    <View style={styles.searchBlock}>
+      <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
+      <FilterChipRow
+        options={CATEGORY_CHIPS}
+        value={listFilters.category}
+        onChange={(category) => setListFilters({ ...listFilters, category })}
+        bleed={COLUMN_PADDING}
+        keepSelectedVisible
+      />
+    </View>
   );
 
   const changeCartQuantity = (productId: string, variantId: string | null, quantity: number, drinkId: string | null = null) => {
@@ -280,6 +323,7 @@ export default function CashierPosScreen() {
               items={items}
               stockByProductId={stockByProductId}
               maxByLine={maxByLine}
+              categoryByProductId={categoryByProductId}
               onIncrease={increaseFromCart}
               onDecrease={decreaseProduct}
               onQuantityChange={changeCartQuantity}
@@ -318,6 +362,7 @@ export default function CashierPosScreen() {
           items={items}
           stockByProductId={stockByProductId}
           maxByLine={maxByLine}
+          categoryByProductId={categoryByProductId}
           onIncrease={increaseFromCart}
           onDecrease={decreaseProduct}
           onQuantityChange={changeCartQuantity}
@@ -343,7 +388,8 @@ const styles = StyleSheet.create({
   catalog: { flex: 1.65, minWidth: 0, minHeight: 0 },
   orderPane: { flex: 1, minWidth: 280, maxWidth: 420, minHeight: 0 },
   top: { gap: spacing.sm },
-  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
+  searchWrap: { paddingHorizontal: COLUMN_PADDING, paddingBottom: spacing.sm },
+  searchBlock: { gap: spacing.sm },
   list: { flex: 1, minHeight: 0 },
   listContent: {
     paddingHorizontal: 20,
@@ -352,6 +398,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   separator: { height: spacing.sm },
+  separatorAfterHeading: { height: 6 },
   pager: { alignItems: 'center', gap: 8, paddingTop: spacing.sm },
   footer: {
     borderTopWidth: 1,

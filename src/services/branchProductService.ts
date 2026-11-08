@@ -82,3 +82,18 @@ export async function listProductBranchVariantPrices(productId: string): Promise
   if (error) throw error;
   return (data ?? []).map((row) => ({ ...row, selling_price: Number(row.selling_price) }));
 }
+
+/** Every option row of one branch (all products), for the Branch Catalogs price ranges. */
+export async function listBranchVariantsForBranch(branchId: string): Promise<BranchProductVariant[]> {
+  const { data, error } = await supabase
+    .from('branch_product_variants')
+    .select('*')
+    .eq('branch_id', branchId)
+    .order('product_id')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...row,
+    selling_price: Number(row.selling_price),
+  }));
+}

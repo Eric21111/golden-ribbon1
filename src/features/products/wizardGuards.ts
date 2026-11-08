@@ -6,35 +6,6 @@
 export type PricingMode = 'same' | 'different';
 
 /**
- * The preview-only settings the wizard keeps in local state. None of them are saved yet. (Stock Used Per Order and
- * Drink Choice are NOT among them any more: both are saved with the product.)
- */
-export type PreviewConfigState = {
-  category: string;
-  /** The category a wizard starts with; choosing it again is not "using" the preview setting. */
-  defaultCategory: string;
-  /** Kept for callers. POS availability is saved on the product, so it is not an unsaved preview setting. */
-  sellable?: boolean;
-};
-
-/** Staff-facing names of the preview-only settings the user has actually used. */
-export function getUnsavedPreviewItems(state: PreviewConfigState): string[] {
-  const items: string[] = [];
-  if (state.category !== state.defaultCategory) items.push('Product Category');
-  return items;
-}
-
-/** One short sentence for the pricing step, or null when no preview-only setting has been used. */
-export function buildPreviewNotice(items: string[]): string | null {
-  if (items.length === 0) return null;
-  const list =
-    items.length === 1
-      ? items[0]
-      : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-  return `Not saved yet: ${list}. Everything else is saved.`;
-}
-
-/**
  * Prices only count for the pricing mode that is selected. Both modes' inputs are kept in state so switching
  * back restores them, but a hidden mode must never leak into what is submitted.
  */
@@ -108,8 +79,8 @@ export function decideClose(options: { dirty: boolean; submitting: boolean }): C
 export const DISCARD_DIALOG = {
   title: 'Discard changes?',
   message: 'You have unsaved changes. If you close now, they will be lost.',
-  cancel: 'Continue Editing',
-  confirm: 'Discard Changes',
+  cancel: 'Keep Editing',
+  confirm: 'Discard',
 } as const;
 
 // ---- product-level "Stock Used Per Order" (products without variants)
@@ -153,8 +124,8 @@ export function withoutDefaultProductStock<T extends Record<string, Array<{ item
 
 /**
  * full: Product Info → category-specific Step 2 → Branch Pricing.
- * simple: Product Info → Branch Pricing. Drinks, Extras & Sides and Inventory Supplies without variants are sold
- *   at one price and have nothing to set up in Step 2.
+ * simple: Product Info → Branch Pricing. Drinks and Inventory Supplies without variants are sold at one price and have
+ *   nothing to set up in Step 2. (Extras & Sides always get Step 2: it is where what they use from stock is chosen.)
  * inventory: Product Info only (not sold in POS: no selling variants, no branch prices to configure).
  *
  * POS availability is its own choice: the flow is never inferred from the category, only from that choice.
@@ -162,7 +133,7 @@ export function withoutDefaultProductStock<T extends Record<string, Array<{ item
 export type WizardFlow = 'full' | 'simple' | 'inventory';
 
 /** Categories that skip Step 2 while they have no variants. An existing one with variants keeps all three steps. */
-const SIMPLE_CATEGORIES: readonly string[] = ['drinks', 'extras', 'supplies'];
+const SIMPLE_CATEGORIES: readonly string[] = ['drinks', 'supplies'];
 
 export function getWizardFlow(options: { sellable: boolean; category: string; variantCount: number }): WizardFlow {
   if (!options.sellable) return 'inventory';
@@ -179,7 +150,7 @@ export function flowSteps(flow: WizardFlow): Array<1 | 2 | 3> {
 
 // ---- inventory-only (saved as products.sell_in_pos, independent of Active)
 
-/** The Sell in POS switch is stored on the product. Category remains a local layout choice. */
+/** The Show in Cashier POS switch is stored on the product. Category remains a local layout choice. */
 export const POS_AVAILABILITY_ENABLED = true;
 
 /**
@@ -190,8 +161,6 @@ export function resolveSellable(enabled: boolean, chosen: boolean): boolean {
   return enabled ? chosen : true;
 }
 
-export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. Still used for stock and meals.';
-
 /**
  * Editable defaults for a new product, chosen from the setup type the user picked.
  * Product names are never read. A later manual change to either switch is kept.
@@ -200,6 +169,14 @@ export const INVENTORY_ONLY_MESSAGE = 'Not sold on its own. Still used for stock
 export function defaultsForProductSetup(category: string): { enabled: boolean; sellSeparately: boolean } {
   if (category === 'supplies') return { enabled: true, sellSeparately: false };
   return { enabled: true, sellSeparately: true };
+}
+
+/**
+ * Keep Unsold Stock at Branch starts ON for Drinks (bottled water and the like do not spoil overnight) and OFF for every other
+ * setup type. Chosen from the setup type only, never from the product name. A manual change to the switch is kept.
+ */
+export function defaultKeepUnsoldStock(category: string): boolean {
+  return category === 'drinks';
 }
 
 /** Applies those defaults unless the user has already moved that switch themselves. */
@@ -217,6 +194,23 @@ export function applySetupDefaults(options: {
   };
 }
 
+/**
+ * Extras & Sides (Create): a new extra starts on "Take from other items", which cannot be saved empty, because an empty list
+ * would silently mean "this product's own stock". Returns the keys of the stock lists that still have nothing in them: the
+ * options whose effective list (their own, else the product-level one) is empty, or the product-level list when the product
+ * has no options. Choosing "Count its own stock" writes an explicit list, so it never shows up here.
+ */
+export function extrasStockMissing(input: {
+  category: string;
+  variants: Array<{ key: string }>;
+  recipes: Record<string, unknown[] | undefined>;
+}): string[] {
+  if (input.category !== 'extras') return [];
+  const productLevel = input.recipes[PRODUCT_STOCK_KEY]?.length ?? 0;
+  if (input.variants.length === 0) return productLevel === 0 ? [PRODUCT_STOCK_KEY] : [];
+  return input.variants.filter((variant) => (input.recipes[variant.key]?.length ?? 0) === 0 && productLevel === 0).map((variant) => variant.key);
+}
+
 /** Whether a flow may be saved. Stock-only products are saved without a selling price. */
 export function isSaveSupported(_flow: WizardFlow): boolean {
   return true;
@@ -225,18 +219,22 @@ export function isSaveSupported(_flow: WizardFlow): boolean {
 // ---- price field feedback (Step 3)
 
 /**
- * Whether one price field should be flagged as "missing". Only once an error is showing, and only when the
- * same list already has some prices entered (a list the user hasn't started yet isn't flagged field by field).
+ * Whether one price field should be flagged as "missing". Only once an error is showing. A list that must be priced (the same
+ * prices for all branches, or per branch with no branch priced yet) flags every empty field. Otherwise (a branch the user
+ * chose to leave unpriced) only a list that already has some prices entered is flagged field by field.
  */
 export function isPriceMissing(options: {
   showErrors: boolean;
   prices: Record<string, string>;
   keys: string[];
   key: string;
+  /** True when this list has to be priced for the save to go through. */
+  required?: boolean;
 }): boolean {
   if (!options.showErrors) return false;
+  if ((options.prices[options.key] ?? '').trim() !== '') return false;
   const anyFilled = options.keys.some((key) => (options.prices[key] ?? '').trim() !== '');
-  return anyFilled && (options.prices[options.key] ?? '').trim() === '';
+  return Boolean(options.required) || anyFilled;
 }
 
 // ---- first option card (Create, Meals and Snacks)

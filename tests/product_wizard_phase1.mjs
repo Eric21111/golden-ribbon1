@@ -12,9 +12,7 @@ import {
   activeUniformBase,
   activeUniformPrice,
   buildDraftSnapshot,
-  buildPreviewNotice,
   decideClose,
-  getUnsavedPreviewItems,
   otherModeHasPrices,
 } from '../src/features/products/wizardGuards.ts';
 
@@ -24,51 +22,21 @@ const createSrc = read('src/features/products/CreateProductWizard.tsx');
 const editSrc = read('src/features/products/EditProductWizard.tsx');
 const pricingSrc = read('src/features/products/BranchPricingStep.tsx');
 
-const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks: {} };
-
-// ---------------------------------------------------------------- 1. preview-only warning
+// ---------------------------------------------------------------- 1. nothing in the wizard claims the category is unsaved
 {
-  assert.equal(buildPreviewNotice(getUnsavedPreviewItems(base)), null, 'no notice when nothing preview-only was used');
-
-  // choosing the default category again is not "using" the preview setting
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, category: 'meals' }), []);
-
-  // empty lists and disabled drink choices don't count
-  assert.deepEqual(
-    getUnsavedPreviewItems({
-      ...base,
-      recipes: { v1: [], v2: [] },
-      drinks: { v1: { enabled: false, drinkIds: ['coke'] }, v2: { enabled: false, drinkIds: [] } },
-    }),
-    [],
-  );
-
-  assert.deepEqual(getUnsavedPreviewItems({ ...base, category: 'drinks' }), ['Product Category']);
-  assert.equal(
-    buildPreviewNotice(['Product Category']),
-    'Not saved yet: Product Category. Everything else is saved.',
-  );
-
-  const all = getUnsavedPreviewItems({
-    category: 'snacks',
-    defaultCategory: 'meals',
-    recipes: { v1: [{ itemId: 'this-product', quantity: 1 }] },
-    drinks: { v1: { enabled: true, drinkIds: ['sample-coke'] } },
-  });
-  // Stock Used Per Order and Drink Choice are saved with the product now, so they are never reported as unsaved
-  assert.deepEqual(all, ['Product Category']);
-  assert.equal(buildPreviewNotice(all), 'Not saved yet: Product Category. Everything else is saved.');
-  assert.equal(
-    buildPreviewNotice(['Product Category', 'POS Availability']),
-    'Not saved yet: Product Category and POS Availability. Everything else is saved.',
-  );
-
-  // wiring: both wizards compute the notice and hand it to the pricing step, which renders it
+  // Category is saved (set_product_category) from both Create and Edit, so the old "Not saved yet: Product Category"
+  // notice and its helpers are gone. A failed category save has its own message in the products screen.
+  const guards = read('src/features/products/wizardGuards.ts');
+  assert.doesNotMatch(guards, /buildPreviewNotice|getUnsavedPreviewItems|PreviewConfigState|Not saved yet/);
   for (const src of [createSrc, editSrc]) {
-    assert.match(src, /buildPreviewNotice\(\s*getUnsavedPreviewItems\(/);
-    assert.match(src, /previewNotice=\{previewNotice\}/);
+    assert.doesNotMatch(src, /previewNotice|buildPreviewNotice|getUnsavedPreviewItems/);
   }
-  assert.match(pricingSrc, /\{previewNotice \? \(/);
+  assert.doesNotMatch(pricingSrc, /previewNotice|Not saved yet/);
+  assert.doesNotMatch(read('src/features/products/StepOneLayout.tsx'), /Not saved yet|PreviewPill/);
+  assert.match(indexSrc, /await setProductCategory\(product\.id, values\.productCategory\)/, 'Create saves the category');
+  assert.match(indexSrc, /await setProductCategory\(productId, values\.productCategory\)/, 'Edit saves the category');
+  assert.match(indexSrc, /Category was not saved/, 'a failed save is reported where it happens');
+
   // the stock text beside the prices is saved data now, so it is shown plainly (no "Preview" marker)
   assert.match(pricingSrc, /\{summaries\[variant\.key\]\}/);
   assert.doesNotMatch(pricingSrc, /Preview ·/);
@@ -76,7 +44,8 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
   // the notice must not leak into what is saved: the submit values carry no preview-only fields
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
     const start = src.indexOf('onSubmit(\n      {');
-    const end = src.indexOf('      pricing,', start);
+    // Edit sends only the branches whose prices changed (plan.send); Create sends pricing
+    const end = src.indexOf(name === 'edit' ? '      send,' : '      pricing,', start);
     assert.ok(start > 0 && end > start, `${name}: submit block found`);
     const block = src.slice(start, end);
     for (const forbidden of ['previewNotice', 'stockSummaries']) {
@@ -87,7 +56,7 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
       assert.ok(block.includes(required), `${name}: submit values keep ${required}`);
     }
   }
-  console.log('phase1 preview warning: ok');
+  console.log('phase1 unsaved-category notice removed: ok');
 }
 
 // ---------------------------------------------------------------- 2. unsaved-changes confirmation
@@ -97,8 +66,8 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
   assert.equal(decideClose({ dirty: true, submitting: true }), 'close', 'a save in flight is never interrupted');
   assert.equal(decideClose({ dirty: false, submitting: true }), 'close');
 
-  assert.equal(DISCARD_DIALOG.cancel, 'Continue Editing');
-  assert.equal(DISCARD_DIALOG.confirm, 'Discard Changes');
+  assert.equal(DISCARD_DIALOG.cancel, 'Keep Editing');
+  assert.equal(DISCARD_DIALOG.confirm, 'Discard');
 
   const start = {
     name: '',
@@ -188,7 +157,9 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
     const end = src.indexOf('\n  }\n', start);
     assert.ok(start > 0 && end > start, `${name}: switchPricingMode found`);
     const body = src.slice(start, end);
-    assert.doesNotMatch(body, /setPriceDrafts\(/, `${name}: switching mode must not clear branch prices`);
+    // the only thing it does to the drafts is start branches that have none from the same-for-all prices (nothing is cleared)
+    assert.doesNotMatch(body.replace(/setPriceDrafts\(\(current\) => \{[\s\S]*?\n      \}\);/, ''), /setPriceDrafts\(/, `${name}: switching mode must not clear branch prices`);
+    assert.match(body, /if \(!next\[branch\.id\]\) next\[branch\.id\] = \{ base: uniformBase, variantPrices: \{ \.\.\.uniformVariantPrices \} \};/, `${name}: only branches without a draft are seeded`);
     assert.doesNotMatch(body, /setUniformBase\(/, `${name}: switching mode must not clear the same-for-all price`);
     assert.doesNotMatch(body, /setUniformVariantPrices\(/, `${name}: switching mode must not clear same-for-all variant prices`);
     assert.match(body, /setPricingMode\(mode\)/);
@@ -203,11 +174,10 @@ const base = { category: 'meals', defaultCategory: 'meals', recipes: {}, drinks:
     assert.match(src, /Enter a price for every variant\./);
     assert.match(src, /Enter a price for every variant on each selected branch\./);
     assert.match(src, /Complete the pricing for all selected branches\./);
-    // the pricing step is told when the other mode's prices are kept
-    assert.match(src, /otherModePricesKept=\{otherModePricesKept\}/);
+    // the pricing step no longer shows a "prices are kept" sentence
+    assert.doesNotMatch(src, /otherModePricesKept/);
   }
-  assert.match(pricingSrc, /Your per-branch prices are kept if you switch back\./);
-  assert.match(pricingSrc, /Your same-for-all prices are kept if you switch back\./);
+  assert.doesNotMatch(pricingSrc, /are kept if you switch back/);
   console.log('phase1 pricing mode switching: ok');
 }
 

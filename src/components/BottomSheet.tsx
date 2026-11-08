@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Modal,
@@ -20,6 +20,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing } from '@/constants/theme';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+
+import { revealScrollOffset } from './sheetScroll';
+
+type Revealable = { measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void };
+type Focusable = { focus: () => void };
+type SheetScroll = {
+  toTop: () => void;
+  reveal: (element: Revealable | null, options?: { focus?: Focusable | null }) => void;
+};
+const SheetScrollContext = createContext<SheetScroll>({ toTop: () => {}, reveal: () => {} });
+
+/**
+ * Lets a form inside a scrolling BottomSheet jump back to its top, e.g. when it moves to another step.
+ * Does nothing outside a scrolling sheet.
+ */
+export function useSheetScrollToTop(): () => void {
+  return useContext(SheetScrollContext).toTop;
+}
+
+/**
+ * Brings an element into view inside a scrolling BottomSheet, for a validation error that would otherwise be out of sight.
+ * It only scrolls when the element is not already fully visible (the visible area already excludes the keyboard), puts it a
+ * little below the top edge, and only then focuses `options.focus` (a text field), so the keyboard never opens for nothing.
+ */
+export function useSheetReveal(): SheetScroll['reveal'] {
+  return useContext(SheetScrollContext).reveal;
+}
 
 type BottomSheetProps = PropsWithChildren<{
   visible: boolean;
@@ -59,6 +86,31 @@ export function BottomSheet({
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffsetRef = useRef(0);
   const [rootHeight, setRootHeight] = useState(0);
+  const contentRef = useRef<View>(null);
+  const viewportHeightRef = useRef(0);
+  const scrollToTop = useCallback(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), []);
+  const reveal = useCallback<SheetScroll['reveal']>((element, options) => {
+    const scrollView = scrollRef.current;
+    const content = contentRef.current;
+    if (!element || !scrollView || !content) {
+      options?.focus?.focus();
+      return;
+    }
+    content.measureInWindow((_cx, contentY) => {
+      element.measureInWindow((_ex, elementY, _width, elementHeight) => {
+        const next = revealScrollOffset({
+          contentY,
+          offset: scrollOffsetRef.current,
+          viewportHeight: viewportHeightRef.current,
+          elementY,
+          elementHeight,
+        });
+        if (next !== null) scrollView.scrollTo({ y: next, animated: false });
+        options?.focus?.focus();
+      });
+    });
+  }, []);
+  const sheetScroll = useMemo<SheetScroll>(() => ({ toTop: scrollToTop, reveal }), [scrollToTop, reveal]);
 
   const topGap = Math.max(insets.top, 16);
   const keyboardLift = keyboardInset > 0 ? keyboardInset : 0;
@@ -114,10 +166,14 @@ export function BottomSheet({
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       onScroll={onScroll}
+      onLayout={(event) => {
+        viewportHeightRef.current = event.nativeEvent.layout.height;
+      }}
       scrollEventThrottle={16}
-      contentContainerStyle={styles.scrollContent}
     >
-      {children}
+      <View ref={contentRef} collapsable={false} style={styles.scrollContent}>
+        {children}
+      </View>
     </ScrollView>
   ) : (
     children
@@ -145,6 +201,9 @@ export function BottomSheet({
               maxHeight: sheetMaxHeight,
               marginBottom: keyboardLiftApplied,
               paddingBottom: Math.max(insets.bottom, spacing.md),
+              // landscape: keep Close and the content clear of a camera cut-out or a side navigation bar
+              paddingLeft: Math.max(insets.left, spacing.md),
+              paddingRight: Math.max(insets.right, spacing.md),
             },
           ]}
         >
@@ -155,7 +214,7 @@ export function BottomSheet({
               <Text style={[styles.close, closeLabelStyle]}>Close</Text>
             </Pressable>
           </View>
-          {body}
+          <SheetScrollContext.Provider value={sheetScroll}>{body}</SheetScrollContext.Provider>
         </View>
       </View>
     </Modal>

@@ -53,7 +53,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
 
   // pricing step controls
   assert.match(pricingSrc, /toggleButton: \{[^}]*minHeight: MIN_TOUCH_TARGET/);
-  assert.match(pricingSrc, /minHeight: MIN_TOUCH_TARGET,\n[\s\S]*?paddingHorizontal: 12/, 'branch chips');
+  assert.match(pricingSrc, /branchHead: \{[^}]*minHeight: MIN_TOUCH_TARGET/, 'branch card header (name + Add to branch switch)');
   assert.match(pricingSrc, /priceBox: \{[\s\S]*?height: MIN_TOUCH_TARGET/);
 
   // variant cards
@@ -86,12 +86,13 @@ const count = (src, re) => (src.match(re) ?? []).length;
   assert.match(pickerSrc, /onSubmitEditing=\{Keyboard\.dismiss\}/);
   assert.match(searchSrc, /'returnKeyType' \| 'onSubmitEditing'/);
   assert.match(searchSrc, /returnKeyType=\{returnKeyType\}/);
-  assert.match(recipeSrc, /onClose=\{\(\) => setPickerOpen\(false\)\}/, 'closing the picker never closes the wizard sheet');
+  assert.match(recipeSrc, /onClose=\{closePicker\}/, 'closing the picker never closes the wizard sheet');
+  assert.match(recipeSrc, /function closePicker\(\) \{\n\s*setStartingOther\(false\);\n\s*setPickerOpen\(false\);\n\s*\}/, 'closePicker only closes the picker');
   // search, selection and duplicate prevention are unchanged
   assert.match(pickerSrc, /matchesInventorySearch\(item, search\)/);
   assert.match(pickerSrc, /disabled=\{added\}/);
-  assert.match(recipeSrc, /if \(lines\.some\(\(line\) => line\.itemId === itemId\)\) return;/);
-  assert.match(recipeSrc, /Missing an item|addedItemIds=\{lines\.map/);
+  assert.match(recipeSrc, /if \(base\.some\(\(line\) => line\.itemId === itemId\)\) return;/);
+  assert.match(recipeSrc, /addedItemIds=\{startingOther \? \[\] : \(lines\.length > 0 \? lines : effective\)\.map\(\(line\) => line\.itemId\)\}/, 'items already in the list are shown as Added and cannot be picked again');
   // the drink picker has no keyboard at all (chips only)
   assert.doesNotMatch(drinkSrc, /TextInput/);
   console.log('phase4 pickers and keyboard: ok');
@@ -113,7 +114,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
   }
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: false, category: 'meals', variantCount: 0 })), [1]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'drinks', variantCount: 0 })), [1, 3]);
-  assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 })), [1, 3]);
+  assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'extras', variantCount: 0 })), [1, 2, 3]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'supplies', variantCount: 0 })), [1, 3]);
   assert.deepEqual(flowSteps(getWizardFlow({ sellable: true, category: 'meals', variantCount: 0 })), [1, 2, 3]);
 
@@ -124,7 +125,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
     assert.doesNotMatch(src, /\b(ScrollView|FlatList|SectionList)\b/, `${file}: no nested scroll container`);
   }
   // rows of chips wrap instead of overflowing horizontally
-  for (const [name, src] of [['stock list', recipeSrc], ['drinks', drinkSrc], ['pricing', pricingSrc]]) {
+  for (const [name, src] of [['stock list', recipeSrc], ['drinks', drinkSrc]]) {
     assert.match(src, /flexWrap: 'wrap'/, `${name}: chip rows wrap`);
   }
   console.log('phase4 wizard navigation: ok');
@@ -132,11 +133,9 @@ const count = (src, re) => (src.match(re) ?? []).length;
 
 // ---------------------------------------------------------------- 4. warnings and feedback
 {
-  // "Not saved yet" stays readable (12px) wherever it appears
+  // nothing in Step 1 is marked "Not saved yet" any more: category, POS and the drink choice are all saved
   const layoutSrc = read('src/features/products/StepOneLayout.tsx');
-  assert.match(layoutSrc, /Not saved yet/);
-  assert.match(layoutSrc, /pillText: \{[^}]*fontSize: 12/, 'pill text is 12px');
-  // the drink choice is saved with the product now, so it no longer carries a "Not saved yet" marker
+  assert.doesNotMatch(layoutSrc, /Not saved yet|pillText/);
   assert.doesNotMatch(drinkSrc, /PreviewPill|Not saved yet/);
 
   for (const [name, src] of [['create', createSrc], ['edit', editSrc]]) {
@@ -155,7 +154,8 @@ const count = (src, re) => (src.match(re) ?? []).length;
   assert.equal(isPriceMissing({ showErrors: true, prices: { v1: '80', v2: '90', v3: '1' }, keys, key: 'v2' }), false);
   assert.match(pricingSrc, /isPriceMissing\(\{/);
   assert.equal(count(pricingSrc, /highlightMissing=\{Boolean\(error\)\}/g), 2, 'both price lists');
-  assert.match(pricingSrc, /'Invalid price' : 'Enter a price'/);
+  assert.match(read('src/features/products/pricingReveal.ts'), /'Invalid price'[\s\S]*'Must be above ₱0'/, 'the field can say invalid or zero');
+  assert.match(pricingSrc, /\{problem \?\? 'Enter a price'\}/, 'and empty after a refused save');
   // existing inline validation near the fields is still there
   assert.match(editorSrc, /`Enter a \$\{noun\} name\.`/);
   assert.match(editorSrc, /'This name is already used\.'/);

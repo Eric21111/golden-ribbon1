@@ -7,6 +7,7 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
 
+import { CategoryIcon } from './CategoryIcon';
 import {
   THIS_PRODUCT_ID,
   filterPickerItems,
@@ -82,6 +83,7 @@ export function InventoryItemPickerModal({
         onPress={() => onSelect(item.id)}
         style={({ pressed }) => [styles.row, index > 0 && styles.rowDivider, pressed && styles.pressed]}
       >
+        {isCurrent ? null : <CategoryIcon category={item.category} size={26} />}
         <View style={styles.rowCopy}>
           <Text style={[styles.rowName, added && styles.rowNameAdded]}>{item.name}</Text>
           <Text style={styles.rowSub} numberOfLines={1}>
@@ -134,7 +136,7 @@ export function InventoryItemPickerModal({
               : mode === 'drink'
                 ? 'No drinks yet. Set the product category to Drinks.'
                 : listFilter === 'supplies'
-                  ? 'No supplies yet. Try All, or turn Sell Separately off.'
+                  ? 'No supplies yet. Try All, or turn Show in Cashier POS off.'
                   : 'No matching items.'}
           </Text>
         ) : (

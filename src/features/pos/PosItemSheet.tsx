@@ -5,7 +5,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
-import { sortMealVariants, STANDARD_MEAL_VARIANT_NAMES } from '@/features/pos/pricingPrograms';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import { sortMealVariants } from '@/features/pos/pricingPrograms';
 import { formatMoney } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { PosDrinkChoice } from '@/stores/cartStore';
@@ -105,30 +106,26 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
   const price = selectedVariant ? selectedVariant.selling_price : item?.product.selling_price ?? 0;
   const subtotal = (toCents(price) * quantity) / 100;
 
+  const unitsLeft = remaining <= 0 ? 'Out of stock' : `${remaining} available`;
+
   return (
     <ManagerBottomSheet visible={item != null} title="Select item" onClose={onClose} scroll>
       {item ? (
         <View style={styles.body}>
           <View style={styles.heading}>
-            <View style={styles.iconChip}>
-              <Ionicons name="fast-food-outline" size={22} color={managerColors.royalBlue} />
-            </View>
+            <CategoryIcon category={item.product.product_category} size={44} decorative />
             <View style={styles.headingCopy}>
               <Text style={styles.name} numberOfLines={2}>{item.product.name}</Text>
-              <Text style={styles.price}>{formatMoney(price)}</Text>
+              <Text style={[styles.stock, remaining <= 0 && styles.stockOut]}>
+                {item.product.sku} · {unitsLeft}
+              </Text>
             </View>
+            {hasVariants ? null : <Text style={styles.headingPrice}>{formatMoney(price)}</Text>}
           </View>
-          <Text style={styles.stock}>
-            {item.product.sku}{remaining <= 0 ? ' · Out of stock' : ` · Available: ${remaining} pcs`}
-          </Text>
 
           {hasVariants ? (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Meal options</Text>
-              <Text style={styles.optionHint}>
-                One stock deduction per item. Prefer {STANDARD_MEAL_VARIANT_NAMES.join(', ')}.
-                A drink chosen here is included in the meal price. A drink added from the menu is charged its own price.
-              </Text>
+              <Text style={styles.sectionLabel}>Choose an option</Text>
               <View style={styles.optionList}>
                 {variants.map((variant) => {
                   const selected = variant.id === selectedVariant?.id;
@@ -156,7 +153,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
                       <Text style={[styles.optionName, selected && styles.optionNameSelected]}>
                         {variant.name}
                       </Text>
-                      <Text style={[styles.optionPrice, selected && styles.optionNameSelected]}>
+                      <Text style={[styles.optionPrice, selected && styles.optionPriceSelected]}>
                         {unavailable ? 'Unavailable' : formatMoney(variant.selling_price)}
                       </Text>
                     </Pressable>
@@ -168,9 +165,11 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
 
           {needsDrink ? (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Choose a drink</Text>
-              <Text style={styles.optionHint}>Included in the meal price. Out of stock cannot be selected.</Text>
-              <View style={styles.optionList}>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionLabel}>Choose a drink</Text>
+                <Text style={styles.sectionNote}>Included in price</Text>
+              </View>
+              <View style={styles.drinkRow}>
                 {drinkOptions.map((option) => {
                   const selected = option.id === selectedDrink?.id;
                   const out = drinkLeft(option) <= 0;
@@ -183,19 +182,23 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
                       disabled={out}
                       onPress={() => setSelectedDrinkId(option.id)}
                       style={({ pressed }) => [
-                        styles.option,
-                        selected && styles.optionSelected,
+                        styles.drinkChip,
+                        selected && styles.drinkChipSelected,
                         out && styles.optionOut,
                         pressed && styles.pressed,
                       ]}
                     >
                       <Ionicons
-                        name={selected ? 'radio-button-on' : 'radio-button-off'}
-                        size={20}
+                        name="cafe-outline"
+                        size={16}
                         color={selected ? managerColors.royalBlue : managerColors.subtext}
                       />
-                      <Text style={[styles.optionName, selected && styles.optionNameSelected]}>{option.name}</Text>
-                      {out ? <Text style={styles.optionPrice}>Out of stock</Text> : null}
+                      <View style={styles.drinkCopy}>
+                        <Text style={[styles.drinkName, selected && styles.optionNameSelected]} numberOfLines={1}>
+                          {option.name}
+                        </Text>
+                        {out ? <Text style={styles.drinkOut}>Out of stock</Text> : null}
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -203,77 +206,70 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
             </View>
           ) : null}
 
-          <View style={styles.qtyCard}>
-            <View style={styles.qtyCardLeft}>
-              <Text style={styles.sectionLabel}>Quantity</Text>
-              <View style={styles.stepperPill}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Decrease quantity"
-                  hitSlop={8}
-                  disabled={quantity <= 0}
-                  onPress={() => commitDraft(String(Math.max(0, quantity - 1)))}
-                  style={({ pressed }) => [
-                    styles.stepperButton,
-                    pressed && quantity > 0 && styles.stepperButtonPressed,
-                  ]}
-                >
-                  <Text style={[styles.stepperSymbol, quantity <= 0 && styles.stepperSymbolDisabled]}>−</Text>
-                </Pressable>
-                <TextInput
-                  accessibilityLabel="Quantity"
-                  keyboardType="number-pad"
-                  value={draft}
-                  placeholder="0"
-                  placeholderTextColor={managerColors.subtext}
-                  maxLength={6}
-                  selectTextOnFocus
-                  onChangeText={(value) => {
-                    if (value === '' || /^\d{1,6}$/.test(value)) {
-                      setDraft(value);
-                      if (value !== '') commitDraft(value);
-                    }
-                  }}
-                  onBlur={() => commitDraft(draft)}
-                  style={styles.quantityInput}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Increase quantity"
-                  hitSlop={8}
-                  disabled={atLimit || remaining <= 0}
-                  onPress={() => commitDraft(String(quantity + 1))}
-                  style={({ pressed }) => [
-                    styles.stepperButton,
-                    pressed && !atLimit && styles.stepperButtonPressed,
-                  ]}
-                >
-                  <Text style={[styles.stepperSymbol, (atLimit || remaining <= 0) && styles.stepperSymbolDisabled]}>
-                    +
-                  </Text>
-                </Pressable>
-              </View>
-              {remaining <= 0 ? (
-                <Text style={styles.limit}>No more stock available.</Text>
-              ) : atLimit ? (
-                <Text style={styles.limit}>Maximum available quantity selected.</Text>
-              ) : null}
+          <View style={styles.actionRow}>
+            <View style={styles.stepperPill}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Decrease quantity"
+                hitSlop={8}
+                disabled={quantity <= 0}
+                onPress={() => commitDraft(String(Math.max(0, quantity - 1)))}
+                style={({ pressed }) => [
+                  styles.stepperButton,
+                  pressed && quantity > 0 && styles.stepperButtonPressed,
+                ]}
+              >
+                <Text style={[styles.stepperSymbol, quantity <= 0 && styles.stepperSymbolDisabled]}>−</Text>
+              </Pressable>
+              <TextInput
+                accessibilityLabel="Quantity"
+                keyboardType="number-pad"
+                value={draft}
+                placeholder="0"
+                placeholderTextColor={managerColors.subtext}
+                maxLength={6}
+                selectTextOnFocus
+                onChangeText={(value) => {
+                  if (value === '' || /^\d{1,6}$/.test(value)) {
+                    setDraft(value);
+                    if (value !== '') commitDraft(value);
+                  }
+                }}
+                onBlur={() => commitDraft(draft)}
+                style={styles.quantityInput}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Increase quantity"
+                hitSlop={8}
+                disabled={atLimit || remaining <= 0}
+                onPress={() => commitDraft(String(quantity + 1))}
+                style={({ pressed }) => [
+                  styles.stepperButton,
+                  pressed && !atLimit && styles.stepperButtonPressed,
+                ]}
+              >
+                <Text style={[styles.stepperSymbol, (atLimit || remaining <= 0) && styles.stepperSymbolDisabled]}>
+                  +
+                </Text>
+              </Pressable>
             </View>
-            <View style={styles.qtyCardDivider} />
-            <View style={styles.qtyCardRight}>
-              <Text style={styles.sectionLabel}>Subtotal</Text>
-              <Text style={styles.subtotalValue}>{formatMoney(subtotal)}</Text>
+            <View style={styles.addButton}>
+              <ManagerActionButton
+                label={quantity > 0 ? `Add · ${formatMoney(subtotal)}` : 'Add'}
+                disabled={!canAdd}
+                onPress={() => {
+                  onAdd(selectedVariant, quantity, selectedDrink ? { id: selectedDrink.id, name: selectedDrink.name } : null);
+                  onClose();
+                }}
+              />
             </View>
           </View>
-
-          <ManagerActionButton
-            label="Add to Order"
-            disabled={!canAdd}
-            onPress={() => {
-              onAdd(selectedVariant, quantity, selectedDrink ? { id: selectedDrink.id, name: selectedDrink.name } : null);
-              onClose();
-            }}
-          />
+          {remaining <= 0 ? (
+            <Text style={styles.limit}>No more stock available.</Text>
+          ) : atLimit ? (
+            <Text style={styles.limit}>Maximum available quantity selected.</Text>
+          ) : null}
         </View>
       ) : null}
     </ManagerBottomSheet>
@@ -281,37 +277,17 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
 }
 
 const styles = StyleSheet.create({
-  body: { gap: 16, paddingBottom: 4 },
-  heading: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  iconChip: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EAF0FB',
-  },
-  headingCopy: { flex: 1, minWidth: 0, gap: 2 },
-  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 21 },
-  price: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 24 },
-  stock: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  body: { gap: 18, paddingBottom: 4 },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headingCopy: { flex: 1, minWidth: 0, gap: 3 },
+  name: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 22 },
+  headingPrice: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 17 },
+  stock: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5 },
+  stockOut: { color: '#B91C1C' },
   section: { gap: 10 },
-  qtyCard: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    backgroundColor: managerColors.cardSurface,
-    padding: 14,
-  },
-  qtyCardLeft: { gap: 10 },
-  qtyCardDivider: { width: 1, backgroundColor: managerColors.cardBorder },
-  qtyCardRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
-  subtotalValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 24 },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   sectionLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  optionHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  sectionNote: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   optionList: { gap: 8 },
   option: {
     flexDirection: 'row',
@@ -319,34 +295,54 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1.5,
     borderColor: managerColors.cardBorder,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     backgroundColor: '#FFFFFF',
   },
-  optionSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F7F9FD' },
+  optionSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F3F7FE' },
   optionOut: { opacity: 0.55 },
-  optionName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  optionName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },
   optionNameSelected: { color: managerColors.royalBlue },
-  optionPrice: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  optionPrice: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  optionPriceSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold' },
+  drinkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  drinkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexGrow: 1,
+    flexBasis: '45%',
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    backgroundColor: '#FFFFFF',
+  },
+  drinkChipSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F3F7FE' },
+  drinkCopy: { flexShrink: 1, minWidth: 0 },
+  drinkName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  drinkOut: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 11 },
   pressed: { opacity: 0.7 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  addButton: { flex: 1, minWidth: 0 },
   stepperPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    height: 48,
+    height: 52,
     borderWidth: 1.5,
     borderColor: managerColors.cardBorder,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
   },
-  stepperButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  stepperButton: { width: 40, height: 52, alignItems: 'center', justifyContent: 'center' },
   stepperButtonPressed: { backgroundColor: '#E4E9F2' },
   stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 20, lineHeight: 24 },
   stepperSymbolDisabled: { color: managerColors.cardBorder },
   quantityInput: {
-    width: 56,
-    height: 48,
+    width: 48,
+    height: 52,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: managerColors.cardBorder,
@@ -357,5 +353,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 0,
   },
-  limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 6 },
+  limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: -8 },
 });

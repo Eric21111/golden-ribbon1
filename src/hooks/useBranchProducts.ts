@@ -5,6 +5,7 @@ import {
   configureBranchProducts,
   configureBranchProductVariants,
   listBranchProducts,
+  listBranchVariantsForBranch,
   listBranchProductVariants,
   listProductBranchPrices,
   listProductBranchVariantPrices,
@@ -14,6 +15,15 @@ export function useBranchProducts(branchId: string, activeOnly = false) {
   return useQuery({
     queryKey: queryKeys.branchProducts(branchId, activeOnly),
     queryFn: () => listBranchProducts(branchId, activeOnly),
+    enabled: Boolean(branchId),
+  });
+}
+
+/** All option rows of one branch. Saving a product invalidates the ['branch-product-variants'] prefix, so it refreshes. */
+export function useBranchVariantsForBranch(branchId: string) {
+  return useQuery({
+    queryKey: ['branch-product-variants', branchId, 'all'],
+    queryFn: () => listBranchVariantsForBranch(branchId),
     enabled: Boolean(branchId),
   });
 }

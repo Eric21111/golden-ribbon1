@@ -13,7 +13,7 @@ export function loadTs(entry, stubs = {}) {
     const abs = path.resolve(file);
     if (cache.has(abs)) return cache.get(abs).exports;
     const { outputText } = ts.transpileModule(readFileSync(abs, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
       fileName: abs,
     });
     const module = { exports: {} };

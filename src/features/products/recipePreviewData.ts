@@ -15,10 +15,14 @@ export type InventoryItemOption = {
   unit: RecipeUnit;
   /** Short note shown in the picker, e.g. what one unit means. */
   hint?: string;
-  /** Sell in POS is off, or the product was saved as an inventory supply. */
+  /** Show in Cashier POS is off, or the product was saved as an inventory supply. */
   stockOnly?: boolean;
   /** Saved category is Drinks. Meal choices must not offer meals or supplies. */
   isDrink?: boolean;
+  /** The product is disabled (Enable Product off). A disabled drink is not offered with a meal and is refused at the register. */
+  inactive?: boolean;
+  /** Saved product category, for the category icon. Absent for "This Product" and for products with none saved. */
+  category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
 };
 
 /** One inventory item used by a variant, and how many whole stock units each order uses. */
@@ -35,6 +39,8 @@ export type IngredientProduct = {
   id: string;
   name: string;
   sellInPos?: boolean;
+  /** False when Enable Product is off. Absent is treated as enabled. */
+  isActive?: boolean;
   category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
 };
 
@@ -55,7 +61,7 @@ export function ingredientOptionsFromProducts(
   return products
     .filter((product) => product.id !== excludeProductId)
     .map((product) => {
-      const hint = [isEggProduct(product.name) ? '½ egg' : null, product.sellInPos === false ? 'Stock only' : null]
+      const hint = [isEggProduct(product.name) ? '½ egg' : null, product.sellInPos === false ? 'Stock only' : null, product.isActive === false ? 'Disabled' : null]
         .filter((part) => part != null)
         .join(' · ');
       return {
@@ -65,6 +71,8 @@ export function ingredientOptionsFromProducts(
         ...(hint ? { hint } : {}),
         stockOnly: product.sellInPos === false || product.category === 'supplies',
         isDrink: product.category === 'drinks',
+        ...(product.isActive === false ? { inactive: true } : {}),
+        category: product.category ?? null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -83,9 +91,28 @@ export const NO_DRINK_CHOICE: DrinkChoice = { enabled: false, drinkIds: [] };
 export function summarizeDrinkChoice(choice: DrinkChoice, drinks: InventoryItemOption[]): string {
   if (!choice.enabled) return '';
   return choice.drinkIds
-    .map((id) => drinks.find((drink) => drink.id === id)?.name)
-    .filter((name): name is string => Boolean(name))
+    .map((id) => drinks.find((drink) => drink.id === id))
+    .filter((drink): drink is InventoryItemOption => drink !== undefined)
+    .map((drink) => (drink.inactive ? `${drink.name} (disabled)` : drink.name))
     .join(', ');
+}
+
+/**
+ * One short phrase for the collapsed option card: "Drink: Coke", "Drink: 3 options", "Drink: 2 options (1 disabled)". Only
+ * ENABLED drinks are offered with a meal, so they are what is counted; disabled ones are called out, and a choice whose
+ * drinks are all disabled says so. Empty when the option includes no drink or none are selected.
+ */
+export function summarizeDrinkLine(choice: DrinkChoice, drinks: InventoryItemOption[]): string {
+  if (!choice.enabled) return '';
+  const chosen = choice.drinkIds
+    .map((id) => drinks.find((drink) => drink.id === id))
+    .filter((drink): drink is InventoryItemOption => drink !== undefined);
+  if (chosen.length === 0) return '';
+  const offered = chosen.filter((drink) => !drink.inactive);
+  const disabled = chosen.length - offered.length;
+  if (offered.length === 0) return 'Drink: all disabled';
+  const head = offered.length === 1 ? `Drink: ${offered[0]!.name}` : `Drink: ${offered.length} options`;
+  return disabled > 0 ? `${head} (${disabled} disabled)` : head;
 }
 
 /**
@@ -165,6 +192,109 @@ export function summarizeExtras(lines: RecipeLine[], productName: string, ingred
     })
     .filter((part): part is string => part !== null);
   return parts.length > 0 ? `+ ${parts.join(', ')}` : '';
+}
+
+// ---- Stock Deduction mode (Extras & Sides)
+
+/**
+ * How a stock list reads. The database resolves what one order deducts like this: a saved list for the option, else the
+ * product-level list, else the product itself x1. So:
+ *   own   no list, or exactly "This Product" x1: the product's own stock, deducted once.
+ *   other any other list: ONLY the listed items are deducted. The product's own stock is not touched unless
+ *         "This Product" is in the list.
+ */
+export type StockMode = 'own' | 'other';
+
+/** "This Product" x1, the list that means "use this product's own stock". */
+export const OWN_STOCK_LINES: RecipeLine[] = [{ itemId: THIS_PRODUCT_ID, quantity: 1 }];
+
+export function stockModeOf(lines: RecipeLine[]): StockMode {
+  if (lines.length === 0) return 'own';
+  return lines.length === 1 && lines[0]!.itemId === THIS_PRODUCT_ID && lines[0]!.quantity === 1 ? 'own' : 'other';
+}
+
+/**
+ * The list one sold option really uses (the database resolves it the same way): the option's own list, else the
+ * product-level list saved for the whole product, else nothing, which means the product itself x1. A product-level
+ * list can stay saved while options exist (it is only editable in the wizard when there are none), so an option
+ * without a list of its own inherits it. Own lists REPLACE it, they are never merged. [] = the product itself x1.
+ */
+export function effectiveLines(optionLines: RecipeLine[], productLines: RecipeLine[]): RecipeLine[] {
+  if (optionLines.length > 0) return optionLines;
+  return stockModeOf(productLines) === 'own' ? [] : productLines;
+}
+
+/** Whether the list also deducts the product's own stock (alongside other items). */
+export function includesOwnStock(lines: RecipeLine[]): boolean {
+  return lines.some((line) => line.itemId === THIS_PRODUCT_ID);
+}
+
+/**
+ * What one order deducts, e.g. "Rice ×1, Egg ×1". An empty list reads as the product itself x1, because that is what
+ * the database does with no list. Items that are no longer known are left out.
+ */
+export function summarizeDeduction(lines: RecipeLine[], productName: string, ingredients: InventoryItemOption[]): string {
+  const effective = lines.length === 0 ? OWN_STOCK_LINES : lines;
+  return effective
+    .map((line) => {
+      const item = findInventoryItem(line.itemId, productName, ingredients);
+      if (!item) return null;
+      const name = item.id === THIS_PRODUCT_ID ? productName.trim() || 'This product' : item.name;
+      return `${name} ×${line.quantity}`;
+    })
+    .filter((part): part is string => part !== null)
+    .join(', ');
+}
+
+/**
+ * What one order of an option deducts, as short sentences for the preview. Stock items first (the effective list, see
+ * effectiveLines), then the drink. A drink is one more ingredient of the sale line, 1 per meal ordered, but WHICH drink
+ * is only known at checkout, so it is described as a choice and never as a specific deduction. Only present when the
+ * option includes a drink; an option without one deducts no drink.
+ */
+export function describeOrderDeduction(options: {
+  lines: RecipeLine[];
+  inheritedLines?: RecipeLine[];
+  productName: string;
+  ingredients: InventoryItemOption[];
+  /** The option's drink choice, or null/absent when the category or option has none. */
+  drink?: DrinkChoice | null;
+  drinks?: InventoryItemOption[];
+}): string[] {
+  const { lines, inheritedLines = [], productName, ingredients, drink, drinks = ingredients } = options;
+  const items = summarizeDeduction(effectiveLines(lines, inheritedLines), productName, ingredients);
+  const sentences = items ? [`Each order uses ${items}.`] : [];
+  if (drink?.enabled) {
+    const chosen = drink.drinkIds
+      .map((id) => drinks.find((item) => item.id === id))
+      .filter((item): item is InventoryItemOption => item !== undefined);
+    const offered = chosen.filter((item) => !item.inactive).map((item) => item.name);
+    const disabled = chosen.filter((item) => item.inactive).map((item) => item.name);
+    if (chosen.length === 0) {
+      sentences.push('Plus 1 drink, but none is selected yet. Add at least one drink above.');
+    } else if (offered.length === 0) {
+      // the database offers only enabled drinks, and an option whose drinks are all disabled cannot be sold
+      sentences.push(`Plus 1 drink, but every selected drink is disabled, so this option can't be sold until one is enabled.`);
+    } else {
+      sentences.push(`Plus 1 drink, chosen at checkout: ${offered.join(', ')}.`);
+      if (disabled.length > 0) sentences.push(`Not offered (disabled): ${disabled.join(', ')}.`);
+    }
+  }
+  return sentences;
+}
+
+/**
+ * One short line for what an option deducts, for the option card and the pricing step. `lines` must already be the
+ * effective list (see effectiveLines). A list with "This Product" x1 reads as "+ Rice, Egg" (the product itself is
+ * implied, as for meals). Anything else is spelled out in full ("Uses Rice ×1"), because then the product's own stock
+ * is either not used (Extra Rice) or used in another quantity, and "+ Rice" would say the opposite.
+ */
+export function summarizeVariantStock(lines: RecipeLine[], productName: string, ingredients: InventoryItemOption[]): string {
+  if (lines.length === 0) return '';
+  const own = lines.find((line) => line.itemId === THIS_PRODUCT_ID);
+  if (own && own.quantity === 1) return summarizeExtras(lines, productName, ingredients);
+  const full = summarizeDeduction(lines, productName, ingredients);
+  return full ? `Uses ${full}` : '';
 }
 
 const QUICK_ADD_LIMIT = 4;

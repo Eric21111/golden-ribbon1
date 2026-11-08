@@ -14,13 +14,26 @@ import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
-import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { RouteBanner } from '@/components/dashboard/RouteBanner';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
+import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useBranchProducts } from '@/hooks/useBranchProducts';
 import { useBranches } from '@/hooks/useBranches';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import {
+  ALL_LIST_FILTER_KEYS,
+  DEFAULT_LIST_FILTERS,
+  countListFilters,
+  listFilterEmptyMessage,
+  matchesListFilters,
+  productSearchText,
+  type ListFilters,
+} from '@/features/products/listFilters';
+import { resultCountText } from '@/features/products/productFilters';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
@@ -65,6 +78,8 @@ export function CreateTransferScreen() {
   const [search, setSearch] = useState('');
   const [stockFilter, setStockFilter] = useState<StockFilter>('in_stock');
   const [sort, setSort] = useState<SortOption>('name-asc');
+  const [listFilters, setListFilters] = useState<ListFilters>(DEFAULT_LIST_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const requestKey = useRef(makeIdempotencyKey('send'));
   const formInitialized = useRef(false);
@@ -73,7 +88,7 @@ export function CreateTransferScreen() {
   const destinations = branches.data?.filter((branch) => !branch.is_main_branch && branch.is_active) ?? [];
   const inventory = useInventory(mainBranch, true);
   const mutation = useSendTransfer();
-  const { control, handleSubmit, reset, setValue, watch, formState } = useForm<Values>({
+  const { control, getValues, handleSubmit, reset, setValue, watch, formState } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { destinationBranchId: '', items: [], notes: '' },
   });
@@ -95,8 +110,9 @@ export function CreateTransferScreen() {
       .filter((row) => {
         if (!row.item) return false;
         if (stockFilter === 'in_stock' && row.item.quantity_on_hand <= 0) return false;
+        if (!matchesListFilters(row.item.product, listFilters)) return false;
         if (!term) return true;
-        return `${row.item.product.name} ${row.item.product.sku}`.toLowerCase().includes(term);
+        return productSearchText(row.item.product).includes(term);
       });
 
     return list.sort((a, b) => {
@@ -111,11 +127,11 @@ export function CreateTransferScreen() {
           return (a.item?.product.name ?? '').localeCompare(b.item?.product.name ?? '');
       }
     });
-  }, [fields, inventory.data, search, stockFilter, sort]);
+  }, [fields, inventory.data, search, stockFilter, sort, listFilters]);
 
   const pagination = useClientPagination(
     rows,
-    `${selectedBranchId}|${search}|${stockFilter}|${sort}`,
+    `${selectedBranchId}|${search}|${stockFilter}|${sort}|${JSON.stringify(listFilters)}`,
     10,
   );
 
@@ -200,6 +216,7 @@ export function CreateTransferScreen() {
               return (
                 <View key={item.product.id} style={styles.reviewCard}>
                   <View style={styles.reviewTop}>
+                    <CategoryIcon category={item.product.product_category} size={36} decorative />
                     <View style={styles.reviewInfo}>
                       <Text style={styles.name} numberOfLines={2}>
                         {item.product.name}
@@ -225,53 +242,75 @@ export function CreateTransferScreen() {
                 </View>
               );
             })}
-            {review.notes ? <Text style={styles.body}>Notes: {review.notes}</Text> : null}
+            <Controller
+              control={control}
+              name="notes"
+              render={({ field, fieldState }) => (
+                <FormField
+                  label="Notes (optional)"
+                  value={field.value ?? ''}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  multiline
+                  labelStyle={styles.fieldLabel}
+                  errorStyle={styles.fieldError}
+                  accentColor={managerColors.royalBlue}
+                  style={styles.fieldInput}
+                />
+              )}
+            />
             {mutation.error ? (
               <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
             ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
-            <ManagerActionButton
-              label="Confirm and send"
-              icon="checkmark-circle-outline"
-              loading={mutation.isPending}
-              disabled={
-                selectedItems.length === 0 ||
-                selectedItems.some((item) => item.quantity > item.quantity_on_hand)
-              }
-              onPress={() =>
-                mutation.mutate(
-                  {
-                    destinationBranchId: review.destinationBranchId,
-                    items: selectedItems.map((item) => ({
-                      product_id: item.product.id,
-                      quantity_sent: item.quantityText,
-                    })),
-                    notes: review.notes?.trim() || null,
-                    idempotencyKey: requestKey.current,
-                  },
-                  {
-                    onSuccess: (id) => {
-                      requestKey.current = makeIdempotencyKey('send');
-                      router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never);
-                    },
-                    onError: () => {
-                      requestKey.current = makeIdempotencyKey('send');
-                    },
-                  },
-                )
-              }
-            />
-            <ManagerActionButton
-              label="Back to edit"
-              variant="secondary"
-              disabled={mutation.isPending}
-              onPress={() => {
-                requestKey.current = makeIdempotencyKey('send');
-                setReview(null);
-              }}
-            />
+            <View style={styles.footerButtonRow}>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Back to edit"
+                  variant="secondary"
+                  disabled={mutation.isPending}
+                  onPress={() => {
+                    requestKey.current = makeIdempotencyKey('send');
+                    setReview(null);
+                  }}
+                />
+              </View>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Confirm"
+                  icon="checkmark-circle-outline"
+                  loading={mutation.isPending}
+                  disabled={
+                    selectedItems.length === 0 ||
+                    selectedItems.some((item) => item.quantity > item.quantity_on_hand)
+                  }
+                  onPress={() =>
+                    mutation.mutate(
+                      {
+                        destinationBranchId: review.destinationBranchId,
+                        items: selectedItems.map((item) => ({
+                          product_id: item.product.id,
+                          quantity_sent: item.quantityText,
+                        })),
+                        notes: getValues('notes')?.trim() || null,
+                        idempotencyKey: requestKey.current,
+                      },
+                      {
+                        onSuccess: (id) => {
+                          requestKey.current = makeIdempotencyKey('send');
+                          router.replace({ pathname: '/manager/transfers/[id]', params: { id } } as never);
+                        },
+                        onError: () => {
+                          requestKey.current = makeIdempotencyKey('send');
+                        },
+                      },
+                    )
+                  }
+                />
+              </View>
+            </View>
           </View>
         </View>
       </Screen>
@@ -350,16 +389,20 @@ export function CreateTransferScreen() {
                 <View style={styles.searchField}>
                   <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Sort: ${SORT_OPTIONS.find((option) => option.value === sort)?.label}`}
+                <FilterIconButton count={countListFilters(listFilters)} onPress={() => setFiltersOpen(true)} />
+                <SortIconButton
+                  currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+                  active={sort !== 'name-asc'}
                   onPress={() => setSortOpen(true)}
-                  style={({ pressed }) => [styles.sortButton, pressed && styles.pressed]}
-                >
-                  <Ionicons name="options-outline" size={20} color={managerColors.ink} />
-                </Pressable>
+                />
               </View>
               <FilterChipRow options={STOCK_FILTER_OPTIONS} value={stockFilter} onChange={setStockFilter} />
+              <ListFilterSummary
+                countText={resultCountText(rows.length, inventory.data?.length)}
+                filters={listFilters}
+                keys={ALL_LIST_FILTER_KEYS}
+                onChange={setListFilters}
+              />
               <Text style={styles.summary}>
                 {selectedQuantityCount > 0
                   ? `${selectedQuantityCount} product${selectedQuantityCount === 1 ? '' : 's'} to send`
@@ -390,6 +433,7 @@ export function CreateTransferScreen() {
                   return (
                     <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
                       <View style={styles.cardTop}>
+                        <CategoryIcon category={item.product.product_category} size={36} decorative />
                         <View style={styles.cardInfo}>
                           <Text style={styles.name} numberOfLines={2}>
                             {item.product.name}
@@ -495,6 +539,10 @@ export function CreateTransferScreen() {
             );
           })}
 
+          {selectedBranchId && pagination.pageItems.length === 0 && (search.trim() || countListFilters(listFilters) > 0) ? (
+            <EmptyState {...listFilterEmptyMessage(Boolean(search.trim()))} />
+          ) : null}
+
           {pagination.showPagination ? (
             <View style={styles.pager}>
               <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
@@ -522,23 +570,6 @@ export function CreateTransferScreen() {
               </View>
             </View>
           ) : null}
-          <Controller
-            control={control}
-            name="notes"
-            render={({ field, fieldState }) => (
-              <FormField
-                label="Notes (optional)"
-                value={field.value ?? ''}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                multiline
-                labelStyle={styles.fieldLabel}
-                errorStyle={styles.fieldError}
-                accentColor={managerColors.royalBlue}
-                style={styles.fieldInput}
-              />
-            )}
-          />
           <ManagerActionButton
             label="Review transfer"
             disabled={
@@ -551,6 +582,13 @@ export function CreateTransferScreen() {
         </View>
       </View>
 
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={listFilters}
+        keys={ALL_LIST_FILTER_KEYS}
+        onChange={setListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
       <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
         <View style={styles.sortList}>
           {SORT_OPTIONS.map((option) => {
@@ -595,16 +633,6 @@ const styles = StyleSheet.create({
   label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13, marginBottom: -2 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: managerColors.cardSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pressed: { opacity: 0.75 },
   summary: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   pager: { alignItems: 'center', paddingTop: 4 },
@@ -783,6 +811,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
+  footerButtonRow: { flexDirection: 'row', gap: 10 },
+  footerButton: { flex: 1 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,

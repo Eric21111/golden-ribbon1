@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-import { applySetupDefaults, defaultsForProductSetup } from '../src/features/products/wizardGuards.ts';
+import { applySetupDefaults, defaultKeepUnsoldStock, defaultsForProductSetup } from '../src/features/products/wizardGuards.ts';
 
 assert.deepEqual(defaultsForProductSetup('supplies'), { enabled: true, sellSeparately: false });
 assert.deepEqual(defaultsForProductSetup('meals'), { enabled: true, sellSeparately: true });
 assert.deepEqual(defaultsForProductSetup('snacks'), { enabled: true, sellSeparately: true });
 assert.deepEqual(defaultsForProductSetup('extras'), { enabled: true, sellSeparately: true });
 assert.deepEqual(defaultsForProductSetup('drinks'), { enabled: true, sellSeparately: true });
+
+// Keep Unsold Stock at Branch: ON for Drinks only, from the setup type (never the name); a manual change is kept
+assert.equal(defaultKeepUnsoldStock('drinks'), true);
+for (const other of ['meals', 'snacks', 'extras', 'supplies', 'unset']) assert.equal(defaultKeepUnsoldStock(other), false, other);
 
 const mealOnlyDrink = applySetupDefaults({
   category: 'drinks',
@@ -43,6 +47,9 @@ const editSrc = readFileSync('src/features/products/EditProductWizard.tsx', 'utf
 assert.match(createSrc, /applySetupDefaults\(/);
 assert.doesNotMatch(editSrc, /applySetupDefaults\(/);
 assert.doesNotMatch(createSrc, /name\.includes|sku\.includes/);
+assert.match(createSrc, /if \(!keepStockOverridden\.current\) setIsNonReturnable\(defaultKeepUnsoldStock\(next\)\);/, 'changing the category sets it until the user moves the switch');
+assert.match(createSrc, /<NonReturnableField value=\{isNonReturnable\} onChange=\{changeKeepStock\} \/>/);
+assert.match(createSrc, /function changeKeepStock\(next: boolean\) \{\n    keepStockOverridden\.current = true;/);
 assert.match(editSrc, /useState\(product\.is_active\)/);
 assert.match(editSrc, /useState\(product\.sell_in_pos !== false\)/);
 

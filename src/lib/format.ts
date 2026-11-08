@@ -24,9 +24,14 @@ export function inventoryModeLabel(mode: InventoryMode | null | undefined): stri
   return mode === 'kg_meal' ? 'KG-delivered meal' : 'Piece-based stock';
 }
 
+/**
+ * What happens to a product's remaining stock when a shift closes (products.closing_stock_behavior). Same words as the
+ * shift reports ("Unsold at close", "Carried to next day"). Not the same thing as Keep Unsold Stock at Branch, which is
+ * about returns to Main (is_non_returnable) and has its own label.
+ */
 export function closingStockBehaviorLabel(behavior: ClosingStockBehavior | null | undefined): string {
-  if (behavior === 'record_as_unsold') return 'Unsold on close';
-  return 'Keep at branch';
+  if (behavior === 'record_as_unsold') return 'Unsold at close';
+  return 'Carried to next day';
 }
 
 function formatPieceQuantity(quantity: number | string | null | undefined): string {

@@ -82,7 +82,7 @@ export function getProductErrorMessage(error: unknown): string {
     || message.includes('update_inventory_product')
     || message.includes('set_product_sell_in_pos')
   ) {
-    return 'Stock-only save failed. The Sell in POS database update has not been applied yet.';
+    return 'Stock-only save failed. The Show in Cashier POS database update has not been applied yet.';
   }
   if (
     message.includes('schema cache')
@@ -309,13 +309,17 @@ export function getInventoryErrorMessage(error: unknown): string {
   if (message.includes('select a meal option') || message.includes('variant) for')) {
     return 'Select a meal option before checkout.';
   }
+  // A product with options and none enabled at this branch (confirm_sale: 'No option of "X" is available at this branch.').
+  if (message.includes('no option of')) {
+    return 'An item in this order has no available option at this branch. Remove it from the order.';
+  }
   if (message.includes('insufficient payment')) return 'The payment amount does not cover the order total. Review the total and try again.';
   if (message.includes('insufficient stock')) return 'There is not enough stock to complete this operation.';
   if (message.includes('main-tracked only') || message.includes('no automatic kg')) {
     return 'KG inventory is tracked at Main only. This booth operation is not supported for KG products.';
   }
   if (message.includes('not marked non-returnable')) {
-    return 'Mark the product as non-returnable in product settings before recording a local purchase.';
+    return 'Turn on Keep Unsold Stock at Branch in product settings before recording a local purchase.';
   }
   if (message.includes('kg discrepancy note is required')) {
     return 'Enter a discrepancy note for this KG product.';
