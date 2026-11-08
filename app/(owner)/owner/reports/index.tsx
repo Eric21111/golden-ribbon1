@@ -49,16 +49,9 @@ export default function OwnerReportsHub() {
             onPress={() => router.push('/owner/reports/branch-performance' as never)}
           />
           <NavTile
-            icon="cube-outline"
-            accent="lilac"
-            title="Inventory Summary"
-            description="Read-only on-hand balances across branches"
-            onPress={() => router.push('/owner/inventory-by-branch')}
-          />
-          <NavTile
             icon="checkmark-done-outline"
             accent="green"
-            title="Inventory Reconciliation"
+            title="Discrepancies Reconciliation"
             description="Physical stock versus the movement ledger"
             onPress={() => router.push('/owner/reports/inventory-reconciliation')}
           />

@@ -364,20 +364,13 @@ export default function OwnerDashboard() {
                 />
                 <NavTile
                   layout="tile"
-                  icon="cube-outline"
-                  accent="lilac"
-                  title="Inventory Summary"
-                  onPress={() => router.push('/owner/inventory-by-branch')}
+                  icon="checkmark-done-outline"
+                  accent="green"
+                  title="Discrepancies Reconciliation"
+                  onPress={() => router.push('/owner/reports/inventory-reconciliation')}
                 />
               </Row>
               <Row>
-                <NavTile
-                  layout="tile"
-                  icon="checkmark-done-outline"
-                  accent="green"
-                  title="Reconciliation"
-                  onPress={() => router.push('/owner/reports/inventory-reconciliation')}
-                />
                 <NavTile
                   layout="tile"
                   icon="alert-circle-outline"
@@ -385,6 +378,7 @@ export default function OwnerDashboard() {
                   title="Discrepancy Analytics"
                   onPress={() => router.push('/owner/reports/discrepancies' as never)}
                 />
+                <View style={styles.half} />
               </Row>
             </Section>
 
