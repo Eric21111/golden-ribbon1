@@ -53,21 +53,6 @@ export default function ManagerDashboard() {
     },
   ].filter((item) => typeof item.value === 'number' && item.value > 0);
 
-  // Every tile here must point at a route this manager can actually reach —
-  // main-branch and selling-branch managers have different accessible screens.
-  const quickAccessItems = isMain
-    ? [
-        { title: 'Products', icon: 'fast-food-outline' as const, accent: 'gold' as const, href: '/manager/products' },
-        { title: 'Branches', icon: 'git-branch-outline' as const, accent: 'teal' as const, href: '/manager/branches' },
-        { title: 'Transfers', icon: 'swap-horizontal-outline' as const, accent: 'blue' as const, href: '/manager/transfers' },
-        { title: 'Stock returns', icon: 'return-up-back-outline' as const, accent: 'lilac' as const, href: '/manager/returns' },
-      ]
-    : [
-        { title: 'Inventory', icon: 'cube-outline' as const, accent: 'blue' as const, href: '/manager/inventory' },
-        { title: 'Incoming transfers', icon: 'download-outline' as const, accent: 'teal' as const, href: '/manager/incoming' },
-        { title: 'Stock returns', icon: 'return-up-back-outline' as const, accent: 'lilac' as const, href: '/manager/returns' },
-      ];
-
   const refresh = () => {
     void metricsQuery.refetch();
   };
@@ -114,7 +99,7 @@ export default function ManagerDashboard() {
           <LoadingState label="Loading dashboard…" />
         ) : (
           <View style={styles.content}>
-            <Section title="BRANCH SNAPSHOT">
+            <Section title="Dashboard">
               <Row>
                 <StatTile
                   style={styles.half}
@@ -163,50 +148,6 @@ export default function ManagerDashboard() {
                     onPress={() => router.push(item.href as never)}
                   />
                 ))
-              )}
-            </Section>
-
-            <Section title="QUICK ACCESS">
-              {isMain ? (
-                <>
-                  <Row>
-                    {quickAccessItems.slice(0, 2).map((item) => (
-                      <NavTile
-                        key={item.title}
-                        layout="tile"
-                        icon={item.icon}
-                        accent={item.accent}
-                        title={item.title}
-                        onPress={() => router.push(item.href as never)}
-                      />
-                    ))}
-                  </Row>
-                  <Row>
-                    {quickAccessItems.slice(2, 4).map((item) => (
-                      <NavTile
-                        key={item.title}
-                        layout="tile"
-                        icon={item.icon}
-                        accent={item.accent}
-                        title={item.title}
-                        onPress={() => router.push(item.href as never)}
-                      />
-                    ))}
-                  </Row>
-                </>
-              ) : (
-                <Row>
-                  {quickAccessItems.map((item) => (
-                    <NavTile
-                      key={item.title}
-                      layout="tile"
-                      icon={item.icon}
-                      accent={item.accent}
-                      title={item.title}
-                      onPress={() => router.push(item.href as never)}
-                    />
-                  ))}
-                </Row>
               )}
             </Section>
 

@@ -67,6 +67,7 @@
     "test:branch-performance": "node tests/branch_performance_return_badge.mjs",
     "test:branch-performance-cards": "node tests/branch_performance_cards.mjs",
     "test:owner-navigation": "node tests/owner_navigation_cleanup.mjs",
+    "test:manager-dashboard-layout": "node tests/manager_dashboard_layout.mjs",
     "test:recon-return": "node tests/inventory_reconciliation_return_issue.mjs",
     "test:product-active": "node tests/product_active_after_opening.mjs",
     "test:create-product": "node tests/create_product_integrity.mjs",
