@@ -11,6 +11,8 @@ export const queryKeys = {
   cashierPosInventory: (branchId: string) => ['inventory', 'cashier-pos', branchId] as const,
   transfers: (branchId = '', status = '') => ['transfers', { branchId, status }] as const,
   transfer: (id: string) => ['transfers', id] as const,
+  pendingOutgoingTransfersCount: (fromBranchId: string) =>
+    ['transfers', 'pending-outgoing-count', fromBranchId] as const,
   activeShift: (cashierId: string) => ['shifts', 'active', cashierId] as const,
   employees: ['employees'] as const,
   returns: (branchId = '', status = '') => ['stock-returns', { branchId, status }] as const,

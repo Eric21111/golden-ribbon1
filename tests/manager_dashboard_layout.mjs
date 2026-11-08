@@ -30,7 +30,27 @@ const stubs = {
   '@/components/Screen': `
     import { createElement } from 'react';
     import { View } from 'react-native';
-    export function Screen({ children }) { return createElement(View, null, children); }
+    export const last = { props: null };
+    export function Screen(props) { last.props = props; return createElement(View, null, props.children); }
+  `,
+  '@/hooks/useManagerAttention': `
+    export const state = { value: {}, calls: [], retries: 0, refetches: 0 };
+    export function useManagerAttention(mainBranchId) {
+      state.calls.push(mainBranchId);
+      return {
+        enabled: Boolean(mainBranchId),
+        pendingOutgoing: undefined,
+        transferDiscrepancies: undefined,
+        returnDiscrepancies: undefined,
+        loading: false,
+        error: null,
+        retrying: false,
+        isRefetching: false,
+        retry: () => { state.retries += 1; },
+        refetch: () => { state.refetches += 1; },
+        ...state.value,
+      };
+    }
   `,
   '@/components/dashboard/HamburgerButton': `
     import { createElement } from 'react';
@@ -120,6 +140,9 @@ const auth = await import('@/features/auth/AuthProvider');
 const sales = await import('@/hooks/useSales');
 const routing = await import('expo-router');
 const roles = await import('../src/features/auth/roles.ts');
+const attentionHook = await import('@/hooks/useManagerAttention');
+const screen = await import('@/components/Screen');
+const actionButtons = await import('@/components/dashboard/ManagerActionButton');
 
 const query = (overrides) => ({
   data: undefined,
@@ -148,6 +171,8 @@ const unassignedManager = { role: 'manager', full_name: 'Una Assigned', branch_i
 
 const render = () => {
   tiles.length = 0;
+  actionButtons.buttons.length = 0;
+  attentionHook.state.calls.length = 0;
   routing.pushed.length = 0;
   const t = renderToStaticMarkup(createElement(ManagerDashboard))
     .replace(/<[^>]+>/g, ' ')
@@ -211,6 +236,73 @@ sales.state.metrics = query({ data: metrics({ pending_incoming_transfers_count: 
   assert.match(statsSlice(t), /3 Pending incoming 2 Returns in transit/);
 }
 
+// Main Branch Manager attention sources: hook gets the Main Branch id; counts become clickable alerts.
+const attentionSlice = (t) => t.slice(t.indexOf('NEEDS ATTENTION'), t.indexOf('REPORTS'));
+sales.state.metrics = query({ data: metrics({ returns_in_transit_count: 1 }) });
+attentionHook.state.value = { pendingOutgoing: 4, transferDiscrepancies: 2, returnDiscrepancies: 3 };
+{
+  const { t, tiles: rendered } = render();
+  assert.deepEqual(attentionHook.state.calls, ['main'], 'attention enabled with the Main Branch id');
+  const alerts = rendered.filter((tile) => tile.variant === 'alert');
+  assert.deepEqual(
+    alerts.map((tile) => [tile.title, tile.value, press(tile)]),
+    [
+      ['Pending transfers', 4, '/manager/transfers'],
+      ['Returns in transit', 1, '/manager/returns'],
+      ['Transfer discrepancies', 2, '/manager/reports/transfer-discrepancies'],
+      ['Return discrepancies', 3, '/manager/reports/return-discrepancies'],
+    ],
+  );
+  const section = attentionSlice(t);
+  assert.doesNotMatch(section, /Nothing needs attention|Checking|Couldn't check/);
+  assert.match(t, /\[tile:Shift remittances\].*\[tile:Waste History\]/, 'Reports unchanged');
+  assert.match(statsSlice(t), /0 Pending incoming 1 Returns in transit/, 'stats untouched by the new alerts');
+}
+
+// Zero counts from every source: empty state.
+attentionHook.state.value = { pendingOutgoing: 0, transferDiscrepancies: 0, returnDiscrepancies: 0 };
+sales.state.metrics = query({ data: metrics() });
+assert.match(attentionSlice(render().t), /Nothing needs attention/);
+
+// Loading: never claims "nothing" while sources are still being checked; known alerts stay visible.
+attentionHook.state.value = { loading: true };
+sales.state.metrics = query({ data: metrics({ returns_in_transit_count: 2 }) });
+{
+  const section = attentionSlice(render().t);
+  assert.match(section, /\[tile:Returns in transit:2\]/);
+  assert.match(section, /Checking transfers and discrepancies…/);
+  assert.doesNotMatch(section, /Nothing needs attention/);
+}
+
+// Error: inline message + Retry (retries only the failed sources); loaded alerts still shown.
+attentionHook.state.value = { error: new Error('Network request failed'), pendingOutgoing: 5 };
+sales.state.metrics = query({ data: metrics() });
+{
+  const section = attentionSlice(render().t);
+  assert.match(section, /\[tile:Pending transfers:5\]/);
+  assert.match(section, /Couldn't check transfers and discrepancies\./);
+  assert.match(section, /Unable to connect\./, 'friendly message from getErrorMessage');
+  assert.match(section, /\[button:Retry\]/);
+  assert.doesNotMatch(section, /Nothing needs attention|Checking/);
+  const before = attentionHook.state.retries;
+  actionButtons.buttons.find((button) => button.label === 'Retry').onPress();
+  assert.equal(attentionHook.state.retries, before + 1);
+  assert.match(render().t, /Today's Sales/, 'dashboard stats still render during an attention error');
+}
+
+// Pull-to-refresh refetches the metrics and the attention sources.
+attentionHook.state.value = {};
+{
+  let metricRefetches = 0;
+  sales.state.metrics = query({ data: metrics(), refetch: async () => void (metricRefetches += 1) });
+  render();
+  const before = attentionHook.state.refetches;
+  screen.last.props.onRefresh();
+  assert.equal(metricRefetches, 1);
+  assert.equal(attentionHook.state.refetches, before + 1);
+}
+sales.state.metrics = query({ data: metrics() });
+
 // Loading and error states unchanged.
 sales.state.metrics = query({ isLoading: true });
 assert.match(render().t, /Loading dashboard…/);
@@ -224,6 +316,7 @@ auth.state.profile = unassignedManager;
 sales.state.metrics = query({ data: metrics() });
 {
   const { t, tiles: rendered } = render();
+  assert.deepEqual(attentionHook.state.calls, [null], 'attention sources disabled for non-main managers');
   assert.doesNotMatch(t, /\[hamburger\]|REPORTS|QUICK ACCESS|BRANCH SNAPSHOT/);
   assert.match(t, /Dashboard/);
   assert.match(t, /NEEDS ATTENTION/);
@@ -237,6 +330,10 @@ sales.state.metrics = query({ data: metrics() });
   assert.ok(roles.isSellingBranchManager(sellingManager));
   const layout = readFileSync('app/(manager)/_layout.tsx', 'utf8');
   assert.match(layout, /if \(isSellingBranchManager\(profile\)\) \{\s*return <SellingManagerLocked \/>;/);
+  // Defense in depth: even if rendered, the dashboard does not enable Main-only sources for them.
+  auth.state.profile = { ...sellingManager, full_name: 'Sam Seller' };
+  render();
+  assert.deepEqual(attentionHook.state.calls, [null], 'selling-branch branch id is never passed to attention sources');
 }
 
 // Former Quick Access destinations stay reachable for the Main Branch Manager via sidebar / tab bar.

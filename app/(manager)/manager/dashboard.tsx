@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
@@ -13,6 +14,8 @@ import { Screen } from '@/components/Screen';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
+import { buildAttentionItems } from '@/features/reports/managerAttention';
+import { useManagerAttention } from '@/hooks/useManagerAttention';
 import { useManagerDashboardMetrics } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
@@ -35,26 +38,22 @@ export default function ManagerDashboard() {
   const isMain = isMainBranchManager(profile);
   const metricsQuery = useManagerDashboardMetrics();
 
-  const metrics = metricsQuery.data;
-  const refreshing = metricsQuery.isRefetching;
+  const attention = useManagerAttention(isMain ? (profile?.branch_id ?? null) : null);
 
-  const attentionItems = [
-    {
-      title: 'Pending incoming',
-      value: metrics?.pending_incoming_transfers_count,
-      description: 'Count and receive stock sent to this branch',
-      href: '/manager/incoming',
-    },
-    {
-      title: 'Returns in transit',
-      value: metrics?.returns_in_transit_count,
-      description: 'Unsold stock returning to Main Branch',
-      href: '/manager/returns',
-    },
-  ].filter((item) => typeof item.value === 'number' && item.value > 0);
+  const metrics = metricsQuery.data;
+  const refreshing = metricsQuery.isRefetching || attention.isRefetching;
+
+  const attentionItems = buildAttentionItems({
+    pendingIncoming: metrics?.pending_incoming_transfers_count,
+    pendingOutgoing: attention.pendingOutgoing,
+    returnsInTransit: metrics?.returns_in_transit_count,
+    transferDiscrepancies: attention.transferDiscrepancies,
+    returnDiscrepancies: attention.returnDiscrepancies,
+  });
 
   const refresh = () => {
     void metricsQuery.refetch();
+    attention.refetch();
   };
 
   const managerName = profile?.full_name ?? 'Manager';
@@ -132,23 +131,38 @@ export default function ManagerDashboard() {
             </Section>
 
             <Section title="NEEDS ATTENTION">
-              {attentionItems.length === 0 ? (
+              {attentionItems.map((item) => (
+                <NavTile
+                  key={item.title}
+                  variant="alert"
+                  icon="alert-circle-outline"
+                  title={item.title}
+                  value={item.value}
+                  description={item.description}
+                  onPress={() => router.push(item.href as never)}
+                />
+              ))}
+              {attention.error ? (
+                <View style={styles.inlineErrorCard} accessibilityLiveRegion="polite">
+                  <Text style={styles.inlineErrorTitle}>Couldn't check transfers and discrepancies.</Text>
+                  <Text style={styles.inlineErrorBody}>{getErrorMessage(attention.error)}</Text>
+                  <ManagerActionButton
+                    label="Retry"
+                    icon="refresh-outline"
+                    variant="secondary"
+                    loading={attention.retrying}
+                    onPress={attention.retry}
+                  />
+                </View>
+              ) : attention.loading ? (
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>Checking transfers and discrepancies…</Text>
+                </View>
+              ) : attentionItems.length === 0 ? (
                 <View style={styles.quietCard}>
                   <Text style={styles.quiet}>Nothing needs attention</Text>
                 </View>
-              ) : (
-                attentionItems.map((item) => (
-                  <NavTile
-                    key={item.title}
-                    variant="alert"
-                    icon="alert-circle-outline"
-                    title={item.title}
-                    value={item.value}
-                    description={item.description}
-                    onPress={() => router.push(item.href as never)}
-                  />
-                ))
-              )}
+              ) : null}
             </Section>
 
             {isMain ? (
@@ -234,4 +248,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  inlineErrorCard: {
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  inlineErrorTitle: { color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  inlineErrorBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
 });

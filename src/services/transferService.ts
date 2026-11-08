@@ -26,6 +26,17 @@ export async function listTransfers(filters: TransferFilters = {}): Promise<Stoc
   return data as unknown as StockTransferSummary[];
 }
 
+/** Exact count of transfers this branch sent that the receiving branch has not yet received. */
+export async function countPendingOutgoingTransfers(fromBranchId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('stock_transfers')
+    .select('id', { count: 'exact', head: true })
+    .eq('from_branch_id', fromBranchId)
+    .eq('status', 'pending_receipt');
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getTransfer(id: string): Promise<StockTransferDetails> {
   const { data, error } = await supabase
     .from('stock_transfers')
