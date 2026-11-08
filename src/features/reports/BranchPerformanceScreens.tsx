@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
@@ -14,12 +15,20 @@ import { StatTile } from '@/components/dashboard/StatTile';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import {
+  inventoryPreview,
+  remittanceSummary,
+  toggleExpandedBranch,
+  transfersInWindow,
+  windowEndsBeforeNow,
+} from '@/features/reports/branchPerformanceCards';
 import { accentForRank } from '@/features/reports/reportAccents';
 import { useProducts } from '@/hooks/useProducts';
 import { useBranchPerformance, useBranchPerformanceDetails } from '@/hooks/useReconciliation';
+import { useShiftRemittances } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatLiveStock, formatMoney } from '@/lib/format';
-import type { BranchPerformanceItem } from '@/types/models';
+import { formatDate, formatLiveStock, formatMoney, formatTransferStatus, getTodayRangeManila } from '@/lib/format';
+import type { BranchPerformanceItem, TransferStatus } from '@/types/models';
 
 function discrepancySummary(missing: number, excess: number): { label: string; tone: ManagerBadgeTone } {
   if (missing === 0 && excess === 0) return { label: 'None', tone: 'success' };
@@ -29,13 +38,22 @@ function discrepancySummary(missing: number, excess: number): { label: string; t
   return { label: parts.join(' · '), tone: missing > 0 ? 'danger' : 'warning' };
 }
 
+type RangeArgs = { rpcRangeType: 'today' | 'custom' | 'all_time'; startIso?: string; endIso?: string };
+
 export function BranchPerformanceReportScreen() {
   const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useBranchPerformance(rpcRangeType, startIso, endIso);
+  const rangeKey = `${rpcRangeType}|${startIso ?? ''}|${endIso ?? ''}`;
+  const [expandedRangeKey, setExpandedRangeKey] = useState(rangeKey);
+  if (expandedRangeKey !== rangeKey) {
+    setExpandedRangeKey(rangeKey);
+    setExpanded(new Set());
+  }
 
   const report = query.data ?? [];
   const totalCompanySales = report.reduce((acc, b) => acc + Number(b.total_sales), 0);
@@ -90,6 +108,9 @@ export function BranchPerformanceReportScreen() {
                 item={branch}
                 share={totalCompanySales > 0 ? (Number(branch.total_sales) / totalCompanySales) * 100 : 0}
                 showOlderReturnHint={rangeType !== 'all_time'}
+                expanded={expanded.has(branch.branch_id)}
+                onToggle={() => setExpanded((current) => toggleExpandedBranch(current, branch.branch_id))}
+                range={{ rpcRangeType, startIso, endIso }}
               />
             ))}
           </View>
@@ -104,75 +125,288 @@ function BranchPerformanceCard({
   item,
   share,
   showOlderReturnHint,
+  expanded,
+  onToggle,
+  range,
 }: {
   rank: number;
   item: BranchPerformanceItem;
   share: number;
   showOlderReturnHint: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  range: RangeArgs;
 }) {
-  const transferSummary = discrepancySummary(item.transfer_missing_qty, item.transfer_excess_qty);
-  const returnSummary = discrepancySummary(item.return_missing_qty, item.return_excess_qty);
   const accent = accentForRank(rank);
   const barColors = [accent.icon, accent.gradient[0]] as const;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push(`/owner/reports/branch-performance/${item.branch_id}` as never)}
-      style={({ pressed }) => [styles.branchCard, pressed && styles.pressed]}
-    >
-      <View style={styles.branchTop}>
-        <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
-          <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
+    <View style={styles.branchCard}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${item.branch_name}, ${formatMoney(item.total_sales)} sales`}
+        accessibilityHint={expanded ? 'Hides branch details' : 'Shows branch details'}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.branchSummary, pressed && styles.pressed]}
+      >
+        <View style={styles.branchTop}>
+          <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
+            <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
+          </View>
+          <Text style={styles.branchName} numberOfLines={1}>
+            {item.branch_name}
+          </Text>
+          <View style={styles.branchTopRight}>
+            <Text style={styles.branchTotal}>{formatMoney(item.total_sales)}</Text>
+            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={managerColors.subtext} />
+          </View>
         </View>
-        <Text style={styles.branchName} numberOfLines={1}>
-          {item.branch_name}
-        </Text>
-        <View style={styles.branchTopRight}>
-          <Text style={styles.branchTotal}>{formatMoney(item.total_sales)}</Text>
-          <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
-        </View>
-      </View>
 
-      <View style={styles.barRow}>
-        <View style={styles.barTrack}>
-          <LinearGradient
-            colors={barColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.barFill, { width: `${Math.max(share, 0)}%` }]}
-          />
+        <View style={styles.barRow}>
+          <View style={styles.barTrack}>
+            <LinearGradient
+              colors={barColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.barFill, { width: `${Math.max(share, 0)}%` }]}
+            />
+          </View>
+          <Text style={[styles.barPercent, { color: accent.icon }]}>{share.toFixed(0)}%</Text>
         </View>
-        <Text style={[styles.barPercent, { color: accent.icon }]}>{share.toFixed(0)}%</Text>
-      </View>
 
-      <View style={styles.branchStatsRow}>
-        <View style={styles.branchStat}>
-          <Text style={styles.branchStatValue}>{item.transaction_count}</Text>
-          <Text style={styles.branchStatLabel}>Transactions</Text>
+        <View style={styles.branchStatsRow}>
+          <View style={styles.branchStat}>
+            <Text style={styles.branchStatValue}>{item.transaction_count}</Text>
+            <Text style={styles.branchStatLabel}>Transactions</Text>
+          </View>
+          <View style={styles.branchStat}>
+            <Text style={styles.branchStatValue}>{item.quantity_sold}</Text>
+            <Text style={styles.branchStatLabel}>Items sold</Text>
+          </View>
         </View>
-        <View style={styles.branchStat}>
-          <Text style={styles.branchStatValue}>{item.quantity_sold}</Text>
-          <Text style={styles.branchStatLabel}>Items sold</Text>
-        </View>
-      </View>
+      </Pressable>
 
+      {expanded ? <BranchCardDetails item={item} range={range} showOlderReturnHint={showOlderReturnHint} /> : null}
+    </View>
+  );
+}
+
+const DETAIL_LIST_LIMIT = 5;
+
+function BranchCardDetails({
+  item,
+  range,
+  showOlderReturnHint,
+}: {
+  item: BranchPerformanceItem;
+  range: RangeArgs;
+  showOlderReturnHint: boolean;
+}) {
+  const { rpcRangeType, startIso, endIso } = range;
+  const details = useBranchPerformanceDetails(item.branch_id, rpcRangeType, startIso, endIso);
+  const remittance = useShiftRemittances(rpcRangeType, startIso, endIso, item.branch_id);
+  const products = useProducts();
+  const inventoryModeByProductId = useMemo(
+    () => new Map((products.data ?? []).map((product) => [product.id, product.inventory_mode])),
+    [products.data],
+  );
+  const modeLookupReady = products.isFetched && !products.isLoading;
+  const reportWindow = useMemo(
+    () => (rpcRangeType === 'today' ? getTodayRangeManila() : { start: startIso, end: endIso }),
+    [rpcRangeType, startIso, endIso],
+  );
+
+  const transferSummary = discrepancySummary(item.transfer_missing_qty, item.transfer_excess_qty);
+  const returnSummary = discrepancySummary(item.return_missing_qty, item.return_excess_qty);
+  const data = details.data;
+  const inventory = inventoryPreview(data?.current_inventory ?? []);
+  const transfers = transfersInWindow(data?.recent_transfers ?? [], reportWindow);
+  const cash = remittanceSummary(remittance.data);
+  const openFullReport = () => router.push(`/owner/reports/branch-performance/${item.branch_id}` as never);
+
+  return (
+    <View style={styles.details}>
       <View style={styles.branchDivider} />
 
+      <Text style={styles.detailTitle}>CASH REMITTANCE</Text>
+      {remittance.isLoading ? (
+        <Text style={styles.mutedText}>Loading remittance…</Text>
+      ) : remittance.error ? (
+        <InlineDetailError
+          message={`Couldn't load remittance. ${getErrorMessage(remittance.error)}`}
+          onRetry={() => void remittance.refetch()}
+        />
+      ) : (
+        <>
+          <View style={styles.branchBadgeRow}>
+            <Text style={styles.branchBadgeLabel}>Cash remitted</Text>
+            <Text style={styles.detailValue}>{cash.remitted == null ? 'None yet' : formatMoney(cash.remitted)}</Text>
+          </View>
+          <Text style={styles.olderHint}>
+            Counted at shift close for {cash.reconciledShifts} {cash.reconciledShifts === 1 ? 'shift' : 'shifts'} that
+            ended in this period. Not the same as sales.
+            {cash.pendingShifts > 0
+              ? ` ${cash.pendingShifts} awaiting remittance (${formatMoney(cash.pendingExpected)} expected).`
+              : ''}
+          </Text>
+        </>
+      )}
+
+      {details.isLoading ? <LoadingState label="Loading branch details…" /> : null}
+      {details.error ? (
+        <InlineDetailError
+          message={`Couldn't load branch details. ${getErrorMessage(details.error)}`}
+          onRetry={() => void details.refetch()}
+        />
+      ) : null}
+
+      <Text style={styles.detailTitle}>DISCREPANCIES</Text>
       <View style={styles.branchBadgeRow}>
         <Text style={styles.branchBadgeLabel}>Transfer discrepancies</Text>
         <ManagerBadge label={transferSummary.label} tone={transferSummary.tone} />
       </View>
+      {data?.transfer_discrepancies.slice(0, DETAIL_LIST_LIMIT).map((disc) => (
+        <DetailRow
+          key={disc.id}
+          title={`${disc.transfer_number} · ${disc.product_name}`}
+          meta={`Sent ${disc.quantity_expected} · Received ${disc.quantity_received} · ${formatDate(disc.created_at)}`}
+          value={disc.discrepancy_type === 'missing' ? `${disc.difference} missing` : `${Math.abs(disc.difference)} excess`}
+          tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
+          onPress={() => router.push(`/owner/reports/discrepancies/transfer/${disc.id}` as never)}
+        />
+      ))}
       <View style={styles.branchBadgeRow}>
         <Text style={styles.branchBadgeLabel}>Return discrepancies</Text>
         <ManagerBadge label={returnSummary.label} tone={returnSummary.tone} />
       </View>
+      {data?.return_discrepancies.slice(0, DETAIL_LIST_LIMIT).map((disc) => (
+        <DetailRow
+          key={disc.id}
+          title={`${disc.return_number} · ${disc.product_name}`}
+          meta={`Returned ${disc.quantity_expected} · Main received ${disc.quantity_received} · ${formatDate(disc.created_at)}`}
+          value={disc.discrepancy_type === 'missing' ? `${disc.difference} missing` : `${Math.abs(disc.difference)} excess`}
+          tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
+          onPress={() => router.push(`/owner/reports/discrepancies/return/${disc.id}` as never)}
+        />
+      ))}
       {showOlderReturnHint && returnSummary.label === 'None' ? (
         <Text style={styles.olderHint}>
           None in this range. Open the branch or switch to All Time to see older Main receive differences.
         </Text>
       ) : null}
+      {data &&
+      (data.transfer_discrepancies.length > DETAIL_LIST_LIMIT || data.return_discrepancies.length > DETAIL_LIST_LIMIT) ? (
+        <Text style={styles.olderHint}>Showing the latest {DETAIL_LIST_LIMIT} of each. See the full branch report for all.</Text>
+      ) : null}
+
+      {data ? (
+        <>
+          <Text style={styles.detailTitle}>CURRENT INVENTORY (NOW)</Text>
+          {inventory.shown.length === 0 ? (
+            <Text style={styles.mutedText}>No stock on hand at this branch.</Text>
+          ) : (
+            inventory.shown.map((inv) => (
+              <View key={inv.product_id} style={styles.branchBadgeRow}>
+                <Text style={styles.detailRowTitle} numberOfLines={1}>
+                  {inv.product_name}
+                </Text>
+                <Text style={styles.highlight}>
+                  {formatLiveStock(
+                    inv.quantity_on_hand,
+                    modeLookupReady ? inventoryModeByProductId.get(inv.product_id) : undefined,
+                  )}
+                </Text>
+              </View>
+            ))
+          )}
+          {inventory.moreStocked > 0 || inventory.zeroCount > 0 ? (
+            <Text style={styles.olderHint}>
+              {[
+                inventory.moreStocked > 0 ? `${inventory.moreStocked} more in stock` : null,
+                inventory.zeroCount > 0 ? `${inventory.zeroCount} at zero` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              . See the full branch report.
+            </Text>
+          ) : null}
+
+          <Text style={styles.detailTitle}>RECENT STOCK TRANSFERS</Text>
+          {transfers.length === 0 ? (
+            <Text style={styles.mutedText}>No stock transfers sent to this branch in this period.</Text>
+          ) : (
+            transfers.map((t) => (
+              <DetailRow
+                key={t.id}
+                title={t.transfer_number}
+                meta={`${formatTransferStatus(t.status as TransferStatus) ?? t.status} · ${t.items_count} products`}
+                value={formatDate(t.received_at || t.sent_at)}
+              />
+            ))
+          )}
+          {windowEndsBeforeNow(reportWindow) ? (
+            <Text style={styles.olderHint}>Only the branch's 5 latest transfers are checked for this range.</Text>
+          ) : null}
+        </>
+      ) : null}
+
+      <ManagerActionButton
+        label="Open full branch report"
+        icon="open-outline"
+        variant="secondary"
+        onPress={openFullReport}
+      />
+    </View>
+  );
+}
+
+function DetailRow({
+  title,
+  meta,
+  value,
+  tone,
+  onPress,
+}: {
+  title: string;
+  meta: string;
+  value: string;
+  tone?: ManagerBadgeTone;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
+      <View style={styles.detailRowBody}>
+        <Text style={styles.detailRowTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.olderHint}>{meta}</Text>
+      </View>
+      {tone ? <ManagerBadge label={value} tone={tone} /> : <Text style={styles.dateText}>{value}</Text>}
+      {onPress ? <Ionicons name="chevron-forward" size={16} color={managerColors.subtext} /> : null}
+    </>
+  );
+  if (!onPress) return <View style={styles.detailRow}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${value}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.detailRow, pressed && styles.pressed]}
+    >
+      {body}
     </Pressable>
+  );
+}
+
+function InlineDetailError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <View style={styles.detailError}>
+      <Text style={styles.detailErrorText}>{message}</Text>
+      <Pressable accessibilityRole="button" onPress={onRetry} style={({ pressed }) => pressed && styles.pressed}>
+        <Text style={styles.detailRetry}>Retry</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -414,6 +648,29 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   pressed: { opacity: 0.85 },
+  branchSummary: { gap: 12 },
+  details: { gap: 10 },
+  detailTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    letterSpacing: 0.8,
+    marginTop: 4,
+  },
+  detailValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  detailRowBody: { flex: 1, gap: 2 },
+  detailRowTitle: { flexShrink: 1, color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
+  detailError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+  },
+  detailErrorText: { flex: 1, color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
+  detailRetry: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 13 },
   branchTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   branchName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   branchTopRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
