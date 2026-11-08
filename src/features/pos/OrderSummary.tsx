@@ -2,29 +2,49 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
 import { formatMoney } from '@/lib/format';
-import { cartLineKey, cartTotalCents, toCents } from '@/lib/money';
+import { cartLineKey, toCents } from '@/lib/money';
 
 import { cartLineLabel } from './cartLine';
+import {
+  chargedUnitPrice,
+  previewOrderTotals,
+  type SalePricingProgram,
+  type SalePricingProgramSetting,
+} from './pricingPrograms';
 import type { CartItem } from '@/types/models';
 
-export function OrderSummary({ items }: { items: CartItem[] }) {
-  const total = cartTotalCents(items) / 100;
+export function OrderSummary({
+  items,
+  program = 'standard',
+  settings = null,
+}: {
+  items: CartItem[];
+  program?: SalePricingProgram;
+  settings?: Partial<Record<SalePricingProgram, SalePricingProgramSetting>> | null;
+}) {
+  const total = previewOrderTotals(items, program, settings).chargedTotal;
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Order Summary</Text>
       {items.length === 0 ? <Text style={styles.empty}>No products selected.</Text> : null}
-      {items.map((item) => (
-        <View key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)} style={styles.itemRow}>
-          <View style={styles.copy}>
-            <Text style={styles.name}>
-              {cartLineLabel(item)}
-            </Text>
-            <Text style={styles.calculation}>{item.quantity} × {formatMoney(item.unit_price)}</Text>
+      {items.map((item) => {
+        const charged = chargedUnitPrice(item.unit_price, program, settings);
+        return (
+          <View key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)} style={styles.itemRow}>
+            <View style={styles.copy}>
+              <Text style={styles.name}>
+                {cartLineLabel(item)}
+              </Text>
+              <Text style={styles.calculation}>
+                {item.quantity} × {formatMoney(charged)}
+                {charged !== item.unit_price ? ` (was ${formatMoney(item.unit_price)})` : ''}
+              </Text>
+            </View>
+            <Text style={styles.subtotal}>{formatMoney(toCents(charged) * item.quantity / 100)}</Text>
           </View>
-          <Text style={styles.subtotal}>{formatMoney(toCents(item.unit_price) * item.quantity / 100)}</Text>
-        </View>
-      ))}
+        );
+      })}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>TOTAL</Text>
         <Text style={styles.total}>{formatMoney(total)}</Text>

@@ -55,11 +55,18 @@ export default function PaymentScreen() {
   const [priceError, setPriceError] = useState('');
   const [priceRefreshKey, setPriceRefreshKey] = useState(0);
   const [stockChecking, setStockChecking] = useState(false);
-  const [pricingProgram, setPricingProgram] = useState<SalePricingProgram>('standard');
+  // A saved (retryable) request is resent unchanged, so the screen must show the program it carries.
+  const [pricingProgram, setPricingProgram] = useState<SalePricingProgram>(
+    checkout.request?.pricingProgram ?? 'standard',
+  );
   const [pricingSettings, setPricingSettings] = useState<Partial<
     Record<SalePricingProgram, SalePricingProgramSetting>
   > | null>(null);
   const [pricingProgramsUnavailable, setPricingProgramsUnavailable] = useState(false);
+  const savedProgram = checkout.request?.pricingProgram;
+  useEffect(() => {
+    if (savedProgram) setPricingProgram(savedProgram);
+  }, [savedProgram]);
 
   const totals = useMemo(
     () => previewOrderTotals(items, pricingProgram, pricingSettings),
@@ -253,7 +260,7 @@ export default function PaymentScreen() {
                 onRetry={() => setPriceRefreshKey((key) => key + 1)}
               />
             ) : null}
-            <OrderSummary items={items} />
+            <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} />
 
             {!checkout.sale ? (
               <View style={styles.programBlock}>
