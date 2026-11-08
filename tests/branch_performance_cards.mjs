@@ -327,7 +327,14 @@ shifts.state.remit[SM2] = query({ data: remitFor(515.5) });
   assert.match(cardSlice(t, 'SM1'), /48%.*3 Transactions 7 Items sold/);
   assert.equal(header('SM1').accessibilityState.expanded, false);
   assert.equal(header('SM2').accessibilityState.expanded, false);
-  assert.doesNotMatch(t, /CASH REMITTANCE|CURRENT INVENTORY|RECENT STOCK TRANSFERS|DISCREPANCIES/, 'collapsed by default');
+  assert.match(cardSlice(t, 'SM1'), /Items sold Transfer discrepancies 2 missing Return discrepancies None/, 'summary badges while collapsed');
+  assert.match(cardSlice(t, 'SM2'), /Items sold Transfer discrepancies None Return discrepancies 1 excess/);
+  assert.doesNotMatch(t, /None in this range/, 'older-return hint only outside All Time');
+  assert.doesNotMatch(
+    t,
+    /CASH REMITTANCE|CURRENT INVENTORY|RECENT STOCK TRANSFERS|DISCREPANCY DETAILS|TR-SM1-9|SM1 Cake|Open full branch report/,
+    'detailed lists hidden while collapsed',
+  );
   assert.equal(recon.state.calls.details.length, 0, 'no detail fetch while collapsed');
   assert.equal(shifts.state.calls.length, 0, 'no remittance fetch while collapsed');
   assert.equal(routing.pushed.length, 0);
@@ -345,9 +352,10 @@ shifts.state.remit[SM2] = query({ data: remitFor(515.5) });
   assert.match(sm1, /CASH REMITTANCE Cash remitted ₱\s*430\.00/);
   assert.match(sm1, /Counted at shift close for 1 shift that ended in this period\. Not the same as sales\./);
   assert.match(sm1, /1 awaiting remittance \(₱\s*75\.00 expected\)/);
-  assert.match(sm1, /Transfer discrepancies 2 missing/);
-  assert.match(sm1, /TR-SM1-9 · SM1 Cake Sent 10 · Received 8/);
-  assert.match(sm1, /Return discrepancies None/);
+  assert.match(sm1, /Transfer discrepancies 2 missing Return discrepancies None/, 'summary badges stay on the card');
+  assert.equal(sm1.split('Transfer discrepancies').length - 1, 1, 'transfer badge not duplicated in details');
+  assert.equal(sm1.split('Return discrepancies').length - 1, 1, 'return badge not duplicated in details');
+  assert.match(sm1, /DISCREPANCY DETAILS TR-SM1-9 · SM1 Cake Sent 10 · Received 8/);
   assert.match(sm1, /CURRENT INVENTORY \(NOW\) SM1 Cake 12/);
   assert.match(sm1, /1 at zero\. See the full branch report\./);
   assert.match(sm1, /RECENT STOCK TRANSFERS TR-SM1-NEW Received · 2 products/);
@@ -378,7 +386,9 @@ shifts.state.remit[SM2] = query({ data: remitFor(515.5) });
 {
   let t = tap(chip('Today'));
   assert.deepEqual(recon.state.calls.list.at(-1), ['today', undefined, undefined]);
-  assert.doesNotMatch(t, /CASH REMITTANCE/, 'changing the filter collapses every card');
+  assert.doesNotMatch(t, /CASH REMITTANCE|DISCREPANCY DETAILS/, 'changing the filter collapses every card');
+  assert.match(cardSlice(t, 'SM1'), /Return discrepancies None None in this range\./, 'older-return hint on the collapsed card');
+  assert.doesNotMatch(cardSlice(t, 'SM2'), /None in this range/, 'no hint when the branch has a return issue');
   t = tap(header('SM1'));
   assert.deepEqual(recon.state.calls.details.at(-1), [SM1, 'today', undefined, undefined]);
   assert.deepEqual(shifts.state.calls.at(-1), ['today', undefined, undefined, SM1]);
@@ -416,7 +426,7 @@ render();
   assert.match(sm1, /Loading remittance…/);
   assert.match(sm1, /Loading branch details…/);
   assert.match(sm1, /Transfer discrepancies 2 missing/, 'summary badges come from the list row while details load');
-  assert.doesNotMatch(sm1, /Cash remitted|CURRENT INVENTORY/);
+  assert.doesNotMatch(sm1, /Cash remitted|CURRENT INVENTORY|DISCREPANCY DETAILS/);
 }
 
 // 7. Error states: list error, then per-card errors with Retry; no amounts shown in place of errors.
@@ -458,6 +468,7 @@ render();
 {
   const sm1 = cardSlice(tap(header('SM1')), 'SM1');
   assert.match(sm1, /Cash remitted None yet/);
+  assert.match(sm1, /DISCREPANCY DETAILS No transfer or return discrepancies in this period\./);
   assert.match(sm1, /No stock on hand at this branch\./);
   assert.match(sm1, /No stock transfers sent to this branch in this period\./);
 }
@@ -485,5 +496,5 @@ recon.state.details[SM1] = query({ data: detailsFor(SM1, 'SM1') });
 }
 
 console.log(
-  'Branch Performance card tests passed: collapsed by default, independent expand/collapse, per-branch details, range-driven queries, loading/error/empty states, remittance kept apart from sales, navigation preserved.',
+  'Branch Performance card tests passed: collapsed by default with summary discrepancy badges, independent expand/collapse, per-branch details, range-driven queries, loading/error/empty states, remittance kept apart from sales, navigation preserved.',
 );

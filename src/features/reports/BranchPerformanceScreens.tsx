@@ -137,6 +137,8 @@ function BranchPerformanceCard({
   onToggle: () => void;
   range: RangeArgs;
 }) {
+  const transferSummary = discrepancySummary(item.transfer_missing_qty, item.transfer_excess_qty);
+  const returnSummary = discrepancySummary(item.return_missing_qty, item.return_excess_qty);
   const accent = accentForRank(rank);
   const barColors = [accent.icon, accent.gradient[0]] as const;
 
@@ -185,24 +187,32 @@ function BranchPerformanceCard({
             <Text style={styles.branchStatLabel}>Items sold</Text>
           </View>
         </View>
+
+        <View style={styles.branchDivider} />
+
+        <View style={styles.branchBadgeRow}>
+          <Text style={styles.branchBadgeLabel}>Transfer discrepancies</Text>
+          <ManagerBadge label={transferSummary.label} tone={transferSummary.tone} />
+        </View>
+        <View style={styles.branchBadgeRow}>
+          <Text style={styles.branchBadgeLabel}>Return discrepancies</Text>
+          <ManagerBadge label={returnSummary.label} tone={returnSummary.tone} />
+        </View>
+        {showOlderReturnHint && returnSummary.label === 'None' ? (
+          <Text style={styles.olderHint}>
+            None in this range. Open the branch or switch to All Time to see older Main receive differences.
+          </Text>
+        ) : null}
       </Pressable>
 
-      {expanded ? <BranchCardDetails item={item} range={range} showOlderReturnHint={showOlderReturnHint} /> : null}
+      {expanded ? <BranchCardDetails item={item} range={range} /> : null}
     </View>
   );
 }
 
 const DETAIL_LIST_LIMIT = 5;
 
-function BranchCardDetails({
-  item,
-  range,
-  showOlderReturnHint,
-}: {
-  item: BranchPerformanceItem;
-  range: RangeArgs;
-  showOlderReturnHint: boolean;
-}) {
+function BranchCardDetails({ item, range }: { item: BranchPerformanceItem; range: RangeArgs }) {
   const { rpcRangeType, startIso, endIso } = range;
   const details = useBranchPerformanceDetails(item.branch_id, rpcRangeType, startIso, endIso);
   const remittance = useShiftRemittances(rpcRangeType, startIso, endIso, item.branch_id);
@@ -217,8 +227,6 @@ function BranchCardDetails({
     [rpcRangeType, startIso, endIso],
   );
 
-  const transferSummary = discrepancySummary(item.transfer_missing_qty, item.transfer_excess_qty);
-  const returnSummary = discrepancySummary(item.return_missing_qty, item.return_excess_qty);
   const data = details.data;
   const inventory = inventoryPreview(data?.current_inventory ?? []);
   const transfers = transfersInWindow(data?.recent_transfers ?? [], reportWindow);
@@ -261,11 +269,10 @@ function BranchCardDetails({
         />
       ) : null}
 
-      <Text style={styles.detailTitle}>DISCREPANCIES</Text>
-      <View style={styles.branchBadgeRow}>
-        <Text style={styles.branchBadgeLabel}>Transfer discrepancies</Text>
-        <ManagerBadge label={transferSummary.label} tone={transferSummary.tone} />
-      </View>
+      {data ? <Text style={styles.detailTitle}>DISCREPANCY DETAILS</Text> : null}
+      {data && data.transfer_discrepancies.length + data.return_discrepancies.length === 0 ? (
+        <Text style={styles.mutedText}>No transfer or return discrepancies in this period.</Text>
+      ) : null}
       {data?.transfer_discrepancies.slice(0, DETAIL_LIST_LIMIT).map((disc) => (
         <DetailRow
           key={disc.id}
@@ -276,10 +283,6 @@ function BranchCardDetails({
           onPress={() => router.push(`/owner/reports/discrepancies/transfer/${disc.id}` as never)}
         />
       ))}
-      <View style={styles.branchBadgeRow}>
-        <Text style={styles.branchBadgeLabel}>Return discrepancies</Text>
-        <ManagerBadge label={returnSummary.label} tone={returnSummary.tone} />
-      </View>
       {data?.return_discrepancies.slice(0, DETAIL_LIST_LIMIT).map((disc) => (
         <DetailRow
           key={disc.id}
@@ -290,11 +293,6 @@ function BranchCardDetails({
           onPress={() => router.push(`/owner/reports/discrepancies/return/${disc.id}` as never)}
         />
       ))}
-      {showOlderReturnHint && returnSummary.label === 'None' ? (
-        <Text style={styles.olderHint}>
-          None in this range. Open the branch or switch to All Time to see older Main receive differences.
-        </Text>
-      ) : null}
       {data &&
       (data.transfer_discrepancies.length > DETAIL_LIST_LIMIT || data.return_discrepancies.length > DETAIL_LIST_LIMIT) ? (
         <Text style={styles.olderHint}>Showing the latest {DETAIL_LIST_LIMIT} of each. See the full branch report for all.</Text>
