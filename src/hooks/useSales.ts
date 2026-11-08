@@ -7,6 +7,7 @@ import {
   getManagerRecentSales,
   getOwnerDailyProductSummary,
   getOwnerDashboardMetrics,
+  getOwnerTodayBranchSales,
   getSale,
   listBranchSalesLog,
   reportBranchDailySales,
@@ -84,6 +85,15 @@ export function useOwnerDailyProductSummary() {
   return useQuery({
     queryKey: queryKeys.ownerDailyProductSummary,
     queryFn: getOwnerDailyProductSummary,
+  });
+}
+
+/** Today's per-branch sales for the owner dashboard. Keyed under the owner dashboard so a completed
+ * sale (which invalidates that prefix) refreshes it with the other dashboard numbers. */
+export function useOwnerTodayBranchSales() {
+  return useQuery({
+    queryKey: queryKeys.ownerTodayBranchSales,
+    queryFn: getOwnerTodayBranchSales,
   });
 }
 

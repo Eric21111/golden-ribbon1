@@ -11,6 +11,7 @@ import type {
   ManagerDashboardMetrics,
   OwnerDailyProductSummaryItem,
   OwnerDashboardMetrics,
+  OwnerTodayBranchSales,
   Product,
   ProductSalesReportItem,
   Profile,
@@ -237,6 +238,24 @@ export async function reportProductSales(
   });
   if (error) throw error;
   return (data as unknown as ProductSalesReportItem[]) ?? [];
+}
+
+function missingDeployedFunction(error: unknown, name: string): boolean {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? '');
+  return code === 'PGRST202' || new RegExp(`could not find the function public\\.${name}`, 'i').test(message);
+}
+
+/** Today's completed sales per selling branch, including branches deactivated since they sold today.
+ * Until the get_owner_today_branch_sales migration is applied, falls back to the active-branch report. */
+export async function getOwnerTodayBranchSales(): Promise<OwnerTodayBranchSales> {
+  const { data, error } = await supabase.rpc('get_owner_today_branch_sales');
+  if (error && missingDeployedFunction(error, 'get_owner_today_branch_sales')) {
+    return { business_date: null, branches: await reportSalesByBranch('today') };
+  }
+  if (error) throw error;
+  const result = data as unknown as Partial<OwnerTodayBranchSales> | null;
+  return { business_date: result?.business_date ?? null, branches: result?.branches ?? [] };
 }
 
 export async function getOwnerDashboardMetrics(): Promise<OwnerDashboardMetrics> {

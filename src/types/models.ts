@@ -591,6 +591,12 @@ export type BranchSalesReportItem = {
   total_sales: number;
 };
 
+export type OwnerTodayBranchSales = {
+  /** Asia/Manila business date (YYYY-MM-DD) the server used. */
+  business_date: string | null;
+  branches: (BranchSalesReportItem & { is_active?: boolean })[];
+};
+
 export type BranchDailySalesItem = {
   business_date: string;
   transaction_count: number;

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -7,14 +7,21 @@ import { Screen } from '@/components/Screen';
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { buildTodayQuickview, todayQuickviewStatus } from '@/features/reports/todayQuickview';
 import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive';
-import { useOwnerDailyProductSummary, useOwnerDashboardMetrics } from '@/hooks/useSales';
+import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
+import {
+  useOwnerDailyProductSummary,
+  useOwnerDashboardMetrics,
+  useOwnerTodayBranchSales,
+} from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 
@@ -31,23 +38,72 @@ function Row({ children }: { children: ReactNode }) {
   return <View style={styles.row}>{children}</View>;
 }
 
+function chunkPairs<T>(items: readonly T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
+  return rows;
+}
+
+function QuickviewError({ message, retrying, onRetry }: { message: string; retrying: boolean; onRetry: () => void }) {
+  return (
+    <View style={styles.inlineErrorCard} accessibilityLiveRegion="polite">
+      <Text style={styles.inlineErrorTitle}>Couldn&apos;t load today&apos;s branch revenue.</Text>
+      <Text style={styles.inlineErrorBody}>{message}</Text>
+      <ManagerActionButton label="Retry" icon="refresh-outline" variant="secondary" loading={retrying} onPress={onRetry} />
+    </View>
+  );
+}
+
 export default function OwnerDashboard() {
   const { profile } = useAuth();
   const metricsQuery = useOwnerDashboardMetrics();
   const summaryQuery = useOwnerDailyProductSummary();
+  const branchSalesQuery = useOwnerTodayBranchSales();
   const archiveQuery = useArchiveStatus();
   const dismissReminder = useDismissArchiveReminder();
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const metrics = metricsQuery.data;
   const summary = summaryQuery.data ?? [];
   const archive = archiveQuery.data;
-  const refreshing = metricsQuery.isRefetching || summaryQuery.isRefetching || archiveQuery.isRefetching;
+  const quickview = useMemo(
+    () => buildTodayQuickview(branchSalesQuery.data?.branches),
+    [branchSalesQuery.data],
+  );
+  const quickviewStatus = todayQuickviewStatus(branchSalesQuery);
+  const quickviewReady = quickviewStatus === 'ready';
+  const retryQuickview = () => void branchSalesQuery.refetch();
+  const quickviewError =
+    quickviewStatus === 'error' ? (
+      <QuickviewError
+        message={getErrorMessage(branchSalesQuery.error)}
+        retrying={branchSalesQuery.isFetching}
+        onRetry={retryQuickview}
+      />
+    ) : null;
+  const refreshing =
+    metricsQuery.isRefetching ||
+    summaryQuery.isRefetching ||
+    branchSalesQuery.isRefetching ||
+    archiveQuery.isRefetching;
   const ownerName = profile?.full_name ?? 'Owner';
 
   const refresh = () => {
     void metricsQuery.refetch();
     void summaryQuery.refetch();
+    void branchSalesQuery.refetch();
     void archiveQuery.refetch();
+  };
+
+  useManilaDayRefresh(() => {
+    void metricsQuery.refetch();
+    void summaryQuery.refetch();
+    void branchSalesQuery.refetch();
+  });
+
+  const openReport = (path: '/owner/reports/sales-by-branch' | '/owner/reports/product-sales') => {
+    setDetailsOpen(false);
+    router.push(path);
   };
 
   return (
@@ -134,33 +190,47 @@ export default function OwnerDashboard() {
               </View>
             ) : null}
 
-            <Section title="TODAY">
-              <Row>
-                <StatTile
-                  style={styles.half}
-                  emphasis
-                  icon="cash-outline"
-                  label="Today's revenue"
-                  value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                  onPress={() => router.push('/owner/reports/sales-by-branch')}
-                />
-              </Row>
-              <Row>
-                <StatTile
-                  style={styles.half}
-                  icon="receipt-outline"
-                  label="Transactions"
-                  value={metrics?.today_transactions ?? '—'}
-                  onPress={() => router.push('/owner/reports/sales-by-branch')}
-                />
-                <StatTile
-                  style={styles.half}
-                  icon="cube-outline"
-                  label="Items sold"
-                  value={metrics?.today_units_sold ?? '—'}
-                  onPress={() => router.push('/owner/reports/product-sales')}
-                />
-              </Row>
+            <Section title="Today Quickview">
+              <StatTile
+                emphasis
+                layout="wide"
+                icon="cash-outline"
+                label="Total · selling branches"
+                value={quickviewReady ? formatMoney(quickview.totalRevenue) : '—'}
+                onPress={() => setDetailsOpen(true)}
+              />
+              {quickviewStatus === 'loading' ? (
+                <LoadingState label="Loading branch revenue…" />
+              ) : quickviewStatus === 'error' ? (
+                quickviewError
+              ) : quickview.branches.length === 0 ? (
+                <View style={styles.quietCard}>
+                  <Text style={styles.quiet}>No active selling branches.</Text>
+                </View>
+              ) : (
+                chunkPairs(quickview.branches).map((pair) => (
+                  <Row key={pair.map((branch) => branch.branchId).join(':')}>
+                    {pair.map((branch) => (
+                      <StatTile
+                        key={branch.branchId}
+                        style={styles.half}
+                        compact
+                        icon="storefront-outline"
+                        label={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
+                        value={formatMoney(branch.revenue)}
+                        onPress={() => router.push('/owner/reports/sales-by-branch')}
+                      />
+                    ))}
+                    {pair.length === 1 ? <View style={styles.half} /> : null}
+                  </Row>
+                ))
+              )}
+              <ManagerActionButton
+                label="Transactions & items sold"
+                icon="receipt-outline"
+                variant="secondary"
+                onPress={() => setDetailsOpen(true)}
+              />
             </Section>
 
             <Section title="TODAY'S PRODUCT PERFORMANCE">
@@ -254,6 +324,54 @@ export default function OwnerDashboard() {
           </View>
         )}
       </ConstrainedWidth>
+
+      <ManagerBottomSheet
+        visible={detailsOpen}
+        title="Today's sales details"
+        onClose={() => setDetailsOpen(false)}
+        scroll
+      >
+        <Row>
+          <StatTile
+            style={styles.half}
+            compact
+            icon="receipt-outline"
+            label="Transactions"
+            value={quickviewReady ? quickview.totalTransactions : '—'}
+          />
+          <StatTile
+            style={styles.half}
+            compact
+            icon="cube-outline"
+            label="Items sold"
+            value={metrics?.today_units_sold ?? '—'}
+          />
+        </Row>
+        {quickviewError}
+        {(quickviewReady ? quickview.branches : []).map((branch) => (
+          <ListRowCard
+            key={branch.branchId}
+            icon="storefront-outline"
+            title={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
+            meta={`${branch.transactions} transaction${branch.transactions === 1 ? '' : 's'}`}
+            trailing={<Text style={styles.revenue}>{formatMoney(branch.revenue)}</Text>}
+          />
+        ))}
+        <Text style={styles.quiet}>
+          Completed sales for today (Asia/Manila). Sales revenue, not cash remitted.
+        </Text>
+        <ManagerActionButton
+          label="Sales by Branch"
+          icon="stats-chart-outline"
+          onPress={() => openReport('/owner/reports/sales-by-branch')}
+        />
+        <ManagerActionButton
+          label="Product Sales"
+          icon="pricetag-outline"
+          variant="secondary"
+          onPress={() => openReport('/owner/reports/product-sales')}
+        />
+      </ManagerBottomSheet>
     </Screen>
   );
 }
@@ -324,4 +442,12 @@ const styles = StyleSheet.create({
   reminderTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
   reminderBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   reminderActions: { gap: spacing.sm },
+  inlineErrorCard: {
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 16,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  inlineErrorTitle: { color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  inlineErrorBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
 });
