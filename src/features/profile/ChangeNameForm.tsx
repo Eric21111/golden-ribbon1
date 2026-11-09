@@ -19,7 +19,6 @@ type ChangeNameFormProps = {
   currentName: string;
   onSuccess?: () => void;
   onCancel?: () => void;
-  hintStyle?: StyleProp<TextStyle>;
   labelStyle?: StyleProp<TextStyle>;
   inputStyle?: StyleProp<TextStyle>;
   errorStyle?: StyleProp<TextStyle>;
@@ -35,7 +34,6 @@ export function ChangeNameForm({
   currentName,
   onSuccess,
   onCancel,
-  hintStyle,
   labelStyle,
   inputStyle,
   errorStyle,
@@ -77,7 +75,7 @@ export function ChangeNameForm({
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.employees });
       reset({ full_name: fullName });
-      setSuccess('Name updated successfully.');
+      setSuccess('Name updated.');
     } catch (error) {
       setError('root', { message: getChangeNameErrorMessage(error) });
     } finally {
@@ -87,16 +85,12 @@ export function ChangeNameForm({
 
   return (
     <View style={styles.form}>
-      <Text style={[styles.hint, hintStyle]}>
-        Updates your own display name only. Role, branch, and active status are not changed.
-      </Text>
       <Controller
         control={control}
         name="full_name"
         render={({ field, fieldState }) => (
           <FormField
-            label="Full Name"
-            placeholder="Enter your full name"
+            label="Full name"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -116,41 +110,48 @@ export function ChangeNameForm({
         <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
       ) : null}
       {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
-      {renderSubmitButton ? (
-        renderSubmitButton({
-          loading: formState.isSubmitting,
-          disabled: formState.isSubmitting,
-          onPress: handleSubmit(submit),
-        })
-      ) : (
-        <AppButton
-          label="Save name"
-          loading={formState.isSubmitting}
-          disabled={formState.isSubmitting}
-          onPress={handleSubmit(submit)}
-          labelStyle={buttonLabelStyle}
-        />
-      )}
-      {onCancel ? (
-        renderCancelButton ? (
-          renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
-        ) : (
-          <AppButton
-            label="Cancel"
-            variant="secondary"
-            disabled={formState.isSubmitting}
-            onPress={onCancel}
-            labelStyle={buttonLabelStyle}
-          />
-        )
-      ) : null}
+      <View style={styles.actions}>
+        {onCancel ? (
+          <View style={styles.action}>
+            {renderCancelButton ? (
+              renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
+            ) : (
+              <AppButton
+                label="Cancel"
+                variant="secondary"
+                disabled={formState.isSubmitting}
+                onPress={onCancel}
+                labelStyle={buttonLabelStyle}
+              />
+            )}
+          </View>
+        ) : null}
+        <View style={styles.action}>
+          {renderSubmitButton ? (
+            renderSubmitButton({
+              loading: formState.isSubmitting,
+              disabled: formState.isSubmitting,
+              onPress: handleSubmit(submit),
+            })
+          ) : (
+            <AppButton
+              label="Save"
+              loading={formState.isSubmitting}
+              disabled={formState.isSubmitting}
+              onPress={handleSubmit(submit)}
+              labelStyle={buttonLabelStyle}
+            />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   form: { gap: spacing.md },
-  hint: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  action: { flex: 1 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   success: { color: colors.success, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 });

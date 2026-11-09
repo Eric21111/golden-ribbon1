@@ -35,16 +35,13 @@ export function ResetPasswordForm({
       <Text style={styles.subtitle}>
         {employeeName} · {employeeEmail}
       </Text>
-      <Text style={styles.notice}>
-        This replaces the employee's password. The existing password cannot be viewed.
-      </Text>
+      <Text style={styles.notice}>This replaces the employee&apos;s password.</Text>
       <Controller
         control={control}
         name="password"
         render={({ field, fieldState }) => (
           <FormField
-            label="New Temporary Password"
-            placeholder="Enter new temporary password"
+            label="New temporary password"
             autoCapitalize="none"
             autoCorrect={false}
             textContentType="newPassword"
@@ -69,8 +66,7 @@ export function ResetPasswordForm({
         name="confirm_password"
         render={({ field, fieldState }) => (
           <FormField
-            label="Confirm Temporary Password"
-            placeholder="Re-enter temporary password"
+            label="Confirm password"
             autoCapitalize="none"
             autoCorrect={false}
             textContentType="newPassword"

@@ -1,0 +1,73 @@
+# Transfers Tab
+
+Owner Transfers and Manager Incoming lists. Cashiers confirm shipment arrival. Manager Incoming is read-only.
+
+| Role | Bottom tab | Route | Screen |
+|------|------------|-------|--------|
+| Owner | Transfers | `/owner/transfers` | `app/(owner)/owner/transfers/index.tsx` |
+| Manager | Incoming | `/manager/incoming` | `app/(manager)/manager/incoming/index.tsx` |
+
+Shared: `src/features/transfers/TransferHub.tsx`
+
+**Tablet:** Owner Transfers use a centered list. Manager Incoming is a read-only list and detail.
+
+---
+
+## Shell
+
+```
+Header (title + context)     [⋯]
+Search
+Status filter (+ Destination for Owner)
+Transfer list (pull to refresh)
+Sticky primary CTA (Owner only)
+```
+
+| Element | Behavior |
+|---------|----------|
+| Search | Transfer #, from/to branch name (client-side) |
+| Status | Owner: dropdown (default **All Status**). Manager: chips (default Pending) |
+| Destination | Owner: dropdown (default **All Branches**) |
+| Status filter | Server filter via `useTransfers` |
+| Row tap | Stack detail / receive screen |
+| Pull to refresh | Refetch list |
+
+---
+
+## Owner — Transfers
+
+**Context:** Main → branches  
+**Default status:** All Status (`''`) — shows Pending, Received, and Discrepancy until filtered.
+**Primary CTA:** Create transfer → `/owner/transfers/create`
+
+**Overflow**
+
+| Label | Destination |
+|-------|-------------|
+| Transfer discrepancies | `/owner/reports/transfer-discrepancies` |
+
+**Row →** `/owner/transfers/[id]` (read-only detail)
+
+---
+
+## Manager — Incoming
+
+**Context:** Assigned branch name  
+**Default status:** Pending (`pending_receipt`) — action queue first  
+**No sticky CTA** (cashiers confirm arrival; managers do not receive)
+
+**Status chip order:** Pending · All · Received · Discrepancy
+
+**Row →** `/manager/incoming/[id]` (read-only; pending shipments are confirmed by the assigned cashier)
+
+---
+
+## Related flows (unchanged Phase 1)
+
+| Flow | Route |
+|------|-------|
+| Create / review / send | `/owner/transfers/create` |
+| Owner detail | `/owner/transfers/[id]` |
+| Manager incoming detail | `/manager/incoming/[id]` (read-only) |
+
+Phase 2 (not in this pass): product search on create, confirm alerts on send/receive.

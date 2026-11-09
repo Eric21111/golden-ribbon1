@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
+import { confirmAction } from '@/lib/confirmAction';
 import { formatMoney } from '@/lib/format';
 import { cartLineKey, cartTotalCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
@@ -42,7 +42,6 @@ export function PosViewOrderSheet({
   onConfirm,
   onClose,
 }: PosViewOrderSheetProps) {
-  const [confirmClear, setConfirmClear] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalCents = cartTotalCents(items);
   const totalByProduct = new Map<string, number>();
@@ -90,33 +89,23 @@ export function PosViewOrderSheet({
         </View>
 
         <View style={styles.actions}>
-          <ManagerActionButton
-            label="Confirm Order"
-            icon="checkmark-circle-outline"
-            disabled={items.length === 0}
-            onPress={onConfirm}
-          />
           {items.length > 0 ? (
-            <View style={styles.clearBlock}>
-              <Text style={styles.clearHint}>
-                {confirmClear
-                  ? 'Tap again to remove every product from this order.'
-                  : 'Clear order removes every product. Nothing is sold.'}
-              </Text>
+            <View style={styles.action}>
               <ManagerActionButton
-                label={confirmClear ? 'Clear order now' : 'Clear order'}
+                label="Clear"
                 variant="secondary"
-                onPress={() => {
-                  if (!confirmClear) {
-                    setConfirmClear(true);
-                    return;
-                  }
-                  setConfirmClear(false);
-                  onClear();
-                }}
+                onPress={() => confirmAction('Clear order?', 'Remove every product from this order.', onClear, { confirm: 'Clear', tone: 'danger' })}
               />
             </View>
           ) : null}
+          <View style={styles.action}>
+            <ManagerActionButton
+              label="Confirm"
+              icon="checkmark-circle-outline"
+              disabled={items.length === 0}
+              onPress={onConfirm}
+            />
+          </View>
         </View>
       </View>
     </ManagerBottomSheet>
@@ -138,7 +127,6 @@ const styles = StyleSheet.create({
   },
   totalMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14, flex: 1 },
   totalAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 21 },
-  actions: { gap: 10 },
-  clearBlock: { gap: 8 },
-  clearHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  actions: { flexDirection: 'row', gap: 10 },
+  action: { flex: 1 },
 });

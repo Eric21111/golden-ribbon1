@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 
+/** What the dialog's icon says: warning (be careful), danger (can't be undone / went wrong), info, success. */
+export type AlertTone = 'warning' | 'danger' | 'info' | 'success';
+
 type ConfirmRequest = {
   kind: 'confirm';
+  tone: AlertTone;
   title: string;
   message: string;
   cancelLabel: string;
@@ -11,6 +15,7 @@ type ConfirmRequest = {
 
 type NoticeRequest = {
   kind: 'notice';
+  tone: AlertTone;
   title: string;
   message: string;
 };

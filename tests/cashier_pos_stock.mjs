@@ -72,7 +72,8 @@ assert.doesNotMatch(posSource, /for \(let i = 0; i < quantity/);
 
 const sheetSource = readFileSync('src/features/pos/PosItemSheet.tsx', 'utf8');
 assert.match(sheetSource, /Math.min\(Math.max\(0, parsed\), remaining\)/);
-assert.match(sheetSource, /Maximum available quantity selected/);
+assert.doesNotMatch(sheetSource, /Maximum available quantity selected/, 'no sentence at the limit: the + button is simply off');
+assert.match(sheetSource, /disabled=\{atLimit \|\| remaining <= 0\}/, 'the + button is off at the limit');
 
 const cartSource = readFileSync('src/stores/cartStore.ts', 'utf8');
 assert.match(cartSource, /Math.min\(nextQuantity, Math.max\(0, quantity_on_hand - otherQuantity\)\)/);

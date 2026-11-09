@@ -345,6 +345,7 @@ export default function ManagerProductListScreen() {
     confirmAction(DISCARD_DIALOG.title, DISCARD_DIALOG.message, closeNow, {
       cancel: DISCARD_DIALOG.cancel,
       confirm: DISCARD_DIALOG.confirm,
+      tone: 'danger',
     });
   };
 
@@ -360,6 +361,7 @@ export default function ManagerProductListScreen() {
     confirmAction(DISCARD_DIALOG.title, DISCARD_DIALOG.message, closeNow, {
       cancel: DISCARD_DIALOG.cancel,
       confirm: DISCARD_DIALOG.confirm,
+      tone: 'danger',
     });
   };
 

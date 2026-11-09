@@ -62,6 +62,7 @@ export function QuantityListScreen({
   quantities,
   onQuantityChange,
   showMax = false,
+  capAtOnHand = false,
   emptyTitle,
   emptyMessage,
   formError,
@@ -81,6 +82,8 @@ export function QuantityListScreen({
   onQuantityChange: (id: string, value: string) => void;
   /** A "Max" button that fills in everything on hand. */
   showMax?: boolean;
+  /** The quantity can never go above what is on hand (typing, + and Max all stop there). For a return: the database refuses more. */
+  capAtOnHand?: boolean;
   emptyTitle: string;
   emptyMessage: string;
   formError?: string | null;
@@ -138,7 +141,9 @@ export function QuantityListScreen({
             const raw = quantities[row.id] ?? '';
             const current = Number.parseInt(raw || '0', 10) || 0;
             const atMin = current <= 0;
-            const atMax = showMax && current >= row.onHand;
+            const atOnHand = current >= row.onHand;
+            // + is off at the ceiling only when there is one (a purchase can be any amount)
+            const atCeiling = capAtOnHand && atOnHand;
             return (
               <View key={row.id} style={[styles.card, current > 0 && styles.cardSelected]}>
                 <View style={styles.cardTop}>
@@ -182,7 +187,10 @@ export function QuantityListScreen({
                         onFocus={() => setFocusedId(row.id)}
                         onBlur={() => setFocusedId((id) => (id === row.id ? null : id))}
                         onChangeText={(value) => {
-                          if (value === '' || /^\d{1,6}$/.test(value)) onQuantityChange(row.id, value);
+                          if (value === '' || /^\d{1,6}$/.test(value)) {
+                            // typing 999 past what is on hand settles at what is on hand
+                            onQuantityChange(row.id, capAtOnHand && Number(value) > row.onHand ? String(row.onHand) : value);
+                          }
                         }}
                         style={styles.stepperInput}
                       />
@@ -190,25 +198,26 @@ export function QuantityListScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`Increase quantity for ${row.name}`}
                         hitSlop={6}
-                        onPress={() => onQuantityChange(row.id, String(Math.min(999999, current + 1)))}
-                        style={({ pressed }) => [styles.stepperButton, pressed && styles.stepperButtonPressed]}
+                        disabled={atCeiling}
+                        onPress={() => onQuantityChange(row.id, String(Math.min(capAtOnHand ? row.onHand : 999999, current + 1)))}
+                        style={({ pressed }) => [styles.stepperButton, pressed && !atCeiling && styles.stepperButtonPressed]}
                       >
-                        <Text style={styles.stepperSymbol}>+</Text>
+                        <Text style={[styles.stepperSymbol, atCeiling && styles.stepperSymbolDisabled]}>+</Text>
                       </Pressable>
                     </View>
                     {showMax ? (
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`All ${row.onHand} on hand for ${row.name}`}
-                        disabled={atMax}
+                        disabled={atOnHand}
                         onPress={() => onQuantityChange(row.id, String(row.onHand))}
                         style={({ pressed }) => [
                           styles.maxButton,
-                          atMax && styles.maxButtonDisabled,
-                          pressed && !atMax && styles.pressed,
+                          atOnHand && styles.maxButtonDisabled,
+                          pressed && !atOnHand && styles.pressed,
                         ]}
                       >
-                        <Text style={[styles.maxButtonText, atMax && styles.maxButtonTextDisabled]}>Max</Text>
+                        <Text style={[styles.maxButtonText, atOnHand && styles.maxButtonTextDisabled]}>Max</Text>
                       </Pressable>
                     ) : null}
                   </View>

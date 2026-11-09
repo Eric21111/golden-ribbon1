@@ -5,11 +5,12 @@ import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_
 
 const cashierCreate = readFileSync('app/(cashier)/cashier/returns/create.tsx', 'utf8');
 assert.match(cashierCreate, /createStockReturn/);
-// the counted quantity is shown against the system's: "System 25", and "20 short" / "n over" / "Matches system" (the difference)
+// the counted quantity is shown against the system's: "System 25", and "20 short" / "Matches system" (the database refuses more than is on hand, so never "over")
 assert.match(cashierCreate, /caption: `System \$\{entry\.system\}`/);
 assert.match(cashierCreate, /Review return/);
 assert.match(cashierCreate, /const difference = entry\.quantity - entry\.system;/);
-assert.match(cashierCreate, /short.*over|over.*short/s);
+assert.match(cashierCreate, /\$\{-difference\} short/);
+assert.doesNotMatch(cashierCreate, /\$\{difference\} over|n over/, 'no "over" tag: it could never be sent');
 assert.match(cashierCreate, /Matches system/);
 assert.doesNotMatch(cashierCreate, /Expected remaining and any difference appear/);
 assert.doesNotMatch(cashierCreate, /returnLeftoverStock/);

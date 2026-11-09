@@ -158,7 +158,7 @@ function FilterRow({
   );
 }
 
-/** Enable Product, Show in Cashier POS and Keep Unsold Stock at Branch as three rows. Changes apply straight away; Done just closes. */
+/** Enable Product, Show in Cashier POS and Keep Unsold Stock at Branch as three rows. Changes apply straight away; Close (or Reset) is all there is. */
 export function ProductFiltersSheet({
   visible,
   filters,
@@ -197,8 +197,8 @@ export function ProductFiltersSheet({
             />
           ))}
         </View>
-        <View style={styles.actions}>
-          {on > 0 ? (
+        {on > 0 ? (
+          <View style={styles.actions}>
             <View style={styles.actionHalf}>
               <ManagerActionButton
                 label="Reset"
@@ -209,11 +209,8 @@ export function ProductFiltersSheet({
                 }}
               />
             </View>
-          ) : null}
-          <View style={styles.actionWide}>
-            <ManagerActionButton label="Done" onPress={onClose} />
           </View>
-        </View>
+        ) : null}
       </View>
     </ManagerBottomSheet>
   );
@@ -239,7 +236,7 @@ export function categoryOptionsWithIcons() {
 
 /**
  * The same filters for the stock lists (Main Inventory, Opening stock, Send stock, the cashier POS). `keys` are the rows the
- * screen offers. Changes apply straight away; Done just closes.
+ * screen offers. Changes apply straight away, like Sort: a sheet with a single row also closes when its choice is made.
  */
 export function ListFiltersSheet({
   visible,
@@ -252,8 +249,8 @@ export function ListFiltersSheet({
   visible: boolean;
   filters: ListFilters;
   keys: ListFilterKey[];
-  /** A row only this screen has (Opening stock: Stock = All / Not set / Has stock), shown after `keys`. "all" is its off state. */
-  extra?: ExtraListFilter;
+  /** Rows only this screen has (Opening stock: Stock = All / Not set / Has stock; Employees: Role, Branch), shown after `keys`. "all" is a row's off state. */
+  extra?: ExtraListFilter | ExtraListFilter[];
   onChange: (next: ListFilters) => void;
   onClose: () => void;
 }) {
@@ -261,9 +258,10 @@ export function ListFiltersSheet({
   useEffect(() => {
     if (!visible) setOpenKey(null);
   }, [visible]);
-  const on = countListFilters(filters, keys) + (extra && extra.value !== 'all' ? 1 : 0);
+  const extras = toExtras(extra);
+  const on = countListFilters(filters, keys) + extras.filter((row) => row.value !== 'all').length;
   const categoryOptions = categoryOptionsWithIcons();
-  const rowCount = keys.length + (extra ? 1 : 0);
+  const rowCount = keys.length + extras.length;
 
   return (
     <ManagerBottomSheet visible={visible} title="Filters" onClose={onClose}>
@@ -281,46 +279,49 @@ export function ListFiltersSheet({
               onPick={(value) => {
                 onChange({ ...filters, [key]: value } as ListFilters);
                 setOpenKey(null);
+                if (rowCount === 1) onClose();
               }}
             />
           ))}
-          {extra ? (
+          {extras.map((row, index) => (
             <FilterRow
-              title={extra.title}
-              options={extra.options}
-              value={extra.value}
-              open={openKey === 'extra'}
-              isLast
-              onToggle={() => setOpenKey((current) => (current === 'extra' ? null : 'extra'))}
+              key={`extra-${index}`}
+              title={row.title}
+              options={row.options}
+              value={row.value}
+              open={openKey === `extra-${index}`}
+              isLast={keys.length + index === rowCount - 1}
+              onToggle={() => setOpenKey((current) => (current === `extra-${index}` ? null : `extra-${index}`))}
               onPick={(value) => {
-                extra.onChange(value);
+                row.onChange(value);
                 setOpenKey(null);
+                if (rowCount === 1) onClose();
               }}
             />
-          ) : null}
+          ))}
         </View>
-        <View style={styles.actions}>
-          {on > 0 ? (
+        {on > 0 ? (
+          <View style={styles.actions}>
             <View style={styles.actionHalf}>
               <ManagerActionButton
                 label="Reset"
                 variant="secondary"
                 onPress={() => {
                   onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
-                  extra?.onChange('all');
+                  extras.forEach((row) => row.onChange('all'));
                   setOpenKey(null);
                 }}
               />
             </View>
-          ) : null}
-          <View style={styles.actionWide}>
-            <ManagerActionButton label="Done" onPress={onClose} />
           </View>
-        </View>
+        ) : null}
       </View>
     </ManagerBottomSheet>
   );
 }
+
+/** One row, or several, in the list. */
+const toExtras = (extra: ExtraListFilter | ExtraListFilter[] | undefined): ExtraListFilter[] => (extra == null ? [] : Array.isArray(extra) ? extra : [extra]);
 
 /** A filter row that belongs to one screen only. `value` "all" means it is off. */
 export type ExtraListFilter = {
@@ -342,16 +343,19 @@ export function ListFilterSummary({
   countText: string;
   filters: ListFilters;
   keys: ListFilterKey[];
-  /** The screen's own sheet row (see ListFiltersSheet): a tag while it is on, cleared by "Clear all" too. */
-  extra?: ExtraListFilter;
+  /** The screen's own sheet row(s) (see ListFiltersSheet): a tag while each is on, cleared by "Clear all" too. */
+  extra?: ExtraListFilter | ExtraListFilter[];
   onChange: (next: ListFilters) => void;
 }) {
-  const extraLabel = extra && extra.value !== 'all' ? extra.options.find((option) => option.value === extra.value)?.label ?? 'Filter' : null;
-  const tags: Array<{ key: string; label: string }> = [...listFilterTags(filters, keys), ...(extraLabel ? [{ key: 'extra', label: extraLabel }] : [])];
+  const extras = toExtras(extra);
+  const extraTags = extras.flatMap((row, index) =>
+    row.value !== 'all' ? [{ key: `extra-${index}`, label: row.options.find((option) => option.value === row.value)?.label ?? 'Filter' }] : [],
+  );
+  const tags: Array<{ key: string; label: string }> = [...listFilterTags(filters, keys), ...extraTags];
   if (tags.length === 0) return null;
   const clearAll = () => {
     onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
-    extra?.onChange('all');
+    extras.forEach((row) => row.onChange('all'));
   };
   return (
     <View style={styles.summary}>
@@ -369,7 +373,7 @@ export function ListFilterSummary({
             key={tag.key}
             accessibilityRole="button"
             accessibilityLabel={`Remove filter ${tag.label}`}
-            onPress={() => (tag.key === 'extra' ? extra?.onChange('all') : onChange({ ...filters, [tag.key]: DEFAULT_LIST_FILTERS[tag.key as ListFilterKey] }))}
+            onPress={() => (tag.key.startsWith('extra-') ? extras[Number(tag.key.slice(6))]?.onChange('all') : onChange({ ...filters, [tag.key]: DEFAULT_LIST_FILTERS[tag.key as ListFilterKey] }))}
             style={({ pressed }) => [styles.tag, pressed && styles.pressed]}
           >
             <Text style={styles.tagText}>{tag.label}</Text>
@@ -436,5 +440,4 @@ const styles = StyleSheet.create({
   optionLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
   actions: { flexDirection: 'row', gap: 10 },
   actionHalf: { flex: 1 },
-  actionWide: { flex: 2 },
 });

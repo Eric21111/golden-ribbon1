@@ -21,6 +21,24 @@ export const EMPLOYEE_STATUS_CHOICES: Array<{ label: string; value: EmployeeStat
   { label: 'Inactive', value: 'inactive' },
 ];
 
+export type EmployeeSort = 'name-asc' | 'name-desc' | 'active-first';
+
+export const EMPLOYEE_SORT_OPTIONS: Array<{ label: string; value: EmployeeSort }> = [
+  { label: 'Name (A–Z)', value: 'name-asc' },
+  { label: 'Name (Z–A)', value: 'name-desc' },
+  { label: 'Active first', value: 'active-first' },
+];
+
+/** A new array in the chosen order (the input is not changed); ties are broken by name. */
+export function sortEmployees(employees: EmployeeRecord[], sort: EmployeeSort): EmployeeRecord[] {
+  const byName = (a: EmployeeRecord, b: EmployeeRecord) => a.full_name.localeCompare(b.full_name);
+  return [...employees].sort((a, b) => {
+    if (sort === 'name-desc') return byName(b, a);
+    if (sort === 'active-first' && a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    return byName(a, b);
+  });
+}
+
 export function matchesEmployeeFilters(
   employee: EmployeeRecord,
   options: {

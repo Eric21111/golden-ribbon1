@@ -160,7 +160,8 @@ const only = (patch) => names(all.filter((p) => f.matchesListFilters(p, { ...f.D
   const html = (extra) => renderToStaticMarkup(React.createElement(controls.ListFiltersSheet, { visible: true, filters: f.DEFAULT_LIST_FILTERS, keys: [], extra, onChange() {}, onClose() {} }));
   const off = html(stockRow('all'));
   assert.match(off, /Stock/);
-  assert.doesNotMatch(off, /Category|Show in Cashier POS|Keep Unsold Stock at Branch|Reset/, 'only the Stock row, nothing to reset');
+  assert.doesNotMatch(off, /Category|Show in Cashier POS|Keep Unsold Stock at Branch|Reset|Done/, 'only the Stock row: nothing to reset and no Done button');
+  assert.doesNotMatch(render(f.DEFAULT_LIST_FILTERS, ['category', 'pos', 'returns']), /Done/, 'no Done button on the three-row sheet either');
   assert.match(html(stockRow('not_set')), /Reset/, 'a Stock choice other than All can be reset');
   const summary = (extra) => renderToStaticMarkup(React.createElement(controls.ListFilterSummary, { countText: '2 of 7 products', filters: f.DEFAULT_LIST_FILTERS, keys: [], extra, onChange() {} }));
   assert.equal(summary(stockRow('all')), '', 'nothing shown while Stock is All');

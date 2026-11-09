@@ -62,7 +62,7 @@ export function ChangePasswordForm({
     try {
       await changeOwnPassword(values.current_password, values.new_password);
       reset({ current_password: '', new_password: '', confirm_password: '' });
-      setSuccess('Password changed successfully.');
+      setSuccess('Password updated.');
     } catch (error) {
       const message = getChangePasswordErrorMessage(error);
       if (message === 'Current password is incorrect.') {
@@ -77,16 +77,12 @@ export function ChangePasswordForm({
 
   return (
     <View style={styles.form}>
-      <Text style={[styles.hint, hintStyle]}>
-        Updates the password for this signed-in account. Role and branch are not changed.
-      </Text>
       <Controller
         control={control}
         name="current_password"
         render={({ field, fieldState }) => (
           <FormField
-            label="Current Password"
-            placeholder="Enter current password"
+            label="Current password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -111,8 +107,7 @@ export function ChangePasswordForm({
         name="new_password"
         render={({ field, fieldState }) => (
           <FormField
-            label="New Password"
-            placeholder="Enter new password"
+            label="New password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -132,13 +127,15 @@ export function ChangePasswordForm({
           />
         )}
       />
+      {formState.errors.new_password?.message ? null : (
+        <Text style={[styles.hint, hintStyle]}>At least 8 characters.</Text>
+      )}
       <Controller
         control={control}
         name="confirm_password"
         render={({ field, fieldState }) => (
           <FormField
-            label="Confirm New Password"
-            placeholder="Re-enter new password"
+            label="Confirm password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -162,41 +159,50 @@ export function ChangePasswordForm({
         <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
       ) : null}
       {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
-      {renderSubmitButton ? (
-        renderSubmitButton({
-          loading: formState.isSubmitting,
-          disabled: formState.isSubmitting,
-          onPress: handleSubmit(submit),
-        })
-      ) : (
-        <AppButton
-          label="Change password"
-          loading={formState.isSubmitting}
-          disabled={formState.isSubmitting}
-          onPress={handleSubmit(submit)}
-          labelStyle={buttonLabelStyle}
-        />
-      )}
-      {onCancel ? (
-        renderCancelButton ? (
-          renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
-        ) : (
-          <AppButton
-            label="Cancel"
-            variant="secondary"
-            disabled={formState.isSubmitting}
-            onPress={onCancel}
-            labelStyle={buttonLabelStyle}
-          />
-        )
-      ) : null}
+      <View style={styles.actions}>
+        {onCancel ? (
+          <View style={styles.action}>
+            {renderCancelButton ? (
+              renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
+            ) : (
+              <AppButton
+                label="Cancel"
+                variant="secondary"
+                disabled={formState.isSubmitting}
+                onPress={onCancel}
+                labelStyle={buttonLabelStyle}
+              />
+            )}
+          </View>
+        ) : null}
+        <View style={styles.action}>
+          {renderSubmitButton ? (
+            renderSubmitButton({
+              loading: formState.isSubmitting,
+              disabled: formState.isSubmitting,
+              onPress: handleSubmit(submit),
+            })
+          ) : (
+            <AppButton
+              label="Update"
+              loading={formState.isSubmitting}
+              disabled={formState.isSubmitting}
+              onPress={handleSubmit(submit)}
+              labelStyle={buttonLabelStyle}
+            />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   form: { gap: spacing.md },
-  hint: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  // sits right under the New password field, not a gap away from it
+  hint: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: -spacing.sm },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  action: { flex: 1 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   success: { color: colors.success, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 });

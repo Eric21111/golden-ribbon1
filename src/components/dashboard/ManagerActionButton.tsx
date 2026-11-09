@@ -9,7 +9,7 @@ interface ManagerActionButtonProps {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'destructive';
   icon?: IoniconsIconName;
   /** Extra style for the button itself, e.g. horizontal padding on a button that is not full width. */
   style?: StyleProp<ViewStyle>;
@@ -45,6 +45,32 @@ export function ManagerActionButton({
           <View style={styles.content}>
             {icon ? <Ionicons name={icon} size={18} color={managerGradients.hero[1]} /> : null}
             <Text style={styles.secondaryLabel}>{label}</Text>
+          </View>
+        )}
+      </Pressable>
+    );
+  }
+
+  // solid red: the confirm button of something that cannot be undone
+  if (variant === 'destructive') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        disabled={isDisabled}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.destructive,
+          style,
+          pressed && styles.pressed,
+          isDisabled && styles.disabled,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <View style={styles.content}>
+            {icon ? <Ionicons name={icon} size={18} color="#FFFFFF" /> : null}
+            <Text style={styles.destructiveLabel}>{label}</Text>
           </View>
         )}
       </Pressable>
@@ -128,6 +154,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
   },
   dangerLabel: { color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 15 },
+  destructive: {
+    height: 54,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+  },
+  destructiveLabel: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

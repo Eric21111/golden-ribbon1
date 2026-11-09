@@ -2,7 +2,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -108,7 +108,7 @@ export default function CashierDashboard() {
       const [shiftResult, profileResult] = await Promise.all([shiftQuery.refetch(), retryProfile()]);
       const resolvedBranchId = authoritativePosBranchId(shiftResult.data, profileResult.data ?? profile);
       if (!resolvedBranchId) {
-        alertNotice('Cannot open POS', 'No branch is assigned to this cashier.');
+        alertNotice('Cannot open POS', 'No branch is assigned to this cashier.', 'danger');
         return;
       }
 
@@ -123,8 +123,9 @@ export default function CashierDashboard() {
         alertNotice(
           'Cannot open POS',
           rows.length === 0
-            ? 'This branch has no active products. Ask a manager to add stock first.'
+            ? 'No active products at this branch. Ask a manager to add stock.'
             : 'Everything is out of stock. Confirm a shipment or ask Main to restock.',
+          'warning',
         );
         return;
       }
@@ -137,12 +138,12 @@ export default function CashierDashboard() {
 
       confirmAction(
         'Some products are out of stock',
-        `These have no stock. You can still continue:\n\n${formatOutOfStockWarning(oosNames)}`,
+        `These have no stock:\n${formatOutOfStockWarning(oosNames)}`,
         onAllowed,
-        { confirm: 'Continue' },
+        { confirm: 'Continue', tone: 'warning' },
       );
     } catch (error) {
-      alertNotice('Stock unavailable', getInventoryErrorMessage(error));
+      alertNotice('Stock unavailable', getInventoryErrorMessage(error), 'danger');
     } finally {
       setCheckingStock(false);
     }
@@ -168,11 +169,12 @@ export default function CashierDashboard() {
         ) {
           alertNotice(
             'Cannot start shift',
-            'This booth has an unfinished remittance. Ask a manager to finish it first.',
+            'Unfinished remittance. Ask a manager to finish it first.',
+            'warning',
           );
           return;
         }
-        alertNotice('Cannot start shift', message);
+        alertNotice('Cannot start shift', message, 'danger');
       },
     });
 
@@ -213,7 +215,7 @@ export default function CashierDashboard() {
     const shiftId = shiftQuery.data?.id;
     if (!shiftId) return;
     if (cartItems.length > 0) {
-      alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.');
+      alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.', 'warning');
       return;
     }
     if (beginCloseMutation.isPending) return;
@@ -232,6 +234,7 @@ export default function CashierDashboard() {
               alertNotice(
                 'End Shift Complete',
                 result.message ?? "This shift remittance is already complete.",
+                'success',
               );
               void finalizedToday.refetch();
               void pendingShift.refetch();
@@ -243,22 +246,23 @@ export default function CashierDashboard() {
             lastFinalizeRef.current = null;
           },
           onError: (error) => {
-            alertNotice('Cannot begin End Shift', getShiftErrorMessage(error));
+            alertNotice('Cannot begin End Shift', getShiftErrorMessage(error), 'danger');
           },
         });
       },
-      { cancel: 'Cancel', confirm: 'Start End Shift' },
+      { cancel: 'Cancel', confirm: 'Start End Shift', tone: 'danger' },
     );
   };
 
   const onRemittanceSuccess = (result: ShiftCloseResult) => {
+    // the products of the shift that was just remitted: the open close preview, or the pending shift being completed
     const names = Object.fromEntries(
-      (closePreview?.products ?? []).map((product) => [product.product_id, product.product_name_snapshot]),
+      (closePreview?.products ?? pendingShift.data?.products ?? []).map((product) => [product.product_id, product.product_name_snapshot]),
     );
     lastFinalizeRef.current = null;
     setAwaitingFinalizeRetry(false);
     setClosePreview(null);
-    alertNotice('End Shift Complete', formatCloseSuccessSummary(result, names));
+    alertNotice('End Shift Complete', formatCloseSuccessSummary(result, names), 'success');
     void finalizedToday.refetch();
     void pendingShift.refetch();
     void shiftQuery.refetch();
@@ -278,17 +282,19 @@ export default function CashierDashboard() {
         alertNotice(
           'End Shift Complete',
           "Connection dropped after save. Today's remittance is already finalized.",
+          'success',
         );
         return;
       }
       alertNotice(
         'Connection problem',
-        'Could not confirm. Retry the same counts. Change them only if a number was wrong.',
+        'Could not confirm. Retry with the same counts unless a number was wrong.',
+        'danger',
       );
       return;
     }
     setAwaitingFinalizeRetry(false);
-    alertNotice('Remittance not saved', getShiftErrorMessage(error));
+    alertNotice('Remittance not saved', getShiftErrorMessage(error), 'danger');
   };
 
   const runFinalize = (attempt: RemittanceAttempt) => {
@@ -339,7 +345,7 @@ export default function CashierDashboard() {
           products: path === 'legacy' ? [] : products,
           path,
         }),
-      { cancel: 'Cancel', confirm: 'Finalize' },
+      { cancel: 'Cancel', confirm: 'Finalize', tone: 'danger' },
     );
   };
 
@@ -380,31 +386,42 @@ export default function CashierDashboard() {
   const salesTotal = summaryQuery.data?.total_sales;
   const cashierName = profile?.full_name ?? 'Cashier';
   // No shift to greet into when a remittance is blocking everything else — the page is the task.
-  const showPendingHeader = !shiftQuery.data && Boolean(pendingPreview);
-
-  const remittanceForm = pendingPreview ? (
-    <View style={styles.remittanceBlock}>
-      <CashierShiftCloseForm
-        preview={pendingPreview}
-        branchName={profile?.branch?.name}
-        title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
-        submitLabel="Complete End Shift"
-        loading={remittancePending}
-        onSubmit={(actualCash, products) => requestFinalize(pendingPreview, actualCash, products)}
-      />
-      {awaitingFinalizeRetry && lastFinalizeRef.current ? (
-        <ManagerActionButton
-          label="Retry same remittance"
-          loading={remittancePending}
-          disabled={remittancePending}
-          onPress={retryLastFinalize}
-        />
-      ) : null}
-      {remittanceError && !isNetworkishError(remittanceError) ? (
-        <Text style={styles.error}>{getShiftErrorMessage(remittanceError)}</Text>
-      ) : null}
-    </View>
-  ) : null;
+  // While a remittance is open the page IS the task (count the stock, count the cash, finish): a full-height count with its own
+  // header and a pinned progress + submit bar, not a card inside the dashboard.
+  if (pendingPreview && !(shiftQuery.isLoading && !shiftQuery.data) && !shiftQuery.error) {
+    const showRetry = awaitingFinalizeRetry && Boolean(lastFinalizeRef.current);
+    const showError = Boolean(remittanceError) && !isNetworkishError(remittanceError);
+    return (
+      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
+        <ManagerScreenHeader title={shiftQuery.data ? 'End Shift' : 'Pending Remittance'} showBack hideMenu />
+        <ConstrainedWidth fill>
+          <CashierShiftCloseForm
+            preview={pendingPreview}
+            branchName={profile?.branch?.name}
+            title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
+            submitLabel="Complete End Shift"
+            loading={remittancePending}
+            onSubmit={(actualCash, products) => requestFinalize(pendingPreview, actualCash, products)}
+            footerExtra={
+              showRetry || showError ? (
+                <>
+                  {showRetry ? (
+                    <ManagerActionButton
+                      label="Retry same remittance"
+                      loading={remittancePending}
+                      disabled={remittancePending}
+                      onPress={retryLastFinalize}
+                    />
+                  ) : null}
+                  {showError ? <Text style={styles.error}>{getShiftErrorMessage(remittanceError)}</Text> : null}
+                </>
+              ) : undefined
+            }
+          />
+        </ConstrainedWidth>
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -414,9 +431,7 @@ export default function CashierDashboard() {
       onRefresh={onRefresh}
       contentContainerStyle={styles.screenContent}
     >
-      {showPendingHeader ? (
-        <ManagerScreenHeader title="Pending Remittance" showBack hideMenu />
-      ) : (
+      {(
         <View style={styles.header}>
           <Text style={styles.greeting} numberOfLines={1}>
             Hi, {cashierName}
@@ -445,30 +460,19 @@ export default function CashierDashboard() {
             onRetry={() => void shiftQuery.refetch()}
           />
         ) : !shiftQuery.data ? (
-          pendingPreview ? (
-            <>
-              {remittanceForm}
-              {showIncomingTile ? (
-                <>
-                  <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
-                  <Row>{incomingTile}</Row>
-                </>
-              ) : null}
-            </>
-          ) : (
+          (
             <View style={styles.noticeCard}>
               {sameDayClosedHint ? (
                 <>
-                  <Text style={styles.noticeTitle}>Shift closed for today</Text>
-                  <Text style={styles.noticeText}>
-                    Today&apos;s End Shift is complete. Start again next business day.
-                  </Text>
-                  <Text style={styles.note}>
-                    Reopen POS only if you still need to sell today. Today&apos;s completed remittance stays as recorded.
-                    The server decides whether a new shift can start.
-                  </Text>
+                  <View style={styles.closedHead}>
+                    <View style={styles.closedBadge}>
+                      <Ionicons name="checkmark" size={30} color="#15803D" />
+                    </View>
+                    <Text style={styles.closedTitle}>Shift closed for today</Text>
+                    <Text style={styles.closedText}>End Shift is complete. Start again next business day.</Text>
+                  </View>
                   {reopenOpen ? (
-                    <>
+                    <View style={styles.reopenForm}>
                       <FormField
                         label="Reason"
                         value={reopenReason}
@@ -476,33 +480,39 @@ export default function CashierDashboard() {
                         placeholder="Why POS needs to reopen"
                         accentColor={managerColors.royalBlue}
                       />
+                      <Text style={styles.note}>The system decides whether a new shift can start.</Text>
                       {reopenError ? <Text style={styles.error}>{reopenError}</Text> : null}
-                      <ManagerActionButton
-                        label="Confirm reopen"
-                        loading={reopenBusy}
-                        disabled={reopenBusy}
-                        onPress={submitReopen}
-                      />
-                      <ManagerActionButton
-                        label="Cancel"
-                        variant="secondary"
-                        disabled={reopenBusy}
-                        onPress={() => {
-                          setReopenOpen(false);
-                          setReopenError('');
-                        }}
-                      />
-                    </>
+                      <View style={styles.closedActions}>
+                        <View style={styles.closedAction}>
+                          <ManagerActionButton
+                            label="Cancel"
+                            variant="secondary"
+                            disabled={reopenBusy}
+                            onPress={() => {
+                              setReopenOpen(false);
+                              setReopenError('');
+                            }}
+                          />
+                        </View>
+                        <View style={styles.closedAction}>
+                          <ManagerActionButton label="Confirm" loading={reopenBusy} disabled={reopenBusy} onPress={submitReopen} />
+                        </View>
+                      </View>
+                    </View>
                   ) : (
-                    <ManagerActionButton
-                      label="Reopen POS"
-                      icon="refresh-outline"
-                      variant="secondary"
-                      onPress={() => {
-                        setReopenError('');
-                        setReopenOpen(true);
-                      }}
-                    />
+                    <View style={styles.reopenRow}>
+                      <Text style={styles.reopenQuestion}>Need to sell more today?</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        hitSlop={10}
+                        onPress={() => {
+                          setReopenError('');
+                          setReopenOpen(true);
+                        }}
+                      >
+                        <Text style={styles.reopenLink}>Reopen POS</Text>
+                      </Pressable>
+                    </View>
                   )}
                 </>
               ) : (
@@ -523,7 +533,7 @@ export default function CashierDashboard() {
                   />
                 </>
               )}
-              {showIncomingTile ? (
+              {showIncomingTile && !sameDayClosedHint ? (
                 <>
                   <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
                   <Row>{incomingTile}</Row>
@@ -564,9 +574,7 @@ export default function CashierDashboard() {
               </View>
             </View>
 
-            {pendingPreview ? (
-              remittanceForm
-            ) : (
+            {(
               <View style={styles.endShiftSection}>
                 <ManagerActionButton
                   label="End Shift / Remit"
@@ -598,24 +606,6 @@ export default function CashierDashboard() {
             {!pendingPreview ? (
               <>
                 <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-                <Row>
-                  <NavTile
-                    layout="tile"
-                    icon="cart-outline"
-                    accent="blue"
-                    title="Open POS"
-                    onPress={checkingStock ? () => {} : openPos}
-                    style={checkingStock && styles.tileBusy}
-                  />
-                  <NavTile
-                    layout="tile"
-                    icon="receipt-outline"
-                    accent="teal"
-                    title="Current shift sales"
-                    onPress={() => router.push('/cashier/sales')}
-                  />
-                  {incomingTile}
-                </Row>
                 <Row>
                   <NavTile
                     layout="tile"
@@ -679,7 +669,6 @@ const styles = StyleSheet.create({
   branchPillText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.md },
-  remittanceBlock: { gap: spacing.sm },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',
@@ -702,6 +691,25 @@ const styles = StyleSheet.create({
   noticeTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 19 },
   noticeText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   note: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  closedHead: { alignItems: 'center', gap: 8, paddingTop: 4 },
+  closedBadge: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  closedTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 19, textAlign: 'center' },
+  closedText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  reopenRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingTop: spacing.md,
+  },
+  reopenQuestion: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  reopenLink: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  reopenForm: { gap: 10, borderTopWidth: 1, borderTopColor: managerColors.cardBorder, paddingTop: spacing.md },
+  closedActions: { flexDirection: 'row', gap: 10 },
+  closedAction: { flex: 1 },
   shiftCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

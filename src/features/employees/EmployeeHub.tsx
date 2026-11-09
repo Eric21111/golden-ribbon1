@@ -1,26 +1,33 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { FilterDropdown } from '@/components/FilterDropdown';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet as BottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
+import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { CreateEmployeeForm } from '@/features/employees/CreateEmployeeForm';
 import { EditEmployeeForm } from '@/features/employees/EditEmployeeForm';
 import { EmployeeListItem } from '@/features/employees/EmployeeListItem';
 import { ResetPasswordForm } from '@/features/employees/ResetPasswordForm';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import { DEFAULT_LIST_FILTERS, type ListFilterKey } from '@/features/products/listFilters';
 import {
   EMPLOYEE_ROLE_CHOICES,
+  EMPLOYEE_SORT_OPTIONS,
   EMPLOYEE_STATUS_CHOICES,
   employeeFilterEmptyMessage,
   matchesEmployeeFilters,
+  sortEmployees,
   type EmployeeRoleFilter,
+  type EmployeeSort,
   type EmployeeStatusFilter,
 } from '@/features/employees/employeeFilters';
 import type { CreateEmployeeValues, EditEmployeeValues, ResetPasswordValues } from '@/features/employees/employeeSchemas';
@@ -34,6 +41,10 @@ import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getEmployeeErrorMessage } from '@/lib/errors';
 import { useLayout } from '@/lib/layout';
 import type { Branch, EmployeeRecord } from '@/types/models';
+
+// The funnel holds only this screen's own rows (Role, Branch); Status is the row of pills.
+const NO_LIST_FILTERS: ListFilterKey[] = [];
+const ignoreListFilters = () => {};
 
 type EmployeeHubProps = {
   employees: EmployeeRecord[] | undefined;
@@ -59,6 +70,9 @@ export function EmployeeHub({
   const [role, setRole] = useState<EmployeeRoleFilter>('all');
   const [branchId, setBranchId] = useState('');
   const [status, setStatus] = useState<EmployeeStatusFilter>('all');
+  const [sort, setSort] = useState<EmployeeSort>('name-asc');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<EmployeeRecord | null>(null);
@@ -72,26 +86,38 @@ export function EmployeeHub({
     () => branches?.filter((branch) => branch.is_active) ?? [],
     [branches]
   );
-  const branchFilterOptions = useMemo(
-    () => [
-      { label: 'All', value: '' },
-      ...(branches ?? []).map((branch) => ({
-        label: branch.is_main_branch ? `${branch.name} (Main)` : branch.name,
-        value: branch.id,
-      })),
-    ],
-    [branches],
+  // the funnel's two rows ("all" is a row's off state, so the branch filter's "no branch picked" is "all" here)
+  const roleRow = useMemo(() => ({ title: 'Role', options: EMPLOYEE_ROLE_CHOICES, value: role, onChange: (value: string) => setRole(value as EmployeeRoleFilter) }), [role]);
+  const branchRow = useMemo(
+    () => ({
+      title: 'Branch',
+      options: [
+        { label: 'All branches', value: 'all' },
+        ...(branches ?? []).map((branch) => ({
+          label: branch.is_main_branch ? `${branch.name} (Main)` : branch.name,
+          value: branch.id,
+        })),
+      ],
+      value: branchId || 'all',
+      onChange: (value: string) => setBranchId(value === 'all' ? '' : value),
+    }),
+    [branches, branchId],
   );
+  const filterRows = useMemo(() => [roleRow, branchRow], [roleRow, branchRow]);
+  const activeFilters = (role !== 'all' ? 1 : 0) + (branchId ? 1 : 0);
 
   const filtered = useMemo(
     () =>
-      (employees ?? []).filter((employee) =>
-        matchesEmployeeFilters(employee, { search, role, branchId, status })
+      sortEmployees(
+        (employees ?? []).filter((employee) =>
+          matchesEmployeeFilters(employee, { search, role, branchId, status })
+        ),
+        sort,
       ),
-    [employees, search, role, branchId, status]
+    [employees, search, role, branchId, status, sort]
   );
 
-  const pagination = useClientPagination(filtered, `${search}|${role}|${branchId}|${status}`);
+  const pagination = useClientPagination(filtered, `${search}|${role}|${branchId}|${status}|${sort}`);
 
   const hasFilters = Boolean(search.trim() || role !== 'all' || branchId || status !== 'all');
   const empty = employeeFilterEmptyMessage(hasFilters);
@@ -101,8 +127,8 @@ export function EmployeeHub({
     confirmAction(
       deactivating ? 'Deactivate employee?' : 'Activate employee?',
       deactivating
-        ? `${employee.full_name} will be unable to use protected app features.`
-        : `${employee.full_name} will regain access for their assigned role and branch.`,
+        ? `${employee.full_name} will lose access to the app.`
+        : `${employee.full_name} will regain access.`,
       () => {
         setBusyId(employee.id);
         updateMutation.mutate(
@@ -125,7 +151,7 @@ export function EmployeeHub({
           },
         );
       },
-      { confirm: deactivating ? 'Deactivate' : 'Activate' },
+      { confirm: deactivating ? 'Deactivate' : 'Activate', tone: deactivating ? 'danger' : 'info' },
     );
   };
 
@@ -143,7 +169,7 @@ export function EmployeeHub({
       {
         onSuccess: () => {
           setCreateOpen(false);
-          alertNotice('Employee created', 'They can sign in with the email and temporary password.');
+          alertNotice('Employee created', 'They can sign in with the email and temporary password.', 'success');
         },
       }
     );
@@ -174,7 +200,8 @@ export function EmployeeHub({
           setResetEmployee(null);
           alertNotice(
             'Password reset',
-            'Give the new temporary password to the employee through a secure channel.'
+            'Give the new temporary password to the employee securely.',
+            'success',
           );
         },
       }
@@ -187,34 +214,25 @@ export function EmployeeHub({
         <View style={styles.layout}>
           <ManagerScreenHeader title="Employees" subtitle="Managers and Cashiers" />
           <View style={styles.top}>
-            <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or email" />
-
-            <View style={styles.filterRow}>
-              <View style={styles.filterItem}>
-                <FilterDropdown
-                  label="Role"
-                  options={EMPLOYEE_ROLE_CHOICES}
-                  value={role}
-                  onChange={setRole}
-                />
+            <View style={styles.searchRow}>
+              <View style={styles.searchField}>
+                <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or email" />
               </View>
-              <View style={styles.filterItem}>
-                <FilterDropdown
-                  label="Branch"
-                  options={branchFilterOptions}
-                  value={branchId}
-                  onChange={setBranchId}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <FilterDropdown
-                  label="Status"
-                  options={EMPLOYEE_STATUS_CHOICES}
-                  value={status}
-                  onChange={setStatus}
-                />
-              </View>
+              <FilterIconButton count={activeFilters} onPress={() => setFiltersOpen(true)} />
+              <SortIconButton
+                currentLabel={EMPLOYEE_SORT_OPTIONS.find((option) => option.value === sort)?.label}
+                active={sort !== 'name-asc'}
+                onPress={() => setSortOpen(true)}
+              />
             </View>
+            <FilterChipRow options={EMPLOYEE_STATUS_CHOICES} value={status} onChange={setStatus} />
+            <ListFilterSummary
+              countText={`${filtered.length} of ${employees?.length ?? 0} employees`}
+              filters={DEFAULT_LIST_FILTERS}
+              keys={NO_LIST_FILTERS}
+              extra={filterRows}
+              onChange={ignoreListFilters}
+            />
 
             {updateMutation.error && !editEmployee ? (
               <Text style={styles.error}>{getEmployeeErrorMessage(updateMutation.error)}</Text>
@@ -279,6 +297,37 @@ export function EmployeeHub({
         </View>
       </ConstrainedWidth>
 
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={DEFAULT_LIST_FILTERS}
+        keys={NO_LIST_FILTERS}
+        extra={filterRows}
+        onChange={ignoreListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
+      <BottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+        <View style={styles.sortList}>
+          {EMPLOYEE_SORT_OPTIONS.map((option) => {
+            const selected = option.value === sort;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => {
+                  setSort(option.value);
+                  setSortOpen(false);
+                }}
+                style={({ pressed }) => [styles.sortRow, selected && styles.sortRowSelected, pressed && styles.pressed]}
+              >
+                <Text style={[styles.sortRowLabel, selected && styles.sortRowLabelSelected]}>{option.label}</Text>
+                {selected ? <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
       <BottomSheet
         visible={createOpen}
         title="Create employee"
@@ -290,6 +339,7 @@ export function EmployeeHub({
           error={createMutation.error ? getEmployeeErrorMessage(createMutation.error) : undefined}
           loading={createMutation.isPending}
           onSubmit={submitCreate}
+          onCancel={() => setCreateOpen(false)}
         />
       </BottomSheet>
 
@@ -342,8 +392,25 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
   top: { paddingHorizontal: 20, paddingTop: 14, gap: 12 },
-  filterRow: { flexDirection: 'row', gap: 10 },
-  filterItem: { flex: 1 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchField: { flex: 1 },
+  sortList: { gap: 8, paddingBottom: 8 },
+  sortRow: {
+    minHeight: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sortRowSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  sortRowLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  sortRowLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
+  pressed: { opacity: 0.75 },
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: 20, paddingVertical: 12, flexGrow: 1, gap: 12 },
   separator: { height: 0 },

@@ -1,3 +1,4 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import type { PropsWithChildren } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -22,6 +23,9 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
 
 import { revealScrollOffset } from './sheetScroll';
+
+/** The X in every sheet's header: light gray, so it is there to find but does not compete with the title and the content. */
+const CLOSE_ICON_COLOR = '#98A2B3';
 
 type Revealable = { measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void };
 type Focusable = { focus: () => void };
@@ -54,7 +58,6 @@ type BottomSheetProps = PropsWithChildren<{
   onClose: () => void;
   scroll?: boolean;
   titleStyle?: StyleProp<TextStyle>;
-  closeLabelStyle?: StyleProp<TextStyle>;
 }>;
 
 /**
@@ -75,7 +78,6 @@ export function BottomSheet({
   children,
   scroll = false,
   titleStyle,
-  closeLabelStyle,
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardBottomInset();
@@ -211,7 +213,7 @@ export function BottomSheet({
           <View style={styles.header}>
             <Text style={[styles.title, titleStyle]}>{title}</Text>
             <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={12} onPress={onClose}>
-              <Text style={[styles.close, closeLabelStyle]}>Close</Text>
+              <Ionicons name="close" size={26} color={CLOSE_ICON_COLOR} />
             </Pressable>
           </View>
           <SheetScrollContext.Provider value={sheetScroll}>{body}</SheetScrollContext.Provider>
@@ -256,7 +258,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   title: { color: colors.text, fontSize: 18, fontWeight: '800', flexShrink: 1 },
-  close: { color: colors.primary, fontSize: 15, fontWeight: '700' },
   scroll: {
     flexGrow: 0,
     flexShrink: 1,

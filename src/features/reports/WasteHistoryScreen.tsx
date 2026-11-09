@@ -1,14 +1,15 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { GlyphIcon } from '@/components/GlyphIcon';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
-import { managerColors } from '@/components/dashboard/theme';
+import { managerColors, statChipColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { formatPcsQty, formatShiftTimeRange } from '@/features/reports/reportDisplay';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -17,11 +18,10 @@ import { useShiftWaste } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatManilaDate } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
-import type { ShiftWasteOccurrenceRow, ShiftWasteStatus } from '@/types/models';
+import type { ShiftWasteOccurrenceRow, ShiftWasteShiftRow, ShiftWasteStatus } from '@/types/models';
 
-/** Each day block is a full stat card plus its shift rows, so a few per page is already dense —
- * unlike the usual 8-item pagination default used for flat lists. */
-const DAYS_PER_PAGE = 3;
+/** A day is a summary card plus compact shift rows (or one quiet line when nothing was wasted), so a handful fit a page. */
+const DAYS_PER_PAGE = 5;
 
 const wasteStatusBadge: Record<ShiftWasteStatus, { label: string; tone: 'danger' | 'success' | 'warning' }> = {
   waste_recorded: { label: 'Waste recorded', tone: 'danger' },
@@ -64,12 +64,54 @@ function dayTotalPcs(day: { shifts: Array<{ occurrences: ShiftWasteOccurrenceRow
   return any ? total : null;
 }
 
+const productCount = (shift: ShiftWasteShiftRow) => new Set(shift.occurrences.map((item) => item.product_id)).size;
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/** What one shift wrote off, product by product (shown in the details sheet). */
+export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
+  const total = shiftTotalPcs(shift.occurrences);
+  return (
+    <View style={styles.sheetBody}>
+            <View style={styles.sheetHead}>
+              <Text style={styles.branchName}>{shift.branch_name}</Text>
+              <Text style={styles.metaItemText}>{formatShiftTimeRange(shift.started_at, shift.ended_at)}</Text>
+              {shift.branch_name !== shift.cashier_name ? <Text style={styles.metaItemText}>{shift.cashier_name}</Text> : null}
+            </View>
+            <View style={styles.sheetCard}>
+              {shift.occurrences.map((item, index) => (
+                <View
+                  key={item.occurrence_id ?? `${shift.shift_id}-${item.product_id}`}
+                  style={[styles.itemRow, index < shift.occurrences.length - 1 && styles.itemRowDivider]}
+                >
+                  <View style={styles.itemCopy}>
+                    <Text style={styles.itemName} numberOfLines={2}>
+                      {item.product_name}
+                    </Text>
+                    {occurrenceMeta(item) ? <Text style={styles.itemNote}>{occurrenceMeta(item)}</Text> : null}
+                  </View>
+                  {item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
+                    <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity)}</Text>
+                  ) : null}
+                </View>
+              ))}
+              <View style={styles.sheetTotal}>
+                <Text style={styles.sheetTotalLabel}>Total</Text>
+                <Text style={styles.sheetTotalValue}>
+                  {total != null ? formatPcsQty(total) : '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+  );
+}
+
 export function WasteHistoryScreen() {
   const { profile } = useAuth();
   const isManager = profile?.role === 'manager';
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [selected, setSelected] = useState<ShiftWasteShiftRow | null>(null);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftWaste(rpcRangeType, startIso, endIso);
   const days = query.data?.days ?? [];
@@ -101,36 +143,40 @@ export function WasteHistoryScreen() {
 
         {pagination.pageItems.map((day) => {
           const totalPcs = dayTotalPcs(day);
+
+          // a day with no waste is one quiet line, not an empty summary card
+          if (day.occurrence_count === 0) {
+            const pending = day.shifts.some((shift) => shift.waste_status === 'pending');
+            return (
+              <View key={day.business_date} style={styles.quietDay}>
+                <Text style={styles.quietDate}>{formatManilaDate(day.business_date)}</Text>
+                <Text style={styles.quietText}>{pending ? 'Pending' : 'No waste recorded'}</Text>
+              </View>
+            );
+          }
+
           return (
             <View key={day.business_date} style={styles.dayBlock}>
               <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
 
               <View style={styles.heroCard}>
-                <View style={styles.statStrip}>
-                  <View style={styles.statItem}>
-                    <View style={styles.statIconChip}>
-                      <Ionicons name="alert-circle-outline" size={18} color={managerColors.royalBlue} />
-                    </View>
-                    <Text style={styles.statValue}>{day.occurrence_count}</Text>
-                    <Text style={styles.statLabel}>Occurrences</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <View style={styles.statIconChip}>
-                      <Ionicons name="cube-outline" size={18} color={managerColors.royalBlue} />
-                    </View>
-                    <Text style={styles.statValue}>{day.distinct_product_count}</Text>
-                    <Text style={styles.statLabel}>Products</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <View style={styles.statIconChip}>
+                <View style={styles.heroRow}>
+                  <View style={styles.heroLeft}>
+                    <View style={styles.heroIconChip}>
                       <Ionicons name="trash-outline" size={18} color={managerColors.royalBlue} />
                     </View>
-                    <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
-                      {totalPcs != null ? formatPcsQty(totalPcs) : '—'}
-                    </Text>
-                    <Text style={styles.statLabel}>Total waste</Text>
+                    <Text style={styles.heroLabel}>Total waste</Text>
+                  </View>
+                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {totalPcs != null ? formatPcsQty(totalPcs) : '—'}
+                  </Text>
+                </View>
+                <View style={styles.pillRow}>
+                  <View style={styles.pill}>
+                    <Text style={styles.pillText}>{plural(day.occurrence_count, 'occurrence', 'occurrences')}</Text>
+                  </View>
+                  <View style={styles.pill}>
+                    <Text style={styles.pillText}>{plural(day.distinct_product_count, 'product', 'products')}</Text>
                   </View>
                 </View>
               </View>
@@ -138,58 +184,59 @@ export function WasteHistoryScreen() {
               {day.shifts.map((shift) => {
                 const badge = wasteStatusBadge[shift.waste_status];
                 const tone = badgeToneStyles[badge.tone];
+                const recorded = shift.waste_status === 'waste_recorded';
                 const totalForShift = shiftTotalPcs(shift.occurrences);
-                return (
-                  <View key={shift.shift_id} style={styles.shiftBlock}>
-                    <ListRowCard
-                      icon="storefront-outline"
-                      iconColor={accentForName(shift.branch_name)}
-                      title={shift.branch_name}
-                      metaRow={
+                const chip = statChipColors[accentForName(shift.branch_name)];
+                const content = (
+                  <View style={styles.shiftRow}>
+                    <View style={[styles.branchChip, { backgroundColor: chip.chip }]}>
+                      <GlyphIcon name="storefront-outline" size={18} color={chip.icon} />
+                    </View>
+                    <View style={styles.shiftCopy}>
+                      <Text style={styles.branchName} numberOfLines={2}>
+                        {shift.branch_name}
+                      </Text>
+                      <View style={styles.metaItem}>
+                        <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
+                        <Text style={styles.metaItemText}>{formatShiftTimeRange(shift.started_at, shift.ended_at)}</Text>
+                      </View>
+                      {shift.branch_name !== shift.cashier_name ? (
+                        <View style={styles.metaItem}>
+                          <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
+                          <Text style={styles.metaItemText}>{shift.cashier_name}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.shiftTrail}>
+                      {recorded ? (
                         <>
-                          <View style={styles.metaItem}>
-                            <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
-                            <Text style={styles.metaItemText}>
-                              {formatShiftTimeRange(shift.started_at, shift.ended_at)}
-                            </Text>
-                          </View>
-                          {shift.branch_name !== shift.cashier_name ? (
-                            <View style={styles.metaItem}>
-                              <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
-                              <Text style={styles.metaItemText}>{shift.cashier_name}</Text>
-                            </View>
-                          ) : null}
+                          <Text style={styles.amount}>{totalForShift != null ? formatPcsQty(totalForShift) : '—'}</Text>
+                          <Text style={styles.trailSub}>{plural(productCount(shift), 'product', 'products')}</Text>
                         </>
-                      }
-                      trailing={
-                        <>
-                          {totalForShift != null ? (
-                            <Text style={styles.amount}>{formatPcsQty(totalForShift)}</Text>
-                          ) : null}
-                          <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
-                            <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
-                              {badge.label}
-                            </Text>
-                          </View>
-                        </>
-                      }
-                    />
-                    {shift.waste_status === 'waste_recorded'
-                      ? shift.occurrences.map((item) => (
-                          <ListRowCard
-                            key={item.occurrence_id ?? `${shift.shift_id}-${item.product_id}`}
-                            icon="trash-outline"
-                            iconColor="red"
-                            title={item.product_name}
-                            subtitle={occurrenceMeta(item)}
-                            trailing={
-                              item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
-                                <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity)}</Text>
-                              ) : undefined
-                            }
-                          />
-                        ))
-                      : null}
+                      ) : (
+                        <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
+                          <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
+                            {badge.label}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {recorded ? <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} /> : null}
+                  </View>
+                );
+                return recorded ? (
+                  <Pressable
+                    key={shift.shift_id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Waste details for ${shift.branch_name}`}
+                    onPress={() => setSelected(shift)}
+                    style={({ pressed }) => [styles.shiftCard, pressed && styles.pressed]}
+                  >
+                    {content}
+                  </Pressable>
+                ) : (
+                  <View key={shift.shift_id} style={styles.shiftCard}>
+                    {content}
                   </View>
                 );
               })}
@@ -202,46 +249,92 @@ export function WasteHistoryScreen() {
           </View>
         ) : null}
       </ConstrainedWidth>
+
+      <ManagerBottomSheet visible={selected != null} title="Waste details" scroll onClose={() => setSelected(null)}>
+        {selected ? <WasteDetailsBody shift={selected} /> : null}
+      </ManagerBottomSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
-  dayBlock: { gap: 12 },
-  shiftBlock: { gap: 8 },
+  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
+  dayBlock: { gap: 10 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  quietDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 2 },
+  quietDate: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  quietText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   heroCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
+    gap: 12,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  statStrip: { flexDirection: 'row', alignItems: 'center' },
-  statItem: { flex: 1, alignItems: 'center', gap: 6 },
-  statIconChip: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DCE8FC',
+  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  heroIconChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DCE8FC' },
+  heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, flexShrink: 1 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: managerColors.cardSurface },
+  pillText: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  shiftCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
-  statValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 18 },
-  statLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, textAlign: 'center' },
-  statDivider: { width: 1, height: 44, backgroundColor: managerColors.cardBorder },
+  pressed: { opacity: 0.75 },
+  shiftRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  branchChip: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  shiftCopy: { flex: 1, minWidth: 0, gap: 3 },
+  branchName: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  shiftTrail: { alignItems: 'flex-end', gap: 2, flexShrink: 0 },
+  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  trailSub: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
   rowBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  rowBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 12.5 },
+  rowBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 12 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaItemText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
-  occurrenceQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  metaItemText: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  sheetBody: { gap: 14, paddingBottom: 8 },
+  sheetHead: { gap: 3 },
+  sheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+  },
+  itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 12 },
+  itemRowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
+  itemCopy: { flex: 1, minWidth: 0, gap: 2 },
+  itemName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },
+  itemNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  occurrenceQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14.5 },
+  sheetTotal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingVertical: 12,
+  },
+  sheetTotalLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
+  sheetTotalValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 17 },
   pager: { paddingVertical: 8 },
 });

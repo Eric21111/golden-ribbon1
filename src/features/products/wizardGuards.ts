@@ -78,7 +78,7 @@ export function decideClose(options: { dirty: boolean; submitting: boolean }): C
 
 export const DISCARD_DIALOG = {
   title: 'Discard changes?',
-  message: 'You have unsaved changes. If you close now, they will be lost.',
+  message: 'Your unsaved changes will be lost.',
   cancel: 'Keep Editing',
   confirm: 'Discard',
 } as const;

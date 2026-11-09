@@ -141,14 +141,13 @@ export default function OwnerAccountScreen() {
           currentName={profile.full_name}
           onCancel={() => setNameOpen(false)}
           onSuccess={() => setNameOpen(false)}
-          hintStyle={styles.formHint}
           labelStyle={styles.formLabel}
           inputStyle={styles.formInput}
           errorStyle={styles.formError}
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
           renderSubmitButton={({ loading, disabled, onPress }) => (
-            <ManagerActionButton label="Save name" loading={loading} disabled={disabled} onPress={onPress} />
+            <ManagerActionButton label="Save" loading={loading} disabled={disabled} onPress={onPress} />
           )}
           renderCancelButton={({ disabled, onPress }) => (
             <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
@@ -167,7 +166,7 @@ export default function OwnerAccountScreen() {
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
           renderSubmitButton={({ loading, disabled, onPress }) => (
-            <ManagerActionButton label="Change password" loading={loading} disabled={disabled} onPress={onPress} />
+            <ManagerActionButton label="Update" loading={loading} disabled={disabled} onPress={onPress} />
           )}
           renderCancelButton={({ disabled, onPress }) => (
             <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
@@ -179,7 +178,6 @@ export default function OwnerAccountScreen() {
         <ChangeEmailForm
           currentEmail={email}
           onCancel={() => setEmailOpen(false)}
-          hintStyle={styles.formHint}
           currentStyle={styles.formLabel}
           labelStyle={styles.formLabel}
           inputStyle={styles.formInput}
@@ -187,7 +185,7 @@ export default function OwnerAccountScreen() {
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
           renderSubmitButton={({ loading, disabled, onPress }) => (
-            <ManagerActionButton label="Change email" loading={loading} disabled={disabled} onPress={onPress} />
+            <ManagerActionButton label="Update" loading={loading} disabled={disabled} onPress={onPress} />
           )}
           renderCancelButton={({ disabled, onPress }) => (
             <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />

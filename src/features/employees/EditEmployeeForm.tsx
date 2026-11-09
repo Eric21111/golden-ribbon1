@@ -5,8 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { FormField } from '@/components/FormField';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { managerColors } from '@/components/dashboard/theme';
+import { RoleChoice } from '@/features/employees/RoleChoice';
 import { editEmployeeSchema, type EditEmployeeValues } from '@/features/employees/employeeSchemas';
 import { BranchSelector } from '@/features/inventory/BranchSelector';
 import type { Branch, EmployeeRecord } from '@/types/models';
@@ -73,8 +73,7 @@ export function EditEmployeeForm({
         name="full_name"
         render={({ field, fieldState }) => (
           <FormField
-            label="Full Name"
-            placeholder="Jane Doe"
+            label="Full name"
             autoCapitalize="words"
             value={field.value}
             onBlur={field.onBlur}
@@ -93,7 +92,7 @@ export function EditEmployeeForm({
           control={control}
           name="role"
           render={({ field }) => (
-            <FilterChipRow
+            <RoleChoice
               options={ROLE_OPTIONS}
               value={field.value}
               onChange={(value) => {
@@ -107,7 +106,7 @@ export function EditEmployeeForm({
         />
       </View>
       <View style={styles.group}>
-        <Text style={styles.label}>Assigned Branch</Text>
+        <Text style={styles.label}>Branch</Text>
         <Controller
           control={control}
           name="branch_id"
@@ -120,16 +119,30 @@ export function EditEmployeeForm({
         />
       </View>
       <Text style={styles.statusHint}>
-        Status: {employee.is_active ? 'Active' : 'Inactive'}. Deactivation is blocked while the
-        employee has an open shift.
+        {employee.is_active ? 'Active' : 'Inactive'}. Cannot be deactivated while there is an open shift.
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ManagerActionButton
-        label="Save employee"
-        loading={Boolean(loading) && !togglingActive}
-        disabled={togglingActive}
-        onPress={handleSubmit(onSubmit)}
-      />
+      {Object.keys(formState.errors).length > 0 ? <Text style={styles.formHint}>Fix the highlighted fields.</Text> : null}
+      <View style={styles.actions}>
+        {onResetPassword ? (
+          <View style={styles.action}>
+            <ManagerActionButton
+              label="Reset password"
+              variant="secondary"
+              disabled={loading || togglingActive}
+              onPress={onResetPassword}
+            />
+          </View>
+        ) : null}
+        <View style={styles.action}>
+          <ManagerActionButton
+            label="Save"
+            loading={Boolean(loading) && !togglingActive}
+            disabled={togglingActive}
+            onPress={handleSubmit(onSubmit)}
+          />
+        </View>
+      </View>
       {onToggleActive ? (
         <ManagerActionButton
           label={employee.is_active ? 'Deactivate' : 'Activate'}
@@ -138,17 +151,6 @@ export function EditEmployeeForm({
           disabled={loading}
           onPress={onToggleActive}
         />
-      ) : null}
-      {onResetPassword ? (
-        <ManagerActionButton
-          label="Reset password"
-          variant="secondary"
-          disabled={loading || togglingActive}
-          onPress={onResetPassword}
-        />
-      ) : null}
-      {Object.keys(formState.errors).length > 0 ? (
-        <Text style={styles.formHint}>Correct the highlighted fields and try again.</Text>
       ) : null}
     </View>
   );
@@ -174,4 +176,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   fieldError: { fontFamily: 'Inter_500Medium' },
+  actions: { flexDirection: 'row', gap: 10 },
+  action: { flex: 1 },
 });

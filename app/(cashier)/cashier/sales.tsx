@@ -15,9 +15,13 @@ import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
+import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
+import { DEFAULT_LIST_FILTERS, type ListFilterKey } from '@/features/products/listFilters';
+import { SALE_DISCOUNT_OPTIONS, matchesSaleDiscount, type SaleDiscountFilter } from '@/features/sales/saleFilters';
 import { SaleDetailsBody } from '@/features/sales/SalesScreens';
 import { useActiveShift } from '@/hooks/useShifts';
 import { getShiftErrorMessage } from '@/lib/errors';
@@ -25,10 +29,16 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { listShiftSales } from '@/services/saleService';
 
+// The shared filter sheet and tags are used with only this screen's own row (Discount): no product list-filter rows here.
+const NO_LIST_FILTERS: ListFilterKey[] = [];
+const ignoreListFilters = () => {};
+
 export default function CurrentShiftSales() {
   const { profile } = useAuth();
   const { isTablet, salesMasterWidth } = useLayout();
   const [search, setSearch] = useState('');
+  const [discount, setDiscount] = useState<SaleDiscountFilter>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const shift = useActiveShift(profile?.id ?? '');
   const sales = useQuery({
@@ -39,11 +49,21 @@ export default function CurrentShiftSales() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return sales.data ?? [];
-    return (sales.data ?? []).filter((sale) =>
-      sale.sale_number.toLowerCase().includes(term),
+    return (sales.data ?? []).filter(
+      (sale) => matchesSaleDiscount(sale, discount) && (!term || sale.sale_number.toLowerCase().includes(term)),
     );
-  }, [sales.data, search]);
+  }, [sales.data, search, discount]);
+
+  // the funnel's one row: how the order was priced (Standard, Employee / guest meal, PWD, Back office / guard)
+  const discountFilter = useMemo(
+    () => ({
+      title: 'Discount',
+      options: SALE_DISCOUNT_OPTIONS,
+      value: discount,
+      onChange: (value: string) => setDiscount(value as SaleDiscountFilter),
+    }),
+    [discount],
+  );
 
   useEffect(() => {
     if (!isTablet) return;
@@ -77,7 +97,19 @@ export default function CurrentShiftSales() {
     <View style={styles.top}>
       <ManagerScreenHeader title="Current Shift Sales" hideMenu />
       <View style={styles.searchWrap}>
-        <SearchInput value={search} onChangeText={setSearch} placeholder="Search sale #" />
+        <View style={styles.searchRow}>
+          <View style={styles.searchGrow}>
+            <SearchInput value={search} onChangeText={setSearch} placeholder="Search sale #" />
+          </View>
+          <FilterIconButton count={discount !== 'all' ? 1 : 0} onPress={() => setFiltersOpen(true)} />
+        </View>
+        <ListFilterSummary
+          countText={`${filtered.length} of ${sales.data?.length ?? 0} ${(sales.data?.length ?? 0) === 1 ? 'sale' : 'sales'}`}
+          filters={DEFAULT_LIST_FILTERS}
+          keys={NO_LIST_FILTERS}
+          extra={discountFilter}
+          onChange={ignoreListFilters}
+        />
       </View>
     </View>
   );
@@ -99,10 +131,10 @@ export default function CurrentShiftSales() {
       }
       ListEmptyComponent={
         <EmptyState
-          title={search.trim() ? 'No matching sales' : 'No sales yet'}
+          title={search.trim() || discount !== 'all' ? 'No matching sales' : 'No sales yet'}
           message={
-            search.trim()
-              ? 'Try another sale number.'
+            search.trim() || discount !== 'all'
+              ? 'Try another sale number or change the filter.'
               : 'Confirmed orders will appear here.'
           }
         />
@@ -175,6 +207,14 @@ export default function CurrentShiftSales() {
           {!sales.error && (sales.data || !sales.isLoading) ? saleList : null}
         </View>
       )}
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={DEFAULT_LIST_FILTERS}
+        keys={NO_LIST_FILTERS}
+        extra={discountFilter}
+        onChange={ignoreListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
     </Screen>
   );
 }
@@ -205,7 +245,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   top: { gap: spacing.sm },
-  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm },
+  searchWrap: { paddingHorizontal: 20, paddingBottom: spacing.sm, gap: spacing.sm },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchGrow: { flex: 1 },
   amount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
   list: { flex: 1, minHeight: 0 },
   listContent: {

@@ -24,7 +24,7 @@ export function useSignOut() {
   };
 
   const confirmSignOut = () => {
-    confirmAction('Log out?', 'You will need to sign in again to use the app.', () => {
+    confirmAction('Log out?', 'You will need to sign in again.', () => {
       void performSignOut();
     });
   };

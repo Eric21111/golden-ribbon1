@@ -15,7 +15,6 @@ type ChangeEmailFormProps = {
   currentEmail: string;
   onSuccess?: (result: ChangeOwnEmailResult) => void;
   onCancel?: () => void;
-  hintStyle?: StyleProp<TextStyle>;
   currentStyle?: StyleProp<TextStyle>;
   labelStyle?: StyleProp<TextStyle>;
   inputStyle?: StyleProp<TextStyle>;
@@ -32,7 +31,6 @@ export function ChangeEmailForm({
   currentEmail,
   onSuccess,
   onCancel,
-  hintStyle,
   currentStyle,
   labelStyle,
   inputStyle,
@@ -84,17 +82,13 @@ export function ChangeEmailForm({
 
   return (
     <View style={styles.form}>
-      <Text style={[styles.hint, hintStyle]}>
-        Updates the sign-in email for this account only. Role, branch, and historical records stay the same.
-      </Text>
       <Text style={[styles.current, currentStyle]}>Current email: {currentEmail || 'Not available'}</Text>
       <Controller
         control={control}
         name="current_password"
         render={({ field, fieldState }) => (
           <FormField
-            label="Current Password"
-            placeholder="Enter current password"
+            label="Current password"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -119,8 +113,7 @@ export function ChangeEmailForm({
         name="new_email"
         render={({ field, fieldState }) => (
           <FormField
-            label="New Email"
-            placeholder="name@example.com"
+            label="New email"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -142,8 +135,7 @@ export function ChangeEmailForm({
         name="confirm_email"
         render={({ field, fieldState }) => (
           <FormField
-            label="Confirm New Email"
-            placeholder="Re-enter new email"
+            label="Confirm email"
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -164,42 +156,49 @@ export function ChangeEmailForm({
         <Text style={[styles.error, errorStyle]}>{formState.errors.root.message}</Text>
       ) : null}
       {success ? <Text style={[styles.success, successStyle]}>{success}</Text> : null}
-      {renderSubmitButton ? (
-        renderSubmitButton({
-          loading: formState.isSubmitting,
-          disabled: formState.isSubmitting,
-          onPress: handleSubmit(submit),
-        })
-      ) : (
-        <AppButton
-          label="Change email"
-          loading={formState.isSubmitting}
-          disabled={formState.isSubmitting}
-          onPress={handleSubmit(submit)}
-          labelStyle={buttonLabelStyle}
-        />
-      )}
-      {onCancel ? (
-        renderCancelButton ? (
-          renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
-        ) : (
-          <AppButton
-            label="Cancel"
-            variant="secondary"
-            disabled={formState.isSubmitting}
-            onPress={onCancel}
-            labelStyle={buttonLabelStyle}
-          />
-        )
-      ) : null}
+      <View style={styles.actions}>
+        {onCancel ? (
+          <View style={styles.action}>
+            {renderCancelButton ? (
+              renderCancelButton({ disabled: formState.isSubmitting, onPress: onCancel })
+            ) : (
+              <AppButton
+                label="Cancel"
+                variant="secondary"
+                disabled={formState.isSubmitting}
+                onPress={onCancel}
+                labelStyle={buttonLabelStyle}
+              />
+            )}
+          </View>
+        ) : null}
+        <View style={styles.action}>
+          {renderSubmitButton ? (
+            renderSubmitButton({
+              loading: formState.isSubmitting,
+              disabled: formState.isSubmitting,
+              onPress: handleSubmit(submit),
+            })
+          ) : (
+            <AppButton
+              label="Update"
+              loading={formState.isSubmitting}
+              disabled={formState.isSubmitting}
+              onPress={handleSubmit(submit)}
+              labelStyle={buttonLabelStyle}
+            />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   form: { gap: spacing.md },
-  hint: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  current: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  current: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  action: { flex: 1 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   success: { color: colors.success, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 });

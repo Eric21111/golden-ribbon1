@@ -111,12 +111,13 @@ assert.match(screen, /setFilters\(DEFAULT_PRODUCT_FILTERS\);\n\s+setSearch\(valu
 assert.match(screen, /const text = productRowText\(item\);/, 'the card text comes from one helper');
 assert.doesNotMatch(screen, /setFilter\(/, 'no leftover single-filter setter');
 
-// ---- the Filters sheet: three rows with their current value, Reset + Done, no descriptions, no count in the button
+// ---- the Filters sheet: three rows with their current value, Reset only while a filter is on (no Done), no descriptions, no count in the button
 const controls = read('src/features/products/ProductFilterControls.tsx');
 assert.match(controls, /\{ key: 'status', title: 'Enable Product'/);
 assert.match(controls, /\{ key: 'pos', title: 'Show in Cashier POS'/);
 assert.match(controls, /\{ key: 'returns', title: 'Keep Unsold Stock at Branch'/);
-assert.match(controls, /<ManagerActionButton label="Done" onPress=\{onClose\} \/>/);
+assert.doesNotMatch(controls, /label="Done"/, 'no Done button: a pick applies straight away and the sheet has its Close link, like Sort');
+assert.ok(controls.includes('if (rowCount === 1) onClose();'), 'a sheet with a single row closes when its choice is made, like Sort');
 assert.match(controls, /label="Reset"/);
 assert.doesNotMatch(controls, /ingredients and are not sold|stay at the branch|groupHint|Show \$\{/, 'no description text and no "Show N products" button');
 assert.doesNotMatch(screen, /<ProductFiltersSheet[^>]*resultCount/, 'the sheet takes no product count');

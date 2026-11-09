@@ -158,7 +158,9 @@ assert.match(formatCashResultLabel(100, '90', 'shortage'), /shortage/);
 assert.match(formatCashResultLabel(100, '110', 'excess'), /excess/);
 
 // --- Begin confirmation wording reflects full-day freeze ---
-assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Sales and stock transactions for this booth will stop for today/);
+assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Sales and stock changes stop for this booth today/, 'the full-day freeze is still said, in three short bullets');
+assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /count the remaining stock and cash/);
+assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Today cannot be reopened/);
 assert.match(dashboard, /BEGIN_CLOSE_CONFIRM_MESSAGE/);
 assert.match(dashboard, /confirmAction\(/);
 assert.match(dashboard, /Start End Shift/);
@@ -215,7 +217,7 @@ const summary = formatCloseSuccessSummary({
     { result: 'excess' },
   ],
 });
-assert.match(summary, /End Shift Complete/);
+assert.doesNotMatch(summary, /End Shift Complete/, 'the dialog title says it; the message is just the result');
 assert.match(summary, /Cash:/);
 assert.match(summary, /1 exact/);
 assert.match(summary, /1 shortage/);
@@ -227,7 +229,7 @@ assert.match(dashboard, /Complete Pending Remittance/);
 assert.match(dashboard, /useMyFinalizedCloseToday/);
 assert.match(dashboard, /sameDayClosedHint/);
 assert.match(dashboard, /Start again next business day/);
-assert.match(dashboard, /server decides whether a new shift can start/i);
+assert.match(dashboard, /system decides whether a new shift can start/i, 'still no promise that POS can reopen');
 assert.match(shiftService, /hasMyFinalizedCloseToday/);
 assert.match(useShifts, /useMyFinalizedCloseToday/);
 assert.match(errorsSource, /Today's shift is already closed/);

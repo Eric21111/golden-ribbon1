@@ -16,7 +16,8 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   assert.match(sheet, /onAdd\(selectedVariant, quantity, selectedDrink \?/);
   // legacy behaviour for options without a drink
   assert.match(sheet, /Math\.min\(Math\.max\(0, parsed\), remaining\)/);
-  assert.match(sheet, /Maximum available quantity selected/);
+  assert.doesNotMatch(sheet, /Maximum available quantity selected/, 'no sentence at the limit: the + button is simply off');
+  assert.match(sheet, /disabled=\{atLimit \|\| remaining <= 0\}/, 'the + button is off at the limit');
 
   const payment = read('app/(cashier)/cashier/payment.tsx');
   assert.match(payment, /\.\.\.\(drink_product_id \? \{ drink_product_id \} : \{\}\)/, 'the key only exists when a drink was chosen');

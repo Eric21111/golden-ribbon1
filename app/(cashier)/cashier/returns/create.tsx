@@ -23,7 +23,7 @@ function savedReturnRequest(request: { p_items?: ReturnRequest['p_items']; p_not
 
 type Entered = { product_id: string; name: string; sku: string; category: string | null | undefined; quantity: number; system: number };
 
-/** What was counted against what the system says: nothing to explain when they agree. */
+/** What was counted against what the system says: nothing to explain when they agree. The list never lets more than the system has be entered (the database refuses it), so the count can only match or be short. */
 function returnLine(entry: Entered): ReviewLine {
   const difference = entry.quantity - entry.system;
   return {
@@ -33,10 +33,7 @@ function returnLine(entry: Entered): ReviewLine {
     category: entry.category,
     quantity: entry.quantity,
     caption: `System ${entry.system}`,
-    flag:
-      difference === 0
-        ? { label: 'Matches system', tone: 'success' }
-        : { label: difference < 0 ? `${-difference} short` : `${difference} over`, tone: 'warning' },
+    flag: difference === 0 ? { label: 'Matches system', tone: 'success' } : difference < 0 ? { label: `${-difference} short`, tone: 'warning' } : null,
   };
 }
 
@@ -198,6 +195,7 @@ export default function CreateReturnScreen() {
       quantities={qty}
       onQuantityChange={(id, value) => setQty((current) => ({ ...current, [id]: value }))}
       showMax
+      capAtOnHand
       emptyTitle="No leftover stock"
       emptyMessage="Only products still on hand at this branch appear here."
       formError={error || null}

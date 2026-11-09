@@ -224,9 +224,6 @@ export function PosProductCard({
             </View>
           </>
         )}
-        {atProductLimit && !outOfStock ? (
-          <Text style={styles.limit}>Maximum available quantity selected.</Text>
-        ) : null}
       </View>
 
       {outOfStock ? (
@@ -323,7 +320,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   quantityInputCompact: { width: 44 },
-  limit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'right' },
   pressed: { opacity: 0.7 },
   outOverlay: {
     ...StyleSheet.absoluteFill,

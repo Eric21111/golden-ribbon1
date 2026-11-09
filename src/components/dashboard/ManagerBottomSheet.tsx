@@ -10,12 +10,10 @@ export function ManagerBottomSheet(props: ComponentProps<typeof BaseBottomSheet>
     <BaseBottomSheet
       {...props}
       titleStyle={[styles.title, props.titleStyle]}
-      closeLabelStyle={[styles.close, props.closeLabelStyle]}
     />
   );
 }
 
 const styles = StyleSheet.create({
   title: { fontFamily: 'Inter_700Bold', color: managerColors.ink },
-  close: { fontFamily: 'Inter_600SemiBold', color: managerColors.royalBlue },
 });

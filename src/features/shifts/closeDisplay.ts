@@ -79,6 +79,14 @@ export function formatCashResultLabel(
   return `${formatMoney(magnitude)} excess`;
 }
 
+/** The most products named in the message; the rest are counted ("and 3 more"). */
+const SUMMARY_MAX_PRODUCTS = 8;
+
+/**
+ * The message shown when End Shift is finished. The dialog's own title already says "End Shift Complete", so the message is just
+ * the result: the cash, one line for the inventory, and ONLY the products that did not match, by name ("- Beef Curry: 2 short").
+ * A "-" line is shown as a bullet. When everything matched there is no list at all.
+ */
 export function formatCloseSuccessSummary(
   result: ShiftCloseResult,
   namesByProductId?: Record<string, string>,
@@ -90,41 +98,33 @@ export function formatCloseSuccessSummary(
         ? `Cash: ${formatMoney(Math.abs(Number(result.difference)))} shortage`
         : `Cash: ${formatMoney(Math.abs(Number(result.difference)))} excess`;
 
-  const products = result.products ?? [];
-  if (products.length === 0) {
-    return `End Shift Complete\n\n${cash}`;
-  }
+  const products = (result.products ?? []) as ShiftCloseProductSummary[];
+  if (products.length === 0) return cash;
 
   let exact = 0;
   let shortage = 0;
   let excess = 0;
-  for (const row of products as ShiftCloseProductSummary[]) {
+  for (const row of products) {
     if (row.result === 'exact') exact += 1;
     else if (row.result === 'shortage') shortage += 1;
     else excess += 1;
   }
+  const inventory =
+    shortage === 0 && excess === 0
+      ? `Inventory: all ${products.length} ${products.length === 1 ? 'product' : 'products'} exact`
+      : `Inventory: ${[exact > 0 ? `${exact} exact` : '', shortage > 0 ? `${shortage} shortage` : '', excess > 0 ? `${excess} excess` : ''].filter(Boolean).join(' · ')}`;
 
-  const lines = [
-    'End Shift Complete',
-    '',
-    cash,
-    '',
-    'Inventory:',
-    `${exact} exact`,
-    `${shortage} shortage`,
-    `${excess} excess`,
-  ];
-  const details = (products as ShiftCloseProductSummary[])
-    .filter((row) => Number.isFinite(Number(row.expected_remaining)) && Number.isFinite(Number(row.discrepancy)))
+  // only the ones that did not match, named, with how far off they were
+  const off = products
+    .filter((row) => Number.isFinite(Number(row.discrepancy)) && Number(row.discrepancy) !== 0)
     .map((row) => {
-      const name = namesByProductId?.[row.product_id] || 'Product';
-      const expected = Number(row.expected_remaining);
       const difference = Number(row.discrepancy);
-      const differenceLabel = difference > 0 ? `+${difference}` : String(difference);
-      return `${name}: expected remaining ${expected}, difference ${differenceLabel}`;
+      const name = namesByProductId?.[row.product_id] || 'Product';
+      return `- ${name}: ${Math.abs(difference)} ${difference < 0 ? 'short' : 'over'}`;
     });
-  if (details.length > 0) lines.push('', ...details);
-  return lines.join('\n');
+  const shownOff = off.slice(0, SUMMARY_MAX_PRODUCTS);
+  if (off.length > shownOff.length) shownOff.push(`…and ${off.length - shownOff.length} more`);
+  return [cash, inventory, ...shownOff].join('\n');
 }
 
 export function incompleteProductCount(
@@ -140,14 +140,13 @@ export const ACTUAL_REMAINING_HELPER =
 export const WASTE_HELPER = 'Damaged, spoiled, dropped, broken, or otherwise unusable pieces.';
 
 export const BEGIN_CLOSE_CONFIRM_MESSAGE =
-  'Once you start End Shift:\n' +
-  '- Sales and stock transactions for this booth will stop for today\n' +
-  '- You will need to count remaining stock and cash before finishing\n\n' +
-  "You cannot reopen today's selling session after this starts.";
+  '- Sales and stock changes stop for this booth today\n' +
+  '- You count the remaining stock and cash to finish\n' +
+  '- Today cannot be reopened';
 
 export const FINALIZE_CONFIRM_MESSAGE =
-  "This will finalize today's cash and inventory counts.\n" +
-  'You will not be able to change this closing record afterward.';
+  "- Today's cash and stock counts are saved\n" +
+  '- They cannot be changed afterward';
 
 export function isNetworkishError(error: unknown): boolean {
   const message =

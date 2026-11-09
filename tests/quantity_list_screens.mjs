@@ -71,6 +71,14 @@ const rows = [R('1', 'Egg', 'supplies', 50), R('2', 'Coke Mismo', 'drinks', 50),
   assert.doesNotMatch(html, /aria-label="All \d+ on hand/, 'no Max button unless asked for');
   assert.equal((render({ showMax: true }).match(/aria-label="All \d+ on hand for /g) ?? []).length, 5);
 
+  // a ceiling (Create return): at what is on hand "+" is off; below it, and with no ceiling at all, "+" works
+  const plusOff = (markup, name) => new RegExp(`disabled=""[^>]*aria-label="Increase quantity for ${name}"|aria-label="Increase quantity for ${name}"[^>]*disabled=""`).test(markup);
+  assert.equal(plusOff(render({ capAtOnHand: true, quantities: { 3: '25' } }), 'Beef Curry'), true, 'at the on-hand amount (25) + is off');
+  assert.equal(plusOff(render({ capAtOnHand: true, quantities: { 3: '24' } }), 'Beef Curry'), false, 'one below: + still works');
+  assert.equal(plusOff(render({ capAtOnHand: true, quantities: { 3: '25' } }), 'Egg'), false, 'the ceiling is per product');
+  assert.equal(plusOff(render({ quantities: { 3: '25' } }), 'Beef Curry'), false, 'no ceiling (Local purchase): + never stops');
+  assert.equal(plusOff(render({ quantities: { 3: '500' } }), 'Beef Curry'), false);
+
   const entered = flat(render({ quantities: { 1: '10', 3: '2', 2: '0' }, actionDisabled: false }));
   assert.match(entered, /\|2\|products\|12 pcs\|total pcs\|/, 'products and total pieces (a 0 does not count)');
   assert.equal(flat(render({ quantities: { 1: '1' } })).includes('|1|product|'), true, 'singular');
@@ -133,6 +141,11 @@ const rows = [R('1', 'Egg', 'supplies', 50), R('2', 'Coke Mismo', 'drinks', 50),
   assert.ok(listCall.includes('actionLabel="Review return"'));
   assert.match(listCall, /onAction=\{\(\) => \{\n\s+setError\(''\);\n\s+setReviewing\(true\);\n\s+\}\}/, 'it only switches to the review');
   assert.ok(listCall.includes('showMax'), 'Create return: Max fills in everything on hand');
+  assert.ok(listCall.includes('capAtOnHand'), 'Create return: never more than is on hand (the database refuses it)');
+  assert.doesNotMatch(ret, /over`|\$\{difference\} over/, 'no "over" tag');
+  const listSrc = read('src/features/stock/QuantityListScreen.tsx');
+  assert.ok(listSrc.includes('capAtOnHand && Number(value) > row.onHand ? String(row.onHand) : value'), 'typing 999 settles at what is on hand, like Send stock');
+  assert.ok(listSrc.includes('Math.min(capAtOnHand ? row.onHand : 999999, current + 1)'), '+ stops at the ceiling');
   assert.ok(ret.includes("subtitle={branchLine}") && ret.includes("const branchLine = `${profile?.branch?.name ?? 'Assigned branch'} → Main Branch`;"));
   // what is sent is exactly as before
   assert.ok(ret.includes("if (!raw || !Number.isInteger(quantity) || quantity <= 0) return [];"), 'whole pieces above zero only');

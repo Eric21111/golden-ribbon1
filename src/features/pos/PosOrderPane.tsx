@@ -89,20 +89,27 @@ export function PosOrderPane({
           </Text>
           <Text style={styles.totalAmount}>{formatMoney(totalCents / 100)}</Text>
         </View>
-        <ManagerActionButton label="Confirm Order" icon="checkmark-circle-outline" disabled={items.length === 0} onPress={onCheckout} />
-        {items.length > 0 ? (
-          <ManagerActionButton
-            label="Clear order"
-            variant="secondary"
-            onPress={() =>
-              confirmAction(
-                'Clear order?',
-                'Remove all products from this unfinished order.',
-                onClear,
-              )
-            }
-          />
-        ) : null}
+        <View style={styles.actions}>
+          {items.length > 0 ? (
+            <View style={styles.action}>
+              <ManagerActionButton
+                label="Clear"
+                variant="secondary"
+                onPress={() =>
+                  confirmAction(
+                    'Clear order?',
+                    'Remove every product from this order.',
+                    onClear,
+                    { confirm: 'Clear', tone: 'danger' },
+                  )
+                }
+              />
+            </View>
+          ) : null}
+          <View style={styles.action}>
+            <ManagerActionButton label="Confirm" icon="checkmark-circle-outline" disabled={items.length === 0} onPress={onCheckout} />
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -135,6 +142,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 10,
   },
+  actions: { flexDirection: 'row', gap: 10 },
+  action: { flex: 1 },
   totalRow: {
     flexDirection: 'row',
     alignItems: 'center',

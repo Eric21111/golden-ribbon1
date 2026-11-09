@@ -1,3 +1,4 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -8,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
@@ -38,6 +39,7 @@ import { invalidateCompletedSaleQueries } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { listCashierPosInventory } from '@/services/inventoryService';
 import { getCashierLineSellingPrices } from '@/services/productService';
+import { listCashierProductCategories } from '@/services/inventoryService';
 import { listSalePricingProgramSettings } from '@/services/saleService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
@@ -68,11 +70,8 @@ export default function PaymentScreen() {
     if (savedProgram) setPricingProgram(savedProgram);
   }, [savedProgram]);
 
-  const totals = useMemo(
-    () => previewOrderTotals(items, pricingProgram, pricingSettings),
-    [items, pricingProgram, pricingSettings],
-  );
-  const selectedProgram = PRICING_PROGRAM_OPTIONS.find((option) => option.value === pricingProgram);
+  // the same read-only category lookup the POS uses, for the icon on each line (without it the lines just show the plain icon)
+  const categories = useQuery({ queryKey: ['cashier-product-categories'], queryFn: listCashierProductCategories, staleTime: 5 * 60 * 1000 });
 
   const ensureLiveStockAllowsCheckout = async (): Promise<boolean> => {
     const branchId = authoritativePosBranchId(shift.data, profile);
@@ -214,6 +213,7 @@ export default function PaymentScreen() {
         'Checkout order?',
         `${programName}\nCharge ${formatMoney(liveTotals.chargedTotal)}. Stock will be deducted.`,
         runSubmit,
+        { confirm: 'Checkout', tone: 'info' },
       );
     })();
   };
@@ -260,7 +260,7 @@ export default function PaymentScreen() {
                 onRetry={() => setPriceRefreshKey((key) => key + 1)}
               />
             ) : null}
-            <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} />
+            <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} categoryByProductId={categories.data} />
 
             {!checkout.sale ? (
               <View style={styles.programBlock}>
@@ -278,15 +278,13 @@ export default function PaymentScreen() {
                         disabled={unavailable || Boolean(checkout.request)}
                         onPress={() => setPricingProgram(option.value)}
                         style={({ pressed }) => [
-                          styles.programOption,
-                          selected && styles.programOptionSelected,
+                          styles.programPill,
+                          selected && styles.programPillSelected,
+                          (unavailable || Boolean(checkout.request)) && !selected && styles.programPillOff,
                           pressed && styles.pressed,
                         ]}
                       >
-                        <Text style={[styles.programLabel, selected && styles.programLabelSelected]}>
-                          {option.label}
-                        </Text>
-                        <Text style={styles.programHint}>{option.hint}</Text>
+                        <Text style={[styles.programLabel, selected && styles.programLabelSelected]}>{option.label}</Text>
                       </Pressable>
                     );
                   })}
@@ -295,36 +293,9 @@ export default function PaymentScreen() {
                   <Text style={styles.programNote}>
                     Discounts are unavailable until the pending database update is applied. Standard price still checks out.
                   </Text>
-                ) : selectedProgram ? (
-                  <Text style={styles.programNote}>{selectedProgram.hint}</Text>
                 ) : null}
               </View>
             ) : null}
-
-            <View style={styles.totalsCard}>
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>Catalog</Text>
-                <Text style={styles.totalsValue}>{formatMoney(totals.catalogSubtotal)}</Text>
-              </View>
-              {totals.discountAmount > 0 || pricingProgram === 'employee_meal' ? (
-                <View style={styles.totalsRow}>
-                  <Text style={styles.totalsLabel}>
-                    {pricingProgram === 'employee_meal' ? 'Employee meal' : 'Discount'}
-                  </Text>
-                  <Text style={styles.totalsValue}>
-                    −{formatMoney(
-                      pricingProgram === 'employee_meal'
-                        ? totals.catalogSubtotal
-                        : totals.discountAmount,
-                    )}
-                  </Text>
-                </View>
-              ) : null}
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsChargeLabel}>Charge</Text>
-                <Text style={styles.totalsCharge}>{formatMoney(totals.chargedTotal)}</Text>
-              </View>
-            </View>
 
             {priceNotice ? (
               <Text accessibilityRole="alert" style={styles.notice}>
@@ -339,19 +310,23 @@ export default function PaymentScreen() {
           </ScrollView>
 
           <View style={styles.footer}>
-            <ManagerActionButton
-              label={checkout.request ? 'Retry checkout' : 'Checkout'}
-              icon="card-outline"
-              loading={checkout.pending || stockChecking}
-              disabled={!canConfirm}
-              onPress={submit}
-            />
-            <ManagerActionButton
-              label="Back to order"
-              variant="secondary"
-              disabled={checkout.pending || Boolean(checkout.request)}
-              onPress={() => router.replace('/cashier/pos')}
-            />
+            <View style={styles.footerButton}>
+              <ManagerActionButton
+                label="Back"
+                variant="secondary"
+                disabled={checkout.pending || Boolean(checkout.request)}
+                onPress={() => router.replace('/cashier/pos')}
+              />
+            </View>
+            <View style={styles.footerButton}>
+              <ManagerActionButton
+                label={checkout.request ? 'Retry' : 'Checkout'}
+                icon="card-outline"
+                loading={checkout.pending || stockChecking}
+                disabled={!canConfirm}
+                onPress={submit}
+              />
+            </View>
           </View>
         </View>
       </ConstrainedWidth>
@@ -359,13 +334,18 @@ export default function PaymentScreen() {
       <Modal visible={Boolean(checkout.sale)} transparent animationType="fade" onRequestClose={() => {}}>
         <View style={styles.overlay}>
           <View style={styles.card}>
-            <Text style={styles.title}>ORDER CONFIRMED</Text>
-            <Text style={styles.cardLine}>Sale: {checkout.sale?.sale_number}</Text>
-            <Text style={styles.cardLine}>
-              Pricing: {pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}
-            </Text>
-            <Text style={styles.cardLine}>Total: {formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
-            <ManagerActionButton label="Done" onPress={done} />
+            <View style={styles.successBadge}>
+              <Ionicons name="checkmark" size={28} color="#15803D" />
+            </View>
+            <Text style={styles.title}>Order confirmed</Text>
+            <Text style={styles.confirmedTotal}>{formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
+            <Text style={styles.cardLine}>{checkout.sale?.sale_number}</Text>
+            {(checkout.sale?.pricing_program ?? pricingProgram) !== 'standard' ? (
+              <Text style={styles.cardLineMuted}>{pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}</Text>
+            ) : null}
+            <View style={styles.confirmedAction}>
+              <ManagerActionButton label="Done" onPress={done} />
+            </View>
           </View>
         </View>
       </Modal>
@@ -389,38 +369,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    flexDirection: 'row',
+    gap: 10,
   },
+  footerButton: { flex: 1 },
   programBlock: { gap: 10 },
   programTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  programList: { gap: 8 },
-  programOption: {
+  programList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  programPill: {
     borderWidth: 1.5,
     borderColor: managerColors.cardBorder,
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
   },
-  programOptionSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F7F9FD' },
+  programPillSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F3F7FE' },
+  programPillOff: { opacity: 0.5 },
   programLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   programLabelSelected: { color: managerColors.royalBlue },
-  programHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
-  programNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
-  totalsCard: {
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
-    backgroundColor: managerColors.cardSurface,
-  },
-  totalsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalsLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
-  totalsValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  totalsChargeLabel: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  totalsCharge: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 20 },
+  programNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
   notice: {
     color: '#92400E',
@@ -440,13 +408,20 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: spacing.lg,
-    gap: 10,
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
+    gap: 8,
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 400,
     alignSelf: 'center',
+    alignItems: 'center',
   },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 18, color: managerColors.royalBlue, letterSpacing: 0.4 },
-  cardLine: { fontFamily: 'Inter_500Medium', fontSize: 15, color: managerColors.ink },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 18, color: managerColors.ink, textAlign: 'center' },
+  successBadge: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' },
+  confirmedTotal: { fontFamily: 'Inter_700Bold', fontSize: 30, color: managerColors.royalBlue, textAlign: 'center' },
+  cardLine: { fontFamily: 'Inter_500Medium', fontSize: 14, color: managerColors.subtext, textAlign: 'center' },
+  cardLineMuted: { fontFamily: 'Inter_500Medium', fontSize: 13, color: managerColors.subtext, textAlign: 'center' },
+  confirmedAction: { alignSelf: 'stretch', marginTop: 6 },
 });

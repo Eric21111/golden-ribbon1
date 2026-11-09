@@ -62,7 +62,7 @@ export default function CashierIncomingShipments() {
     const idempotencyKey = keyFor(transferId);
     confirmAction(
       'Shipment arrived?',
-      `Confirm delivery from ${transfer.from_branch_name}. All lines are received as sent.`,
+      `Everything from ${transfer.from_branch_name} is received as sent.`,
       () => {
         arrival.reset();
         arrival.mutate(
@@ -75,6 +75,7 @@ export default function CashierIncomingShipments() {
           },
         );
       },
+      { confirm: 'Arrived', tone: 'info' },
     );
   };
 
@@ -84,7 +85,7 @@ export default function CashierIncomingShipments() {
       quantity_received: Number(receivedByItem[line.stock_transfer_item_id] ?? ''),
     }));
     if (items.some((item) => !Number.isInteger(item.quantity_received) || item.quantity_received < 0)) {
-      alertNotice('Check quantities', 'Enter a whole PCS quantity of zero or greater for every line.');
+      alertNotice('Check quantities', 'Enter a whole PCS quantity of zero or greater for every line.', 'warning');
       return;
     }
     if (
@@ -99,18 +100,19 @@ export default function CashierIncomingShipments() {
       alertNotice(
         'No difference entered',
         'Change a counted quantity, or tap Arrived if it matches.',
+        'warning',
       );
       return;
     }
     if (issueNotes.trim().length < 3) {
-      alertNotice('Notes required', 'Describe what is wrong in at least 3 characters.');
+      alertNotice('Notes required', 'Describe what is wrong in at least 3 characters.', 'warning');
       return;
     }
     const transferId = String(transfer.id ?? '').trim();
     const idempotencyKey = keyFor(transferId);
     confirmAction(
       'Report shipment issue?',
-      'Enter the actual PCS counted for each line that differs from what was sent.',
+      'Report the counted quantities that differ from what was sent.',
       () => {
         issue.reset();
         issue.mutate(

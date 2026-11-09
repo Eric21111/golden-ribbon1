@@ -57,8 +57,9 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   // behaviour that must not change
   assert.match(sheet, /canAdd = remaining > 0 && quantity > 0 && \(!needsDrink \|\| selectedDrink !== null\)/);
   assert.match(sheet, /onAdd\(selectedVariant, quantity, selectedDrink \?/);
-  assert.match(sheet, /Maximum available quantity selected\./);
-  assert.match(sheet, /No more stock available\./);
+  assert.doesNotMatch(sheet, /Maximum available quantity selected/, 'no sentence at the limit (the + button is off); the card component has none either');
+  assert.doesNotMatch(read('src/features/pos/PosProductCard.tsx'), /Maximum available quantity selected/);
+  assert.match(sheet, /No more stock available\./, 'the out-of-stock message stays');
   assert.match(sheet, /disabled=\{out\}/, 'an out-of-stock drink cannot be picked');
   assert.match(sheet, /disabled=\{unavailable\}/, 'an unavailable option cannot be picked');
   console.log('3. item sheet: ok');

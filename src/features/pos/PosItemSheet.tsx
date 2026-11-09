@@ -265,11 +265,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
               />
             </View>
           </View>
-          {remaining <= 0 ? (
-            <Text style={styles.limit}>No more stock available.</Text>
-          ) : atLimit ? (
-            <Text style={styles.limit}>Maximum available quantity selected.</Text>
-          ) : null}
+          {remaining <= 0 ? <Text style={styles.limit}>No more stock available.</Text> : null}
         </View>
       ) : null}
     </ManagerBottomSheet>

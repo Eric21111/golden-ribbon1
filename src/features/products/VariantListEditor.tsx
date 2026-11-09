@@ -313,7 +313,7 @@ export function VariantListEditor({
                 `Remove this ${noun}?`,
                 `"${displayName(variant, index)}" will be removed${hasPreviewData ? ', along with its stock items and drink choice' : ''}.`,
                 () => onRemove(index),
-                { confirm: 'Remove' },
+                { confirm: 'Remove', tone: 'danger' },
               );
             };
             const nameProblem = nameProblemOf(variant);
