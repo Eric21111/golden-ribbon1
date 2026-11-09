@@ -1,101 +1,99 @@
-PLAN APPROVED WITH ONE REQUIRED CORRECTION.
+We need to correct the **Create Branch permission** in Golden Ribbon.
 
-Do NOT implement sales_cutoff_at in the cashier hint.
+## Background
 
-Reason:
+Originally, Branch Management / branch creation was intended to be under the **Owner's authority**, not the Manager's.
 
-Current production does NOT have shifts.sales_cutoff_at yet.
-That column is introduced by Revision 7A, which has not been pushed.
+However, during Milestone 11, this permission was changed. The migration appears to have replaced the original Owner-only branch insert/update policies with policies that allow the Main Branch Manager to manage branches.
 
-This fix must work BOTH:
-- against current pre-Revision-7 production
-- after Revision 7 is eventually deployed
+As a result, the current application places the Branches page and Create Branch functionality under the Manager side, while the Owner does not have the intended branch creation access.
 
-Therefore hasMyFinalizedCloseToday must NOT SELECT or reference
-sales_cutoff_at.
+The client has now noticed this and requested that the Create Branch functionality be moved back to the Owner side.
 
-==================================================
-REVISED IMPLEMENTATION
-==================================================
+## Your task — PLAN MODE ONLY
 
-Keep the app-only authorized-read approach.
+Inspect the current repository and prepare a detailed implementation plan to restore the intended permission.
 
-Use getTodayRangeManila():
+### 1. Investigate the original and current implementation
 
-const { start, end } = getTodayRangeManila();
+Inspect:
+- Git history and relevant Milestone 11 changes.
+- Original Owner-only branch policies.
+- The migration that introduced `branches_insert_main_manager` and any related update policy.
+- Current Supabase RLS policies for the `branches` table.
+- Owner navigation, sidebar, routes, and branch management screens.
+- Manager navigation, sidebar, routes, and branch management screens.
+- Branch creation forms, services, RPCs, and authorization checks.
+- Existing role and permission tests.
 
-Query cashier-authorized shifts using ended_at directly:
+Identify exactly which changes moved branch creation from Owner to Main Branch Manager.
 
-shifts
-- select id only
-- cashier_id = cashierId
-- branch_id = branchId
-- status = closed
-- ended_at >= Manila today start
-- ended_at < Manila tomorrow start
+### 2. Intended permission correction
 
-Do NOT fetch a generic recent list + client-filter if the database can apply
-the exact range.
+The required outcome is:
 
-If there are no matching shift IDs:
-return false.
+- **Owner:** Can access Create Branch and create new branches.
+- **Main Branch Manager:** Must no longer be authorized to create branches.
+- Other unauthorized roles must not be able to create branches either.
 
-Then query shift_reconciliations for those shift IDs using existing RLS.
+Important: Do not automatically remove the Manager's ability to view or edit existing branches. Investigate the current behavior and original requirements, then keep existing view/edit permissions unchanged unless a change is strictly necessary. If you believe broader Branch Management should also become Owner-only, present that as a separate recommendation instead of silently including it.
 
-If at least one reconciliation is visible:
-return true.
+### 3. Database and security requirements
 
-On either query failure:
-return false.
+The correction must be enforced at the database level, not just by hiding the Create Branch button.
 
-This is UI HINT ONLY.
+Plan a new **forward-only Supabase migration** that:
+- Restores Owner-only branch insertion.
+- Removes the Main Branch Manager's branch-insertion authority.
+- Preserves unrelated branch policies and permissions.
+- Does not modify or rewrite previously deployed migrations.
+- Does not delete or alter existing branch records.
 
-start_cashier_shift / assert_branch_may_start_shift remains authoritative.
+Check whether branch creation uses any RPC or server-side function that also needs authorization changes.
 
-Do NOT:
-- reference sales_cutoff_at
-- call listShiftRemittances
-- call report_branch_shift_remittances from cashier hint
-- widen report permissions
-- add an RPC
-- add a migration
-- change RLS
+### 4. Application requirements
 
-Owner/Main Manager reporting remains unchanged.
+Plan the necessary changes to:
+- Owner navigation and sidebar.
+- Owner branch management screen or route.
+- Manager navigation and branch screen.
+- Create Branch button and form access.
+- Service-layer authorization and error handling.
+- Role-based UI behavior.
 
-Preserve the plan's note that another cashier's branch-wide finalized close may
-not be visible to this cashier hint; the server will still reject Start Shift.
+Avoid duplicating branch creation logic unnecessarily. Prefer reusing the existing implementation where appropriate.
 
-TESTS:
+### 5. Tests and verification
 
-Add explicit static/regression coverage proving:
+Include tests that prove:
 
-1. hasMyFinalizedCloseToday does NOT reference:
-   - listShiftRemittances
-   - report_branch_shift_remittances
-   - sales_cutoff_at
+1. Owner can access the Create Branch functionality.
+2. Owner can successfully create a branch.
+3. Main Branch Manager cannot create a branch through the UI.
+4. Main Branch Manager is also denied when attempting direct database/API insertion.
+5. Other unauthorized roles cannot create branches.
+6. Existing Manager permissions for viewing and editing branches remain unchanged, if that is the intended current behavior.
+7. Existing branches and related records remain unaffected.
 
-2. It uses:
-   - shifts
-   - ended_at
-   - getTodayRangeManila
-   - shift_reconciliations
+## Important project constraints
 
-3. Owner/Main Manager reporting still uses report_branch_shift_remittances.
+- Revision 7 has already been pushed successfully to the production Supabase database.
+- Do not modify the already-deployed historical migrations.
+- Any database correction must be a new migration.
+- Do not run `supabase db push`.
+- Do not deploy or build a new APK.
+- Do not modify files yet.
 
-4. start_cashier_shift remains authoritative.
+## Expected Plan Mode response
 
-5. No migration/grant/RLS changes.
+Before implementation, provide:
 
-Run:
-- npm run typecheck
-- test:7d
-- test:7e
-- test:7final
-- test:kg-meal
-- relevant remaining suites
+1. Root cause, with exact file paths and migration names.
+2. Original versus current permission behavior.
+3. Exact files that need changes.
+4. Proposed new migration and its security impact.
+5. Test cases and verification commands.
+6. Risks, compatibility concerns, and rollback considerations.
+7. A clear list of anything that needs my approval before implementation.
 
-Return implementation report and STOP.
-
-NO DB PUSH.
-NO DEPLOY.
+**Stop after presenting the plan. Do not implement anything until I review and approve it.**

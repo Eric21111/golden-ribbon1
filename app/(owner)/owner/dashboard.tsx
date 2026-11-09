@@ -393,11 +393,21 @@ export default function OwnerDashboard() {
                 />
                 <NavTile
                   layout="tile"
+                  icon="git-branch-outline"
+                  accent="blue"
+                  title="Branches"
+                  onPress={() => router.push('/owner/branches' as never)}
+                />
+              </Row>
+              <Row>
+                <NavTile
+                  layout="tile"
                   icon="archive-outline"
                   accent="gray"
                   title="Data Archive"
                   onPress={() => router.push('/owner/data-archive' as never)}
                 />
+                <View style={styles.half} />
               </Row>
             </Section>
           </View>

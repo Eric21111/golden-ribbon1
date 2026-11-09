@@ -141,6 +141,7 @@ function getOwnerGroups(): SidebarGroup[] {
           ],
         },
         { label: 'Employees', href: '/owner/employees', icon: 'people-outline', selectedIcon: 'people' },
+        { label: 'Branches', href: '/owner/branches', icon: 'git-branch-outline', selectedIcon: 'git-branch' },
         { label: 'Inventory summary', href: '/owner/inventory-by-branch', icon: 'cube-outline', selectedIcon: 'cube' },
         { label: 'Data archive', href: '/owner/data-archive', icon: 'archive-outline', selectedIcon: 'archive' },
       ],
