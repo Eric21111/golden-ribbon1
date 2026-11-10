@@ -27,6 +27,11 @@ const shift=(await db.query('select public.start_cashier_shift() id')).rows[0].i
 await db.query('select public.confirm_sale($1,$2::jsonb,20,$3)',[shift,JSON.stringify([{product_id:product,quantity:2}]),'reset-test-sale-key-001']);
 await db.query('select public.create_stock_return($1::jsonb,$2,$3)',[JSON.stringify([{product_id:product,quantity_returned:1}]),null,'reset-test-return-key-001']);
 await db.exec('reset role');
+// Include a retained manager's device and a queued delivery: deleting only removed
+// accounts would leave these behind.
+await db.query("insert into public.push_devices(id,user_id,expo_push_token,platform) values ($1,$2,'ExpoPushToken[resetTestDevice0001]','android')",[id(71),manager]);
+await db.query("insert into public.notifications(id,recipient_id,recipient_role,recipient_branch_id,kind,entity_id,title,body) values ($1,$2,'manager',$3,'return_submitted',$4,'Test','Test return')",[id(72),manager,main,id(73)]);
+await db.query('insert into public.push_deliveries(notification_id,device_id) values ($1,$2) on conflict do nothing',[id(72),id(71)]);
 const script=readFileSync('docs/reset-keep-owner-and-main-branch.sql','utf8');
 const execute=script.replace('true, -- PREVIEW ONLY','false, -- PREVIEW ONLY')
  .replace('null, -- Owner UUID',`'${owner}', -- Owner UUID`)

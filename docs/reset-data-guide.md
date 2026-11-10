@@ -40,6 +40,10 @@ The operation uses an explicit `TRUNCATE ... RESTRICT` list, then deletes only t
 
 ## After reset
 
+The November 11 schema check found 35 public tables, including all three notification tables. The reset clears test notifications, queued deliveries, and push registrations, including those of retained accounts. Pause push dispatch and let in-flight sends finish before execution; a reset cannot recall a notification already handed to the push provider. Re-register retained devices through the normal app notification flow afterward. Clear any pending stock-correction requests from test devices along with checkout and return requests.
+
+Stock-correction history is stored in inventory movements; stock awaiting a leftover return is stored in branch inventory. Both tables are already cleared. Their functions, constraints, and triggers remain installed.
+
 - Clear app storage on ALL test devices/browser profiles before signing back in, including retained users' devices, so cached carts and pending checkout/return requests cannot replay. Confirm retained credentials are available first. Deleting an Auth user alone does not immediately invalidate an already-issued JWT; keep removed users' devices out of service. See [Supabase user deletion behavior](https://supabase.com/docs/guides/auth/managing-user-data).
 - Sign in as Admin and manager and verify Main Branch access and the empty catalog/inventory/history.
 - Add real products as the Main Branch Manager, including prices, variants, recipes/drink options, and closing-stock behavior. Set verified opening stock using the application's inventory workflow.

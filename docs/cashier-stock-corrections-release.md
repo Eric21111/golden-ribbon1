@@ -21,7 +21,7 @@ A row-version and quantity comparison rejects stale counts after another sale, r
 1. Back up production and retain the current APK. Confirm the earlier stock-portions and remittance migrations are already applied; do not rerun them.
 2. Apply **only** `supabase/migrations/20261110151546_cashier_stock_corrections.sql` once in the SQL editor. This adds one nullable column, one index and three restricted RPCs; it does not change existing quantities or historical sales/returns.
 3. Test the updated app on a non-production database first, then build the preview APK and perform the Android checks below before distributing it.
-4. Do not run the reset script as part of deploying this feature. This feature adds no new table, but the reset regression currently fails safely because the repository's notification tables (`notifications`, `push_deliveries`, `push_devices`) are absent from its reviewed allowlist. Review that separate reset compatibility issue before using the reset script.
+4. Do not run the reset script as part of deploying this feature. The separately reviewed reset script now covers the notification tables; see the reset data guide before planning a reset.
 
 No production migration or APK build was executed during implementation. The two earlier migrations the user already ran are separate from this new migration.
 
