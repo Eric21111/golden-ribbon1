@@ -79,9 +79,17 @@ assert.equal(result.result, 'exact');
 const recon = Object.fromEntries((await db.query(`select product_name_snapshot n, closing_stock_behavior::text b, unsold_quantity::numeric u, carried_quantity::numeric c from public.shift_product_reconciliations where shift_id=$1`, [shift])).rows.map((r) => [r.n, [r.b, Number(r.u), Number(r.c)]]));
 assert.deepEqual(recon.Rice, ['record_as_unsold', 40, 0], 'Rice (switch off): all 40 recorded as UNSOLD at close');
 assert.deepEqual(recon['Kept Egg'], ['keep_at_branch', 0, 40], 'Kept Egg (switch on): all 40 CARRIED to the next day');
-assert.equal(await qty(rice), 0, 'the branch Rice balance is written off to 0 at close');
+assert.equal(await qty(rice), 40, 'Rice stays on hand so it can be returned after close');
+assert.equal(
+  Number((await db.query('select quantity_awaiting_return q from public.branch_inventory where branch_id=$1 and product_id=$2', [booth, rice.id])).rows[0].q),
+  40,
+  'the unsold count is reserved, not sold on the next shift',
+);
 assert.equal(await qty(keptRice), 40, 'the kept supply still has its 40');
+assert.equal(
+  Number((await db.query('select quantity_awaiting_return q from public.branch_inventory where branch_id=$1 and product_id=$2', [booth, keptRice.id])).rows[0].q),
+  0,
+);
 const moves = (await db.query(`select p.name, m.movement_type::text t, m.quantity::numeric q from public.inventory_movements m join public.products p on p.id=m.product_id where m.reference_type='shift_product_reconciliation' order by 1`)).rows.map((r) => [r.name, r.t, Number(r.q)]);
-assert.deepEqual(moves, [['Rice', 'unsold', -40]], 'one "unsold" movement for Rice, none for the kept supply');
-// and the supply used in a recipe is therefore gone for the next shift unless Main sends it again
+assert.deepEqual(moves, [], 'close records the unsold count without deducting stock');
 console.log('supplies_shift_close_behavior: ALL PASS (current behaviour recorded)');

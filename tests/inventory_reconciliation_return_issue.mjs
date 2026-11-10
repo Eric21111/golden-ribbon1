@@ -8,7 +8,7 @@ assert.match(source, /export function reconciliationIssueBadge/);
 assert.match(source, /Return issue/);
 assert.match(source, /auditDiscrepancySummary/);
 assert.match(source, /Return issues/);
-assert.match(source, /after Main receives/);
+assert.match(source, /Count differences stay listed even when stock totals match/);
 assert.match(source, /hasVisibleReconciliationIssue\(item\)/);
 assert.match(source, /formatLiveStock/);
 assert.doesNotMatch(source, /formatSnapshottedQuantity/);

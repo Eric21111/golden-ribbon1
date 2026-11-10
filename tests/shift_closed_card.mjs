@@ -40,6 +40,22 @@ assert.ok(src.includes("closedActions: { flexDirection: 'row', gap: 10 },") && s
 assert.ok(src.includes('{showIncomingTile && !sameDayClosedHint ? ('), 'the tile stays on No Active Shift, and not on the closed card');
 assert.ok(src.includes("import { Pressable, StyleSheet, Text, View } from 'react-native';"));
 
+// The existing Leftover return tile, unchanged, also sits under a completed close. Not on No Active Shift, and not on the pending remittance form.
+assert.equal((src.match(/title="Leftover return"/g) || []).length, 1);
+assert.match(src, /icon="return-down-back-outline"[\s\S]{0,80}title="Leftover return"[\s\S]{0,80}router\.push\('\/cashier\/returns\/create'\)/);
+assert.match(src, /\{sameDayClosedHint \? <Row>\{leftoverReturnTile\}<\/Row> : null\}/);
+const noShiftBranch = src.slice(
+  src.indexOf('<Text style={styles.noticeTitle}>No Active Shift</Text>'),
+  src.indexOf('{showIncomingTile && !sameDayClosedHint ? ('),
+);
+assert.doesNotMatch(noShiftBranch, /leftoverReturnTile/);
+const pendingStart = src.indexOf('if (pendingPreview &&');
+const pendingEnd = src.indexOf('Checking active shift');
+assert.ok(pendingStart > 0 && pendingEnd > pendingStart);
+assert.doesNotMatch(src.slice(pendingStart, pendingEnd), /leftoverReturnTile/);
+const activeShift = src.slice(src.indexOf('>Active Shift</Text>'));
+assert.equal((activeShift.match(/leftoverReturnTile/g) || []).length, 1);
+
 // what reopening does is unchanged
 assert.ok(src.includes('const submitReopen = () => {') && card.includes("setReopenError('');") && card.includes('setReopenOpen(true);'));
 console.log('shift_closed_card: ALL PASS');

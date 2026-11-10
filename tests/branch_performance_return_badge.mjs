@@ -5,10 +5,10 @@ const source = readFileSync('src/features/reports/BranchPerformanceScreens.tsx',
 assert.match(source, /useState<DateFilterType>\('all_time'\)/);
 assert.equal((source.match(/useState<DateFilterType>\('all_time'\)/g) || []).length, 2);
 assert.doesNotMatch(source, /useState<DateFilterType>\('today'\)/);
-assert.match(source, /Return discrepancies appear after Main counts/);
+assert.match(source, /Return issues appear after Main counts/);
 assert.match(source, /showOlderReturnHint/);
 assert.match(source, /None in this range/);
-assert.match(source, /does not create a/);
+assert.match(source, /does not create one/);
 assert.match(source, /formatLiveStock/);
 assert.doesNotMatch(source, /formatReportLiveOnHand/);
 assert.match(source, /modeLookupReady/);
