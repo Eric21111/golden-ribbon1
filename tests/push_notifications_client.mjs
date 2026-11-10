@@ -34,6 +34,25 @@ const stubs = {
     export const state = { session: null, profile: null };
     export const useAuth = () => ({ session: state.session, profile: state.profile });
   `,
+  '@/features/notifications/pushNotifications': `
+    export const state = { permission: { status: 'granted', canAskAgain: true }, token: 'ExponentPushToken[current-install]',
+      remembered: null, tokenCalls: 0, hang: false };
+    export const isPushSupported = true;
+    export const getPushPermission = async () => state.permission;
+    export const getExpoPushToken = async () => {
+      state.tokenCalls += 1;
+      return state.hang ? new Promise(() => {}) : state.token;
+    };
+    export const getRegisteredToken = () => state.remembered;
+    export const rememberRegisteredToken = (token) => { state.remembered = token; };
+  `,
+  '@/services/notificationService': `
+    export const calls = [];
+    export const registerPushDevice = async (token, platform) => { calls.push(['register', token, platform]); };
+    export const unregisterPushDevice = async (token) => { calls.push(['unregister', token]); };
+    export const getUnreadNotificationCounts = async () => ({ transfer_pending: 0, return_submitted: 0 });
+    export const markNotificationsRead = async () => 0;
+  `,
   '@/lib/supabase': `
     export const isSupabaseConfigured = true;
     export const supabase = { rpc: async () => ({ data: null, error: null }) };
@@ -186,6 +205,48 @@ const settings = await import('../src/features/notifications/pushSettings.ts');
   assert.equal(probe(session, { id: 'u1', role: 'cashier', is_active: false }), 'null', 'deactivated');
   assert.equal(probe(session, { id: 'previous-user', role: 'cashier', is_active: true }), 'null', 'stale profile after account switch');
   assert.equal(probe(null, { id: 'u1', role: 'cashier', is_active: true }), 'null', 'signed out');
+}
+
+// --- Device registration and sign-out cleanup (real pushRegistration) ----------------------------------
+{
+  const push = await import('@/features/notifications/pushNotifications');
+  const service = await import('@/services/notificationService');
+  const { registerThisDeviceForPush, unregisterThisDeviceForPush } = await import('../src/features/notifications/pushRegistration.ts');
+  const reset = (overrides = {}) => {
+    Object.assign(push.state, { permission: { status: 'granted', canAskAgain: true }, remembered: null, tokenCalls: 0, hang: false }, overrides);
+    service.calls.length = 0;
+  };
+
+  reset({ permission: { status: 'denied', canAskAgain: false } });
+  assert.equal(await registerThisDeviceForPush(), false, 'no permission: nothing registered, no prompt');
+  assert.deepEqual(service.calls, []);
+  reset();
+  assert.equal(await registerThisDeviceForPush(), true);
+  assert.deepEqual(service.calls, [['register', 'ExponentPushToken[current-install]', 'android']]);
+  assert.equal(push.state.remembered, 'ExponentPushToken[current-install]');
+
+  reset({ remembered: 'ExponentPushToken[remembered]' });
+  await unregisterThisDeviceForPush();
+  assert.deepEqual(service.calls, [['unregister', 'ExponentPushToken[remembered]']]);
+  assert.equal(push.state.tokenCalls, 0);
+  assert.equal(push.state.remembered, null);
+
+  reset();
+  await unregisterThisDeviceForPush();
+  assert.deepEqual(
+    service.calls,
+    [['unregister', 'ExponentPushToken[current-install]']],
+    'this launch never registered: the install token is still unregistered on sign-out',
+  );
+
+  reset({ permission: { status: 'denied', canAskAgain: true } });
+  await unregisterThisDeviceForPush();
+  assert.deepEqual(service.calls, [], 'no permission: no token lookup');
+
+  reset({ hang: true });
+  const started = Date.now();
+  await unregisterThisDeviceForPush(50);
+  assert.ok(Date.now() - started < 1_000, 'sign-out is never blocked by a hanging token lookup');
 }
 
 // --- Source wiring ------------------------------------------------------------------------------------

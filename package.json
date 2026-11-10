@@ -71,7 +71,7 @@
     "test:owner-navigation": "node tests/owner_navigation_cleanup.mjs",
     "test:manager-dashboard-layout": "node tests/manager_dashboard_layout.mjs",
     "test:manager-needs-attention": "node tests/manager_needs_attention.mjs",
-    "test:push-notifications": "node tests/push_notifications.mjs && node tests/push_notifications_client.mjs",
+    "test:push-notifications": "node tests/push_notifications.mjs && node tests/push_notifications_client.mjs && node tests/push_dispatch_function.mjs",
     "test:recon-return": "node tests/inventory_reconciliation_return_issue.mjs",
     "test:product-active": "node tests/product_active_after_opening.mjs",
     "test:create-product": "node tests/create_product_integrity.mjs",

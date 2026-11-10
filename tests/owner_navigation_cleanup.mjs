@@ -153,6 +153,7 @@ const routesOf = (rendered) =>
     ['Discrepancies Reconciliation', '/owner/reports/inventory-reconciliation'],
     ['Discrepancy Analytics', '/owner/reports/discrepancies'],
     ['Employees', '/owner/employees'],
+    ['Branches', '/owner/branches'],
     ['Data Archive', '/owner/data-archive'],
   ]);
   assert.ok(rendered.every((tile) => tile.layout === 'tile'), 'dashboard keeps the compact tile layout');

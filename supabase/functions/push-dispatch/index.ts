@@ -16,6 +16,8 @@ import {
 
 // Server-only: invoked by Postgres (pg_net) and pg_cron with the project secret key. Clients never call it.
 const MAX_SEND_BATCHES = 5;
+// Keeps a full run (5 send batches + receipts) well inside the Edge Function wall-clock limit.
+const EXPO_TIMEOUT_MS = 15_000;
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -49,11 +51,17 @@ function expoHeaders(): HeadersInit {
 
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; payload: unknown }> {
   try {
-    const res = await fetch(url, { method: 'POST', headers: expoHeaders(), body: JSON.stringify(body) });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: expoHeaders(),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
+    });
     const payload = await res.json().catch(() => null);
     return { ok: res.ok, payload };
   } catch (error) {
-    return { ok: false, payload: { errors: [{ code: 'NetworkError', message: String(error) }] } };
+    const code = error instanceof Error && error.name === 'TimeoutError' ? 'Timeout' : 'NetworkError';
+    return { ok: false, payload: { errors: [{ code, message: String(error) }] } };
   }
 }
 

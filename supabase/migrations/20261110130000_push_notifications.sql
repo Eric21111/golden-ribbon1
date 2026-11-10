@@ -420,9 +420,12 @@ as $$
 declare
   v_result jsonb;
 begin
-  -- Recover batches abandoned mid-send.
+  -- Recover batches abandoned mid-send, within the same attempt limit as reported failures.
   update public.push_deliveries
-  set status = 'pending', locked_at = null, updated_at = now()
+  set status = case when attempts >= 5 then 'failed' else 'pending' end,
+      last_error = case when attempts >= 5 then 'Dispatch interrupted; retry limit reached' else last_error end,
+      locked_at = null,
+      updated_at = now()
   where status = 'sending' and locked_at < now() - interval '10 minutes';
 
   -- Never push to a device that moved accounts, a signed-out device, or a recipient who is no longer

@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
+
+const nodeRequire = createRequire(import.meta.url);
 
 function loadTsWithAlias(entryPath, aliasRoot = 'src') {
   const cache = new Map();
@@ -16,13 +19,13 @@ function loadTsWithAlias(entryPath, aliasRoot = 'src') {
     });
     const module = { exports: {} };
     const localRequire = (id) => {
-      if (id.startsWith('@/')) {
-        const resolved = path.resolve(aliasRoot, id.slice(2));
+      if (id.startsWith('@/') || id.startsWith('./') || id.startsWith('../')) {
+        const resolved = id.startsWith('@/') ? path.resolve(aliasRoot, id.slice(2)) : path.resolve(path.dirname(abs), id);
         for (const candidate of [`${resolved}.ts`, `${resolved}.tsx`, resolved]) {
           try {
             return load(candidate);
-          } catch {
-            // continue
+          } catch (error) {
+            if (error?.code !== 'ENOENT' || path.resolve(error.path ?? '') !== path.resolve(candidate)) throw error;
           }
         }
         throw new Error(`Unable to resolve ${id}`);
@@ -30,7 +33,7 @@ function loadTsWithAlias(entryPath, aliasRoot = 'src') {
       if (id === 'react-native' || id.startsWith('react')) {
         return new Proxy({}, { get: () => () => null });
       }
-      return require(id);
+      return nodeRequire(id);
     };
     vm.runInNewContext(
       outputText,

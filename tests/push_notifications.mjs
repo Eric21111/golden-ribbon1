@@ -63,8 +63,13 @@ await db.exec(`
   create function auth.uid() returns uuid language sql as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
   $$;
-  grant usage on schema public, auth to authenticated, service_role;
-  grant execute on function auth.uid() to authenticated, service_role;
+  grant usage on schema public, auth to anon, authenticated, service_role;
+  grant execute on function auth.uid() to anon, authenticated, service_role;
+  -- Supabase's default grants: every new public table/function is granted to anon and authenticated, so only
+  -- explicit revokes in the migration keep clients out.
+  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 `);
 for (const file of readdirSync('supabase/migrations').filter((name) => name.endsWith('.sql')).sort()) {
   await db.exec(
@@ -284,6 +289,56 @@ assert.deepEqual(await myCounts(mainMgr), { transfer_pending: 0, return_submitte
 await db.exec(`update public.profiles set is_active=true where id='${mainMgr}'`);
 assert.equal((await myVisible(mainMgr)).length, 2, 'reactivated: history returns');
 
+// Anonymous callers get nothing at all.
+for (const sql of [
+  'select * from public.notifications',
+  'select * from public.push_devices',
+  'select * from public.push_deliveries',
+  'select public.get_my_unread_notification_counts()',
+  `select public.mark_notifications_read('transfer_pending', null)`,
+  `select public.register_push_device('ExponentPushToken[anonymous-device-1]', 'android')`,
+  `select public.unregister_push_device('${tokenA}')`,
+  'select public.claim_push_deliveries(10)',
+  `select public.can_see_notification('${cashier1}', 'cashier', '${sm1}')`,
+]) {
+  await assert.rejects(() => asRole('anon', null, () => db.query(sql)), /permission denied/, `anon: ${sql}`);
+}
+// Every function the migration adds is closed to anon; only the intended ones are open to authenticated.
+{
+  const exposed = await rows(`
+    select p.proname, has_function_privilege('anon', p.oid, 'execute') anon,
+           has_function_privilege('authenticated', p.oid, 'execute') authed
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = any($1::text[]) order by p.proname`,
+    [[
+      'can_see_notification', 'get_my_unread_notification_counts', 'mark_notifications_read', 'register_push_device',
+      'unregister_push_device', 'claim_push_deliveries', 'record_push_tickets', 'claim_push_receipts', 'record_push_receipts',
+      'request_push_dispatch', 'request_push_dispatch_if_due', 'push_deliveries_after_insert', 'notifications_queue_push',
+      'notify_transfer_awaiting_receipt', 'notify_return_submitted',
+    ]],
+  );
+  assert.equal(exposed.length, 15);
+  assert.deepEqual(exposed.filter((f) => f.anon).map((f) => f.proname), []);
+  assert.deepEqual(exposed.filter((f) => f.authed).map((f) => f.proname).sort(), [
+    'can_see_notification', 'get_my_unread_notification_counts', 'mark_notifications_read', 'register_push_device', 'unregister_push_device',
+  ]);
+}
+// Events cannot be forged by writing the stock tables directly; only the operation RPCs create them.
+{
+  const before = (await rows('select count(*)::int n from public.notifications'))[0].n;
+  for (const [user, sql] of [
+    [mainMgr, `insert into public.stock_transfers(transfer_number, from_branch_id, to_branch_id, status, created_by, sent_by, sent_at)
+               values ('TRF-FORGED-1', '${main}', '${sm1}', 'pending_receipt', '${mainMgr}', '${mainMgr}', now())`],
+    [cashier1, `insert into public.stock_returns(return_number, from_branch_id, to_branch_id, created_by, returned_by,
+               from_branch_name, to_branch_name, returned_by_name, idempotency_key, request_items)
+               values ('RET-FORGED-1', '${sm1}', '${main}', '${cashier1}', '${cashier1}', 'SM1', 'Main', 'x', 'forged-return-000001', '[]')`],
+  ]) {
+    await assert.rejects(() => asUser(user, () => db.query(sql)), /permission denied|row-level security/);
+  }
+  await asUser(mainMgr, () => db.query(`update public.stock_transfers set status = status where id = $1`, [t1])).catch(() => undefined);
+  assert.equal((await rows('select count(*)::int n from public.notifications'))[0].n, before, 'no forged notifications');
+}
+
 // --- Feature 5: dispatcher RPCs are server-only ---------------------------------------------------
 for (const sql of [
   'select public.claim_push_deliveries(10)',
@@ -416,6 +471,24 @@ await db.exec(`update public.profiles set is_active=true where id='${cashier1}'`
   await asService(() => db.query('select public.record_push_tickets($1::jsonb)', [JSON.stringify([{ delivery_id: retry.id, error: 'InvalidCredentials', message: 'bad' }])]));
   assert.deepEqual((await rows('select status, last_error from public.push_deliveries where id=$1', [retry.id]))[0], {
     status: 'failed', last_error: 'InvalidCredentials: bad',
+  });
+}
+
+// A dispatcher that dies mid-send: recovered for retry, but never past the attempt limit.
+{
+  const t7 = await send(sm2, [{ product_id: drink, quantity_sent: '1' }], 'push-send-t7-00000001');
+  const [stuck] = await rows(
+    `select d.id from public.push_deliveries d join public.notifications n on n.id=d.notification_id where n.entity_id=$1`,
+    [t7],
+  );
+  assert.equal((await asService(async () => (await rows('select public.claim_push_deliveries(100) c'))[0].c)).length, 1);
+  await db.exec(`update public.push_deliveries set locked_at = now() - interval '11 minutes' where id='${stuck.id}'`);
+  const [again] = await asService(async () => (await rows('select public.claim_push_deliveries(100) c'))[0].c);
+  assert.equal(again.delivery_id, stuck.id, 'abandoned send is retried');
+  await db.exec(`update public.push_deliveries set attempts = 5, locked_at = now() - interval '11 minutes' where id='${stuck.id}'`);
+  assert.deepEqual(await asService(async () => (await rows('select public.claim_push_deliveries(100) c'))[0].c), []);
+  assert.deepEqual((await rows('select status, last_error from public.push_deliveries where id=$1', [stuck.id]))[0], {
+    status: 'failed', last_error: 'Dispatch interrupted; retry limit reached',
   });
 }
 
