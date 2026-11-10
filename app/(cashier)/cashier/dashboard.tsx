@@ -210,6 +210,15 @@ export default function CashierDashboard() {
       onPress={() => router.push('/cashier/incoming' as never)}
     />
   ) : null;
+  const leftoverReturnTile = (
+    <NavTile
+      layout="tile"
+      icon="return-down-back-outline"
+      accent="teal"
+      title="Leftover return"
+      onPress={() => router.push('/cashier/returns/create')}
+    />
+  );
 
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
@@ -460,7 +469,7 @@ export default function CashierDashboard() {
             onRetry={() => void shiftQuery.refetch()}
           />
         ) : !shiftQuery.data ? (
-          (
+          <View style={styles.content}>
             <View style={styles.noticeCard}>
               {sameDayClosedHint ? (
                 <>
@@ -540,7 +549,8 @@ export default function CashierDashboard() {
                 </>
               ) : null}
             </View>
-          )
+            {sameDayClosedHint ? <Row>{leftoverReturnTile}</Row> : null}
+          </View>
         ) : (
           <View style={styles.content}>
             <View style={styles.row}>
@@ -614,13 +624,7 @@ export default function CashierDashboard() {
                     title="Local purchase"
                     onPress={() => router.push('/cashier/local-purchase')}
                   />
-                  <NavTile
-                    layout="tile"
-                    icon="return-down-back-outline"
-                    accent="teal"
-                    title="Leftover return"
-                    onPress={() => router.push('/cashier/returns/create')}
-                  />
+                  {leftoverReturnTile}
                 </Row>
               </>
             ) : null}

@@ -227,7 +227,7 @@ const finalize = (db, cashier, shiftId, actualCash, products) =>
   assert.equal(Number(result.actual_cash), 50);
   assert.equal(Number(result.difference), 0);
   assert.equal(await qty(db, ctx.branch, ctx.drink), 8); // keep_at_branch
-  assert.equal(await qty(db, ctx.branch, ctx.meal), 0); // record_as_unsold
+  assert.equal(await qty(db, ctx.branch, ctx.meal), 5); // record_as_unsold stays for the manual return
 
   // Idempotent retry
   const again = await finalize(db, ctx.cashier, shiftId, '50.00', [
