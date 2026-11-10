@@ -334,6 +334,7 @@ export default function PaymentScreen() {
                 <SignOutButton />
               </View>
             ) : null}
+            {validation && !checkout.request && !checkout.sale ? <ManagerActionButton label="Check actual stock" variant="secondary" onPress={() => router.push('/cashier/correct-stock' as never)} /> : null}
           </ScrollView>
 
           <View style={styles.footer}>

@@ -1,0 +1,91 @@
+process.on('uncaughtException', e => { console.error(e.message, e.detail ?? '', e.where ?? '', e.stack?.split('\n').slice(-3).join('\n')); process.exit(1); });
+import assert from 'node:assert/strict';
+import { readFileSync,readdirSync } from 'node:fs';
+import { PGlite } from '@electric-sql/pglite';
+const db=new PGlite();
+await db.exec(`create role anon; create role authenticated; create role service_role;
+create schema auth; create table auth.users(id uuid primary key,email text,encrypted_password text);
+create table auth.identities(id uuid primary key,user_id uuid references auth.users on delete cascade);
+create table auth.sessions(id uuid primary key,user_id uuid references auth.users on delete cascade);
+create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema public,auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort())
+ await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8').replace(/create extension if not exists pgcrypto;/g,''));
+const id=n=>`81100000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const owner=id(1),manager=id(2),cashier=id(3),branch=id(4),product=id(5);
+await db.exec("insert into public.branches(name,code,is_main_branch) values ('Main Branch','MAIN',true) on conflict do nothing");
+const main=(await db.query('select id from public.branches where is_main_branch')).rows[0].id;
+await db.exec(`insert into auth.users values ('${owner}','owner@test','owner-hash'),('${manager}','manager@test','manager-hash'),('${cashier}','cashier@test','cashier-hash');
+insert into auth.identities select id,id from auth.users; insert into auth.sessions select id,id from auth.users;
+insert into public.branches(id,name,code) values ('${branch}','Test booth','TB');
+insert into public.profiles(id,full_name,role,branch_id) values ('${owner}','Test Owner','owner','${main}'),('${manager}','Test Manager','manager','${main}'),('${cashier}','Test Cashier','cashier','${branch}');
+insert into public.products(id,name,sku,selling_price,closing_stock_behavior) values ('${product}','Test Product','TP',10,'keep_at_branch');
+insert into public.branch_products(branch_id,product_id,selling_price) values ('${branch}','${product}',10);
+insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values ('${branch}','${product}',5);
+set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false);`);
+const shift=(await db.query('select public.start_cashier_shift() id')).rows[0].id;
+await db.query('select public.confirm_sale($1,$2::jsonb,20,$3)',[shift,JSON.stringify([{product_id:product,quantity:2}]),'reset-test-sale-key-001']);
+await db.query('select public.create_stock_return($1::jsonb,$2,$3)',[JSON.stringify([{product_id:product,quantity_returned:1}]),null,'reset-test-return-key-001']);
+await db.exec('reset role');
+
+const as=async(user, fn)=>{await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${user}',false)`);try{return await fn();}finally{await db.exec('reset role');}};
+
+const snapshot=async()=> (await db.query('select quantity_on_hand::int quantity, updated_at::text from public.branch_inventory where branch_id=$1 and product_id=$2',[branch,product])).rows[0];
+const correct=(user,args)=>as(user,()=>db.query('select public.correct_cashier_stock_count($1,$2,$3,$4,$5,$6,$7) id',args));
+const request=async(actual,key)=>{const s=await snapshot();return [shift,product,s.quantity,s.updated_at,actual,'Incorrect kitchen count',key];};
+const total=async()=> (await db.query("select count(*)::int n from public.inventory_movements where stock_count_correction is not null")).rows[0].n;
+const stock=await as(cashier,()=>db.query('select * from public.list_cashier_correction_stock()'));
+assert.equal(Number(stock.rows.find(p=>p.product_id===product).quantity),2);
+const up=await request(10,'correction-test-up-001');
+const result=await correct(cashier,up);
+await correct(cashier,up);
+assert.equal((await snapshot()).quantity,10);assert.equal(await total(),1);
+await assert.rejects(correct(cashier,[...up.slice(0,4),11,...up.slice(5)]),/different correction/);
+await assert.rejects(correct(manager,await request(9,'correction-manager-001')),/Active cashier/);
+await assert.rejects(correct(owner,await request(9,'correction-owner-001')),/Active cashier/);
+for(const value of [-1,0.5,1000000,'NaN']) await assert.rejects(correct(cashier,await request(value,'invalid-value-key-001')),/valid whole/);
+await assert.rejects(correct(cashier,await request(10,'unchanged-value-key-001')),/unchanged/);
+const stale=await request(7,'correction-stale-001');
+await as(cashier,()=>db.query('select public.confirm_sale($1,$2::jsonb,10,$3)',[shift,JSON.stringify([{product_id:product,quantity:1}]),'correction-sale-001']));
+await assert.rejects(correct(cashier,stale),/Stock changed/);
+assert.equal((await snapshot()).quantity,9);
+await correct(cashier,await request(7,'correction-down-001'));
+assert.equal((await snapshot()).quantity,7);
+// Reject even an equal-quantity snapshot if another movement changed the row version.
+const aba=await request(8,'correction-version-001');
+await db.query('update public.branch_inventory set quantity_on_hand=quantity_on_hand where branch_id=$1 and product_id=$2',[branch,product]);
+await assert.rejects(correct(cashier,aba),/Stock changed/);
+// A ledger failure must roll back the inventory update.
+await db.exec(`create function public.test_reject_correction() returns trigger language plpgsql as $$ begin if new.stock_count_correction is not null then raise exception 'Injected ledger failure'; end if; return new; end $$;
+create trigger test_reject_correction before insert on public.inventory_movements for each row execute function public.test_reject_correction();`);
+await assert.rejects(correct(cashier,await request(6,'correction-rollback-001')),/Injected ledger failure/);
+assert.equal((await snapshot()).quantity,7);assert.equal(await total(),2);
+await db.exec('drop trigger test_reject_correction on public.inventory_movements; drop function public.test_reject_correction()');
+await correct(cashier,await request(0,'correction-zero-001'));
+assert.equal((await snapshot()).quantity,0);
+await assert.rejects(as(cashier,()=>db.query('select public.confirm_sale($1,$2::jsonb,10,$3)',[shift,JSON.stringify([{product_id:product,quantity:1}]),'correction-zero-sale-001'])),/stock/i);
+await correct(cashier,await request(7,'correction-restore-001'));
+const other=id(90),otherBranch=id(91);
+await db.exec(`insert into auth.users(id,email) values ('${other}','other@test'); insert into public.branches(id,name,code) values ('${otherBranch}','Other','OTHER'); insert into public.profiles(id,full_name,role,branch_id) values ('${other}','Other cashier','cashier','${otherBranch}');`);
+assert.equal((await as(other,()=>db.query('select * from public.list_cashier_correction_stock()'))).rows.length,0);
+assert.deepEqual((await as(other,()=>db.query('select public.list_stock_count_corrections() rows'))).rows[0].rows,[]);
+await assert.rejects(correct(other,await request(6,'other-branch-key-001')),/active shift/i);
+for(const actor of [owner,manager,cashier]) {
+  const history=(await as(actor,()=>db.query('select public.list_stock_count_corrections() rows'))).rows[0].rows;
+  assert.equal(history.length,4); assert.equal(history[0].details.after,7); assert.equal(history[3].details.before,2);
+}
+const frozen=await request(6,'correction-frozen-001');
+const preview=(await as(cashier,()=>db.query('select public.begin_cashier_shift_close($1) p',[shift]))).rows[0].p;
+const row=preview.products.find(p=>p.product_id===product);
+assert.equal(row.adjustment_quantity,6);assert.equal(row.system_balance_before_waste,7);
+await assert.rejects(correct(cashier,frozen),/frozen|remittance/);
+assert.equal((await correct(cashier,up)).rows[0].id,result.rows[0].id,'lost-response retry after freeze returns original receipt');
+const counts=preview.products.map(p=>({product_id:p.product_id,actual_remaining:String(p.system_balance_before_waste)}));
+await as(cashier,()=>db.query('select public.finalize_cashier_shift_reconciliation($1,$2,$3::jsonb)',[shift,String(preview.expected_cash),JSON.stringify(counts)]));
+await assert.rejects(correct(cashier,frozen),/frozen|active shift/);
+await db.exec('set role anon');
+await assert.rejects(db.query('select public.list_stock_count_corrections()'),/permission denied/);
+await db.exec('reset role');
+await db.close();
+console.log('Stock corrections passed: up/down, validation, role/branch isolation, stale/version checks, retries, sale, rollback, audit history, remittance and freeze.');
+

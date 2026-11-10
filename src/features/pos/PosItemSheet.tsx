@@ -21,9 +21,10 @@ type PosItemSheetProps = {
   /** `drink` is set when the option includes a drink: the one the cashier picked. */
   onAdd: (variant: PosVariant | null, quantity: number, drink?: PosDrinkChoice | null) => void;
   onClose: () => void;
+  onCorrectStock?: () => void;
 };
 
-export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, onClose }: PosItemSheetProps) {
+export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, onClose, onCorrectStock }: PosItemSheetProps) {
   const variants = useMemo(() => sortMealVariants(item?.variants ?? []), [item?.variants]);
   const hasVariants = variants.length > 0;
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
@@ -266,6 +267,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
             </View>
           </View>
           {remaining <= 0 ? <Text style={styles.limit}>No more stock available.</Text> : null}
+          {remaining <= 0 && onCorrectStock ? <ManagerActionButton label="Check actual stock" variant="secondary" onPress={onCorrectStock} /> : null}
         </View>
       ) : null}
     </ManagerBottomSheet>

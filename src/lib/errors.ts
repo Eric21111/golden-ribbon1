@@ -24,6 +24,14 @@ function isNetworkError(message: string): boolean {
 /** Maps backend failures to an allow-list of user-safe messages. Never return raw backend text here. */
 export function getErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
+  if (message.includes('stock changed while you were counting')) return 'Stock changed while you were counting. Refresh and count the remaining stock again.';
+  if (message.includes('count is unchanged')) return 'The count is unchanged; no correction is needed.';
+  if (message.includes('valid whole stock count')) return 'Enter a whole stock count from 0 to 999999 and select a reason.';
+  if (message.includes('different correction')) return 'This confirmation belongs to another correction. Review correction history before trying again.';
+  if (message.includes('active shift is required')) return 'An active shift is required. Complete pending remittance first.';
+  if (message.includes('branch inventory is frozen')) return 'Stock corrections are locked during pending remittance and after final close for the day.';
+  if (message.includes('active cashier required')) return 'Sign in with an active cashier account to correct stock.';
+  if (message.includes('does not belong to your branch inventory')) return 'Select a stock item from your assigned branch.';
   if (message.includes('branches_one_main_branch')) return 'Only one branch can be marked as the Main Branch.';
   if (message.includes('branches_code_unique_ci')) return 'That branch code is already in use.';
   if (

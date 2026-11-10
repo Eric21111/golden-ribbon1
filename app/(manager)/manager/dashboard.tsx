@@ -167,6 +167,7 @@ export default function ManagerDashboard() {
 
             {isMain ? (
               <Section title="REPORTS">
+                <NavTile icon="create-outline" accent="blue" title="Stock corrections" onPress={() => router.push('/manager/reports/stock-corrections' as never)} />
                 <Row>
                   <NavTile
                     layout="tile"

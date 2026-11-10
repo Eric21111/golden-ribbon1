@@ -19,6 +19,8 @@ function CashierNavigator() {
         <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
           <Stack.Screen name="cashier/dashboard" />
           <Stack.Screen name="cashier/pos" />
+          <Stack.Screen name="cashier/correct-stock" />
+          <Stack.Screen name="cashier/stock-corrections" />
           <Stack.Screen name="cashier/payment" />
           <Stack.Screen name="cashier/sales" />
           <Stack.Screen name="cashier/sales/[id]" />

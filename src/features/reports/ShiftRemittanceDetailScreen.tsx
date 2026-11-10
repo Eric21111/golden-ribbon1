@@ -309,7 +309,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
             <Text style={styles.ledgerValue}>{formatPcsQty(product.sold_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Adjustment</Text>
+            <Text style={styles.ledgerLabel}>Adjustments (includes count corrections)</Text>
             <Text style={styles.ledgerValue}>{formatPcsQty(product.adjustment_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>

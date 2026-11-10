@@ -317,6 +317,9 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      list_cashier_correction_stock: { Args: Record<string, never>; Returns: import('@/services/stockCorrectionService').CorrectionStock[] };
+      correct_cashier_stock_count: { Args: import('@/services/stockCorrectionService').CorrectionRequest; Returns: string };
+      list_stock_count_corrections: { Args: { p_offset?: number }; Returns: import('@/services/stockCorrectionService').CorrectionHistory[] };
       get_stock_unit_codes: {
         Args: { p_product_ids: string[] };
         Returns: Array<{ product_id: string; stock_unit_code: import('@/lib/stockUnits').StockUnitCode | null }>;

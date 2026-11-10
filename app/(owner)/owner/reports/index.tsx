@@ -13,6 +13,7 @@ export default function OwnerReportsHub() {
       <ManagerScreenHeader title="Reports" subtitle="Company-wide read-only performance" />
       <ConstrainedWidth style={styles.column}>
         <View style={styles.list}>
+          <NavTile icon="create-outline" accent="blue" title="Stock corrections" description="Cashier counts, reasons, and stock changes" onPress={() => router.push('/owner/reports/stock-corrections' as never)} />
           <NavTile
             icon="stats-chart-outline"
             accent="blue"
