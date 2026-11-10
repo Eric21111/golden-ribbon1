@@ -35,14 +35,14 @@ export default function LocalPurchaseScreen() {
     return rows.flatMap((row) => {
       const raw = (qty[row.product_id] ?? '').trim();
       if (!raw || raw === '0') return [];
-      return [{ product_id: row.product_id, name: row.product_name, sku: row.product_sku, category: row.product_category, onHand: row.quantity_on_hand, quantity: raw }];
+      return [{ product_id: row.product_id, name: row.product_name, sku: row.product_sku, stock_unit_code: row.stock_unit_code, category: row.product_category, onHand: row.quantity_on_hand, quantity: raw }];
     });
   }, [catalog.data, qty]);
 
   const reviewLines: ReviewLine[] = lines.map((line) => ({
     id: line.product_id,
     name: line.name,
-    sku: line.sku,
+    sku: line.sku, stock_unit_code: line.stock_unit_code,
     category: line.category,
     quantity: Number(line.quantity),
     caption: `On hand ${line.onHand}`,
@@ -112,7 +112,7 @@ export default function LocalPurchaseScreen() {
   const rows: QuantityRow[] = (catalog.data ?? []).map((row) => ({
     id: row.product_id,
     name: row.product_name,
-    sku: row.product_sku,
+    sku: row.product_sku, stock_unit_code: row.stock_unit_code,
     category: row.product_category,
     onHand: row.quantity_on_hand,
   }));

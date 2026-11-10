@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { supabase } from '@/lib/supabase';
 import type {
   BranchPerformanceDetails,
@@ -21,7 +22,7 @@ export async function reportBranchPerformance(
   return (data as unknown as BranchPerformanceItem[]) ?? [];
 }
 
-export async function getBranchPerformanceDetails(
+async function readGetBranchPerformanceDetails(
   branchId: string,
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
   startDate?: string,
@@ -37,7 +38,7 @@ export async function getBranchPerformanceDetails(
   return data as unknown as BranchPerformanceDetails;
 }
 
-export async function reportTransferDiscrepancies(
+async function readReportTransferDiscrepancies(
   branchId?: string,
   discrepancyType?: 'all' | 'missing' | 'excess',
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
@@ -55,7 +56,7 @@ export async function reportTransferDiscrepancies(
   return (data as unknown as TransferDiscrepancyReportItem[]) ?? [];
 }
 
-export async function reportReturnDiscrepancies(
+async function readReportReturnDiscrepancies(
   branchId?: string,
   discrepancyType?: 'all' | 'missing' | 'excess',
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
@@ -73,7 +74,7 @@ export async function reportReturnDiscrepancies(
   return (data as unknown as ReturnDiscrepancyReportItem[]) ?? [];
 }
 
-export async function reportInventoryReconciliation(
+async function readReportInventoryReconciliation(
   branchId?: string
 ): Promise<InventoryReconciliationItem[]> {
   const { data, error } = await supabase.rpc('report_inventory_reconciliation', {
@@ -81,4 +82,20 @@ export async function reportInventoryReconciliation(
   });
   if (error) throw error;
   return (data as unknown as InventoryReconciliationItem[]) ?? [];
+}
+
+export async function getBranchPerformanceDetails(...args: Parameters<typeof readGetBranchPerformanceDetails>) {
+  return withStockUnits(await readGetBranchPerformanceDetails(...args));
+}
+
+export async function reportTransferDiscrepancies(...args: Parameters<typeof readReportTransferDiscrepancies>) {
+  return withStockUnits(await readReportTransferDiscrepancies(...args));
+}
+
+export async function reportReturnDiscrepancies(...args: Parameters<typeof readReportReturnDiscrepancies>) {
+  return withStockUnits(await readReportReturnDiscrepancies(...args));
+}
+
+export async function reportInventoryReconciliation(...args: Parameters<typeof readReportInventoryReconciliation>) {
+  return withStockUnits(await readReportInventoryReconciliation(...args));
 }

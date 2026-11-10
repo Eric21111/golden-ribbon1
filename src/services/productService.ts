@@ -72,6 +72,7 @@ export type CreateCompleteProductInput = {
 };
 
 export type InventoryProductInput = {
+  stockUnitCode?: import('@/lib/stockUnits').StockUnitCode;
   name: string;
   sku: string;
   description: string | null;
@@ -108,7 +109,8 @@ export async function createCompleteProduct(input: CreateCompleteProductInput): 
 
 /** Stock-only product: no selling price, hidden from POS, still usable as a meal component. */
 export async function createInventoryProduct(input: InventoryProductInput): Promise<Product> {
-  const { data, error } = await supabase.rpc('create_inventory_product', {
+  const { data, error } = await supabase.rpc('create_portion_stock_product', {
+    p_stock_unit_code: input.stockUnitCode ?? 'piece',
     p_name: input.name,
     p_sku: input.sku,
     p_description: input.description,

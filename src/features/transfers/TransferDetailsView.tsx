@@ -34,11 +34,12 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
           transfer.status,
           item.quantity_received,
           item.inventory_mode,
+          item.stock_unit_code,
         );
         return (
           <View key={item.id} style={styles.card}>
             <Text style={styles.product}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
-            <AuditDetail label="Sent" value={formatSnapshottedQuantity(item.quantity_sent, item.inventory_mode)} />
+            <AuditDetail label="Sent" value={formatSnapshottedQuantity(item.quantity_sent, item.inventory_mode, item.stock_unit_code)} />
             <AuditDetail label="Received" value={receivedLabel} />
             <AuditDetail
               label="Difference"
@@ -47,6 +48,7 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
                 item.quantity_sent,
                 item.quantity_received,
                 item.inventory_mode,
+                item.stock_unit_code,
               )}
             />
             {!kgMeal && difference !== null && difference !== 0 ? (
@@ -65,8 +67,8 @@ export function TransferDetailsView({ transfer }: { transfer: StockTransferDetai
           <Text style={styles.product}>{item.product?.name ?? `Unavailable product (${item.product_id})`}</Text>
           <Text style={styles.warning}>{item.discrepancy_type === 'missing' ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}</Text>
           <Text style={styles.empty}>
-            Expected {formatSnapshottedQuantity(item.quantity_expected, mode)} · Received{' '}
-            {formatSnapshottedQuantity(item.quantity_received, mode)}
+            Expected {formatSnapshottedQuantity(item.quantity_expected, mode, item.stock_unit_code)} · Received{' '}
+            {formatSnapshottedQuantity(item.quantity_received, mode, item.stock_unit_code)}
           </Text>
         </View>
         );

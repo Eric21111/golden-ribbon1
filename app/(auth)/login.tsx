@@ -34,7 +34,7 @@ const loginSchema = z.object({
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
-const logoSource = require('../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logoSource = require('../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 const NAVY = '#0A1224';
 const ROYAL_BLUE = '#1E3A8A';

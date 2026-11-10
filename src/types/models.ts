@@ -1,3 +1,4 @@
+import type { StockUnitCode } from '@/lib/stockUnits';
 export type UserRole = 'owner' | 'manager' | 'cashier';
 export type BranchReceivingMode = 'counted' | 'cashier_confirm';
 export type InventoryMovementType =
@@ -62,6 +63,7 @@ export type Shift = {
 
 export type CartItem = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   variant_id: string | null;
   product_name: string;
   variant_name: string | null;
@@ -104,6 +106,7 @@ export type UpdateEmployeeInput = {
 };
 
 export type Product = {
+  stock_unit_code?: StockUnitCode | null;
   id: string;
   name: string;
   sku: string;
@@ -131,6 +134,7 @@ export type BranchInventory = {
   id: string;
   branch_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   quantity_on_hand: number;
   created_at: string;
   updated_at: string;
@@ -139,6 +143,7 @@ export type BranchInventory = {
 export type BranchProduct = {
   branch_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   selling_price: number;
   is_active: boolean;
   created_at: string;
@@ -149,6 +154,7 @@ export type BranchProduct = {
 export type ProductDrinkChoice = {
   id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   variant_id: string;
   drink_product_id: string;
   created_at: string;
@@ -159,6 +165,7 @@ export type ProductDrinkChoice = {
 export type ProductStockUse = {
   id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   /** NULL = the product-level list (product sold at one price, or the default for options without their own). */
   variant_id: string | null;
   ingredient_product_id: string;
@@ -170,6 +177,7 @@ export type ProductStockUse = {
 export type ProductVariant = {
   id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   name: string;
   default_price: number;
   is_active: boolean;
@@ -182,6 +190,7 @@ export type BranchProductVariant = {
   id: string;
   branch_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   name: string;
   selling_price: number;
   is_active: boolean;
@@ -244,6 +253,7 @@ export type InventoryMovement = {
   id: string;
   branch_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   movement_type: InventoryMovementType;
   quantity: number;
   reference_type:
@@ -288,6 +298,7 @@ export type StockTransferItem = {
   id: string;
   stock_transfer_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   quantity_sent: number;
   quantity_received: number | null;
   inventory_mode: InventoryMode;
@@ -310,6 +321,7 @@ export type TransferDiscrepancy = {
   stock_transfer_id: string;
   stock_transfer_item_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   quantity_expected: number;
   quantity_received: number;
   difference: number;
@@ -343,6 +355,7 @@ export type StockTransferDetails = StockTransfer & {
 export type CashierPendingTransferItem = {
   stock_transfer_item_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_sent: number;
@@ -390,7 +403,10 @@ export type ShiftSummary = {
 export type ShiftProductReconResult = 'exact' | 'shortage' | 'excess';
 
 export type ShiftCloseProductPreview = {
+  /** False only when the server verified zero opening/current stock and no shift movements. */
+  requires_count?: boolean;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name_snapshot: string;
   sku_snapshot: string | null;
   closing_stock_behavior: ClosingStockBehavior;
@@ -441,6 +457,7 @@ export type PendingShiftReconciliation = ShiftClosePreview;
 
 export type ShiftCloseProductSummary = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   expected_remaining: number;
   actual_remaining: number;
   waste_quantity: number;
@@ -452,6 +469,7 @@ export type ShiftCloseProductSummary = {
 
 export type ShiftCloseFinalizeProduct = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   actual_remaining: string | number;
   waste_quantity?: string | number;
   /** Required when product is kg_meal and counted stock differs from expected. */
@@ -509,6 +527,7 @@ export type ShiftWasteOccurrenceRow = {
   /** Present when enriched from shift_waste_occurrences; null/omitted for RPC-only legacy rows. */
   occurrence_id?: string | null;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   recorded_at: string;
   recorded_by: string;
@@ -521,6 +540,7 @@ export type ShiftCloseReportProduct = {
   id: string;
   shift_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name_snapshot: string;
   sku_snapshot: string | null;
   closing_stock_behavior: ClosingStockBehavior;
@@ -644,6 +664,7 @@ export type BranchDailySalesItem = {
 
 export type ProductSalesReportItem = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_sold: number;
@@ -663,6 +684,7 @@ export type OwnerDashboardMetrics = {
 
 export type OwnerDailyProductSummaryItem = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   quantity_sold: number;
   quantity_returned: number;
@@ -697,6 +719,7 @@ export type BranchPerformanceItem = {
 
 export type BranchPerformanceProductSold = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_sold: number;
@@ -705,6 +728,7 @@ export type BranchPerformanceProductSold = {
 
 export type BranchPerformanceInventoryItem = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_on_hand: number;
@@ -715,6 +739,7 @@ export type BranchPerformanceTransferDiscrepancy = {
   stock_transfer_id: string;
   transfer_number: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_expected: number;
@@ -730,6 +755,7 @@ export type BranchPerformanceReturnDiscrepancy = {
   stock_return_id: string;
   return_number: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_expected: number;
@@ -788,6 +814,7 @@ export type TransferDiscrepancyReportItem = {
   from_branch_name?: string | null;
   to_branch_name?: string | null;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_sent: number;
@@ -813,6 +840,7 @@ export type ReturnDiscrepancyReportItem = {
   from_branch_name?: string | null;
   to_branch_name?: string | null;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_returned: number;
@@ -833,6 +861,7 @@ export type InventoryReconciliationItem = {
   branch_id: string;
   branch_name: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   inventory_mode: InventoryMode;
@@ -907,6 +936,7 @@ export type ArchiveExportSaleItem = {
   id: string;
   sale_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity: number;

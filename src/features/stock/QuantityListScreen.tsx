@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -27,6 +28,7 @@ export type QuantityRow = {
   id: string;
   name: string;
   sku: string;
+  stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null;
   category: string | null | undefined;
   /** The balance this branch holds now. */
   onHand: number;
@@ -152,11 +154,12 @@ export function QuantityListScreen({
                     <Text style={styles.name} numberOfLines={2}>
                       {row.name}
                     </Text>
+          <StockUnitHint code={row.stock_unit_code} />
                     <Text style={styles.sku}>{row.sku}</Text>
                   </View>
                   <View style={styles.onHandPill}>
                     <Text style={styles.onHandText} numberOfLines={1}>
-                      <Text style={styles.onHandValue}>{formatLiveStock(row.onHand)}</Text>
+                      <Text style={styles.onHandValue}>{formatLiveStock(row.onHand, undefined, row.stock_unit_code)}</Text>
                       <Text style={styles.onHandLabel}> on hand</Text>
                     </Text>
                   </View>
@@ -245,8 +248,8 @@ export function QuantityListScreen({
                 </View>
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{formatLiveStock(totalPieces)}</Text>
-                  <Text style={styles.summaryLabel}>total pcs</Text>
+                  <Text style={styles.summaryValue}>{`${entered.length} stock items`}</Text>
+                  <Text style={styles.summaryLabel}>selected stock items</Text>
                 </View>
               </View>
             ) : null}

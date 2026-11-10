@@ -61,7 +61,7 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole PCS quantity.'),
+        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole stock-unit quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -225,13 +225,13 @@ export function CreateTransferScreen() {
                     </View>
                     <View style={[styles.sendPill, insufficient && styles.sendPillWarning]}>
                       <Text style={[styles.sendValue, insufficient && styles.sendValueWarning]}>
-                        {formatLiveStock(item.quantity)}
+                        {formatLiveStock(item.quantity, undefined, item.product.stock_unit_code)}
                       </Text>
                       <Text style={styles.sendLabel}>to send</Text>
                     </View>
                   </View>
                   <View style={styles.reviewFooter}>
-                    <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand)}</Text>
+                    <Text style={styles.available}>Available: {formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                     {insufficient ? <ManagerBadge label="Insufficient stock" tone="danger" /> : null}
                   </View>
                   {item.isNew && item.product.sell_in_pos !== false && item.product.selling_price != null ? (
@@ -447,7 +447,7 @@ export function CreateTransferScreen() {
                         </View>
                         <View style={styles.availablePill}>
                           <Text style={styles.availableText} numberOfLines={1}>
-                            <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand)}</Text>
+                            <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                             <Text style={styles.availableLabel}> available</Text>
                           </Text>
                         </View>
@@ -565,8 +565,8 @@ export function CreateTransferScreen() {
               </View>
               <View style={styles.stickySummaryDivider} />
               <View style={styles.stickySummaryItem}>
-                <Text style={styles.stickySummaryValue}>{formatLiveStock(totalSelectedQuantity)}</Text>
-                <Text style={styles.stickySummaryLabel}>total pcs</Text>
+                <Text style={styles.stickySummaryValue}>{`${selectedItems.length} stock items`}</Text>
+                <Text style={styles.stickySummaryLabel}>selected stock items</Text>
               </View>
             </View>
           ) : null}

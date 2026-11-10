@@ -39,7 +39,7 @@ export function InventoryListItem({ item, showBranch = false, onPress }: Invento
       trailing={
         <>
           <Text style={[styles.stock, status === 'out' && styles.stockMuted]}>
-            {formatLiveStock(item.quantity_on_hand)}
+            {formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}
           </Text>
           <ManagerBadge label={stockStatusLabelForItem(item)} tone={badgeTone(status)} />
         </>

@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -246,6 +247,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
         <Text style={styles.productName} numberOfLines={2}>
           {product.product_name_snapshot}
         </Text>
+          <StockUnitHint code={product.stock_unit_code} />
         <ManagerBadge label={badge.label} tone={badge.tone} />
       </View>
 
@@ -265,11 +267,11 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
       <View style={styles.summaryRow}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel} numberOfLines={1}>Expected</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.expected_remaining)}</Text>
+          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.expected_remaining, product.stock_unit_code)}</Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel} numberOfLines={1}>Actual</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.actual_remaining)}</Text>
+          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.actual_remaining, product.stock_unit_code)}</Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel} numberOfLines={1}>Discrepancy</Text>
@@ -277,7 +279,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
             style={[styles.summaryValue, isIssue && (product.result === 'shortage' ? styles.varianceDanger : styles.varianceSuccess)]}
             numberOfLines={1}
           >
-            {product.discrepancy > 0 ? `+${formatPcsQty(product.discrepancy)}` : formatPcsQty(product.discrepancy)}
+            {product.discrepancy > 0 ? `+${formatPcsQty(product.discrepancy, product.stock_unit_code)}` : formatPcsQty(product.discrepancy, product.stock_unit_code)}
           </Text>
         </View>
       </View>
@@ -292,37 +294,37 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
         <View style={styles.ledger}>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Opening</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.opening_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.opening_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Received</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.received_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.received_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Outgoing</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.outgoing_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.outgoing_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Sold</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.sold_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.sold_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Adjustment</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.adjustment_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.adjustment_quantity, product.stock_unit_code)}</Text>
           </View>
           <View style={styles.ledgerRow}>
             <Text style={styles.ledgerLabel}>Waste</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.waste_quantity)}</Text>
+            <Text style={styles.ledgerValue}>{formatPcsQty(product.waste_quantity, product.stock_unit_code)}</Text>
           </View>
 
           <View style={styles.dispositionBlock}>
             <View style={styles.ledgerRow}>
               <Text style={styles.ledgerLabel}>Unsold</Text>
-              <Text style={styles.ledgerValue}>{formatPcsQty(product.unsold_quantity)}</Text>
+              <Text style={styles.ledgerValue}>{formatPcsQty(product.unsold_quantity, product.stock_unit_code)}</Text>
             </View>
             <View style={styles.ledgerRow}>
               <Text style={styles.ledgerLabel}>Carried</Text>
-              <Text style={styles.ledgerValue}>{formatPcsQty(product.carried_quantity)}</Text>
+              <Text style={styles.ledgerValue}>{formatPcsQty(product.carried_quantity, product.stock_unit_code)}</Text>
             </View>
             <Text style={styles.disposition}>{closingDispositionLabel(product)}</Text>
           </View>

@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -104,7 +105,7 @@ export function MainStockDetails({
   const toneColor = stock.tone === 'danger' || stock.tone === 'warning' ? TONE_COLORS[stock.tone] : undefined;
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap}><StockUnitHint code={item.product.stock_unit_code} />
       <View style={styles.section}>
         <Text style={styles.label}>{sharedStock ? 'STOCK' : 'STOCK AT MAIN'}</Text>
         {sharedStock ? (

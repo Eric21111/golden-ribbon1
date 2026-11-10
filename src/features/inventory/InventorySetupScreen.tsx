@@ -44,7 +44,7 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole PCS quantity.'),
+        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole stock-unit quantity.'),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -336,12 +336,12 @@ export function InventorySetupScreen() {
                     </View>
                   </View>
                   <View style={styles.reviewRowStat}>
-                    <Text style={styles.reviewRowStatValue}>{formatLiveStock(item.quantity_on_hand)}</Text>
+                    <Text style={styles.reviewRowStatValue}>{formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                     <Text style={styles.reviewRowStatLabel}>Current</Text>
                   </View>
                   <View style={styles.reviewRowStat}>
                     <Text style={[styles.reviewRowStatValue, styles.reviewRowStatValueEmphasis]}>
-                      {formatLiveStock(item.quantity)}
+                      {formatLiveStock(item.quantity, undefined, item.product.stock_unit_code)}
                     </Text>
                     <Text style={styles.reviewRowStatLabel}>Qty</Text>
                   </View>
@@ -465,7 +465,7 @@ export function InventorySetupScreen() {
                           <View style={styles.availablePill}>
                             {initialized ? (
                               <Text style={styles.availableText} numberOfLines={1}>
-                                <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand)}</Text>
+                                <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                                 <Text style={styles.availableLabel}> current</Text>
                               </Text>
                             ) : (
@@ -563,7 +563,7 @@ export function InventorySetupScreen() {
                 </View>
                 <View style={styles.stickySummaryDivider} />
                 <View style={styles.stickySummaryItem}>
-                  <Text style={styles.stickySummaryValue}>{formatLiveStock(totalSelectedQuantity)}</Text>
+                  <Text style={styles.stickySummaryValue}>{`${completedCount} stock items`}</Text>
                   <Text style={styles.stickySummaryLabel}>total units</Text>
                 </View>
               </View>

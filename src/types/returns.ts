@@ -1,3 +1,4 @@
+import type { StockUnitCode } from '@/lib/stockUnits';
 import type {
   DiscrepancyResolutionReason,
   DiscrepancyResolutionStatus,
@@ -10,6 +11,7 @@ export type ReturnStatus = 'draft' | 'in_transit' | 'received' | 'received_with_
 
 export type ReturnStock = {
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   is_active: boolean;
@@ -41,6 +43,7 @@ export type ReturnItem = {
   id: string;
   stock_return_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   product_name: string;
   product_sku: string;
   quantity_returned: number;
@@ -55,6 +58,7 @@ export type ReturnDiscrepancy = {
   stock_return_id: string;
   stock_return_item_id: string;
   product_id: string;
+  stock_unit_code?: StockUnitCode | null;
   quantity_expected: number;
   quantity_received: number;
   difference: number;

@@ -137,7 +137,7 @@ export function incompleteProductCount(
 export const ACTUAL_REMAINING_HELPER =
   'Count usable items left at the booth. Do not include waste.';
 
-export const WASTE_HELPER = 'Damaged, spoiled, dropped, broken, or otherwise unusable pieces.';
+export const WASTE_HELPER = 'Damaged, spoiled, dropped, broken, or otherwise unusable stock units.';
 
 export const BEGIN_CLOSE_CONFIRM_MESSAGE =
   '- Sales and stock changes stop for this booth today\n' +

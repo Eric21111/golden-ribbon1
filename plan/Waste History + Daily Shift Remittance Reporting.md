@@ -582,7 +582,7 @@ This distinction must be maintained in both DB result semantics and UI.
 WASTE REPORT DESIGN
 ==================================================
 
-Add a minimal report screen consistent with the current Golden Ribbon report
+Add a minimal report screen consistent with the current Golden Ribbons report
 UI.
 
 Preferred label:
@@ -692,7 +692,7 @@ display according to existing app conventions.
 SECURITY
 ==================================================
 
-Any new/replaced report RPC follows Golden Ribbon hardened style:
+Any new/replaced report RPC follows Golden Ribbons hardened style:
 
 SECURITY DEFINER
 SET search_path = ''

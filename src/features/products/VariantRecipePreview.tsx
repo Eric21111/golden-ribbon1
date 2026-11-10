@@ -78,6 +78,7 @@ export function VariantRecipePreview({
   suggestedIds?: string[];
   onChange: (lines: RecipeLine[]) => void;
 }) {
+  const [quantityError, setQuantityError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   // True while the sheet was opened by tapping "Take from other items" with nothing to restore: the pick STARTS the list
   // instead of being added to "This Product". Closing the sheet without a pick changes nothing, so an "other items"
@@ -193,10 +194,12 @@ export function VariantRecipePreview({
                 <TextInput
                   accessibilityLabel={`${item.name} quantity used`}
                   keyboardType="number-pad"
-                  maxLength={2}
                   selectTextOnFocus
                   value={line.quantity === 0 ? '' : String(line.quantity)}
-                  onChangeText={(text) => setQuantity(index, parseInt(text.replace(/\D/g, '') || '0', 10))}
+                  onChangeText={(text) => {
+                    if (!/^\d{0,2}$/.test(text)) { setQuantityError('Enter whole stock units. For half portions, choose a half-unit stock item.'); return; }
+                    setQuantityError(''); setQuantity(index, Number(text || '0'));
+                  }}
                   onBlur={() => {
                     if (line.quantity === 0) setQuantity(index, 1);
                   }}
@@ -289,6 +292,7 @@ export function VariantRecipePreview({
 
   return (
     <View style={styles.wrap}>
+      {quantityError ? <Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{quantityError}</Text> : null}
       {/* the Extras & Sides choice sits under its own page heading, so the section label would only repeat it */}
       {stockModeChoice ? null : <Text style={styles.label}>{label}</Text>}
 

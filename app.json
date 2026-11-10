@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Golden Ribbon",
+    "name": "Golden Ribbons",
     "slug": "golden-ribbon",
     "version": "1.0.0",
     "orientation": "default",
@@ -33,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/Golden_Ribbon_Logo-removebg-preview.png",
+          "image": "./assets/Golden_Ribbons_Logo-removebg-preview.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#0A1224"

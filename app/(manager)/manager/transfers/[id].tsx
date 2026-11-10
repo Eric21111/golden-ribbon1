@@ -75,6 +75,7 @@ export default function ManagerTransferDetailsScreen() {
             item.quantity_sent,
             item.quantity_received,
             item.inventory_mode,
+            item.stock_unit_code,
           );
           return (
             <ListRowCard

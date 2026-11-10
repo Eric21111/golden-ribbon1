@@ -113,13 +113,13 @@ export function ReturnDetailsBody({ returnId }: ReturnDetailsBodyProps) {
             <Text style={returnStyles.meta}>SKU: {item.product_sku}</Text>
             <View style={returnStyles.auditRow}>
               <Text style={returnStyles.auditLabel}>Returned (expected):</Text>
-              <Text style={returnStyles.auditValue}>{formatSnapshottedQuantity(item.quantity_returned, item.inventory_mode)}</Text>
+              <Text style={returnStyles.auditValue}>{formatSnapshottedQuantity(item.quantity_returned, item.inventory_mode, item.stock_unit_code)}</Text>
             </View>
             <View style={returnStyles.auditRow}>
               <Text style={returnStyles.auditLabel}>Actual received:</Text>
               <Text style={returnStyles.auditValue}>
                 {isReceived
-                  ? formatSnapshottedQuantity(item.quantity_received, item.inventory_mode)
+                  ? formatSnapshottedQuantity(item.quantity_received, item.inventory_mode, item.stock_unit_code)
                   : 'Pending physical count'}
               </Text>
             </View>

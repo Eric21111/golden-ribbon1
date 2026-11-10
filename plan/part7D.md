@@ -174,7 +174,7 @@ Responsive:
 - phone
 - tablet
 
-Use existing Golden Ribbon design language/components.
+Use existing Golden Ribbons design language/components.
 
 Do not redesign unrelated app navigation.
 

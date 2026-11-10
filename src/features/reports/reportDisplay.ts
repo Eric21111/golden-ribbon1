@@ -48,14 +48,14 @@ export function formatPersistedInventoryResult(
   return `${magnitude} pc${magnitude === 1 ? '' : 's'} excess`;
 }
 
-export function formatPcsQty(quantity: number | null | undefined): string {
+export function formatPcsQty(quantity: number | null | undefined, code?: import('@/lib/stockUnits').StockUnitCode | null): string {
   if (quantity == null || !Number.isFinite(Number(quantity))) return '—';
-  return formatLiveStock(quantity);
+  return formatLiveStock(quantity, undefined, code);
 }
 
 export function closingDispositionLabel(product: ShiftCloseReportProduct): string {
   if (product.closing_stock_behavior === 'record_as_unsold') {
-    return `Unsold at close: ${formatPcsQty(product.unsold_quantity)}`;
+    return `Unsold at close: ${formatPcsQty(product.unsold_quantity, product.stock_unit_code)}`;
   }
-  return `Carried to next day: ${formatPcsQty(product.carried_quantity)}`;
+  return `Carried to next day: ${formatPcsQty(product.carried_quantity, product.stock_unit_code)}`;
 }

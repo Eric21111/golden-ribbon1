@@ -1,3 +1,4 @@
+import { STOCK_UNITS, type StockUnitCode } from '@/lib/stockUnits';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -55,6 +56,7 @@ import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, sa
 export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
 
 export type CreateProductValues = {
+  stockUnitCode?: StockUnitCode;
   name: string;
   sku: string;
   description: string;
@@ -107,6 +109,7 @@ export function CreateProductWizard({
   onSubmit,
   onDirtyChange,
 }: CreateProductWizardProps) {
+  const [stockUnitCode, setStockUnitCode] = useState<StockUnitCode>('piece');
   const ingredients = useMemo(() => ingredientOptionsFromProducts(ingredientProducts), [ingredientProducts]);
   // POS-off products stay selectable as a meal's included drink. The cashier catalog hides them on their own.
   const drinkOptions = useMemo(() => ingredientOptionsFromProducts(ingredientProducts), [ingredientProducts]);
@@ -353,6 +356,7 @@ export function CreateProductWizard({
           stockUses: [],
           drinkChoices: [],
           sellInPos: false,
+          stockUnitCode,
           productCategory: category,
           isActive: enabledChoice,
         },
@@ -479,6 +483,7 @@ export function CreateProductWizard({
   // Unsaved-changes tracking. The snapshot covers what the user can edit (saved fields and preview-only
   // settings); empty values are ignored, so undoing an edit counts as no change. Step position is not an edit.
   const draftSnapshot = buildDraftSnapshot({
+    stockUnitCode,
     name,
     sku: skuEditedRef.current ? sku : '',
     isNonReturnable,
@@ -553,6 +558,16 @@ export function CreateProductWizard({
           <View style={styles.group}>
             <SectionHeader title="Category & availability" />
             <ProductCategoryField value={category} onChange={changeCategory} />
+            {!sellable ? <View style={styles.group}>
+              <SectionHeader title="Stock counting unit" />
+              {(Object.keys(STOCK_UNITS) as StockUnitCode[]).map(code => (
+                <Pressable key={code} accessibilityRole="radio" accessibilityState={{ checked: stockUnitCode === code }}
+                  onPress={() => setStockUnitCode(code)} style={{ paddingVertical: 10 }}>
+                  <Text>{stockUnitCode === code ? '[Selected] ' : ''}{STOCK_UNITS[code].plural}</Text>
+                </Pressable>
+              ))}
+              <Text style={styles.hint}>{STOCK_UNITS[stockUnitCode].hint} This unit is fixed after creation. All stock counts, transfers, returns and waste use this unit.</Text>
+            </View> : null}
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>
           <View style={styles.group}>

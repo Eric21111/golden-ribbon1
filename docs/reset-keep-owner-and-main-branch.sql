@@ -1,231 +1,244 @@
--- Manual data wipe. Not a migration. Do not db push. Do not deploy.
---
--- Run this yourself in the Supabase SQL editor as the database owner (postgres),
--- after you have taken a backup.
---
--- Keeps:
---   * the single Main Branch (is_main_branch = true)
---   * the single Owner profile and its Auth user
---   * the single Manager assigned to that Main Branch, and that Auth user
---   * sale_pricing_program_settings and archive_settings (app configuration)
---
--- Deletes every other branch, employee, Auth user, product, stock row, sale,
--- shift, transfer, return, and history row.
---
--- Immutability triggers block ordinary DELETEs of completed sales, movements,
--- transfers, and returns. This script sets session_replication_role to replica
--- for this transaction only so those triggers do not fire. It still deletes
--- child rows before parents. It never drops schema, grants, or RLS.
---
--- Dry run: change the final COMMIT to ROLLBACK, run once, and read the notices
--- plus the final result grid. Change it back to COMMIT only after the kept
--- names are the accounts you intend to keep.
+-- Golden Ribbons: manual TEST-DATA reset, never a migration.
+-- Run the ENTIRE file in Supabase SQL Editor as postgres.
+-- Default mode only previews; no application or Auth records are changed.
+-- Read docs/reset-data-guide.md first. Verify the project in the dashboard.
+-- After reviewing the preview and taking a restorable backup, fill the three
+-- exact UUIDs below, change preview_only to false and supply the acknowledgement.
+-- Stop all apps, background jobs and employee administration during execution.
+-- Storage objects are NOT deleted: a nonempty Storage bucket blocks execution.
+-- Database schema, RLS, functions, migration history and kept credentials stay intact.
 
 begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '120s';
 
-create temp table wipe_keep (
-  id uuid primary key,
-  kind text not null
+create temporary table reset_options (
+  preview_only boolean not null,
+  owner_id uuid,
+  manager_id uuid,
+  main_branch_id uuid,
+  acknowledgement text not null
+) on commit drop;
+insert into reset_options values (
+  true, -- PREVIEW ONLY. Set false only for the approved reset.
+  null, -- Owner UUID from preview
+  null, -- Main Branch Manager UUID from preview
+  null, -- Main Branch UUID from preview
+  '' -- For execution: BACKUP VERIFIED - DELETE TEST DATA
+);
+
+create temporary table reset_scope (
+  table_name text primary key,
+  action text not null,
+  before_count bigint,
+  after_count bigint
+) on commit drop;
+insert into reset_scope(table_name, action) values
+  ('return_discrepancies', 'clear'),
+  ('transfer_discrepancies', 'clear'),
+  ('sale_items', 'clear'),
+  ('stock_transfer_items', 'clear'),
+  ('stock_return_items', 'clear'),
+  ('inventory_movements', 'clear'),
+  ('shift_waste_occurrences', 'clear'),
+  ('shift_product_reconciliations', 'clear'),
+  ('shift_product_close_baselines', 'clear'),
+  ('shift_product_opening_stock', 'clear'),
+  ('shift_reopen_events', 'clear'),
+  ('sales', 'clear'),
+  ('stock_transfers', 'clear'),
+  ('stock_returns', 'clear'),
+  ('shift_reconciliations', 'clear'),
+  ('shifts', 'clear'),
+  ('daily_product_sales_summary', 'clear'),
+  ('daily_branch_sales_summary', 'clear'),
+  ('data_archives', 'clear'),
+  ('pcs_cutover_product_snapshots', 'clear'),
+  ('kg_meal_cutover_balance_snapshots', 'clear'),
+  ('branch_product_variants', 'clear'),
+  ('branch_products', 'clear'),
+  ('branch_inventory', 'clear'),
+  ('product_drink_choices', 'clear'),
+  ('product_stock_uses', 'clear'),
+  ('product_variants', 'clear'),
+  ('products', 'clear'),
+  ('branches', 'keep_main'),
+  ('profiles', 'keep_accounts'),
+  ('sale_pricing_program_settings', 'keep_all'),
+  ('archive_settings', 'keep_all');
+
+create temporary table reset_keep (
+  kind text primary key, id uuid not null, label text not null
+) on commit drop;
+create temporary table reset_preserved (
+  table_name text primary key, rows_before jsonb not null
 ) on commit drop;
 
-insert into wipe_keep (id, kind)
-select id, 'main_branch'
-from public.branches
-where is_main_branch;
-
-insert into wipe_keep (id, kind)
-select id, 'owner'
-from public.profiles
-where role = 'owner';
-
-insert into wipe_keep (id, kind)
-select p.id, 'main_manager'
-from public.profiles p
-where p.role = 'manager'
-  and p.branch_id = (select id from wipe_keep where kind = 'main_branch');
-
-do $$
+-- Validate exact table coverage, lock against concurrent writes on execution,
+-- then choose the records to preserve. Never guess between multiple owners/managers.
+do $reset_preflight$
 declare
-  v_main_count integer;
-  v_owner_count integer;
-  v_manager_count integer;
-  v_owner_name text;
-  v_manager_name text;
-  v_branch_name text;
+  o record;
+  t record;
+  unexpected text;
+  n bigint;
+  kept_owner uuid;
+  kept_manager uuid;
+  kept_branch uuid;
 begin
-  select count(*) into v_main_count from wipe_keep where kind = 'main_branch';
-  select count(*) into v_owner_count from wipe_keep where kind = 'owner';
-  select count(*) into v_manager_count from wipe_keep where kind = 'main_manager';
-
-  if v_main_count <> 1 then
-    raise exception 'Refusing to wipe: expected exactly 1 Main Branch, found %.', v_main_count;
+  select * into strict o from reset_options;
+  if current_user <> 'postgres' then
+    raise exception 'Run this manual script using the SQL Editor postgres role.';
   end if;
-  if v_owner_count <> 1 then
-    raise exception 'Refusing to wipe: expected exactly 1 Owner, found %.', v_owner_count;
+  if current_setting('session_replication_role') <> 'origin' then
+    raise exception 'Triggers must be enabled (session_replication_role = origin).';
   end if;
-  if v_manager_count <> 1 then
-    raise exception 'Refusing to wipe: expected exactly 1 Main Branch Manager, found %.', v_manager_count;
+  select string_agg(c.relname, ', ' order by c.relname) into unexpected
+  from pg_class c join pg_namespace ns on ns.oid=c.relnamespace
+  where ns.nspname='public' and c.relkind in ('r','p','f','m')
+    and not exists (select 1 from reset_scope s where s.table_name=c.relname);
+  if unexpected is not null then
+    raise exception 'Unreviewed public tables/materialized views: %. Stop and update the reset review.', unexpected;
   end if;
-
-  if exists (
-    select 1
-    from public.profiles p
-    where p.id = (select id from wipe_keep where kind = 'owner')
-      and p.branch_id is distinct from (select id from wipe_keep where kind = 'main_branch')
-  ) then
-    raise exception 'Refusing to wipe: the Owner is not assigned to the Main Branch.';
-  end if;
-
-  select p.full_name into v_owner_name
-  from public.profiles p
-  where p.id = (select id from wipe_keep where kind = 'owner');
-  select p.full_name into v_manager_name
-  from public.profiles p
-  where p.id = (select id from wipe_keep where kind = 'main_manager');
-  select b.name into v_branch_name
-  from public.branches b
-  where b.id = (select id from wipe_keep where kind = 'main_branch');
-
-  raise notice 'KEEP Owner: %', v_owner_name;
-  raise notice 'KEEP Main Branch Manager: %', v_manager_name;
-  raise notice 'KEEP Main Branch: %', v_branch_name;
-end $$;
-
--- Bypass immutability triggers for this transaction only.
-set local session_replication_role = replica;
-
--- Child tables first. Skip any table this database does not have yet.
-do $$
-declare
-  t text;
-  tables text[] := array[
-    'public.return_discrepancies',
-    'public.transfer_discrepancies',
-    'public.sale_items',
-    'public.stock_transfer_items',
-    'public.stock_return_items',
-    'public.inventory_movements',
-    'public.shift_waste_occurrences',
-    'public.shift_product_reconciliations',
-    'public.shift_product_close_baselines',
-    'public.shift_product_opening_stock',
-    'public.shift_reopen_events',
-    'public.sales',
-    'public.stock_transfers',
-    'public.stock_returns',
-    'public.shift_reconciliations',
-    'public.shifts',
-    'public.daily_product_sales_summary',
-    'public.daily_branch_sales_summary',
-    'public.data_archives',
-    'public.audit_logs',
-    'public.pcs_cutover_product_snapshots',
-    'public.kg_meal_cutover_balance_snapshots',
-    'public.branch_product_variants',
-    'public.branch_products',
-    'public.branch_inventory',
-    'public.product_drink_choices',
-    'public.product_stock_uses',
-    'public.product_variants',
-    'public.products'
-  ];
-begin
-  foreach t in array tables loop
-    if to_regclass(t) is null then
-      raise notice 'Skipped missing table %', t;
-    else
-      execute format('delete from %s', t);
-      raise notice 'Cleared %', t;
+  for t in select * from reset_scope order by table_name loop
+    if to_regclass(format('public.%I',t.table_name)) is null then
+      raise exception 'Expected table public.% is missing; schema differs from the reviewed repository.',t.table_name;
+    end if;
+    if exists (select 1 from pg_inherits where inhparent=to_regclass(format('public.%I',t.table_name))
+      or inhrelid=to_regclass(format('public.%I',t.table_name))) then
+      raise exception 'Inheritance/partitioning requires a separate review: %',t.table_name;
     end if;
   end loop;
-end $$;
+  if not o.preview_only then
+    if o.owner_id is null or o.manager_id is null or o.main_branch_id is null
+      or o.acknowledgement <> 'BACKUP VERIFIED - DELETE TEST DATA' then
+      raise exception 'Execution requires all three reviewed UUIDs and the exact backup acknowledgement.';
+    end if;
+    lock table auth.users in access exclusive mode;
+  end if;
+  for t in select * from reset_scope order by table_name loop
+    execute format('lock table public.%I in %s mode', t.table_name,
+      case when o.preview_only then 'access share' else 'access exclusive' end);
+    execute format('select count(*) from public.%I',t.table_name) into n;
+    update reset_scope set before_count=n where table_name=t.table_name;
+  end loop;
+  if (select count(*) from public.branches where is_main_branch) <> 1 then
+    raise exception 'Expected exactly one Main Branch.';
+  end if;
+  select id into kept_branch from public.branches where is_main_branch and is_active;
+  if kept_branch is null then raise exception 'Main Branch must be active.'; end if;
+  if (select count(*) from public.profiles where role='owner') <> 1 then
+    raise exception 'Expected exactly one Owner; review accounts manually.';
+  end if;
+  select id into kept_owner from public.profiles
+    where role='owner' and branch_id=kept_branch and is_active;
+  if kept_owner is null then raise exception 'Owner must be active and assigned to Main Branch.'; end if;
+  if (select count(*) from public.profiles where role='manager' and branch_id=kept_branch) <> 1 then
+    raise exception 'Expected exactly one Main Branch Manager; review accounts manually.';
+  end if;
+  select id into kept_manager from public.profiles
+    where role='manager' and branch_id=kept_branch and is_active;
+  if kept_manager is null then raise exception 'Main Branch Manager must be active.'; end if;
+  if (select count(*) from auth.users where id in (kept_owner,kept_manager)) <> 2 then
+    raise exception 'Both kept profiles must have existing Auth accounts.';
+  end if;
+  if (o.owner_id is not null and o.owner_id<>kept_owner)
+    or (o.manager_id is not null and o.manager_id<>kept_manager)
+    or (o.main_branch_id is not null and o.main_branch_id<>kept_branch) then
+    raise exception 'Provided UUIDs do not match the current Owner, Main Manager and Main Branch.';
+  end if;
+  insert into reset_keep select 'owner',id,full_name from public.profiles where id=kept_owner;
+  insert into reset_keep select 'main_manager',id,full_name from public.profiles where id=kept_manager;
+  insert into reset_keep select 'main_branch',id,name from public.branches where id=kept_branch;
+  if not exists(select 1 from public.sale_pricing_program_settings)
+    or (select count(*) from public.archive_settings)<>1 then
+    raise exception 'Required application settings are missing.';
+  end if;
+  -- Fail before mutation if a kept or external table references a table to clear.
+  select string_agg(conrelid::regclass::text || ' -> ' || confrelid::regclass::text, ', ')
+    into unexpected from pg_constraint fk
+  where fk.contype='f'
+    and fk.confrelid in (select to_regclass(format('public.%I',table_name)) from reset_scope where action='clear')
+    and fk.conrelid not in (select to_regclass(format('public.%I',table_name)) from reset_scope where action='clear');
+  if unexpected is not null then raise exception 'Unreviewed foreign-key dependencies: %',unexpected; end if;
+  -- A new external dependency must not be silently cascaded when deleting accounts/branches.
+  select string_agg(conrelid::regclass::text, ', ') into unexpected from pg_constraint fk
+  where fk.contype='f'
+    and fk.confrelid in ('public.branches'::regclass,'public.profiles'::regclass,'auth.users'::regclass)
+    and fk.conrelid not in (select to_regclass(format('public.%I',table_name)) from reset_scope)
+    and not (fk.confrelid='auth.users'::regclass and fk.connamespace='auth'::regnamespace);
+  if unexpected is not null then raise exception 'Unreviewed account/branch dependencies: %',unexpected; end if;
+  -- SQL must not delete Storage metadata without deleting the actual objects via Storage API.
+  if to_regclass('storage.objects') is not null then
+    execute 'select count(*) from storage.objects' into n;
+    insert into reset_scope values ('storage.objects','external_storage_not_deleted',n,n);
+    if not o.preview_only and n>0 then
+      raise exception 'Storage contains % objects. Review/export and remove test objects through Storage first.',n;
+    end if;
+  end if;
+  insert into reset_scope select 'auth.users','keep_accounts',count(*),null from auth.users;
+  insert into reset_preserved
+    select 'branches',jsonb_agg(to_jsonb(b) order by b.id) from public.branches b where id=kept_branch;
+  insert into reset_preserved
+    select 'profiles',jsonb_agg(to_jsonb(p) order by p.id) from public.profiles p where id in (kept_owner,kept_manager);
+  -- Kept credentials are compared in-database only, never printed in preview/results.
+  insert into reset_preserved
+    select 'auth.users',jsonb_agg(to_jsonb(u) order by u.id) from auth.users u where id in (kept_owner,kept_manager);
+  for t in select * from reset_scope where action='keep_all' loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x) order by to_jsonb(x)::text),''[]''::jsonb) from public.%I x',t.table_name)
+      into unexpected;
+    insert into reset_preserved values(t.table_name,unexpected::jsonb);
+  end loop;
+end;
+$reset_preflight$;
 
--- Other employees first. profiles.branch_id blocks deletion of selling branches.
-delete from public.profiles
-where id not in (
-  select id from wipe_keep where kind in ('owner', 'main_manager')
-);
-
-delete from public.branches
-where id <> (select id from wipe_keep where kind = 'main_branch');
-
--- Restore triggers before Auth deletes so Supabase cascades (identities,
--- sessions, refresh tokens) still run. Public immutability triggers are
--- no longer involved.
-set local session_replication_role = origin;
-
-delete from auth.users
-where id not in (
-  select id from wipe_keep where kind in ('owner', 'main_manager')
-);
-
-do $$
+do $reset_execute$
 declare
-  v_main uuid;
-  v_owner uuid;
-  v_manager uuid;
+  t record;
+  n bigint;
+  table_list text;
+  actual jsonb;
 begin
-  select id into v_main from wipe_keep where kind = 'main_branch';
-  select id into v_owner from wipe_keep where kind = 'owner';
-  select id into v_manager from wipe_keep where kind = 'main_manager';
+  if (select preview_only from reset_options) then return; end if;
+  select string_agg(format('public.%I',table_name),', ' order by table_name) into table_list
+    from reset_scope where action='clear';
+  -- Explicit scope, no CASCADE, no trigger disabling, no sequence resets.
+  -- TRUNCATE handles immutable transaction rows without firing DELETE triggers.
+  execute 'truncate table ' || table_list || ' continue identity restrict';
+  delete from public.profiles where id not in (select id from reset_keep where kind in ('owner','main_manager'));
+  delete from public.branches where id<>(select id from reset_keep where kind='main_branch');
+  -- Auth FK cascades stay enabled for identities, sessions and other Auth dependents.
+  delete from auth.users where id not in (select id from reset_keep where kind in ('owner','main_manager'));
+  set constraints all immediate;
+  for t in select * from reset_scope where action<>'external_storage_not_deleted' loop
+    execute format('select count(*) from %s',case when t.table_name='auth.users'
+      then 'auth.users' else format('public.%I',t.table_name) end) into n;
+    update reset_scope set after_count=n where table_name=t.table_name;
+    if (t.action='clear' and n<>0) or (t.action='keep_accounts' and n<>2)
+      or (t.action='keep_main' and n<>1) then
+      raise exception 'Reset verification failed for %; all changes will roll back.',t.table_name;
+    end if;
+  end loop;
+  for t in select * from reset_preserved loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x) order by %s),''[]''::jsonb) from %s x',
+      case when t.table_name in ('branches','profiles','auth.users') then 'x.id' else 'to_jsonb(x)::text' end,
+      case when t.table_name='auth.users' then 'auth.users' else format('public.%I',t.table_name) end) into actual;
+    if actual is distinct from t.rows_before then
+      raise exception 'Preserved records changed in %; all changes will roll back.',t.table_name;
+    end if;
+  end loop;
+end;
+$reset_execute$;
 
-  if (select count(*) from public.branches) <> 1
-     or not exists (select 1 from public.branches where id = v_main and is_main_branch) then
-    raise exception 'Wipe check failed: Main Branch was not the only branch left.';
-  end if;
-
-  if (select count(*) from public.profiles) <> 2
-     or not exists (select 1 from public.profiles where id = v_owner and role = 'owner')
-     or not exists (
-       select 1 from public.profiles
-       where id = v_manager and role = 'manager' and branch_id = v_main
-     ) then
-    raise exception 'Wipe check failed: Owner and Main Branch Manager were not the only profiles left.';
-  end if;
-
-  if (select count(*) from auth.users) <> 2
-     or not exists (select 1 from auth.users where id = v_owner)
-     or not exists (select 1 from auth.users where id = v_manager) then
-    raise exception 'Wipe check failed: Auth users were not limited to the Owner and Main Branch Manager.';
-  end if;
-
-  if to_regclass('public.products') is not null
-     and (select count(*) from public.products) <> 0 then
-    raise exception 'Wipe check failed: products remain.';
-  end if;
-  if to_regclass('public.sales') is not null
-     and (select count(*) from public.sales) <> 0 then
-    raise exception 'Wipe check failed: sales remain.';
-  end if;
-  if to_regclass('public.shifts') is not null
-     and (select count(*) from public.shifts) <> 0 then
-    raise exception 'Wipe check failed: shifts remain.';
-  end if;
-  if to_regclass('public.branch_inventory') is not null
-     and (select count(*) from public.branch_inventory) <> 0 then
-    raise exception 'Wipe check failed: inventory remains.';
-  end if;
-  if to_regclass('public.inventory_movements') is not null
-     and (select count(*) from public.inventory_movements) <> 0 then
-    raise exception 'Wipe check failed: inventory movements remain.';
-  end if;
-
-  if to_regclass('public.sale_pricing_program_settings') is not null
-     and (select count(*) from public.sale_pricing_program_settings) < 1 then
-    raise exception 'Wipe check failed: pricing settings were removed.';
-  end if;
-  if to_regclass('public.archive_settings') is not null
-     and (select count(*) from public.archive_settings) <> 1 then
-    raise exception 'Wipe check failed: archive settings were removed.';
-  end if;
-end $$;
-
+-- One result row: expand/copy the JSON fields in the SQL Editor results.
 select
-  b.name as main_branch,
-  p.full_name,
-  p.role::text as role
-from public.profiles p
-join public.branches b on b.id = p.branch_id
-order by p.role;
-
+  case when o.preview_only then 'PREVIEW ONLY - NO DATA DELETED' else 'RESET COMPLETED' end as result,
+  (select jsonb_agg(to_jsonb(k) order by kind) from reset_keep k) as records_to_keep,
+  (select jsonb_agg(jsonb_build_object('table',table_name,'action',action,
+    'before',before_count,'after',after_count,
+    'planned_delete',case when action='clear' then before_count
+      when action='keep_accounts' then before_count-2
+      when action='keep_main' then before_count-1 else 0 end) order by table_name)
+    from reset_scope) as table_summary
+from reset_options o;
 commit;

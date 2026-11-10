@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -96,6 +97,7 @@ export type EditProductSourceBranchVariantPrice = { branch_id: string; name: str
 
 interface EditProductWizardProps {
   product: {
+    stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null;
     /** Needed to tell which saved stock line is "This Product" (the product's own id). */
     id: string;
     name: string;
@@ -630,7 +632,7 @@ export function EditProductWizard({
       <StepIndicator step={step} flow={flow} middleLabel={getCategoryConfig(category).stepLabel} />
 
       {step === 1 ? (
-        <View style={styles.stepBody}>
+        <View style={styles.stepBody}><StockUnitHint code={product.stock_unit_code} />
           <FormField
             ref={nameFieldRef}
             label="Product name"

@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
@@ -32,6 +33,7 @@ import {
   type ProductCounts,
 } from '@/features/shifts/closeCountList';
 import { confirmAction } from '@/lib/confirmAction';
+import { buildFinalizePayload, requiresRemittanceCount } from './remittanceProducts';
 import { TABLET_MIN_EDGE } from '@/lib/layout';
 import { formatMoney, previewCashResult } from '@/lib/format';
 import { listCashierProductCategories } from '@/services/inventoryService';
@@ -58,21 +60,6 @@ const DEFAULT_SORT: CountSort = 'stock-desc';
 
 // The pills are the count status; the funnel holds the Category.
 const COUNT_LIST_FILTERS: ListFilterKey[] = ['category'];
-
-function buildFinalizePayload(
-  products: ShiftCloseProductPreview[],
-  counts: ProductCounts,
-): ShiftCloseFinalizeProduct[] {
-  return products.map((product) => {
-    const row = counts[product.product_id];
-    const waste = (row?.wasteQuantity ?? '0').trim() || '0';
-    return {
-      product_id: product.product_id,
-      actual_remaining: (row?.actualRemaining ?? '').trim(),
-      ...(waste !== '0' ? { waste_quantity: waste } : {}),
-    };
-  });
-}
 
 /** A small − 12 + control: tap to step or type. Digits only, up to 6. */
 function MiniStepper({
@@ -196,6 +183,7 @@ function ProductCountCard({
           <Text style={styles.productName} numberOfLines={2}>
             {product.product_name_snapshot}
           </Text>
+          <StockUnitHint code={product.stock_unit_code} />
           <Pressable
             onPress={() => setDetailsOpen((open) => !open)}
             accessibilityRole="button"
@@ -302,7 +290,8 @@ export function CashierShiftCloseForm({
   const { width, height } = useWindowDimensions();
   const wide = Math.min(width, height) >= TABLET_MIN_EDGE;
   const isLegacy = preview.mode === 'legacy_cash_only' || !preview.inventory_reconciliation_required;
-  const products = isLegacy ? [] : preview.products ?? [];
+  const allProducts = isLegacy ? [] : preview.products ?? [];
+  const products = allProducts.filter(requiresRemittanceCount);
   const expectedCash = Number(preview.expected_cash);
 
   const [actualCash, setActualCash] = useState('');
@@ -413,7 +402,7 @@ export function CashierShiftCloseForm({
 
   const submit = () => {
     if (!canSubmit || loading) return;
-    onSubmit(actualCash.trim(), buildFinalizePayload(products, counts));
+    onSubmit(actualCash.trim(), buildFinalizePayload(allProducts, counts));
   };
 
   const progressText = closeProgressText({ total: products.length, counted: countedTotal, cashEntered: cashResult != null });

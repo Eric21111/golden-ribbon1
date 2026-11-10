@@ -90,14 +90,14 @@ export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
                     {occurrenceMeta(item) ? <Text style={styles.itemNote}>{occurrenceMeta(item)}</Text> : null}
                   </View>
                   {item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
-                    <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity)}</Text>
+                    <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity, item.stock_unit_code)}</Text>
                   ) : null}
                 </View>
               ))}
               <View style={styles.sheetTotal}>
                 <Text style={styles.sheetTotalLabel}>Total</Text>
                 <Text style={styles.sheetTotalValue}>
-                  {total != null ? formatPcsQty(total) : '—'}
+                  {total != null ? `${total} stock units (mixed items)` : '—'}
                 </Text>
               </View>
             </View>
@@ -168,7 +168,7 @@ export function WasteHistoryScreen() {
                     <Text style={styles.heroLabel}>Total waste</Text>
                   </View>
                   <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {totalPcs != null ? formatPcsQty(totalPcs) : '—'}
+                    {totalPcs != null ? `${totalPcs} stock units (mixed items)` : '—'}
                   </Text>
                 </View>
                 <View style={styles.pillRow}>
@@ -210,7 +210,7 @@ export function WasteHistoryScreen() {
                     <View style={styles.shiftTrail}>
                       {recorded ? (
                         <>
-                          <Text style={styles.amount}>{totalForShift != null ? formatPcsQty(totalForShift) : '—'}</Text>
+                          <Text style={styles.amount}>{totalForShift != null ? `${totalForShift} stock units (mixed items)` : '—'}</Text>
                           <Text style={styles.trailSub}>{plural(productCount(shift), 'product', 'products')}</Text>
                         </>
                       ) : (

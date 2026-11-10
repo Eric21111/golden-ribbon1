@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { supabase } from '@/lib/supabase';
 import type {
   CashierPendingTransfer,
@@ -37,7 +38,7 @@ export async function countPendingOutgoingTransfers(fromBranchId: string): Promi
   return count ?? 0;
 }
 
-export async function getTransfer(id: string): Promise<StockTransferDetails> {
+async function readGetTransfer(id: string): Promise<StockTransferDetails> {
   const { data, error } = await supabase
     .from('stock_transfers')
     .select('*, from_branch:branches!stock_transfers_from_branch_id_fkey(*), to_branch:branches!stock_transfers_to_branch_id_fkey(*), created_by_profile:profiles!stock_transfers_created_by_fkey(id, full_name), sent_by_profile:profiles!stock_transfers_sent_by_fkey(id, full_name), received_by_profile:profiles!stock_transfers_received_by_fkey(id, full_name), items:stock_transfer_items(*, product:products(*)), discrepancies:transfer_discrepancies(*, product:products(*))')
@@ -58,7 +59,7 @@ export async function sendTransfer(input: SendTransferInput): Promise<string> {
   return data;
 }
 
-export async function listCashierPendingTransfers(): Promise<CashierPendingTransfer[]> {
+async function readListCashierPendingTransfers(): Promise<CashierPendingTransfer[]> {
   const { data, error } = await supabase.rpc('list_cashier_pending_transfers');
   if (error) throw error;
   return ((data ?? []) as CashierPendingTransfer[]).map((row) => ({
@@ -148,4 +149,12 @@ export async function confirmShipmentArrival(
   } catch {
     return trimmed.replace(/^"|"$/g, '') as TransferStatus;
   }
+}
+
+export async function getTransfer(...args: Parameters<typeof readGetTransfer>) {
+  return withStockUnits(await readGetTransfer(...args));
+}
+
+export async function listCashierPendingTransfers(...args: Parameters<typeof readListCashierPendingTransfers>) {
+  return withStockUnits(await readListCashierPendingTransfers(...args));
 }

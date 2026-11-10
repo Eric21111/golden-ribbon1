@@ -4,7 +4,7 @@ Dark branded staff sign-in at `app/(auth)/login.tsx`.
 
 ## Layout
 
-- Logo: `assets/Golden_Ribbon_Logo-removebg-preview.png`
+- Logo: `assets/Golden_Ribbons_Logo-removebg-preview.png`
 - Subtitle: “Staff sign-in”
 - Email + Password + Log in
 - Phone: full-width form with padding; tablet: centered column `maxWidth` ~440

@@ -119,6 +119,20 @@ const names = (list) => list.map((p) => p.product_name_snapshot);
   const onlyNone = flat(renderToStaticMarkup(React.createElement(form.CashierShiftCloseForm, { preview: { ...preview, products: products.filter((p) => p.system_balance_before_waste === 0) }, onSubmit() {} })));
   assert.match(onlyNone, /NO SYSTEM STOCK \|2\|Set all to 0/);
   assert.doesNotMatch(onlyNone, /WITH STOCK/);
+  // Updated previews omit only server-certified idle rows. Sold-out activity still needs a count.
+  const updatedProducts = products.map(p => p.product_id === 'rice' ? { ...p, requires_count: false }
+    : p.product_id === 'kulma' ? { ...p, requires_count: true, received_quantity: 2, sold_quantity: 2 } : p);
+  const updated = renderToStaticMarkup(React.createElement(form.CashierShiftCloseForm, {
+    preview: { ...preview, products: updatedProducts }, onSubmit() {},
+  }));
+  assert.doesNotMatch(updated, /aria-label="Actual remaining for Rice"/);
+  assert.match(updated, /aria-label="Actual remaining for Beef Kulma"/);
+  assert.match(flat(updated), /0 of 6 counted/);
+  const idleOnly = renderToStaticMarkup(React.createElement(form.CashierShiftCloseForm, {
+    preview: { ...preview, products: products.filter(p => p.system_balance_before_waste === 0).map(p => ({ ...p, requires_count: false })) }, onSubmit() {},
+  }));
+  assert.doesNotMatch(idleOnly, /Actual remaining for|NO SYSTEM STOCK/);
+  assert.match(flat(idleOnly), /Enter the cash you counted/);
   // legacy, retry slot
   const legacy = renderToStaticMarkup(React.createElement(form.CashierShiftCloseForm, { preview: { ...preview, mode: 'legacy_cash_only', inventory_reconciliation_required: false, products: [] }, onSubmit() {} }));
   assert.match(flat(legacy), /This historical shift only needs cash reconciliation\.\|Cash Remittance\|/);
@@ -138,9 +152,10 @@ const names = (list) => list.map((p) => p.product_name_snapshot);
   assert.ok(src.includes("kind === 'none' ? `Set ${targets.length} ${noun} to 0?`") && src.includes("{ confirm: kind === 'none' ? 'Set to 0' : 'Fill', tone: 'warning' },"));
   assert.ok(src.includes("action: 'Set all to 0'") && src.includes("action: 'Use system stock for all'"));
   // what is submitted and when: unchanged
-  assert.ok(src.includes("const waste = (row?.wasteQuantity ?? '0').trim() || '0';") && src.includes("...(waste !== '0' ? { waste_quantity: waste } : {}),"));
+  const payloadSource = read('src/features/shifts/remittanceProducts.ts');
+  assert.ok(payloadSource.includes("const waste = (row?.wasteQuantity ?? '0').trim() || '0';") && payloadSource.includes("...(waste !== '0' ? { waste_quantity: waste } : {}),"));
   assert.ok(src.includes('const canSubmit = cashResult != null && productsValid && incomplete === 0;'));
-  assert.ok(src.includes('onSubmit(actualCash.trim(), buildFinalizePayload(products, counts));'));
+  assert.ok(src.includes('onSubmit(actualCash.trim(), buildFinalizePayload(allProducts, counts));'));
   assert.ok(src.includes('disabled={!canSubmit || loading}'));
   // earlier behaviour kept
   assert.ok(src.includes("onChangeText={(text) => onChange(text.replace(/[^\\d]/g, '').slice(0, 6))}"));

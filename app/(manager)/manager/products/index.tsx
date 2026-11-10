@@ -138,6 +138,7 @@ export default function ManagerProductListScreen() {
         id: product.id,
         name: product.name,
         sellInPos: product.sell_in_pos !== false,
+        stockUnitCode: product.stock_unit_code,
         isActive: product.is_active,
         category: product.product_category ?? null,
       })),
@@ -214,6 +215,7 @@ export default function ManagerProductListScreen() {
         drinkChoices: values.drinkChoices,
       })
       : createInventoryMutation.mutateAsync({
+          stockUnitCode: values.stockUnitCode,
           name: values.name,
           sku: values.sku,
           description: values.description ? values.description : null,
@@ -528,6 +530,7 @@ export default function ManagerProductListScreen() {
             <EditProductWizard
               key={editProduct.id}
               product={{
+                stock_unit_code: editProduct.stock_unit_code,
                 id: editProduct.id,
                 name: editProduct.name,
                 sku: editProduct.sku,

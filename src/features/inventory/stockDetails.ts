@@ -20,7 +20,7 @@ export type StockDisplay = {
   updated: string;
 };
 
-type StockItem = { updated_at: string | null; quantity_on_hand: number | string };
+type StockItem = { product?: { stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null }; updated_at: string | null; quantity_on_hand: number | string };
 
 /**
  * Four different things used to read alike ("Not set", "0 pcs", "Not initialized"):
@@ -34,7 +34,7 @@ export function stockDisplay(item: StockItem): StockDisplay {
     return { value: 'Not set', note: null, tone: 'muted', updated: 'Never' };
   }
   const updated = formatDate(item.updated_at);
-  const shown = formatLiveStock(item.quantity_on_hand);
+  const shown = formatLiveStock(item.quantity_on_hand, undefined, item.product?.stock_unit_code);
   if (shown === INVALID_QUANTITY_LABEL) {
     return { value: 'Unavailable', note: 'The stored quantity is not a whole number of pieces.', tone: 'danger', updated };
   }

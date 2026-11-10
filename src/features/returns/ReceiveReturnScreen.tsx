@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -313,6 +314,7 @@ export function ReceiveReturnScreen() {
                         <Text style={styles.name} numberOfLines={2}>
                           {item.product_name}
                         </Text>
+          <StockUnitHint code={item.stock_unit_code} />
                         <Text style={styles.sku}>{item.product_sku}</Text>
                       </View>
                       <View style={styles.expectedPill}>

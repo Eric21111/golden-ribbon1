@@ -1,4 +1,4 @@
-We need to correct the **Create Branch permission** in Golden Ribbon.
+We need to correct the **Create Branch permission** in Golden Ribbons.
 
 ## Background
 

@@ -313,6 +313,7 @@ function BranchCardDetails({ item, range }: { item: BranchPerformanceItem; range
                   {formatLiveStock(
                     inv.quantity_on_hand,
                     modeLookupReady ? inventoryModeByProductId.get(inv.product_id) : undefined,
+                    inv.stock_unit_code,
                   )}
                 </Text>
               </View>
@@ -484,6 +485,7 @@ export function BranchPerformanceDetailScreen() {
                       {formatLiveStock(
                         inv.quantity_on_hand,
                         modeLookupReady ? inventoryModeByProductId.get(inv.product_id) : undefined,
+                    inv.stock_unit_code,
                       )}
                     </Text>
                   }

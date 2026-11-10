@@ -11,7 +11,7 @@ import { isMainBranchManager } from '@/features/auth/roles';
 import { ManagerSignOutButton } from './ManagerSignOutButton';
 import { managerColors, managerGradients } from './theme';
 
-const logoSource = require('../../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logoSource = require('../../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 type SidebarItem = {
   label: string;

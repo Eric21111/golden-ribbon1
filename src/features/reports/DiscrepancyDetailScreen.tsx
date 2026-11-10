@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -131,7 +132,7 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
         title={isReturn ? 'Return discrepancy' : 'Transfer discrepancy'}
         showBack
       />
-      <ConstrainedWidth style={styles.column}>
+      <ConstrainedWidth style={styles.column}><StockUnitHint code={row.stock_unit_code} />
         <View style={styles.badges}>
           <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
           <ManagerBadge

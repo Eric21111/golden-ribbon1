@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -205,6 +206,7 @@ export default function CashierIncomingShipments() {
                 {item.items.map((line) => (
                   <View key={line.stock_transfer_item_id} style={styles.itemRow}>
                     <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
+          <StockUnitHint code={line.stock_unit_code} />
                     {reporting ? (
                       <TextInput
                         accessibilityLabel={`Actual received quantity for ${line.product_name}`}
@@ -226,7 +228,7 @@ export default function CashierIncomingShipments() {
                       />
                     ) : (
                       <Text style={styles.itemQty} numberOfLines={1}>
-                        {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode)}
+                        {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode, line.stock_unit_code)}
                       </Text>
                     )}
                   </View>

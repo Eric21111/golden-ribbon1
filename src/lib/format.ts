@@ -1,3 +1,4 @@
+import { labelStockQuantity, type StockUnitCode } from './stockUnits';
 import type {
   CashReconciliationResult,
   ClosingStockBehavior,
@@ -46,8 +47,9 @@ function formatPieceQuantity(quantity: number | string | null | undefined): stri
 export function formatSellingBranchOnHand(
   quantity: number | string,
   _mode?: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
-  return formatLiveStock(quantity);
+  return formatLiveStock(quantity, undefined, stockUnitCode);
 }
 
 /** Report/live on-hand — operational inventory is always whole PCS. */
@@ -63,6 +65,7 @@ export function formatReportLiveOnHand(
 export function formatInventoryQuantity(
   value: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
   if (mode === 'kg_meal') {
     if (value == null || value === '') return 'Unmeasured';
@@ -70,20 +73,22 @@ export function formatInventoryQuantity(
     if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
     return `${n.toFixed(3)} kg`;
   }
-  return formatPieceQuantity(value);
+  return labelStockQuantity(formatPieceQuantity(value), stockUnitCode);
 }
 
 export function formatLiveStock(
   quantity: number | string,
   _mode?: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
-  return formatPieceQuantity(quantity);
+  return labelStockQuantity(formatPieceQuantity(quantity), stockUnitCode);
 }
 
 /** Null KG received weight is unmeasured. It is never shown as 0 kg. */
 export function formatSnapshottedQuantity(
   quantity: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
   if (mode === 'kg_meal') {
     if (quantity == null || quantity === '') return 'Unmeasured';
@@ -91,20 +96,21 @@ export function formatSnapshottedQuantity(
     if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
     return `${n.toFixed(3)} kg`;
   }
-  if (quantity == null || quantity === '') return formatPieceQuantity(0);
-  return formatPieceQuantity(quantity);
+  if (quantity == null || quantity === '') return labelStockQuantity(formatPieceQuantity(0), stockUnitCode);
+  return labelStockQuantity(formatPieceQuantity(quantity), stockUnitCode);
 }
 
 export function formatTransferReceivedQuantity(
   status: TransferStatus,
   quantityReceived: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
   if (status === 'cancelled') return formatTransferStatus(status);
   if (status === 'draft' || status === 'pending_receipt') return 'Pending';
   if (status === 'received' || status === 'received_with_discrepancy') {
     if (isKgMeal(mode) && (quantityReceived == null || quantityReceived === '')) return 'Unmeasured';
-    return formatSnapshottedQuantity(quantityReceived, mode);
+    return formatSnapshottedQuantity(quantityReceived, mode, stockUnitCode);
   }
   return 'Pending';
 }
@@ -114,8 +120,9 @@ export function formatTransferLineSummary(
   quantitySent: number | string,
   quantityReceived: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
-  return `Sent ${formatSnapshottedQuantity(quantitySent, mode)} · Received ${formatTransferReceivedQuantity(status, quantityReceived, mode)}`;
+  return `Sent ${formatSnapshottedQuantity(quantitySent, mode, stockUnitCode)} · Received ${formatTransferReceivedQuantity(status, quantityReceived, mode, stockUnitCode)}`;
 }
 
 export function formatTransferDifference(
@@ -123,6 +130,7 @@ export function formatTransferDifference(
   quantitySent: number | string,
   quantityReceived: number | string | null | undefined,
   mode: InventoryMode | null | undefined,
+  stockUnitCode?: StockUnitCode | null,
 ): string {
   if (status === 'cancelled') return formatTransferStatus(status);
   if (status === 'draft' || status === 'pending_receipt') return 'Pending';
@@ -132,7 +140,7 @@ export function formatTransferDifference(
     const sent = Number(quantitySent);
     const received = Number(quantityReceived);
     if (!Number.isFinite(sent) || !Number.isFinite(received)) return INVALID_QUANTITY_LABEL;
-    return formatSnapshottedQuantity(sent - received, mode);
+    return formatSnapshottedQuantity(sent - received, mode, stockUnitCode);
   }
   return 'Pending';
 }

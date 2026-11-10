@@ -60,11 +60,11 @@ function stockPillLabel(item: InventoryItem): string {
   const status = getStockStatus(item);
   if (status === 'out') return 'Out of stock';
   if (status === 'not_set') return 'Not set';
-  return formatLiveStock(item.quantity_on_hand);
+  return formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code);
 }
 
 function onHandLabel(item: InventoryItem): string {
-  return formatLiveStock(item.quantity_on_hand);
+  return formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code);
 }
 
 type SortOption = 'name-asc' | 'name-desc' | 'qty-desc' | 'qty-asc';

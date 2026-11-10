@@ -1,4 +1,4 @@
-# Golden Ribbon — Manual Test Checklist
+# Golden Ribbons — Manual Test Checklist
 
 Mark items with `[x]` when done. Leave `[ ]` if not tested / failed.
 

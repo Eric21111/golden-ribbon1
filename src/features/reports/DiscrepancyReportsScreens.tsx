@@ -1,3 +1,4 @@
+import { stockUnit } from '@/lib/stockUnits';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -172,7 +173,7 @@ export function TransferDiscrepanciesReportScreen({
             <ListRowCard
               key={item.id}
               title={item.transfer_number}
-              meta={`${item.branch_name} · Sent ${item.quantity_sent} → Received ${item.quantity_received}`}
+              meta={`${item.branch_name} · ${stockUnit(item.stock_unit_code)?.plural ?? 'pcs'} · Sent ${item.quantity_sent} → Received ${item.quantity_received}`}
               trailing={
                 <View style={styles.trailing}>
                   <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
@@ -362,7 +363,7 @@ export function ReturnDiscrepanciesReportScreen({
             <ListRowCard
               key={item.id}
               title={item.return_number}
-              meta={`${item.branch_name} · Returned ${item.quantity_returned} → Received ${item.quantity_received}`}
+              meta={`${item.branch_name} · ${stockUnit(item.stock_unit_code)?.plural ?? 'pcs'} · Returned ${item.quantity_returned} → Received ${item.quantity_received}`}
               trailing={
                 <View style={styles.trailing}>
                   <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />

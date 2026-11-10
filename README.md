@@ -1,4 +1,4 @@
-# Golden Ribbon — Milestones 1–4
+# Golden Ribbons — Milestones 1–4
 
 Mobile-first catering inventory and POS system with staff authentication, employee management, branches, products, stock transfers, receiving, discrepancy history, cashier shifts, cash checkout, completed sales, and atomic inventory deduction. Returns, refunds, void approval, receipt printing, and advanced reports are not included yet.
 

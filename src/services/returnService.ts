@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { supabase } from '@/lib/supabase';
 import { isSaleId } from '@/lib/saleErrors';
 import type {
@@ -18,7 +19,7 @@ export interface ReturnFilters {
   sort?: 'newest' | 'oldest';
 }
 
-export async function listReturnStock() {
+async function readListReturnStock() {
   const { data, error } = await supabase.rpc('list_return_inventory');
   if (error) throw error;
   return data;
@@ -71,7 +72,7 @@ export async function listReturns(filters: ReturnFilters = {}) {
   }
 }
 
-export async function getReturn(id: string): Promise<StockReturnDetails> {
+async function readGetReturn(id: string): Promise<StockReturnDetails> {
   const { data, error } = await supabase
     .from('stock_returns')
     .select('*')
@@ -126,7 +127,7 @@ export async function receiveReturn(input: ReceiveReturnInput): Promise<ReturnSt
   return data as ReturnStatus;
 }
 
-export async function listReturnDiscrepancies(): Promise<ReturnDiscrepancy[]> {
+async function readListReturnDiscrepancies(): Promise<ReturnDiscrepancy[]> {
   const { data, error } = await supabase
     .from('return_discrepancies')
     .select('*, product:products(*), stock_return:stock_returns(*)')
@@ -134,4 +135,16 @@ export async function listReturnDiscrepancies(): Promise<ReturnDiscrepancy[]> {
     .limit(100);
   if (error) throw error;
   return data as unknown as ReturnDiscrepancy[];
+}
+
+export async function listReturnStock(...args: Parameters<typeof readListReturnStock>) {
+  return withStockUnits(await readListReturnStock(...args));
+}
+
+export async function getReturn(...args: Parameters<typeof readGetReturn>) {
+  return withStockUnits(await readGetReturn(...args));
+}
+
+export async function listReturnDiscrepancies(...args: Parameters<typeof readListReturnDiscrepancies>) {
+  return withStockUnits(await readListReturnDiscrepancies(...args));
 }

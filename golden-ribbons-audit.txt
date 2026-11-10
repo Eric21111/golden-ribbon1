@@ -1,4 +1,4 @@
-Golden Ribbon Source Audit Bundle
+Golden Ribbons Source Audit Bundle
 Generated from commit: 1e5cd81d7ebc87b37fa22265858ddf244f46434d
 
 
@@ -33,7 +33,7 @@ FILE: CLAUDE.md
 FILE: README.md
 ================================================================================
 
-# Golden Ribbon — Milestones 1–4
+# Golden Ribbons — Milestones 1–4
 
 Mobile-first catering inventory and POS system with staff authentication, employee management, branches, products, stock transfers, receiving, discrepancy history, cashier shifts, cash checkout, completed sales, and atomic inventory deduction. Returns, refunds, void approval, receipt printing, and advanced reports are not included yet.
 
@@ -274,7 +274,7 @@ FILE: app.json
 
 {
   "expo": {
-    "name": "Golden Ribbon",
+    "name": "Golden Ribbons",
     "slug": "golden-ribbon",
     "version": "1.0.0",
     "orientation": "default",
@@ -307,7 +307,7 @@ FILE: app.json
       [
         "expo-splash-screen",
         {
-          "image": "./assets/Golden_Ribbon_Logo-removebg-preview.png",
+          "image": "./assets/Golden_Ribbons_Logo-removebg-preview.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#0A1224"
@@ -402,7 +402,7 @@ const loginSchema = z.object({
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
-const logoSource = require('../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logoSource = require('../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 const NAVY = '#0A1224';
 const ROYAL_BLUE = '#1E3A8A';
@@ -8172,7 +8172,7 @@ Dark branded staff sign-in at `app/(auth)/login.tsx`.
 
 ## Layout
 
-- Logo: `assets/Golden_Ribbon_Logo-removebg-preview.png`
+- Logo: `assets/Golden_Ribbons_Logo-removebg-preview.png`
 - Subtitle: “Staff sign-in”
 - Email + Password + Log in
 - Phone: full-width form with padding; tablet: centered column `maxWidth` ~440
@@ -8217,7 +8217,7 @@ Shared: `MasterDetailLayout`, `ConstrainedWidth`. Receive stock and create retur
 FILE: docs/manual-test-checklist.md
 ================================================================================
 
-# Golden Ribbon — Manual Test Checklist
+# Golden Ribbons — Manual Test Checklist
 
 Mark items with `[x]` when done. Leave `[ ]` if not tested / failed.
 
@@ -8763,7 +8763,7 @@ FILE: package.json
 ================================================================================
 
 {
-  "name": "golden-ribbon",
+  "name": "golden-ribbons",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
@@ -12771,7 +12771,7 @@ This distinction must be maintained in both DB result semantics and UI.
 WASTE REPORT DESIGN
 ==================================================
 
-Add a minimal report screen consistent with the current Golden Ribbon report
+Add a minimal report screen consistent with the current Golden Ribbons report
 UI.
 
 Preferred label:
@@ -12881,7 +12881,7 @@ display according to existing app conventions.
 SECURITY
 ==================================================
 
-Any new/replaced report RPC follows Golden Ribbon hardened style:
+Any new/replaced report RPC follows Golden Ribbons hardened style:
 
 SECURITY DEFINER
 SET search_path = ''
@@ -16531,7 +16531,7 @@ Responsive:
 - phone
 - tablet
 
-Use existing Golden Ribbon design language/components.
+Use existing Golden Ribbons design language/components.
 
 Do not redesign unrelated app navigation.
 
@@ -20499,7 +20499,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 
 import { managerGradients } from '@/components/dashboard/theme';
 
-const logo = require('../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logo = require('../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 interface BrandSplashScreenProps {
   /** Shown under the logo with a spinner. Omit for a plain branded screen with no spinner. */
@@ -22542,7 +22542,7 @@ import { isMainBranchManager } from '@/features/auth/roles';
 import { ManagerSignOutButton } from './ManagerSignOutButton';
 import { managerColors, managerGradients } from './theme';
 
-const logoSource = require('../../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logoSource = require('../../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 type SidebarItem = {
   label: string;

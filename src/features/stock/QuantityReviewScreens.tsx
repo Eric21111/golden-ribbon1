@@ -1,3 +1,4 @@
+import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -18,6 +19,7 @@ export type ReviewLine = {
   id: string;
   name: string;
   sku: string;
+  stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null;
   category: string | null | undefined;
   quantity: number;
   /** One small gray line under the SKU, e.g. "System 25". */
@@ -36,6 +38,7 @@ function LineList({ lines, quantityCaption }: { lines: ReviewLine[]; quantityCap
             <Text style={styles.name} numberOfLines={2}>
               {line.name}
             </Text>
+          <StockUnitHint code={line.stock_unit_code} />
             <Text style={styles.meta} numberOfLines={1}>
               {line.sku}
               {line.caption ? ` · ${line.caption}` : ''}
@@ -43,7 +46,7 @@ function LineList({ lines, quantityCaption }: { lines: ReviewLine[]; quantityCap
             {line.flag ? <ManagerBadge label={line.flag.label} tone={line.flag.tone} /> : null}
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{formatLiveStock(line.quantity)}</Text>
+            <Text style={styles.statValue}>{formatLiveStock(line.quantity, undefined, line.stock_unit_code)}</Text>
             <Text style={styles.statLabel}>{quantityCaption}</Text>
           </View>
         </View>

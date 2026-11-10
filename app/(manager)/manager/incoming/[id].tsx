@@ -83,6 +83,7 @@ export default function IncomingTransferDetailsScreen() {
                 item.quantity_sent,
                 item.quantity_received,
                 item.inventory_mode,
+            item.stock_unit_code,
               )}
               meta={note ? `Note: ${note}` : undefined}
               trailing={

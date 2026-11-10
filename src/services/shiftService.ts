@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { getTodayRangeManila } from '@/lib/format';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
@@ -38,7 +39,7 @@ export async function reopenCashierShift(reason: string): Promise<string> {
   return data;
 }
 
-export async function beginCashierShiftClose(shiftId: string): Promise<ShiftCloseBeginResult> {
+async function readBeginCashierShiftClose(shiftId: string): Promise<ShiftCloseBeginResult> {
   const { data, error } = await supabase.rpc('begin_cashier_shift_close', {
     p_shift_id: shiftId,
   });
@@ -72,7 +73,7 @@ export async function reconcileClosedShift(shiftId: string, actualCash: string):
   return data as ShiftCloseResult;
 }
 
-export async function getMyPendingShiftReconciliation(): Promise<PendingShiftReconciliation | null> {
+async function readGetMyPendingShiftReconciliation(): Promise<PendingShiftReconciliation | null> {
   const { data, error } = await supabase.rpc('get_my_pending_shift_reconciliation');
   if (error) throw error;
   return data as PendingShiftReconciliation | null;
@@ -181,7 +182,7 @@ async function enrichWasteReportQuantities(report: ShiftWasteReport): Promise<Sh
   };
 }
 
-export async function listShiftWaste(
+async function readListShiftWaste(
   branchId: string | null | undefined,
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
   startDate?: string,
@@ -241,7 +242,7 @@ function asDetail(value: ShiftCloseReportDetail): ShiftCloseReportDetail {
   };
 }
 
-export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftCloseReportDetail> {
+async function readGetShiftCloseReportDetail(shiftId: string): Promise<ShiftCloseReportDetail> {
   if (!shiftId) throw new Error('Shift id is required.');
 
   const direct = await supabase.rpc('get_shift_remittance_detail', { p_shift_id: shiftId });
@@ -357,4 +358,20 @@ export async function getShiftCloseReportDetail(shiftId: string): Promise<ShiftC
     reconciled_at: cashRow?.reconciled_at ?? remittanceRow.reconciled_at,
     products: productRows,
   };
+}
+
+export async function beginCashierShiftClose(...args: Parameters<typeof readBeginCashierShiftClose>) {
+  return withStockUnits(await readBeginCashierShiftClose(...args));
+}
+
+export async function getMyPendingShiftReconciliation(...args: Parameters<typeof readGetMyPendingShiftReconciliation>) {
+  return withStockUnits(await readGetMyPendingShiftReconciliation(...args));
+}
+
+export async function getShiftCloseReportDetail(...args: Parameters<typeof readGetShiftCloseReportDetail>) {
+  return withStockUnits(await readGetShiftCloseReportDetail(...args));
+}
+
+export async function listShiftWaste(...args: Parameters<typeof readListShiftWaste>) {
+  return withStockUnits(await readListShiftWaste(...args));
 }

@@ -1,3 +1,4 @@
+import { stockUnit, type StockUnitCode } from '@/lib/stockUnits';
 /**
  * Stock Used Per Order — data helpers for the Create/Edit Product wizards.
  *
@@ -8,6 +9,7 @@
  */
 
 export type RecipeUnit = { singular: string; plural: string };
+const PCS: RecipeUnit = { singular: 'pc', plural: 'pcs' };
 
 export type InventoryItemOption = {
   id: string;
@@ -30,12 +32,9 @@ export type RecipeLine = { itemId: string; quantity: number };
 
 export const MAX_RECIPE_QUANTITY = 99;
 
-/** Inventory is tracked in pieces. Egg is the one exception: it is counted in half-egg units. */
-const PCS: RecipeUnit = { singular: 'pc', plural: 'pcs' };
-const HALF_EGG: RecipeUnit = { singular: 'half-egg unit', plural: 'half-egg units' };
-
 /** A real product offered as a stock item. */
 export type IngredientProduct = {
+  stockUnitCode?: StockUnitCode | null;
   id: string;
   name: string;
   sellInPos?: boolean;
@@ -43,15 +42,6 @@ export type IngredientProduct = {
   isActive?: boolean;
   category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
 };
-
-/** Products carry no unit of their own; by convention Egg stock is kept in half-egg units. */
-export function isEggProduct(name: string): boolean {
-  return /^eggs?$/i.test(name.trim());
-}
-
-export function unitForIngredient(name: string): RecipeUnit {
-  return isEggProduct(name) ? HALF_EGG : PCS;
-}
 
 /** Real products as stock items, A to Z, optionally leaving out one product (the one being edited). */
 export function ingredientOptionsFromProducts(
@@ -61,13 +51,13 @@ export function ingredientOptionsFromProducts(
   return products
     .filter((product) => product.id !== excludeProductId)
     .map((product) => {
-      const hint = [isEggProduct(product.name) ? '½ egg' : null, product.sellInPos === false ? 'Stock only' : null, product.isActive === false ? 'Disabled' : null]
+      const hint = [stockUnit(product.stockUnitCode)?.hint ?? null, product.sellInPos === false ? 'Stock only' : null, product.isActive === false ? 'Disabled' : null]
         .filter((part) => part != null)
         .join(' · ');
       return {
         id: product.id,
         name: product.name,
-        unit: unitForIngredient(product.name),
+        unit: stockUnit(product.stockUnitCode) ?? { singular: 'stock unit (legacy)', plural: 'stock units (legacy)' },
         ...(hint ? { hint } : {}),
         stockOnly: product.sellInPos === false || product.category === 'supplies',
         isDrink: product.category === 'drinks',

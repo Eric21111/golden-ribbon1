@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { supabase } from '@/lib/supabase';
 import type { DiscrepancyResolutionReason, TransferDiscrepancy } from '@/types/models';
 import type { ReturnDiscrepancy } from '@/types/returns';
@@ -5,7 +6,7 @@ import type { StockTransfer } from '@/types/models';
 
 export type DiscrepancyKind = 'return' | 'transfer';
 
-export async function getReturnDiscrepancy(id: string): Promise<ReturnDiscrepancy> {
+async function readGetReturnDiscrepancy(id: string): Promise<ReturnDiscrepancy> {
   const { data, error } = await supabase
     .from('return_discrepancies')
     .select('*, product:products(*), stock_return:stock_returns(*)')
@@ -15,7 +16,7 @@ export async function getReturnDiscrepancy(id: string): Promise<ReturnDiscrepanc
   return data as ReturnDiscrepancy;
 }
 
-export async function getTransferDiscrepancy(id: string): Promise<
+async function readGetTransferDiscrepancy(id: string): Promise<
   TransferDiscrepancy & {
     product?: { name: string; sku: string } | null;
     stock_transfer?:
@@ -65,3 +66,11 @@ export async function resolveTransferDiscrepancy(
   return data;
 }
 
+
+export async function getReturnDiscrepancy(...args: Parameters<typeof readGetReturnDiscrepancy>) {
+  return withStockUnits(await readGetReturnDiscrepancy(...args));
+}
+
+export async function getTransferDiscrepancy(...args: Parameters<typeof readGetTransferDiscrepancy>) {
+  return withStockUnits(await readGetTransferDiscrepancy(...args));
+}

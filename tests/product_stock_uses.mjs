@@ -10,7 +10,7 @@ const migration = readFileSync(migrationFile, 'utf8');
 // ---------------------------------------------------------------- 0. the migration is additive only
 {
   // executable SQL only: drop -- comments and COMMENT ON statements (documentation may mention confirm_sale)
-  const code = migration.replace(/--[^\n]*/g, '').replace(/comment on [\s\S]*?;\n/gi, '');
+  const code = migration.replace(/--[^\n]*/g, '').replace(/comment on [\s\S]*?;\r?\n/gi, '');
   assert.doesNotMatch(code, /confirm_sale/i, 'confirm_sale is not touched');
   assert.doesNotMatch(code, /create (or replace )?function|drop function/i, 'no function is created or changed');
   assert.doesNotMatch(code, /\bdrop\s+(table|column|index|constraint|policy|trigger)\b/i, 'nothing is dropped');

@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 
 import { managerGradients } from '@/components/dashboard/theme';
 
-const logo = require('../../assets/Golden_Ribbon_Logo-removebg-preview.png');
+const logo = require('../../assets/Golden_Ribbons_Logo-removebg-preview.png');
 
 interface BrandSplashScreenProps {
   /** Shown under the logo with a spinner. Omit for a plain branded screen with no spinner. */

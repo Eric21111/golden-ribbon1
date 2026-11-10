@@ -76,9 +76,9 @@ const stubs = {
     ...stubs,
     '@/services/accountService': { changeOwnEmail: async () => ({ confirmed: true }) },
   });
-  const html = renderToStaticMarkup(React.createElement(ChangeEmailForm, { currentEmail: 'golden-ribbon@gmail.com', onCancel() {} }));
+  const html = renderToStaticMarkup(React.createElement(ChangeEmailForm, { currentEmail: 'golden-ribbons@gmail.com', onCancel() {} }));
   const text = flat(html);
-  assert.match(text, /Current email: golden-ribbon@gmail\.com\|Current password\|New email\|Confirm email\|Cancel\|Update\|$/, 'the current email, three fields, then Cancel | Update');
+  assert.match(text, /Current email: golden-ribbons@gmail\.com\|Current password\|New email\|Confirm email\|Cancel\|Update\|$/, 'the current email, three fields, then Cancel | Update');
   assert.doesNotMatch(text, /Updates the sign-in email for this account only|historical records|Enter current password|name@example\.com|Re-enter new email|Current Password|New Email|Confirm New Email|Change email\|/, 'no paragraph, no placeholders, no Title Case labels');
   assert.match(html, /data-variant="secondary"[^>]*>Cancel</, 'Cancel is the light one, on the left');
   assert.match(html, /aria-label="Show password"/, 'the show / hide eye is still there');

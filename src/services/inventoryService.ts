@@ -1,3 +1,4 @@
+import { withStockUnits } from './stockUnitService';
 import { supabase } from '@/lib/supabase';
 import { listProducts } from '@/services/productService';
 import { parseStockUses } from '@/features/pos/posAvailability';
@@ -151,6 +152,7 @@ export async function initializeMainInventory(
 }
 
 export type LocalPurchaseCatalogRow = {
+  stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null;
   product_id: string;
   product_name: string;
   product_sku: string;
@@ -159,7 +161,7 @@ export type LocalPurchaseCatalogRow = {
   product_category?: Product['product_category'];
 };
 
-export async function listCashierLocalPurchaseCatalog(): Promise<LocalPurchaseCatalogRow[]> {
+async function readListCashierLocalPurchaseCatalog(): Promise<LocalPurchaseCatalogRow[]> {
   const [{ data, error }, categories] = await Promise.all([
     supabase.rpc('list_cashier_local_purchase_catalog'),
     listCashierProductCategories(),
@@ -185,4 +187,8 @@ export async function recordBranchLocalPurchase(
   });
   if (error) throw error;
   return data as string;
+}
+
+export async function listCashierLocalPurchaseCatalog(...args: Parameters<typeof readListCashierLocalPurchaseCatalog>) {
+  return withStockUnits(await readListCashierLocalPurchaseCatalog(...args));
 }

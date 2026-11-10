@@ -29,7 +29,7 @@ export function InventoryProductDetails({ item, primaryAction }: InventoryProduc
         <View style={styles.stat}>
           <Text style={styles.statLabel}>On hand</Text>
           <Text style={styles.statValue}>
-            {formatLiveStock(item.quantity_on_hand)}
+            {formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}
           </Text>
         </View>
         <View style={styles.stat}>

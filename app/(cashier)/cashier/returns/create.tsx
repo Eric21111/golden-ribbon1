@@ -21,7 +21,7 @@ function savedReturnRequest(request: { p_items?: ReturnRequest['p_items']; p_not
   };
 }
 
-type Entered = { product_id: string; name: string; sku: string; category: string | null | undefined; quantity: number; system: number };
+type Entered = { stock_unit_code?: import('@/lib/stockUnits').StockUnitCode | null; product_id: string; name: string; sku: string; category: string | null | undefined; quantity: number; system: number };
 
 /** What was counted against what the system says: nothing to explain when they agree. The list never lets more than the system has be entered (the database refuses it), so the count can only match or be short. */
 function returnLine(entry: Entered): ReviewLine {
@@ -29,7 +29,7 @@ function returnLine(entry: Entered): ReviewLine {
   return {
     id: entry.product_id,
     name: entry.name,
-    sku: entry.sku,
+    sku: entry.sku, stock_unit_code: entry.stock_unit_code,
     category: entry.category,
     quantity: entry.quantity,
     caption: `System ${entry.system}`,
@@ -67,7 +67,7 @@ export default function CreateReturnScreen() {
       {
         product_id: row.product_id,
         name: row.product_name,
-        sku: row.product_sku,
+        sku: row.product_sku, stock_unit_code: row.stock_unit_code,
         category: row.product_category,
         quantity,
         system: Number(row.quantity_on_hand),
@@ -133,6 +133,7 @@ export default function CreateReturnScreen() {
         lines={submitted ? submitted.map(returnLine) : (savedReturnRequest(saved.request)?.p_items ?? []).map(item => ({
           id: item.product_id,
           name: leftover.find(row => row.product_id === item.product_id)?.product_name ?? 'Product',
+          stock_unit_code: leftover.find(row => row.product_id === item.product_id)?.stock_unit_code,
           sku: leftover.find(row => row.product_id === item.product_id)?.product_sku ?? '',
           category: leftover.find(row => row.product_id === item.product_id)?.product_category ?? null,
           quantity: Number(item.quantity_returned),
@@ -157,7 +158,7 @@ export default function CreateReturnScreen() {
           const row = known.get(item.product_id);
           const quantity = Number(item.quantity_returned);
           return row
-            ? returnLine({ product_id: row.product_id, name: row.product_name, sku: row.product_sku, category: row.product_category, quantity, system: Number(row.quantity_on_hand) })
+            ? returnLine({ product_id: row.product_id, name: row.product_name, sku: row.product_sku, stock_unit_code: row.stock_unit_code, category: row.product_category, quantity, system: Number(row.quantity_on_hand) })
             : { id: item.product_id, name: 'Product', sku: '', category: null, quantity };
         })
       : entered.map(returnLine);
@@ -188,7 +189,7 @@ export default function CreateReturnScreen() {
   const rows: QuantityRow[] = leftover.map((row) => ({
     id: row.product_id,
     name: row.product_name,
-    sku: row.product_sku,
+    sku: row.product_sku, stock_unit_code: row.stock_unit_code,
     category: row.product_category,
     onHand: Number(row.quantity_on_hand),
   }));

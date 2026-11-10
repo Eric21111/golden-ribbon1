@@ -317,6 +317,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      get_stock_unit_codes: {
+        Args: { p_product_ids: string[] };
+        Returns: Array<{ product_id: string; stock_unit_code: import('@/lib/stockUnits').StockUnitCode | null }>;
+      };
+      create_portion_stock_product: {
+        Args: { p_name: string; p_sku: string; p_description: string | null; p_stock_unit_code: string; p_closing_stock_behavior?: string | null };
+        Returns: Product;
+      };
       list_return_inventory: { Args: Record<string, never>; Returns: ReturnStock[] };
       configure_branch_products: {
         Args: {
