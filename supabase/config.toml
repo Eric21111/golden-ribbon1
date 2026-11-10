@@ -9,6 +9,11 @@ project_id = "golden-ribbon"
 # Supabase Auth access token with auth.getUser before any admin operation.
 verify_jwt = false
 
+[functions.push-dispatch]
+# Called only by Postgres (pg_net / pg_cron) with the project secret key, which
+# is not a JWT. The function compares the apikey header against its own secret keys.
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.

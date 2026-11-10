@@ -16,6 +16,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { canChangeOwnEmail } from '@/features/auth/roles';
 import { ChangeEmailForm } from '@/features/profile/ChangeEmailForm';
 import { ChangeNameForm } from '@/features/profile/ChangeNameForm';
+import { PushNotificationsCard } from '@/features/notifications/PushNotificationsCard';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 
 function ActionRow({
@@ -109,6 +110,8 @@ export default function ManagerAccountScreen() {
             ) : null}
           </View>
         </View>
+
+        <PushNotificationsCard role={profile.role} />
 
         <View style={styles.footer}>
           <ManagerSignOutButton />

@@ -13,6 +13,7 @@ export const queryKeys = {
   transfer: (id: string) => ['transfers', id] as const,
   pendingOutgoingTransfersCount: (fromBranchId: string) =>
     ['transfers', 'pending-outgoing-count', fromBranchId] as const,
+  unreadNotificationCounts: (userId: string) => ['notifications', 'unread', userId] as const,
   activeShift: (cashierId: string) => ['shifts', 'active', cashierId] as const,
   employees: ['employees'] as const,
   returns: (branchId = '', status = '') => ['stock-returns', { branchId, status }] as const,

@@ -31,6 +31,14 @@
       "expo-font",
       "@react-native-vector-icons/ionicons",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#0A1224",
+          "defaultChannel": "default"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/Golden_Ribbons_Logo-removebg-preview.png",

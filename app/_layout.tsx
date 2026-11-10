@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GlobalAlertModal } from '@/components/GlobalAlertModal';
 import { AuthProvider } from '@/features/auth/AuthProvider';
+import { NotificationsBridge } from '@/features/notifications/NotificationsBridge';
 import { queryClient } from '@/lib/queryClient';
 
 export default function RootLayout() {
@@ -23,6 +24,7 @@ export default function RootLayout() {
               <Stack.Screen name="(cashier)" options={{ headerShown: false }} />
             </Stack>
             <GlobalAlertModal />
+            <NotificationsBridge />
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

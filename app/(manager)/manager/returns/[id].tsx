@@ -15,6 +15,7 @@ import { returnStatusBadgeLabel, returnStatusTone } from '@/components/dashboard
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
+import { useMarkNotificationsReviewed } from '@/hooks/useNotifications';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { getReturn } from '@/services/returnService';
@@ -29,6 +30,7 @@ export default function ManagerReturnDetailsScreen() {
     queryFn: () => getReturn(returnId),
     enabled: Boolean(returnId),
   });
+  useMarkNotificationsReviewed('return_submitted', returnId, returnId && query.data ? query.dataUpdatedAt : 0);
 
   if (query.isLoading) {
     return (

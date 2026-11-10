@@ -6,7 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { managerColors } from '@/components/dashboard/theme';
 import { colors } from '@/constants/theme';
+import { formatBadgeCount, type NotificationKind } from '@/features/notifications/notificationRoutes';
 import { useKeyboardBottomInset } from '@/hooks/useKeyboardBottomInset';
+import { useUnreadNotificationCounts } from '@/hooks/useNotifications';
 import type { UserRole } from '@/types/models';
 
 type NavigationItem = {
@@ -14,6 +16,7 @@ type NavigationItem = {
   href: Href;
   icon: IoniconsIconName;
   selectedIcon: IoniconsIconName;
+  badgeKind?: NotificationKind;
 };
 
 function menuHref(href: string): Href {
@@ -35,7 +38,7 @@ const mainManagerMenu: NavigationItem[] = [
   { label: 'Home', href: menuHref('/manager/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
   { label: 'Inventory', href: menuHref('/manager/inventory'), icon: 'cube-outline', selectedIcon: 'cube' },
   { label: 'Transfers', href: menuHref('/manager/transfers'), icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
-  { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+  { label: 'Returns', href: menuHref('/manager/returns'), icon: 'return-up-back-outline', selectedIcon: 'return-up-back', badgeKind: 'return_submitted' },
   { label: 'Account', href: menuHref('/manager/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
@@ -43,7 +46,7 @@ const cashierMenu: NavigationItem[] = [
   { label: 'Home', href: '/cashier/dashboard', icon: 'home-outline', selectedIcon: 'home' },
   { label: 'POS', href: '/cashier/pos', icon: 'cart-outline', selectedIcon: 'cart' },
   { label: 'Sales', href: '/cashier/sales', icon: 'receipt-outline', selectedIcon: 'receipt' },
-  { label: 'Incoming', href: menuHref('/cashier/incoming'), icon: 'cube-outline', selectedIcon: 'cube' },
+  { label: 'Incoming', href: menuHref('/cashier/incoming'), icon: 'cube-outline', selectedIcon: 'cube', badgeKind: 'transfer_pending' },
   { label: 'Profile', href: '/cashier/profile', icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];
 
@@ -68,6 +71,7 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
   const indicatorColor = isPremium ? managerColors.gold : colors.primary;
   const labelFontFamily = isPremium ? 'Inter_600SemiBold' : undefined;
   const selectedLabelFontFamily = isPremium ? 'Inter_700Bold' : undefined;
+  const unread = useUnreadNotificationCounts();
 
   return (
     <BottomNavigationContext.Provider value={visible}>
@@ -84,6 +88,8 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
             >
               {items.map((item) => {
                 const selected = item.href === pathname;
+                const unreadCount = item.badgeKind ? unread[item.badgeKind] : 0;
+                const badge = formatBadgeCount(unreadCount);
                 return (
                   <Link
                     key={String(item.href)}
@@ -94,7 +100,7 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
                   >
                     <Pressable
                       accessibilityRole="link"
-                      accessibilityLabel={item.label}
+                      accessibilityLabel={badge ? `${item.label}, ${unreadCount} unread` : item.label}
                       accessibilityState={{ selected }}
                       onPress={(event) => { if (selected) event.preventDefault(); }}
                       style={({ pressed }) => StyleSheet.flatten([
@@ -113,6 +119,11 @@ export function RoleNavigation({ role, children }: PropsWithChildren<{ role: Use
                           name={selected ? item.selectedIcon : item.icon}
                           size={22}
                         />
+                        {badge ? (
+                          <View style={styles.badge} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                            <Text style={styles.badgeText}>{badge}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text
                         numberOfLines={1}
@@ -197,6 +208,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   iconChipActive: { backgroundColor: '#EAF0FB' },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', lineHeight: 12 },
   label: { color: colors.muted, fontSize: 10, fontWeight: '600', textAlign: 'center', width: '100%' },
   selectedLabel: { fontWeight: '800' },
 });

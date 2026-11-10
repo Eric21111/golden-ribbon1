@@ -15,6 +15,7 @@ import {
   useConfirmShipmentArrival,
   useReportShipmentIssue,
 } from '@/hooks/useTransfers';
+import { useMarkNotificationsReviewed } from '@/hooks/useNotifications';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatDate, formatSnapshottedQuantity, makeIdempotencyKey } from '@/lib/format';
@@ -23,6 +24,7 @@ import type { CashierPendingTransfer } from '@/types/models';
 export default function CashierIncomingShipments() {
   const { session } = useAuth();
   const pending = useCashierPendingTransfers(session?.user.id ?? '');
+  useMarkNotificationsReviewed('transfer_pending', null, pending.isSuccess ? pending.dataUpdatedAt : 0);
   const arrival = useConfirmShipmentArrival();
   const issue = useReportShipmentIssue();
   const keysRef = useRef<Map<string, string>>(new Map());

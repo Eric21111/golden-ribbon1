@@ -667,6 +667,16 @@ export type Database = {
         Args: { p_id: string; p_reason: string; p_note?: string | null };
         Returns: Record<string, unknown>;
       };
+      get_my_unread_notification_counts: {
+        Args: Record<string, never>;
+        Returns: { transfer_pending: number; return_submitted: number };
+      };
+      mark_notifications_read: {
+        Args: { p_kind: 'transfer_pending' | 'return_submitted'; p_entity_id?: string | null };
+        Returns: number;
+      };
+      register_push_device: { Args: { p_token: string; p_platform: 'ios' | 'android' }; Returns: undefined };
+      unregister_push_device: { Args: { p_token: string }; Returns: undefined };
       get_archive_status: { Args: Record<string, never>; Returns: ArchiveStatus };
       dismiss_archive_reminder: { Args: Record<string, never>; Returns: ArchiveStatus };
       prepare_sales_archive: { Args: Record<string, never>; Returns: DataArchiveRecord };

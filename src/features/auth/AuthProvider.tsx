@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient, type QueryObserverResult } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
+import { clearDeliveredNotifications } from '@/features/notifications/pushNotifications';
+import { registerThisDeviceForPush, unregisterThisDeviceForPush } from '@/features/notifications/pushRegistration';
 import { queryKeys } from '@/lib/queryKeys';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getMyProfile } from '@/services/profileService';
@@ -87,8 +89,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signOut = useCallback(async () => {
     if (useCheckoutStore.getState().pending) throw new Error('Wait for the checkout request to finish before logging out.');
+    // Needs the current session, so it runs before sign-out; bounded and never blocks logging out.
+    await unregisterThisDeviceForPush();
     const { error } = await supabase.auth.signOut({ scope: 'local' });
-    if (error) throw error;
+    if (error) {
+      void registerThisDeviceForPush().catch(() => undefined);
+      throw error;
+    }
+    void clearDeliveredNotifications();
     // Unverified requests remain in the per-user journal and resume after signing back in.
     useCheckoutStore.getState().activateUser(null);
     setSession(null);

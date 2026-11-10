@@ -14,6 +14,7 @@ import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ChangeNameForm } from '@/features/profile/ChangeNameForm';
+import { PushNotificationsCard } from '@/features/notifications/PushNotificationsCard';
 import { ChangePasswordForm } from '@/features/profile/ChangePasswordForm';
 
 export default function CashierAccountScreen() {
@@ -81,6 +82,8 @@ export default function CashierAccountScreen() {
             </Pressable>
           </View>
         </View>
+
+        <PushNotificationsCard role={profile.role} />
 
         <View style={styles.footer}>
           <ManagerSignOutButton />
