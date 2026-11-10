@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -18,10 +18,8 @@ import { managerColors } from '@/components/dashboard/theme';
 import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
-import type { StockReturnSummary } from '@/features/returns/ReturnListItem';
 import { MANAGER_RETURN_STATUS_CHOICES, returnFilterEmptyMessage, type ReturnStatusFilter } from '@/features/returns/returnFilters';
-import { useClientPagination } from '@/hooks/useClientPagination';
-import { useReturns } from '@/hooks/useReturns';
+import { useReturnHistoryPage } from '@/hooks/useReturns';
 import { getErrorMessage } from '@/lib/errors';
 import {
   formatDateShort,
@@ -47,7 +45,7 @@ const DATE_RANGE_LABELS: Record<DateFilterType, string> = {
   custom: 'Custom range',
 };
 
-/** Local (non-report) date-range filtering — resolves a preset or custom range to real bounds. */
+/** Resolve inclusive Manila dates into an exclusive upper bound for the server query. */
 function resolveDateBounds(
   rangeType: DateFilterType,
   customStart: string,
@@ -66,7 +64,7 @@ function resolveDateBounds(
 
 export default function ManagerReturnsScreen() {
   const { profile } = useAuth();
-  const [status, setStatus] = useState<ReturnStatusFilter>('in_transit');
+  const [status, setStatus] = useState<ReturnStatusFilter>('');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('newest');
   const [sortOpen, setSortOpen] = useState(false);
@@ -74,44 +72,26 @@ export default function ManagerReturnsScreen() {
   const [dateRange, setDateRange] = useState<DateFilterType>('all_time');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const query = useReturns(profile?.branch_id ?? '', status);
+  const bounds = resolveDateBounds(dateRange, customStart, customEnd);
+  const rangeReady = dateRange !== 'custom' || Boolean(bounds && bounds.start < bounds.end);
+  const filterKey = JSON.stringify([profile?.branch_id, status, search, sort, bounds]);
+  const [position, setPosition] = useState({ key: '', page: 0 });
+  const page = position.key === filterKey ? position.page : 0;
+  const setPage = (next: number) => setPosition({ key: filterKey, page: next });
+  const enabled = Boolean(profile?.branch_id) && rangeReady;
+  const query = useReturnHistoryPage({
+    branchId: profile?.branch_id ?? '', status, search, sort,
+    start: bounds?.start, end: bounds?.end,
+  }, page, enabled);
+  const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / 10));
+  useEffect(() => {
+    if (query.data && page >= totalPages) setPosition({ key: filterKey, page: totalPages - 1 });
+  }, [query.data, page, totalPages, filterKey]);
   const refetchReturns = query.refetch;
   useFocusEffect(
     useCallback(() => {
-      void refetchReturns();
-    }, [refetchReturns]),
-  );
-  const returns = (query.data as StockReturnSummary[] | undefined) ?? [];
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    let rows = !term
-      ? [...returns]
-      : returns.filter((item) =>
-          `${item.return_number} ${item.from_branch_name} ${item.to_branch_name}`.toLowerCase().includes(term),
-        );
-
-    const bounds = resolveDateBounds(dateRange, customStart, customEnd);
-    if (bounds) {
-      const startMs = Date.parse(bounds.start);
-      const endMs = Date.parse(bounds.end);
-      rows = rows.filter((item) => {
-        const ms = Date.parse(item.created_at);
-        return ms >= startMs && ms < endMs;
-      });
-    }
-
-    return rows.sort((a, b) =>
-      sort === 'oldest'
-        ? a.created_at.localeCompare(b.created_at)
-        : b.created_at.localeCompare(a.created_at),
-    );
-  }, [returns, search, sort, dateRange, customStart, customEnd]);
-
-  const pagination = useClientPagination(
-    filtered,
-    `${search}|${status}|${sort}|${dateRange}|${customStart}|${customEnd}`,
-    10,
+      if (enabled) void refetchReturns();
+    }, [refetchReturns, enabled]),
   );
 
   const empty =
@@ -163,13 +143,15 @@ export default function ManagerReturnsScreen() {
           <FilterChipRow options={MANAGER_RETURN_STATUS_CHOICES} value={status} onChange={setStatus} />
         </View>
 
-        {query.error ? (
+        {!rangeReady ? (
+          <EmptyState title="Choose a date range" message="Enter a valid start and end date to load returns." />
+        ) : query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : query.isLoading && !query.data ? (
           <LoadingState label="Loading returns…" />
         ) : (
           <FlatList
-            data={pagination.pageItems}
+            data={query.data?.rows ?? []}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             refreshControl={
@@ -182,12 +164,12 @@ export default function ManagerReturnsScreen() {
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
             ListFooterComponent={
-              pagination.showPagination ? (
+              totalPages > 1 ? (
                 <View style={styles.pager}>
                   <Pagination
-                    page={pagination.page}
-                    totalPages={pagination.totalPages}
-                    onPageChange={pagination.setPage}
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={setPage}
                   />
                 </View>
               ) : null

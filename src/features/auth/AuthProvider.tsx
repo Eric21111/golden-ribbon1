@@ -29,24 +29,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let mounted = true;
+    let authEventReceived = false;
+    const applySession = (nextSession: Session | null) => {
+      const nextUserId = nextSession?.user.id ?? null;
+      if (useCheckoutStore.getState().userId !== nextUserId) {
+        queryClient.clear();
+        useCartStore.getState().clearCart();
+      }
+      useCheckoutStore.getState().activateUser(nextUserId);
+      setSession(nextSession);
+      setSessionLoading(false);
+    };
 
     void supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session);
-        setSessionLoading(false);
-      }
+      if (mounted && !authEventReceived) applySession(data.session);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setSessionLoading(false);
+      authEventReceived = true;
+      if (mounted) applySession(nextSession);
     });
 
     return () => {
       mounted = false;
       subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient]);
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(userId),
@@ -78,13 +86,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
-    if (useCheckoutStore.getState().request) throw new Error('Finish the sale confirmation before logging out.');
+    if (useCheckoutStore.getState().pending) throw new Error('Wait for the checkout request to finish before logging out.');
     const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    // Unverified requests remain in the per-user journal and resume after signing back in.
+    useCheckoutStore.getState().activateUser(null);
     setSession(null);
     queryClient.clear();
     useCartStore.getState().clearCart();
-    useCheckoutStore.getState().reset();
-    if (error) throw error;
   }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(

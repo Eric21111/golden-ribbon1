@@ -1,5 +1,5 @@
-import { Redirect, router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -46,6 +46,11 @@ export default function CurrentShiftSales() {
     queryFn: () => listShiftSales(shift.data!.id),
     enabled: Boolean(shift.data),
   });
+  const refetchSales = sales.refetch;
+  const shiftId = shift.data?.id;
+  useFocusEffect(useCallback(() => {
+    if (shiftId) void refetchSales();
+  }, [shiftId, refetchSales]));
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

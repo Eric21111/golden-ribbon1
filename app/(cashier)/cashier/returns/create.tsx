@@ -108,11 +108,14 @@ export default function CreateReturnScreen() {
     } catch (failure) {
       const code =
         typeof failure === 'object' && failure && 'code' in failure ? String(failure.code) : '';
-      if (['22023', '42501', '23514', 'P0001', '40P01', '40001'].includes(code)) {
+      const rejected = !savedRequest && !useReturnStore.getState().byUser[user]?.id
+        && ['22023', '42501', '23514', 'P0001', '40P01', '40001', '55000', 'PGRST202'].includes(code);
+      if (rejected) {
         useReturnStore.getState().clear(user);
         void query.refetch();
       }
-      setError(getInventoryErrorMessage(failure));
+      setError(rejected ? getInventoryErrorMessage(failure)
+        : 'This saved return is still unverified. Retry it or contact support before creating another return.');
     } finally {
       lock.current = false;
       setBusy(false);
@@ -127,7 +130,13 @@ export default function CreateReturnScreen() {
         title="Return submitted"
         subtitle={branchLine}
         heading="In transit to Main Branch"
-        lines={(submitted ?? []).map(returnLine)}
+        lines={submitted ? submitted.map(returnLine) : (savedReturnRequest(saved.request)?.p_items ?? []).map(item => ({
+          id: item.product_id,
+          name: leftover.find(row => row.product_id === item.product_id)?.product_name ?? 'Product',
+          sku: leftover.find(row => row.product_id === item.product_id)?.product_sku ?? '',
+          category: leftover.find(row => row.product_id === item.product_id)?.product_category ?? null,
+          quantity: Number(item.quantity_returned),
+        }))}
         quantityCaption="returned"
         doneLabel="Back to home"
         onDone={() => {

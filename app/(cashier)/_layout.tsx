@@ -10,8 +10,9 @@ import { RoleGuard } from '@/features/auth/RoleGuard';
 
 function CashierNavigator() {
   const request = useCheckoutStore((state) => state.request);
+  const recoveryError = useCheckoutStore((state) => state.recoveryError);
   const pathname = usePathname();
-  if (request && pathname !== '/cashier/payment') return <RoleGuard role="cashier"><Redirect href="/cashier/payment" /></RoleGuard>;
+  if ((request || recoveryError) && pathname !== '/cashier/payment') return <RoleGuard role="cashier"><Redirect href="/cashier/payment" /></RoleGuard>;
   return (
     <RoleGuard role="cashier">
       <RoleNavigation role="cashier">

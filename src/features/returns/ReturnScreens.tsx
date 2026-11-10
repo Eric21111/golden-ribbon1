@@ -23,7 +23,7 @@ export function ReturnHistory({ role }: { role: 'owner' | 'manager' }) {
   const { profile } = useAuth();
   const isMainBranch = isMainBranchManager(profile);
   const [status, setStatus] = useState<ReturnStatusFilter>(
-    role === 'manager' ? 'in_transit' : '',
+    '',
   );
 
   const branchId = role === 'manager' && !isMainBranch ? (profile?.branch_id ?? '') : '';

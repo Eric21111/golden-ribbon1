@@ -10,6 +10,8 @@ import { managerColors } from '@/components/dashboard/theme';
 import { pricingProgramLabel } from '@/features/pos/pricingPrograms';
 import { useSale } from '@/hooks/useSales';
 import { formatDate, formatMoney } from '@/lib/format';
+import { isSaleId, saleReadErrorMessage } from '@/lib/saleErrors';
+import { AppButton } from '@/components/AppButton';
 
 function goBack() {
   if (router.canGoBack()) {
@@ -29,13 +31,19 @@ type SaleDetailsBodyProps = {
 export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyProps) {
   const query = useSale(saleId);
 
+  if (!isSaleId(saleId)) return (
+    <View>
+      <ErrorState message={saleReadErrorMessage({ code: 'INVALID_SALE_ID' })} />
+      <AppButton label="Back to Sales" onPress={() => router.replace('/cashier/sales')} />
+    </View>
+  );
   if (query.isLoading) return <LoadingState label="Loading sale details…" />;
   if (query.error || !query.data) {
     return (
-      <ErrorState
-        message="Unable to load sale details."
-        onRetry={() => void query.refetch()}
-      />
+      <View>
+        <ErrorState message={saleReadErrorMessage(query.error)} onRetry={() => void query.refetch()} />
+        {showBack ? <AppButton label="Back to Sales" onPress={() => router.replace('/cashier/sales')} /> : null}
+      </View>
     );
   }
 

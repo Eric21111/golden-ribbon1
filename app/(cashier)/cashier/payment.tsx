@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
+import { SignOutButton } from '@/components/SignOutButton';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
@@ -108,7 +109,7 @@ export default function PaymentScreen() {
   };
 
   useEffect(() => {
-    if (checkout.sale) return;
+    if (checkout.sale || checkout.request) return;
     let cancelled = false;
     setPricesReady(false);
     setPriceError('');
@@ -158,7 +159,7 @@ export default function PaymentScreen() {
     return () => {
       cancelled = true;
     };
-  }, [checkout.sale, priceRefreshKey]);
+  }, [checkout.sale, checkout.request, priceRefreshKey]);
 
   useEffect(() => {
     if (!checkout.sale) return;
@@ -166,11 +167,12 @@ export default function PaymentScreen() {
   }, [checkout.sale, client]);
 
   const runSubmit = () => {
-    if (!shift.data || checkout.pending || !pricesReady || stockChecking) return;
+    if (checkout.pending || stockChecking) return;
     if (checkout.request) {
       void checkout.submit(checkout.request);
       return;
     }
+    if (!shift.data || !pricesReady) return;
     const liveItems = useCartStore.getState().items;
     if (liveItems.length === 0) {
       setValidation('Cart is empty after stock adjustment. Return to POS and rebuild the order.');
@@ -190,15 +192,16 @@ export default function PaymentScreen() {
         quantity,
         ...(drink_product_id ? { drink_product_id } : {}),
       })),
-    });
+    }, liveItems);
   };
 
   const submit = () => {
-    if (!shift.data || checkout.pending || !pricesReady || stockChecking) return;
+    if (checkout.pending || stockChecking) return;
     if (checkout.request) {
       runSubmit();
       return;
     }
+    if (!shift.data || !pricesReady) return;
     setValidation('');
     void (async () => {
       const stockOk = await ensureLiveStockAllowsCheckout();
@@ -218,27 +221,34 @@ export default function PaymentScreen() {
     })();
   };
 
-  const done = () => {
+  const done = (viewSale = false) => {
+    const saleId = checkout.sale?.id;
+    if (!checkout.reset()) return;
     useCartStore.getState().clearCart();
-    checkout.reset();
     void invalidateCompletedSaleQueries(client);
-    router.replace('/cashier/pos');
+    router.replace(viewSale && saleId ? `/cashier/sales/${saleId}` : '/cashier/pos');
   };
 
-  if (shift.isLoading) return <LoadingState />;
-  if (shift.error) {
+  if (checkout.recoveryError) return (
+    <Screen>
+      <ErrorState message={checkout.error} onRetry={() => checkout.activateUser(profile?.id ?? null)} />
+      <SignOutButton />
+    </Screen>
+  );
+  if (shift.isLoading && !checkout.request && !checkout.sale) return <LoadingState />;
+  if (shift.error && !checkout.request && !checkout.sale) {
     return (
       <Screen backgroundColor="#FFFFFF">
         <ErrorState message="Unable to verify your shift." onRetry={() => void shift.refetch()} />
       </Screen>
     );
   }
-  if (!shift.data && !checkout.sale) return <Redirect href="/cashier/dashboard" />;
+  if (!shift.data && !checkout.sale && !checkout.request) return <Redirect href="/cashier/dashboard" />;
   if (!items.length && !checkout.sale && !checkout.request) {
     return <Redirect href="/cashier/pos" />;
   }
 
-  const canConfirm = pricesReady && !priceError && !stockChecking;
+  const canConfirm = Boolean(checkout.request) || (pricesReady && !priceError && !stockChecking);
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
@@ -251,16 +261,27 @@ export default function PaymentScreen() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           >
-            {!pricesReady && !priceError && !checkout.sale ? (
+            {!pricesReady && !priceError && !checkout.sale && !checkout.request ? (
               <LoadingState label="Refreshing current prices…" />
             ) : null}
-            {priceError && !checkout.sale ? (
+            {priceError && !checkout.sale && !checkout.request ? (
               <ErrorState
                 message={priceError}
                 onRetry={() => setPriceRefreshKey((key) => key + 1)}
               />
             ) : null}
-            <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} categoryByProductId={categories.data} />
+            {checkout.request ? (
+              <View>
+                <Text style={styles.cardLine}>Saved checkout · {checkout.request.items.reduce((total, item) => total + item.quantity, 0)} items</Text>
+                <Text style={styles.cardLine}>Original payment: {formatMoney(Number(checkout.request.amountPaid))}</Text>
+                {checkout.items.map((item, index) => (
+                  <Text key={index} style={styles.cardLineMuted}>
+                    {item.quantity} × {item.product_name}{item.variant_name ? ` · ${item.variant_name}` : ''}{item.drink_name ? ` · ${item.drink_name}` : ''}
+                  </Text>
+                ))}
+                <Text style={styles.cardLineMuted}>Retry checks this same order with its original quantities and payment.</Text>
+              </View>
+            ) : <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} categoryByProductId={categories.data} />}
 
             {!checkout.sale ? (
               <View style={styles.programBlock}>
@@ -307,6 +328,12 @@ export default function PaymentScreen() {
                 {validation || checkout.error}
               </Text>
             ) : null}
+            {checkout.request && checkout.error && !checkout.pending ? (
+              <View>
+                <Text style={styles.cardLineMuted}>Signing out keeps this checkout saved for this account.</Text>
+                <SignOutButton />
+              </View>
+            ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -344,7 +371,9 @@ export default function PaymentScreen() {
               <Text style={styles.cardLineMuted}>{pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}</Text>
             ) : null}
             <View style={styles.confirmedAction}>
-              <ManagerActionButton label="Done" onPress={done} />
+              {checkout.error ? <Text style={styles.cardLine}>{checkout.error}</Text> : null}
+              <ManagerActionButton label="View sale" variant="secondary" onPress={() => done(true)} />
+              <ManagerActionButton label="Done" onPress={() => done()} />
             </View>
           </View>
         </View>

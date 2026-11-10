@@ -1,3 +1,4 @@
+import 'expo-sqlite/localStorage/install';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { LeftoverReturnRequest, ReturnRequest } from '@/types/returns';

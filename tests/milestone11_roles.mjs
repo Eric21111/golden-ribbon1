@@ -84,6 +84,12 @@ assert.match(employeeAdminSource, /Owner access is required/);
 assert.doesNotMatch(employeeAdminSource, /\.eq\('role', 'manager'\)/);
 
 await asUser(owner, async () => {
+  // November branch administration corrections: Owner creates/updates; Main Manager reads for operations.
+  await db.exec(`insert into public.branches(name,code,is_main_branch,is_active) values ('Branch 3','BR-03',false,true)`);
+  await assert.rejects(
+    db.exec(`update public.branches set is_active = false where id = '${main}'`),
+    /cannot be deactivated/,
+  );
   assert.equal((await db.query('select public.can_change_own_email() flag')).rows[0].flag, true);
   await db.query('select public.assert_can_change_own_email()');
   const employees = (await db.query('select * from public.list_employees()')).rows;
@@ -144,11 +150,12 @@ await asUser(mainMgr, async () => {
     )
   ).rows[0];
   assert.ok(createdProduct.id);
-  await db.exec(`insert into public.branches(name,code,is_main_branch,is_active) values ('Branch 3','BR-03',false,true)`);
   await assert.rejects(
-    db.exec(`update public.branches set is_active = false where id = '${main}'`),
-    /cannot be deactivated/,
+    db.exec(`insert into public.branches(name,code,is_main_branch,is_active) values ('Manager Branch','MGR-BR',false,true)`),
+    /permission denied|row-level security/,
   );
+  assert.equal((await db.query(`update public.branches set is_active = false where id = '${main}' returning id`)).rows.length, 0);
+  assert.equal((await db.query(`select is_active from public.branches where id = '${main}'`)).rows[0].is_active, true);
 });
 
 const transferIds = (await db.query('select id, to_branch_id from public.stock_transfers order by to_branch_id')).rows;

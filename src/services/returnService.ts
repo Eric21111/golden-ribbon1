@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { isSaleId } from '@/lib/saleErrors';
 import type {
   LeftoverReturnRequest,
   ReceiveReturnInput,
@@ -11,6 +12,10 @@ import type {
 export interface ReturnFilters {
   branchId?: string;
   status?: ReturnStatus | '';
+  search?: string;
+  start?: string;
+  end?: string;
+  sort?: 'newest' | 'oldest';
 }
 
 export async function listReturnStock() {
@@ -19,25 +24,51 @@ export async function listReturnStock() {
   return data;
 }
 
-export async function listReturns(filters: ReturnFilters = {}, page = 0) {
+export async function listReturnsPage(filters: ReturnFilters = {}, page = 0, pageSize = 50) {
+  if (!Number.isInteger(page) || page < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new Error('Invalid return history page.');
+  }
   let query = supabase
     .from('stock_returns')
-    .select('*, items:stock_return_items(count)')
-    .order('returned_at', { ascending: false })
+    .select('*, items:stock_return_items(count)', { count: 'exact' })
+    .order('returned_at', { ascending: filters.sort === 'oldest' })
     .order('id');
 
+  const groups: string[] = [];
   if (filters.branchId) {
-    query = query.or(`from_branch_id.eq.${filters.branchId},to_branch_id.eq.${filters.branchId}`);
+    if (!isSaleId(filters.branchId)) throw new Error('Invalid return branch.');
+    groups.push(`or(from_branch_id.eq.${filters.branchId},to_branch_id.eq.${filters.branchId})`);
   }
+  if (filters.search?.trim()) {
+    // Quote the entire pattern so punctuation cannot become PostgREST filter syntax.
+    const pattern = JSON.stringify(`%${filters.search.trim().replace(/[\\%_]/g, '\\$&')}%`);
+    groups.push(`or(return_number.ilike.${pattern},from_branch_name.ilike.${pattern},to_branch_name.ilike.${pattern})`);
+  }
+  if (groups.length) query = query.or(`and(${groups.join(',')})`);
   if (filters.status) {
     query = query.eq('status', filters.status);
   }
+  if (filters.start) query = query.gte('returned_at', filters.start);
+  if (filters.end) query = query.lt('returned_at', filters.end);
 
-  query = query.range(page * 50, page * 50 + 49);
+  query = query.range(page * pageSize, page * pageSize + pageSize - 1);
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
+  // Receipt/status changes can remove the last page while a manager is viewing it.
+  // An empty result with zero pages lets the UI return to page one rather than trapping it on an error.
+  if (error?.code === 'PGRST103' && page > 0) return { rows: [], count: 0 };
   if (error) throw error;
-  return data as (StockReturn & { items: [{ count: number }] })[];
+  return { rows: (data ?? []) as (StockReturn & { items: [{ count: number }] })[], count: count ?? 0 };
+}
+
+/** Compatibility for the shared history pane, whose filters operate on the full list. */
+export async function listReturns(filters: ReturnFilters = {}) {
+  const rows: (StockReturn & { items: [{ count: number }] })[] = [];
+  for (let page = 0; ; page++) {
+    const result = await listReturnsPage(filters, page);
+    rows.push(...result.rows);
+    if (result.rows.length < 50 || rows.length >= result.count) return rows;
+  }
 }
 
 export async function getReturn(id: string): Promise<StockReturnDetails> {
@@ -74,6 +105,7 @@ export async function getReturn(id: string): Promise<StockReturnDetails> {
 export async function createStockReturn(request: import('@/types/returns').ReturnRequest): Promise<string> {
   const { data, error } = await supabase.rpc('create_stock_return', request);
   if (error) throw error;
+  if (!isSaleId(data)) throw new Error('The return confirmation could not be verified. Retry the saved request.');
   return data;
 }
 

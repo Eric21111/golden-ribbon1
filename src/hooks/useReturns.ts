@@ -5,9 +5,20 @@ import {
   getReturn,
   listReturnDiscrepancies,
   listReturns,
+  listReturnsPage,
+  type ReturnFilters,
   receiveReturn,
 } from '@/services/returnService';
 import type { ReceiveReturnInput, ReturnStatus } from '@/types/returns';
+
+export function useReturnHistoryPage(filters: ReturnFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: ['stock-returns', 'history-page', filters, page],
+    queryFn: () => listReturnsPage(filters, page, 10),
+    enabled,
+    refetchInterval: 15_000,
+  });
+}
 
 export function useReturns(branchId = '', status: ReturnStatus | '' = '') {
   return useQuery({

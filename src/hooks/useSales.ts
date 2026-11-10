@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { isReportRangeReady } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
+import { isSaleId } from '@/lib/saleErrors';
 import {
   getManagerDashboardMetrics,
   getManagerRecentSales,
@@ -19,7 +20,7 @@ export function useSale(id: string) {
   return useQuery({
     queryKey: queryKeys.sale(id),
     queryFn: () => getSale(id),
-    enabled: Boolean(id),
+    enabled: isSaleId(id),
   });
 }
 

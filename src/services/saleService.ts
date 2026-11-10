@@ -4,6 +4,7 @@ import type {
 } from '@/features/pos/pricingPrograms';
 import { getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
+import { isSaleId, reportSaleReadError } from '@/lib/saleErrors';
 import type {
   Branch,
   BranchDailySalesItem,
@@ -78,14 +79,7 @@ export type SaleRequest = {
   pricingProgram?: SalePricingProgram;
 };
 
-function missingDeployedConfirmSale(error: unknown): boolean {
-  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
-  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? '');
-  return code === 'PGRST202' || /could not find the function public\.confirm_sale/i.test(message);
-}
-
-/** Current server pricing, drinks, and shared stock need the pending confirm_sale argument.
- * Until that migration is applied, a standard sale with no drink can still use the deployed function. */
+/** Never silently downgrade to an RPC that may use different stock deduction rules. */
 export async function confirmSale(request: SaleRequest): Promise<Sale> {
   const pricingProgram = request.pricingProgram ?? 'standard';
   const full = await supabase.rpc('confirm_sale', {
@@ -95,22 +89,13 @@ export async function confirmSale(request: SaleRequest): Promise<Sale> {
     p_idempotency_key: request.key,
     p_pricing_program: pricingProgram,
   });
-  const legacySafe = pricingProgram === 'standard' && request.items.every((item) => !item.drink_product_id);
-  if (full.error && missingDeployedConfirmSale(full.error) && legacySafe) {
-    const legacy = await supabase.rpc('confirm_sale', {
-      p_shift_id: request.shiftId,
-      p_items: request.items.map(({ product_id, variant_id, quantity }) => ({
-        product_id,
-        variant_id,
-        quantity,
-      })),
-      p_amount_paid: request.amountPaid,
-      p_idempotency_key: request.key,
-    });
-    if (legacy.error) throw legacy.error;
-    return legacy.data;
-  }
   if (full.error) throw full.error;
+  if (!full.data || !isSaleId(full.data.id) || full.data.shift_id !== request.shiftId
+      || typeof full.data.sale_number !== 'string' || !full.data.sale_number
+      || full.data.total_amount == null || !Number.isFinite(Number(full.data.total_amount)) || Number(full.data.total_amount) < 0) {
+    // The transaction may have committed: keep the key for an identical retry.
+    throw new Error('The sale confirmation response could not be verified.');
+  }
   return full.data;
 }
 
@@ -137,30 +122,37 @@ export async function listSalePricingProgramSettings(): Promise<
 }
 
 export async function listShiftSales(shiftId: string): Promise<SaleWithRelations[]> {
-  const { data, error } = await supabase
-    .from('sales')
-    .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name)')
-    .eq('shift_id', shiftId)
-    .order('sold_at', { ascending: false })
-    .limit(100);
-  if (error) throw error;
-  return data as unknown as SaleWithRelations[];
+  const rows: SaleWithRelations[] = [];
+  for (let page = 0; ; page++) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name)')
+      .eq('shift_id', shiftId)
+      .order('sold_at', { ascending: false })
+      .order('id')
+      .range(page * 100, page * 100 + 99);
+    if (error?.code === 'PGRST103' && page > 0) return rows;
+    if (error) { reportSaleReadError('list', error); throw error; }
+    rows.push(...(data as unknown as SaleWithRelations[] ?? []));
+    if (!data || data.length < 100) return rows;
+  }
 }
 
 export async function getSale(id: string): Promise<SaleDetails> {
+  if (!isSaleId(id)) throw { code: 'INVALID_SALE_ID', message: 'Invalid sale ID.' };
   const { data: saleData, error: saleError } = await supabase
     .from('sales')
     .select('*, branch:branches(*), cashier:profiles!sales_cashier_id_fkey(id, full_name), shift:shifts(*)')
     .eq('id', id)
     .single();
-  if (saleError) throw saleError;
+  if (saleError) { reportSaleReadError('header', saleError); throw saleError; }
 
   const { data: itemsData, error: itemsError } = await supabase
     .from('sale_items')
-    .select('*, product:products(*)')
+    .select('*, product:products!sale_items_product_id_fkey(*)')
     .eq('sale_id', id)
     .order('subtotal', { ascending: false });
-  if (itemsError) throw itemsError;
+  if (itemsError) { reportSaleReadError('items', itemsError); throw itemsError; }
 
   return {
     ...(saleData as unknown as SaleWithRelations),

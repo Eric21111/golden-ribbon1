@@ -47,6 +47,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:sales": "node tests/sales.mjs",
+    "test:sales-returns-client": "node tests/sales_returns_client.mjs && node tests/checkout_recovery.mjs && node tests/sales_checkout_ui.mjs && node tests/returns_submission_ui.mjs && node tests/auth_checkout_session.mjs",
     "test:returns": "node tests/returns.mjs",
     "test:archive": "node tests/milestone11_3_archive.mjs",
     "test:pos": "node tests/pos_and_sku.mjs && node tests/cashier_pos_stock.mjs",

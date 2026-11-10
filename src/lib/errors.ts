@@ -254,6 +254,11 @@ export function getInventoryErrorMessage(error: unknown): string {
   logDevError(error);
   const message = readErrorMessage(error).toLowerCase();
 
+  if (message.includes('frozen') || message.includes('pending inventory reconciliation')) {
+    return 'Branch stock is locked for end-of-shift reconciliation. Complete remittance or ask your manager to review the shift before returning stock.';
+  }
+  if (message.includes('non-returnable')) return 'This product must stay at the branch and cannot be returned.';
+
   if (message.includes('already been resolved')) {
     return 'This discrepancy has already been resolved.';
   }
@@ -473,11 +478,12 @@ export function getCheckoutFailure(error: unknown): CheckoutFailure {
     || message.includes('could not find the table')
   ) {
     return {
-      message: 'This sale was not saved. Discounts and drink choices need the pending database update before they can be used.',
+      message: 'The server could not accept this checkout request. Ask support to verify app and database compatibility before trying again.',
       preserveRequest: false,
     };
   }
-  const definitivelyRejected = ['22023', '42501', '23514', '22003'].includes(code);
+  const definitivelyRejected = ['22023', '42501', '23514', '22003'].includes(code)
+    || (code === '55000' && message.includes('frozen'));
   return definitivelyRejected
     ? {
         message: `${getInventoryErrorMessage(error)} Review the order and try again.`,
