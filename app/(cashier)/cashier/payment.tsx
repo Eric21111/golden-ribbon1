@@ -1,3 +1,5 @@
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { paymentLabel, type PaymentMethod } from '@/features/sales/paymentMethods';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -59,6 +61,7 @@ export default function PaymentScreen() {
   const [priceRefreshKey, setPriceRefreshKey] = useState(0);
   const [stockChecking, setStockChecking] = useState(false);
   // A saved (retryable) request is resent unchanged, so the screen must show the program it carries.
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [pricingProgram, setPricingProgram] = useState<SalePricingProgram>(
     checkout.request?.pricingProgram ?? 'standard',
   );
@@ -182,6 +185,7 @@ export default function PaymentScreen() {
     setValidation('');
     void checkout.submit({
       shiftId: shift.data.id,
+      paymentMethod,
       amountPaid: centsDecimal(Math.round(charged * 100)),
       key: makeIdempotencyKey('sale'),
       pricingProgram,
@@ -214,7 +218,7 @@ export default function PaymentScreen() {
       const programName = pricingProgramLabel(pricingProgram);
       confirmAction(
         'Checkout order?',
-        `${programName}\nCharge ${formatMoney(liveTotals.chargedTotal)}. Stock will be deducted.`,
+        `${paymentLabel(paymentMethod)} · ${programName}\nCharge ${formatMoney(liveTotals.chargedTotal)}. Stock will be deducted.`,
         runSubmit,
         { confirm: 'Checkout', tone: 'info' },
       );
@@ -273,6 +277,7 @@ export default function PaymentScreen() {
             {checkout.request ? (
               <View>
                 <Text style={styles.cardLine}>Saved checkout · {checkout.request.items.reduce((total, item) => total + item.quantity, 0)} items</Text>
+                <Text style={styles.cardLine}>Method: {paymentLabel(checkout.request.paymentMethod)}</Text>
                 <Text style={styles.cardLine}>Original payment: {formatMoney(Number(checkout.request.amountPaid))}</Text>
                 {checkout.items.map((item, index) => (
                   <Text key={index} style={styles.cardLineMuted}>
@@ -282,6 +287,10 @@ export default function PaymentScreen() {
                 <Text style={styles.cardLineMuted}>Retry checks this same order with its original quantities and payment.</Text>
               </View>
             ) : <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} categoryByProductId={categories.data} />}
+            {!checkout.request && !checkout.sale ? <View style={{gap:8}}>
+              <Text style={styles.cardLine}>Payment method</Text>
+              <FilterChipRow options={[{value:'cash',label:'Cash'},{value:'gcash',label:'GCash'}]} value={paymentMethod} onChange={setPaymentMethod} />
+            </View> : null}
 
             {!checkout.sale ? (
               <View style={styles.programBlock}>
@@ -368,6 +377,7 @@ export default function PaymentScreen() {
             <Text style={styles.title}>Order confirmed</Text>
             <Text style={styles.confirmedTotal}>{formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
             <Text style={styles.cardLine}>{checkout.sale?.sale_number}</Text>
+            <Text style={styles.cardLineMuted}>Payment: {paymentLabel(checkout.sale?.payment_method)}</Text>
             {(checkout.sale?.pricing_program ?? pricingProgram) !== 'standard' ? (
               <Text style={styles.cardLineMuted}>{pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}</Text>
             ) : null}

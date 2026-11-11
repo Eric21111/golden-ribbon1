@@ -10,6 +10,7 @@ import { FormField } from '@/components/FormField';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { BulkQuantityPicker } from '@/features/inventory/BulkQuantityPicker';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -131,7 +132,7 @@ export function InventorySetupScreen() {
     if (target) setSearch(target.product.name);
   }, [preselectId, inventory.data, setupData.isFetched, countableItems]);
   const mutation = useInitializeMainInventory();
-  const { control, handleSubmit, reset, getValues, watch, setError, formState } = useForm<Values>({
+  const { control, handleSubmit, reset, getValues, watch, setValue, setError, formState } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { items: [], notes: '' },
   });
@@ -402,6 +403,10 @@ export function InventorySetupScreen() {
         <ManagerScreenHeader title="Opening stock" showBack />
 
         <View style={styles.filters}>
+          <BulkQuantityPicker rows={displayIndexes.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name}] : [])}
+            onApply={(ids, quantity) => getValues('items').forEach((row, index) => {
+              if (ids.has(row.product_id)) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
+            })} />
           <View style={styles.searchRow}>
             <View style={styles.searchField}>
               <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />

@@ -48,8 +48,8 @@ export function remittanceSummary(report: ShiftRemittanceReport | undefined) {
   for (const day of report?.days ?? []) {
     reconciledShifts += Number(day.reconciled_shift_count) || 0;
     pendingShifts += Number(day.pending_shift_count) || 0;
-    if (day.actual_remitted != null) remittedCents += Math.round(Number(day.actual_remitted) * 100);
-    pendingCents += Math.round(Number(day.pending_expected_cash ?? 0) * 100);
+    if (day.actual_remitted != null) remittedCents += Math.round((Number(day.actual_remitted) + Number(day.actual_gcash ?? 0)) * 100);
+    pendingCents += Math.round((Number(day.pending_expected_cash ?? 0) + Number(day.pending_gcash ?? 0)) * 100);
   }
   return {
     remitted: reconciledShifts > 0 ? remittedCents / 100 : null,

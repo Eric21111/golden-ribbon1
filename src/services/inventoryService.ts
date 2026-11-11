@@ -192,3 +192,9 @@ export async function recordBranchLocalPurchase(
 export async function listCashierLocalPurchaseCatalog(...args: Parameters<typeof readListCashierLocalPurchaseCatalog>) {
   return withStockUnits(await readListCashierLocalPurchaseCatalog(...args));
 }
+
+export async function listCashierDayStock() {
+  const { data, error } = await supabase.rpc('list_cashier_day_stock');
+  if (error) throw error;
+  return data ?? [];
+}

@@ -51,11 +51,13 @@ export async function finalizeCashierShiftReconciliation(
   shiftId: string,
   actualCash: string,
   products: ShiftCloseFinalizeProduct[] = [],
+  actualGcash?: string,
 ): Promise<ShiftCloseResult> {
   const { data, error } = await supabase.rpc('finalize_cashier_shift_reconciliation', {
     p_shift_id: shiftId,
     p_actual_cash: actualCash,
     p_products: products,
+    ...(actualGcash !== undefined ? { p_actual_gcash: actualGcash } : {}),
   });
   if (error) throw error;
   return data as ShiftCloseResult;
@@ -343,6 +345,8 @@ async function readGetShiftCloseReportDetail(shiftId: string): Promise<ShiftClos
     inventory_reconciliation_required: Boolean(inventoryRequired),
     reconciliation_required: Boolean(shiftMeta?.reconciliation_required ?? remittanceRow.status === 'pending'),
     cash_status: cashStatus,
+    expected_gcash: remittanceRow.expected_gcash,
+    actual_gcash: remittanceRow.actual_gcash,
     expected_cash: cashRow ? Number(cashRow.expected_cash) : Number(remittanceRow.expected_cash),
     actual_cash: cashRow
       ? Number(cashRow.actual_cash)

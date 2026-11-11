@@ -111,7 +111,7 @@ export function ShiftRemittanceScreen() {
                       <View style={styles.heroIconChip}>
                         <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
                       </View>
-                      <Text style={styles.heroLabel}>Actual Remitted</Text>
+                      <Text style={styles.heroLabel}>Cash remitted</Text>
                     </View>
                     <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
                       {formatKnownMoney(day.actual_remitted == null ? null : Number(day.actual_remitted))}
@@ -119,6 +119,7 @@ export function ShiftRemittanceScreen() {
                   </View>
                 </View>
 
+                {day.expected_gcash != null && <Text>GCash expected {formatMoney(day.expected_gcash)} · Remitted {formatKnownMoney(day.actual_gcash ?? null)} · Pending {formatMoney(day.pending_gcash ?? 0)}</Text>}
                 <View style={styles.pillRow}>
                   <View style={[styles.pill, { backgroundColor: shortage > 0 ? '#FEE2E2' : managerColors.cardSurface }]}>
                     <Ionicons
@@ -222,9 +223,10 @@ export function ShiftRemittanceScreen() {
                             ? formatMoney(Number(row.expected_cash))
                             : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
                         </Text>
+                        {row.expected_gcash != null && <Text>GCash {formatKnownMoney(row.actual_gcash ?? null)} / {formatMoney(row.expected_gcash)}</Text>}
                         <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
                           <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
-                            {badge.label}
+                            {row.expected_gcash != null ? 'Cash: ' : ''}{badge.label}
                           </Text>
                         </View>
                       </>

@@ -91,12 +91,16 @@ export function formatCloseSuccessSummary(
   result: ShiftCloseResult,
   namesByProductId?: Record<string, string>,
 ): string {
-  const cash =
+  const cashOnly =
     result.result === 'exact'
       ? 'Cash: Exact'
       : result.result === 'shortage'
         ? `Cash: ${formatMoney(Math.abs(Number(result.difference)))} shortage`
         : `Cash: ${formatMoney(Math.abs(Number(result.difference)))} excess`;
+
+  const gcashDifference = Number(result.actual_gcash) - Number(result.expected_gcash);
+  const cash = result.actual_gcash == null ? cashOnly : cashOnly + '\nGCash: ' +
+    (gcashDifference === 0 ? 'Exact' : formatMoney(Math.abs(gcashDifference)) + (gcashDifference < 0 ? ' shortage' : ' excess'));
 
   const products = (result.products ?? []) as ShiftCloseProductSummary[];
   if (products.length === 0) return cash;

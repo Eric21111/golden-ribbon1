@@ -419,6 +419,8 @@ export type ShiftCloseProductPreview = {
 };
 
 export type ShiftClosePreview = {
+  expected_gcash?: number | null;
+  unrecorded_count?: number;
   shift_id: string;
   branch_id: string;
   started_at: string;
@@ -477,6 +479,8 @@ export type ShiftCloseFinalizeProduct = {
 };
 
 export type ShiftCloseResult = {
+  expected_gcash?: number | null;
+  actual_gcash?: number | null;
   shift_id: string;
   expected_cash: number;
   actual_cash: number;
@@ -489,6 +493,8 @@ export type ShiftCloseResult = {
 };
 
 export type ShiftRemittanceRow = {
+  expected_gcash?: number | null;
+  actual_gcash?: number | null;
   business_date: string;
   shift_id: string;
   branch_id: string;
@@ -506,6 +512,9 @@ export type ShiftRemittanceRow = {
 };
 
 export type ShiftRemittanceDay = {
+  expected_gcash?: number | null;
+  actual_gcash?: number | null;
+  pending_gcash?: number | null;
   business_date: string;
   expected_cash: number;
   actual_remitted: number | null;
@@ -561,6 +570,8 @@ export type ShiftCloseReportProduct = {
 };
 
 export type ShiftCloseReportDetail = {
+  expected_gcash?: number | null;
+  actual_gcash?: number | null;
   shift_id: string;
   branch_id: string;
   branch_name: string;

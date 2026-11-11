@@ -285,7 +285,7 @@ export function CashierShiftCloseForm({
   loading?: boolean;
   /** Something that belongs right above the submit button (a retry button, an error). */
   footerExtra?: ReactNode;
-  onSubmit: (actualCash: string, products: ShiftCloseFinalizeProduct[]) => void;
+  onSubmit: (actualCash: string, products: ShiftCloseFinalizeProduct[], actualGcash?: string) => void;
 }) {
   const { width, height } = useWindowDimensions();
   const wide = Math.min(width, height) >= TABLET_MIN_EDGE;
@@ -294,6 +294,9 @@ export function CashierShiftCloseForm({
   const products = allProducts.filter(requiresRemittanceCount);
   const expectedCash = Number(preview.expected_cash);
 
+  const [actualGcash, setActualGcash] = useState('');
+  const splitPayments = preview.expected_gcash != null;
+  const gcashResult = previewCashResult(Number(preview.expected_gcash ?? 0), actualGcash);
   const [actualCash, setActualCash] = useState('');
   const [counts, setCounts] = useState<ProductCounts>(() => initialCounts(products));
   const [search, setSearch] = useState('');
@@ -390,7 +393,7 @@ export function CashierShiftCloseForm({
     });
   }, [counts, products]);
 
-  const canSubmit = cashResult != null && productsValid && incomplete === 0;
+  const canSubmit = cashResult != null && (!splitPayments || gcashResult != null) && productsValid && incomplete === 0;
 
   const cutoffLabel = preview.sales_cutoff_at
     ? new Date(preview.sales_cutoff_at).toLocaleString('en-PH', {
@@ -402,10 +405,12 @@ export function CashierShiftCloseForm({
 
   const submit = () => {
     if (!canSubmit || loading) return;
-    onSubmit(actualCash.trim(), buildFinalizePayload(allProducts, counts));
+    const products = buildFinalizePayload(allProducts, counts);
+    if (splitPayments) onSubmit(actualCash.trim(), products, actualGcash.trim());
+    else onSubmit(actualCash.trim(), products);
   };
 
-  const progressText = closeProgressText({ total: products.length, counted: countedTotal, cashEntered: cashResult != null });
+  const progressText = closeProgressText({ total: products.length, counted: countedTotal, cashEntered: cashResult != null && (!splitPayments || gcashResult != null) });
   const progress = products.length > 0 ? countedTotal / products.length : cashResult == null ? 0 : 1;
 
   const activeFilters = countListFilters(listFilters, COUNT_LIST_FILTERS);
@@ -513,7 +518,7 @@ export function CashierShiftCloseForm({
         ) : (
           <View style={styles.sectionCard}>
             <Text style={styles.note}>
-              {isLegacy
+              {isLegacy && !splitPayments
                 ? 'This historical shift only needs cash reconciliation.'
                 : 'No inventory counts required for this shift.'}
             </Text>
@@ -521,10 +526,11 @@ export function CashierShiftCloseForm({
         )}
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Cash Remittance</Text>
-          <Text style={styles.expectedCash}>Expected cash {formatMoney(expectedCash)}</Text>
+          <Text style={styles.sectionTitle}>{splitPayments ? 'Cash remittance' : preview.unrecorded_count ? 'Combined collections' : 'Cash Remittance'}</Text>
+          {preview.unrecorded_count ? <Text>This shift includes receipts without a recorded payment method. Enter all collections together.</Text> : null}
+          <Text style={styles.expectedCash}>{preview.unrecorded_count ? 'Expected collections' : 'Expected cash'} {formatMoney(expectedCash)}</Text>
           <FormField
-            label="Actual cash"
+            label={preview.unrecorded_count ? "Actual collections" : "Actual cash"}
             value={actualCash}
             onChangeText={setActualCash}
             keyboardType="decimal-pad"
@@ -535,6 +541,12 @@ export function CashierShiftCloseForm({
           <Text style={styles.cashDiff}>
             Difference: {formatCashResultLabel(expectedCash, actualCash, cashResult)}
           </Text>
+          {splitPayments && <>
+            <Text style={styles.sectionTitle}>GCash remittance</Text>
+            <Text>Expected GCash {formatMoney(Number(preview.expected_gcash))}</Text>
+            <FormField label="Actual GCash received this shift" value={actualGcash} onChangeText={setActualGcash} keyboardType="decimal-pad" placeholder="—" />
+            <Text>Difference: {formatCashResultLabel(Number(preview.expected_gcash), actualGcash, gcashResult)}</Text>
+          </>}
         </View>
       </ScrollView>
 

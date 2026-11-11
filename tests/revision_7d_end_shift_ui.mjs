@@ -1,71 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import ts from 'typescript';
-import vm from 'node:vm';
-
-function loadTsWithAlias(entryPath, aliasRoot = 'src') {
-  const cache = new Map();
-
-  function load(filePath) {
-    const abs = path.resolve(filePath);
-    if (cache.has(abs)) return cache.get(abs);
-
-    const source = readFileSync(abs, 'utf8');
-    const { outputText } = ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-      fileName: abs,
-    });
-
-    const module = { exports: {} };
-    const localRequire = (id) => {
-      if (id.startsWith('@/')) {
-        const resolved = path.resolve(aliasRoot, id.slice(2));
-        const candidates = [`${resolved}.ts`, `${resolved}.tsx`, resolved];
-        for (const candidate of candidates) {
-          try {
-            return load(candidate);
-          } catch {
-            // try next
-          }
-        }
-        throw new Error(`Unable to resolve ${id}`);
-      }
-      if (id === 'react-native' || id.startsWith('react')) {
-        return new Proxy({}, { get: () => () => null });
-      }
-      return require(id);
-    };
-
-    const sandbox = {
-      module,
-      exports: module.exports,
-      require: localRequire,
-      console,
-      Number,
-      Math,
-      Boolean,
-      Array,
-      Object,
-      String,
-      RegExp,
-      Error,
-      Date,
-      Intl,
-      JSON,
-      parseInt,
-      parseFloat,
-      isNaN,
-      Infinity,
-      undefined,
-    };
-    vm.runInNewContext(outputText, sandbox, { filename: abs });
-    cache.set(abs, module.exports);
-    return module.exports;
-  }
-
-  return load(entryPath);
-}
+import { loadTs as loadTsWithAlias } from './_load_ts.mjs';
 
 const closeDisplay = loadTsWithAlias('src/features/shifts/closeDisplay.ts');
 const {
@@ -264,7 +199,7 @@ assert.match(closeForm, /isLegacy|legacy_cash_only/);
 assert.match(dashboard, /isLegacyCashOnlyPreview|legacy_cash_only/);
 assert.match(dashboard, /useReconcileClosedShift/);
 assert.match(dashboard, /reconcileMutation/);
-assert.match(dashboard, /path === 'legacy' \? 'legacy' : 'pcs'|isLegacyCashOnlyPreview\(preview\) \? 'legacy'/);
+assert.match(dashboard, /isLegacyCashOnlyPreview\(preview\) && actualGcash === undefined \? 'legacy' : 'pcs'/);
 assert.match(dashboard, /preview\.mode === 'legacy_cash_only'/);
 assert.doesNotMatch(
   dashboard,

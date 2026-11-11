@@ -10,7 +10,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
   create schema auth; create table auth.users(id uuid primary key,email text);
   create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
   grant usage on schema public,auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const file of readdirSync('supabase/migrations').filter(f => f.endsWith('.sql') && f !== migration).sort()) {
+for (const file of readdirSync('supabase/migrations').filter(f => f.endsWith('.sql') && f < migration).sort()) {
   await db.exec(readFileSync(`supabase/migrations/${file}`, 'utf8').replace(/create extension if not exists pgcrypto;/g, ''));
 }
 const id = n => `71100000-0000-4000-8000-${String(n).padStart(12, '0')}`;

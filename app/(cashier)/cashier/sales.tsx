@@ -1,4 +1,6 @@
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { PAYMENT_FILTERS, type PaymentFilter } from '@/features/sales/paymentMethods';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -37,6 +39,9 @@ export default function CurrentShiftSales() {
   const { profile } = useAuth();
   const { isTablet, salesMasterWidth } = useLayout();
   const [search, setSearch] = useState('');
+  const { method } = useLocalSearchParams<{method?:string}>();
+  const [payment, setPayment] = useState<PaymentFilter>('all');
+  useEffect(() => { setPayment(PAYMENT_FILTERS.find(option => option.value === method)?.value ?? 'all'); }, [method]);
   const [discount, setDiscount] = useState<SaleDiscountFilter>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -55,9 +60,9 @@ export default function CurrentShiftSales() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (sales.data ?? []).filter(
-      (sale) => matchesSaleDiscount(sale, discount) && (!term || sale.sale_number.toLowerCase().includes(term)),
+      (sale) => (payment === 'all' || payment === (sale.payment_method ?? 'unrecorded')) && matchesSaleDiscount(sale, discount) && (!term || sale.sale_number.toLowerCase().includes(term)),
     );
-  }, [sales.data, search, discount]);
+  }, [sales.data, search, discount, payment]);
 
   // the funnel's one row: how the order was priced (Standard, Employee / guest meal, PWD, Back office / guard)
   const discountFilter = useMemo(
@@ -108,6 +113,7 @@ export default function CurrentShiftSales() {
           </View>
           <FilterIconButton count={discount !== 'all' ? 1 : 0} onPress={() => setFiltersOpen(true)} />
         </View>
+        <FilterChipRow options={PAYMENT_FILTERS} value={payment} onChange={setPayment} />
         <ListFilterSummary
           countText={`${filtered.length} of ${sales.data?.length ?? 0} ${(sales.data?.length ?? 0) === 1 ? 'sale' : 'sales'}`}
           filters={DEFAULT_LIST_FILTERS}

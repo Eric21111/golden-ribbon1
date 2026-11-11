@@ -11,6 +11,7 @@ import { FormField } from '@/components/FormField';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { BulkQuantityPicker } from '@/features/inventory/BulkQuantityPicker';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
@@ -385,7 +386,11 @@ export function CreateTransferScreen() {
 
           {selectedBranchId && !destinationCatalog.isLoading && !destinationCatalog.error ? (
             <>
-              <View style={styles.searchRow}>
+              <BulkQuantityPicker key={selectedBranchId} rows={rows.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name, maximum: item.quantity_on_hand}] : [])}
+            onApply={(ids, quantity) => getValues('items').forEach((row, index) => {
+              if (ids.has(row.product_id)) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
+            })} />
+          <View style={styles.searchRow}>
                 <View style={styles.searchField}>
                   <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
                 </View>

@@ -28,6 +28,7 @@ const base = {
 let saleQuery = {};
 const { SaleDetailsBody } = loadTs('src/features/sales/SalesScreens.tsx', {
   ...base,
+  './ItemVoidForm': { ItemVoidForm: () => React.createElement('button', null, 'Void item') },
   '@/hooks/useSales': { useSale: () => saleQuery },
   '@/components/dashboard/ManagerBadge': { ManagerBadge: ({ label }) => React.createElement('span', null, label) },
   '@/components/dashboard/SummaryCard': { SummaryCard: () => null },
@@ -41,6 +42,11 @@ assert.match(details(id), /does not mean the sale was not saved/);
 saleQuery = { data: { id, sale_number: 'SALE-1', sold_at: '2026-11-10T00:00:00Z', status: 'completed', total_amount: 25,
   items: [{ id: 'line', product_id: id, product: { name: 'Meal' }, drink_name: 'Cola', quantity: 1, unit_price: 25, subtotal: 25 }] } };
 assert.match(details(id), /Meal · Cola/);
+saleQuery.data.shift = {status:'open', started_at:'2026-11-10T00:00:00Z'};
+saleQuery.data.items[0].stock_per_unit = {ingredient: 1};
+assert.match(details(id), /Void item/);
+saleQuery.data.shift.status = 'closed';
+assert.doesNotMatch(details(id), /Void item/);
 assert.doesNotMatch(details(id), /Unable to load/);
 
 // Test payment recovery at its actual button handler, with an empty cart and no open shift.

@@ -1,3 +1,5 @@
+import { ItemVoidForm } from './ItemVoidForm';
+import { paymentLabel } from '@/features/sales/paymentMethods';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -49,6 +51,7 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
 
   const sale = query.data;
   const isCompleted = sale.status === 'completed';
+  const partiallyVoided = isCompleted && sale.items.some(item => item.void_history?.length);
 
   return (
     <View style={styles.body}>
@@ -73,8 +76,8 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
               Sold {formatDate(sale.sold_at)}
             </Text>
             <ManagerBadge
-              label={isCompleted ? 'Completed' : 'Voided'}
-              tone={isCompleted ? 'success' : 'danger'}
+              label={partiallyVoided ? 'Partially voided' : isCompleted ? 'Completed' : 'Voided'}
+              tone={partiallyVoided ? 'warning' : isCompleted ? 'success' : 'danger'}
             />
             {sale.pricing_program && sale.pricing_program !== 'standard' ? (
               <ManagerBadge
@@ -88,6 +91,7 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
 
       <SummaryCard
         rows={[
+          { label: 'Payment method', value: paymentLabel(sale.payment_method), icon: 'wallet-outline' },
           { label: 'Branch', value: sale.branch?.name ?? 'Branch', icon: 'storefront-outline' },
           { label: 'Cashier', value: sale.cashier?.full_name ?? 'Cashier', icon: 'person-outline' },
           {
@@ -124,6 +128,10 @@ export function SaleDetailsBody({ saleId, showBack = false }: SaleDetailsBodyPro
                 </View>
                 <Text style={styles.receiptSubtotal}>{formatMoney(item.subtotal)}</Text>
               </View>
+              {!!item.void_history?.length && <Text>Originally ordered {Number(item.quantity) + item.void_history.reduce((sum, entry) => sum + entry.quantity, 0)}</Text>}
+              {item.void_history?.map(entry => <Text key={entry.id}>Voided {entry.quantity} · −{formatMoney(entry.amount)} · {entry.reason === 'Other' ? entry.note : entry.reason}</Text>)}
+              {isCompleted && sale.shift?.status === 'open' && !sale.shift.sales_cutoff_at && item.quantity > 0 && item.stock_per_unit &&
+                <ItemVoidForm key={item.quantity} item={item} name={name} cashierId={sale.cashier_id} />}
             </View>
           );
         })}

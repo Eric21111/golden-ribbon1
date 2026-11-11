@@ -26,6 +26,8 @@ function CashierNavigator() {
           <Stack.Screen name="cashier/sales/[id]" />
           <Stack.Screen name="cashier/incoming" />
           <Stack.Screen name="cashier/local-purchase" />
+          <Stack.Screen name="cashier/inventory" />
+          <Stack.Screen name="cashier/payment-totals" />
           <Stack.Screen name="cashier/returns/create" />
           <Stack.Screen name="cashier/profile" />
           <Stack.Screen name="cashier/change-password" />

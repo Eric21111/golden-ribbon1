@@ -125,7 +125,13 @@ export function ShiftRemittanceDetailScreen() {
               ) : null}
             </View>
 
-            <Text style={styles.section}>Cash</Text>
+            {detail.expected_gcash != null && <View style={styles.identityCard}>
+              <Text style={styles.section}>GCash</Text>
+              <Text>Expected: {formatMoney(detail.expected_gcash)}</Text>
+              <Text>Received: {detail.actual_gcash == null ? 'Pending' : formatMoney(detail.actual_gcash)}</Text>
+              {detail.actual_gcash != null && <Text>{detail.actual_gcash < detail.expected_gcash ? 'Shortage' : detail.actual_gcash > detail.expected_gcash ? 'Excess' : 'Exact'} · {formatMoney(Math.abs(detail.actual_gcash - detail.expected_gcash))}</Text>}
+            </View>}
+            <Text style={styles.section}>{detail.expected_gcash == null ? 'Collections' : 'Cash'}</Text>
             <View style={styles.heroCard}>
               <View style={styles.heroStack}>
                 <View style={styles.heroRowFull}>

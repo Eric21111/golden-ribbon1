@@ -154,8 +154,8 @@ const names = (list) => list.map((p) => p.product_name_snapshot);
   // what is submitted and when: unchanged
   const payloadSource = read('src/features/shifts/remittanceProducts.ts');
   assert.ok(payloadSource.includes("const waste = (row?.wasteQuantity ?? '0').trim() || '0';") && payloadSource.includes("...(waste !== '0' ? { waste_quantity: waste } : {}),"));
-  assert.ok(src.includes('const canSubmit = cashResult != null && productsValid && incomplete === 0;'));
-  assert.ok(src.includes('onSubmit(actualCash.trim(), buildFinalizePayload(allProducts, counts));'));
+  assert.ok(src.includes('const canSubmit = cashResult != null && (!splitPayments || gcashResult != null) && productsValid && incomplete === 0;'));
+  assert.ok(src.includes('buildFinalizePayload(allProducts, counts)') && src.includes('onSubmit(actualCash.trim(), products, actualGcash.trim())'));
   assert.ok(src.includes('disabled={!canSubmit || loading}'));
   // earlier behaviour kept
   assert.ok(src.includes("onChangeText={(text) => onChange(text.replace(/[^\\d]/g, '').slice(0, 6))}"));
@@ -167,7 +167,7 @@ const names = (list) => list.map((p) => p.product_name_snapshot);
 
   const dash = read('app/(cashier)/cashier/dashboard.tsx');
   assert.match(dash, /if \(pendingPreview && !\(shiftQuery\.isLoading && !shiftQuery\.data\) && !shiftQuery\.error\) \{/);
-  assert.ok(dash.includes('onSubmit={(actualCash, products) => requestFinalize(pendingPreview, actualCash, products)}'));
+  assert.ok(dash.includes('onSubmit={(actualCash, products, actualGcash) => requestFinalize(pendingPreview, actualCash, products, actualGcash)}'));
   console.log('3. wiring: ok');
 }
 

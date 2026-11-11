@@ -495,6 +495,11 @@ export type Database = {
         Args: Record<string, never>;
         Returns: { closed_count: number; leftover_return_count: number; cutoff_at: string };
       };
+      list_cashier_day_stock: { Args: Record<string, never>; Returns: { product_id: string; product_name: string; on_hand: number; awaiting_return: number; available: number; stock_unit_code: import('@/lib/stockUnits').StockUnitCode | null }[] };
+      void_cashier_sale_item: {
+        Args: { p_item: string; p_quantity: number; p_expected_quantity: number; p_reason: string; p_note: string };
+        Returns: undefined;
+      };
       confirm_sale: {
         Args: {
           p_shift_id: string;
@@ -502,6 +507,7 @@ export type Database = {
           p_amount_paid: string;
           p_idempotency_key: string;
           p_pricing_program?: string;
+            p_payment_method?: 'cash' | 'gcash';
         };
         Returns: Sale;
       };
@@ -524,6 +530,7 @@ export type Database = {
           p_shift_id: string;
           p_actual_cash: string;
           p_products?: import('./models').ShiftCloseFinalizeProduct[];
+            p_actual_gcash?: string;
         };
         Returns: import('./models').ShiftCloseResult;
       };

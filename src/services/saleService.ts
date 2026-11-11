@@ -21,6 +21,7 @@ import type {
 } from '@/types/models';
 
 export type Sale = {
+  payment_method?: import('@/features/sales/paymentMethods').PaymentMethod | null;
   id: string;
   sale_number: string;
   branch_id: string;
@@ -39,6 +40,8 @@ export type Sale = {
 };
 
 export type SaleItem = {
+  stock_per_unit?: Record<string, number> | null;
+  void_history?: { id: string; quantity: number; amount: number; reason: string; note: string; at: string; cashier_id: string }[];
   id: string;
   sale_id: string;
   product_id: string;
@@ -70,7 +73,15 @@ export type SaleDetails = Sale & {
   items: SaleItem[];
 };
 
+export async function voidCashierSaleItem(item: SaleItem, quantity: number, reason: string, note: string) {
+  const { error } = await supabase.rpc('void_cashier_sale_item', {
+    p_item: item.id, p_expected_quantity: item.quantity, p_quantity: quantity, p_reason: reason, p_note: note,
+  });
+  if (error) throw error;
+}
+
 export type SaleRequest = {
+  paymentMethod?: import('@/features/sales/paymentMethods').PaymentMethod; // absent on pre-upgrade saved requests
   shiftId: string;
   /** drink_product_id is only present for a meal option that includes a drink (Drink Choice). */
   items: { product_id: string; variant_id: string | null; quantity: number; drink_product_id?: string }[];
@@ -88,9 +99,11 @@ export async function confirmSale(request: SaleRequest): Promise<Sale> {
     p_amount_paid: request.amountPaid,
     p_idempotency_key: request.key,
     p_pricing_program: pricingProgram,
+    ...(request.paymentMethod ? { p_payment_method: request.paymentMethod } : {}),
   });
   if (full.error) throw full.error;
   if (!full.data || !isSaleId(full.data.id) || full.data.shift_id !== request.shiftId
+      || (request.paymentMethod && full.data.payment_method !== request.paymentMethod)
       || typeof full.data.sale_number !== 'string' || !full.data.sale_number
       || full.data.total_amount == null || !Number.isFinite(Number(full.data.total_amount)) || Number(full.data.total_amount) < 0) {
     // The transaction may have committed: keep the key for an identical retry.

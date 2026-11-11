@@ -89,10 +89,10 @@ export function useFinalizeCashierShiftReconciliation(cashierId: string) {
   return useMutation<
     ShiftCloseResult,
     Error,
-    { shiftId: string; actualCash: string; products?: ShiftCloseFinalizeProduct[] }
+    { shiftId: string; actualCash: string; actualGcash?: string; products?: ShiftCloseFinalizeProduct[] }
   >({
-    mutationFn: ({ shiftId, actualCash, products }) =>
-      finalizeCashierShiftReconciliation(shiftId, actualCash, products ?? []),
+    mutationFn: ({ shiftId, actualCash, products, actualGcash }) =>
+      finalizeCashierShiftReconciliation(shiftId, actualCash, products ?? [], actualGcash),
     onSuccess: async () => {
       await invalidateAfterShiftClose(client, cashierId);
     },

@@ -1,3 +1,5 @@
+// Load native web before the screen-specific module hooks intercept its CommonJS imports.
+import 'react-native-web';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';

@@ -60,6 +60,7 @@ type RemittancePath = 'legacy' | 'pcs';
 type RemittanceAttempt = {
   shiftId: string;
   actualCash: string;
+  actualGcash?: string;
   products: ShiftCloseFinalizeProduct[];
   path: RemittancePath;
 };
@@ -331,6 +332,7 @@ export default function CashierDashboard() {
       {
         shiftId: attempt.shiftId,
         actualCash: attempt.actualCash,
+        actualGcash: attempt.actualGcash,
         products: attempt.products,
       },
       handlers,
@@ -341,9 +343,10 @@ export default function CashierDashboard() {
     preview: ShiftClosePreview,
     actualCash: string,
     products: ShiftCloseFinalizeProduct[],
+    actualGcash?: string,
   ) => {
     if (remittancePending || remittanceSubmitLock.current) return;
-    const path: RemittancePath = isLegacyCashOnlyPreview(preview) ? 'legacy' : 'pcs';
+    const path: RemittancePath = isLegacyCashOnlyPreview(preview) && actualGcash === undefined ? 'legacy' : 'pcs';
     confirmAction(
       'Finalize End Shift?',
       FINALIZE_CONFIRM_MESSAGE,
@@ -351,6 +354,7 @@ export default function CashierDashboard() {
         runFinalize({
           shiftId: preview.shift_id,
           actualCash,
+          actualGcash,
           products: path === 'legacy' ? [] : products,
           path,
         }),
@@ -410,7 +414,7 @@ export default function CashierDashboard() {
             title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
             submitLabel="Complete End Shift"
             loading={remittancePending}
-            onSubmit={(actualCash, products) => requestFinalize(pendingPreview, actualCash, products)}
+            onSubmit={(actualCash, products, actualGcash) => requestFinalize(pendingPreview, actualCash, products, actualGcash)}
             footerExtra={
               showRetry || showError ? (
                 <>
@@ -549,6 +553,7 @@ export default function CashierDashboard() {
                 </>
               ) : null}
             </View>
+            <ManagerActionButton label="Branch inventory" variant="secondary" onPress={() => router.push('/cashier/inventory' as never)} />
             {sameDayClosedHint ? <Row>{leftoverReturnTile}</Row> : null}
           </View>
         ) : (
@@ -559,6 +564,7 @@ export default function CashierDashboard() {
                 emphasis
                 icon="cash-outline"
                 label="Total sales"
+                onPress={() => router.push('/cashier/payment-totals' as never)}
                 value={
                   summaryQuery.isLoading && salesTotal === undefined
                     ? '—'
@@ -621,8 +627,8 @@ export default function CashierDashboard() {
                     layout="tile"
                     icon="basket-outline"
                     accent="gold"
-                    title="Local purchase"
-                    onPress={() => router.push('/cashier/local-purchase')}
+                    title="Branch inventory"
+                    onPress={() => router.push('/cashier/inventory' as never)}
                   />
                   {leftoverReturnTile}
                 </Row>
