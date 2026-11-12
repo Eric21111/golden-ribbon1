@@ -597,7 +597,7 @@ export function BranchPerformanceDetailScreen() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 14 },
+  column: { flexGrow: 1, padding: 20, gap: 14 },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',

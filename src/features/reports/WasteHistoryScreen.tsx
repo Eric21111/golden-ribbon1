@@ -35,6 +35,11 @@ const badgeToneStyles = {
   warning: { bg: '#FEF3C7', text: managerColors.goldMuted },
 } as const;
 
+/** A day with nothing wasted and no shift still waiting for its remittance. */
+function isQuietDay(day: { occurrence_count: number; shifts: Array<{ waste_status: ShiftWasteStatus }> }): boolean {
+  return day.occurrence_count === 0 && !day.shifts.some((shift) => shift.waste_status === 'pending');
+}
+
 function occurrenceMeta(item: ShiftWasteOccurrenceRow): string | undefined {
   return item.note ?? undefined;
 }
@@ -116,6 +121,9 @@ export function WasteHistoryScreen() {
   const query = useShiftWaste(rpcRangeType, startIso, endIso);
   const days = query.data?.days ?? [];
   const pagination = useClientPagination(days, rangeType, DAYS_PER_PAGE);
+  // Nothing wasted on any day (and no shift still pending): one centred "No waste recorded", like the other reports, instead of a
+  // list of identical "No waste recorded" lines. If any day has waste or a pending shift, the day list is shown as before.
+  const noWaste = query.isFetched && !query.error && days.length > 0 && days.every((day) => isQuietDay(day));
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
@@ -140,8 +148,9 @@ export function WasteHistoryScreen() {
         {!query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
           <EmptyState title="No waste history" message="No reconciliation-aware closed shifts in this range." />
         ) : null}
+        {noWaste ? <EmptyState title="No waste recorded" message="No waste was recorded in this period." /> : null}
 
-        {pagination.pageItems.map((day) => {
+        {(noWaste ? [] : pagination.pageItems).map((day) => {
           const totalPcs = dayTotalPcs(day);
 
           // a day with no waste is one quiet line, not an empty summary card
@@ -243,7 +252,7 @@ export function WasteHistoryScreen() {
             </View>
           );
         })}
-        {pagination.showPagination ? (
+        {pagination.showPagination && !noWaste ? (
           <View style={styles.pager}>
             <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
           </View>
@@ -259,7 +268,8 @@ export function WasteHistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
+  // flexGrow: with nothing to list, the loading / error / empty message fills the space under the filter and sits in the middle
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
   dayBlock: { gap: 10 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   quietDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 2 },

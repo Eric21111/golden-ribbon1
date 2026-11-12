@@ -21,6 +21,16 @@ export const INVALID_QUANTITY_LABEL = 'Invalid quantity';
 export const KG_QUANTITY_MAX_LENGTH = 10;
 export const PIECE_QUANTITY_MAX_LENGTH = 6;
 
+/**
+ * Width of a quantity box that grows with what is typed: it stays at `min` for short numbers and widens for longer ones, so up to
+ * 6 digits (999999) are always fully visible instead of being cut off by a fixed width. `fontSize` is the box's own text size.
+ */
+export function quantityBoxWidth(text: string | null | undefined, { min, fontSize }: { min: number; fontSize: number }): number {
+  const digits = Math.max(1, (text ?? '').length);
+  // a bold digit is about 0.66em wide; 8 leaves room for the two borders and a little air
+  return Math.max(min, Math.ceil(digits * fontSize * 0.66 + 8));
+}
+
 export function inventoryModeLabel(mode: InventoryMode | null | undefined): string {
   return mode === 'kg_meal' ? 'KG-delivered meal' : 'Piece-based stock';
 }

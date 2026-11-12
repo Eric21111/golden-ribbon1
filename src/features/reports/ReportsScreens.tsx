@@ -318,7 +318,7 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 14 },
+  column: { flexGrow: 1, padding: 20, gap: 14 },
   filterGroup: { gap: 6 },
   filterLabel: {
     color: managerColors.subtext,

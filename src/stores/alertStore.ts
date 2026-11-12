@@ -11,6 +11,10 @@ type ConfirmRequest = {
   cancelLabel: string;
   confirmLabel: string;
   onConfirm: () => void;
+  /** A second action that takes the place of Cancel (the dialog closes first, then it runs). Tapping outside still closes. */
+  secondary?: { label: string; onPress: () => void };
+  /** Shows a light-gray X in the corner. Tapping outside the dialog closes it either way. */
+  closeButton?: boolean;
 };
 
 type NoticeRequest = {

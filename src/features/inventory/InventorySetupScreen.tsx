@@ -38,7 +38,7 @@ import { useStockSetupData } from '@/hooks/useStockSetup';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, isValidPieceQuantity, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { formatLiveStock, isValidPieceQuantity, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
 
 const schema = z
   .object({
@@ -403,9 +403,12 @@ export function InventorySetupScreen() {
         <ManagerScreenHeader title="Opening stock" showBack />
 
         <View style={styles.filters}>
-          <BulkQuantityPicker rows={displayIndexes.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name}] : [])}
-            onApply={(ids, quantity) => getValues('items').forEach((row, index) => {
-              if (ids.has(row.product_id)) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
+          <BulkQuantityPicker rows={displayIndexes.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name, category: item.product.product_category, current: watchedItems.find((row) => row.product_id === item.product.id)?.quantity}] : [])}
+            filledCount={watchedItems.filter((row) => String(row.quantity ?? '').trim() !== '').length}
+            onClearAll={() => getValues('items').forEach((_row, index) => setValue(`items.${index}.quantity`, '', {shouldDirty: true, shouldValidate: false}))}
+            onApply={(values) => getValues('items').forEach((row, index) => {
+              const quantity = values.get(row.product_id);
+              if (quantity !== undefined) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
             })} />
           <View style={styles.searchRow}>
             <View style={styles.searchField}>
@@ -510,7 +513,7 @@ export function InventorySetupScreen() {
                               underlineColorAndroid="transparent"
                               onFocus={() => setFocusedIndex(index)}
                               onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
-                              style={[styles.input, fieldState.error && styles.inputError]}
+                              style={[styles.input, { width: quantityBoxWidth(quantity.value, { min: 48, fontSize: 18 }) }, fieldState.error && styles.inputError]}
                             />
                             <Pressable
                               accessibilityRole="button"

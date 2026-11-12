@@ -39,7 +39,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatLiveStock, formatMoney, isValidPieceQuantity, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { formatLiveStock, formatMoney, isValidPieceQuantity, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
 
 type StockFilter = 'in_stock' | 'all';
 type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
@@ -386,9 +386,12 @@ export function CreateTransferScreen() {
 
           {selectedBranchId && !destinationCatalog.isLoading && !destinationCatalog.error ? (
             <>
-              <BulkQuantityPicker key={selectedBranchId} rows={rows.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name, maximum: item.quantity_on_hand}] : [])}
-            onApply={(ids, quantity) => getValues('items').forEach((row, index) => {
-              if (ids.has(row.product_id)) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
+              <BulkQuantityPicker key={selectedBranchId} rows={rows.flatMap(({item}) => item ? [{id: item.product.id, name: item.product.name, maximum: item.quantity_on_hand, category: item.product.product_category, current: watchedItems.find((row) => row.product_id === item.product.id)?.quantity}] : [])}
+            filledCount={watchedItems.filter((row) => String(row.quantity ?? '').trim() !== '').length}
+            onClearAll={() => getValues('items').forEach((_row, index) => setValue(`items.${index}.quantity`, '', {shouldDirty: true, shouldValidate: false}))}
+            onApply={(values) => getValues('items').forEach((row, index) => {
+              const quantity = values.get(row.product_id);
+              if (quantity !== undefined) setValue(`items.${index}.quantity`, quantity, {shouldDirty: true, shouldValidate: false});
             })} />
           <View style={styles.searchRow}>
                 <View style={styles.searchField}>
@@ -408,11 +411,11 @@ export function CreateTransferScreen() {
                 keys={ALL_LIST_FILTER_KEYS}
                 onChange={setListFilters}
               />
-              <Text style={styles.summary}>
-                {selectedQuantityCount > 0
-                  ? `${selectedQuantityCount} product${selectedQuantityCount === 1 ? '' : 's'} to send`
-                  : 'Enter a quantity to add a product to this transfer.'}
-              </Text>
+              {selectedQuantityCount > 0 ? (
+                <Text style={styles.summary}>
+                  {`${selectedQuantityCount} product${selectedQuantityCount === 1 ? '' : 's'} to send`}
+                </Text>
+              ) : null}
             </>
           ) : null}
 
@@ -504,7 +507,7 @@ export function CreateTransferScreen() {
                                   numeric > item.quantity_on_hand ? String(item.quantity_on_hand) : value,
                                 );
                               }}
-                              style={styles.stepperInput}
+                              style={[styles.stepperInput, { width: quantityBoxWidth(quantity.value, { min: 40, fontSize: 17 }) }]}
                             />
                             <Pressable
                               accessibilityRole="button"

@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/components/Screen';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { getErrorMessage } from '@/lib/errors';
 import { useActiveShift } from '@/hooks/useShifts';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { listShiftSales } from '@/services/saleService';
@@ -20,8 +22,8 @@ export default function PaymentTotals() {
   useFocusEffect(useCallback(()=>{ if(id) void refetch(); },[id,refetch]));
   const [open,setOpen] = useState<PaymentFilter | null>(null);
   return <Screen><ManagerScreenHeader title="Current shift sales" showBack />
-    {shift.error || sales.error ? <ManagerActionButton label="Unable to load sales · Retry" onPress={()=>{void shift.refetch(); if(id) void refetch();}} /> :
-      shift.isPending || (id && sales.isPending) ? <Text>Loading sales…</Text> : !id ? <Text>No active shift.</Text> :
+    {shift.error || sales.error ? <ErrorState message={getErrorMessage(shift.error ?? sales.error)} onRetry={()=>{void shift.refetch(); if(id) void refetch();}} /> :
+      shift.isPending || (id && sales.isPending) ? <LoadingState label="Loading sales…" /> : !id ? <EmptyState title="No active shift" message="Start a shift to see its sales." /> :
       (['cash','gcash','unrecorded'] as const).map(method=>{
         const row=paymentBreakdown(sales.data ?? [],method);
         if(method==='unrecorded' && !row.orders) return null;

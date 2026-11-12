@@ -5,6 +5,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useActiveShift } from '@/hooks/useShifts';
 import { useCartStore } from '@/stores/cartStore';
@@ -82,8 +83,8 @@ export default function CorrectStockScreen() {
       : !selected ? <>
         <Text>Count the stock physically available at your branch, before serving the next order.</Text>
         <TextInput accessibilityLabel="Search stock item" placeholder="Search rice or another stock item" value={search} onChangeText={setSearch} style={{ borderWidth: 1, borderColor: '#CBD5E1', padding: 14, borderRadius: 10 }} />
-        {stock.isPending ? <Text>Loading stock…</Text> : stock.error ? <><Text>{getErrorMessage(stock.error)}</Text><ManagerActionButton label="Retry" onPress={() => void stock.refetch()} /></> : null}
-        {!stock.isPending && !stock.error && !(stock.data ?? []).some(row => row.product_name.toLowerCase().includes(search.toLowerCase())) ? <Text>No matching branch stock items.</Text> : null}
+        {stock.isPending ? <LoadingState label="Loading stock…" /> : stock.error ? <ErrorState message={getErrorMessage(stock.error)} onRetry={() => void stock.refetch()} /> : null}
+        {!stock.isPending && !stock.error && !(stock.data ?? []).some(row => row.product_name.toLowerCase().includes(search.toLowerCase())) ? <EmptyState title="No matching stock" message="Try another name." /> : null}
         {(stock.data ?? []).filter(row => row.product_name.toLowerCase().includes(search.toLowerCase())).map(row => <Pressable key={row.product_id} accessibilityRole="button" onPress={() => { setSelected(row); setCount(''); setReason(''); setReview(false); }} style={{ padding: 16, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10 }}>
           <Text style={{ fontWeight: '700' }}>{row.product_name}</Text>
           <Text>System: {row.quantity} {stockUnit(row.stock_unit_code)?.plural ?? 'pcs'}{usage.has(row.product_id) ? ` · Order needs ${usage.get(row.product_id)}` : ''}</Text>

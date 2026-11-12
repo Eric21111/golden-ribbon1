@@ -80,7 +80,7 @@ const MARGIN = 6; // approximation safety margin, dp
   const sub = textWidth('Base product · Required', 'Inter_400Regular', 12);
   // it is wider than the room on a small screen, so it must be allowed to wrap onto two lines (it used to truncate)
   assert.ok(sub > room(360), 'the label is wider than the room beside the stepper at 360dp');
-  assert.match(recipe, /numberOfLines=\{locked \? 2 : 1\}/, 'the locked label may wrap to two lines');
+  assert.match(recipe, /numberOfLines=\{locked \|\| portion \? 2 : 1\}/, 'the locked and portion labels may wrap to two lines');
   // each of its two halves fits on a line at every width, so wrapping never truncates it
   for (const w of WIDTHS) {
     const longestWord = Math.max(...'Base product · Required'.split(' ').map((word) => textWidth(word, 'Inter_400Regular', 12)));

@@ -5,7 +5,14 @@ export function confirmAction(
   message: string,
   action: () => void,
   // tone: 'danger' for something that cannot be undone (the confirm button turns red), 'warning' (default) for a careful step
-  labels: { cancel?: string; confirm?: string; tone?: AlertTone } = {},
+  labels: {
+    cancel?: string;
+    confirm?: string;
+    tone?: AlertTone;
+    // a second choice next to the confirm button, instead of Cancel (e.g. "Replace it" / "Add to it"); closing is then the X or a tap outside
+    secondary?: { label: string; onPress: () => void };
+    closeButton?: boolean;
+  } = {},
 ) {
   useAlertStore.getState().show({
     kind: 'confirm',
@@ -15,6 +22,8 @@ export function confirmAction(
     cancelLabel: labels.cancel ?? 'Cancel',
     confirmLabel: labels.confirm ?? 'Confirm',
     onConfirm: action,
+    ...(labels.secondary ? { secondary: labels.secondary } : {}),
+    ...(labels.closeButton ? { closeButton: true } : {}),
   });
 }
 

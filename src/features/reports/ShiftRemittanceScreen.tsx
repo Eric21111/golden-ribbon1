@@ -117,9 +117,40 @@ export function ShiftRemittanceScreen() {
                       {formatKnownMoney(day.actual_remitted == null ? null : Number(day.actual_remitted))}
                     </Text>
                   </View>
+                  {day.expected_gcash != null ? (
+                    <>
+                      <View style={styles.heroRowFull}>
+                        <View style={styles.heroLeft}>
+                          <View style={styles.heroIconChip}>
+                            <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
+                          </View>
+                          <Text style={styles.heroLabel}>Expected GCash</Text>
+                        </View>
+                        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatMoney(Number(day.expected_gcash))}
+                        </Text>
+                      </View>
+                      <View style={styles.heroRowFull}>
+                        <View style={styles.heroLeft}>
+                          <View style={styles.heroIconChip}>
+                            <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
+                          </View>
+                          <Text style={styles.heroLabel}>GCash remitted</Text>
+                        </View>
+                        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatKnownMoney(day.actual_gcash == null ? null : Number(day.actual_gcash))}
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
 
-                {day.expected_gcash != null && <Text>GCash expected {formatMoney(day.expected_gcash)} · Remitted {formatKnownMoney(day.actual_gcash ?? null)} · Pending {formatMoney(day.pending_gcash ?? 0)}</Text>}
+                {day.expected_gcash != null && Number(day.pending_gcash ?? 0) > 0 ? (
+                  <View style={styles.pendingNote}>
+                    <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+                    <Text style={styles.pendingNoteText}>{`${formatMoney(Number(day.pending_gcash))} GCash pending`}</Text>
+                  </View>
+                ) : null}
                 <View style={styles.pillRow}>
                   <View style={[styles.pill, { backgroundColor: shortage > 0 ? '#FEE2E2' : managerColors.cardSurface }]}>
                     <Ionicons
@@ -223,7 +254,11 @@ export function ShiftRemittanceScreen() {
                             ? formatMoney(Number(row.expected_cash))
                             : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
                         </Text>
-                        {row.expected_gcash != null && <Text>GCash {formatKnownMoney(row.actual_gcash ?? null)} / {formatMoney(row.expected_gcash)}</Text>}
+                        {row.expected_gcash != null ? (
+                          <Text style={styles.gcashLine} numberOfLines={1}>
+                            {`GCash ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} / ${formatMoney(Number(row.expected_gcash))}`}
+                          </Text>
+                        ) : null}
                         <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
                           <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
                             {row.expected_gcash != null ? 'Cash: ' : ''}{badge.label}
@@ -249,10 +284,13 @@ export function ShiftRemittanceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   dayBlock: { gap: 12 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  gcashLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  pendingNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12 },
+  pendingNoteText: { flex: 1, color: managerColors.goldMuted, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
   heroCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

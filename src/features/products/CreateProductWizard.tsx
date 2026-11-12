@@ -1,4 +1,4 @@
-import { STOCK_UNITS, type StockUnitCode } from '@/lib/stockUnits';
+import type { StockUnitCode } from '@/lib/stockUnits';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -41,6 +41,14 @@ import {
 import { generateSkuFromName } from './generateSku';
 import { isSellingPrice } from './productSchema';
 import { VariantListEditor } from './VariantListEditor';
+import { StockUnitField } from './StockUnitField';
+
+/**
+ * Offering "split into halves or quarters" when creating a stock item is switched off for now. While it is off the unit
+ * stays 'piece' (whole pieces), which is the same as leaving the switch off. Existing half-egg / half-serving items and
+ * their Quantity picker in Stock Used Per Order are not affected. Set to true to bring the switch back.
+ */
+const STOCK_UNIT_SPLIT_ENABLED = false;
 import {
   THIS_PRODUCT_ID,
   ingredientOptionsFromProducts,
@@ -558,15 +566,8 @@ export function CreateProductWizard({
           <View style={styles.group}>
             <SectionHeader title="Category & availability" />
             <ProductCategoryField value={category} onChange={changeCategory} />
-            {!sellable ? <View style={styles.group}>
-              <SectionHeader title="Stock counting unit" />
-              {(Object.keys(STOCK_UNITS) as StockUnitCode[]).map(code => (
-                <Pressable key={code} accessibilityRole="radio" accessibilityState={{ checked: stockUnitCode === code }}
-                  onPress={() => setStockUnitCode(code)} style={{ paddingVertical: 10 }}>
-                  <Text>{stockUnitCode === code ? '[Selected] ' : ''}{STOCK_UNITS[code].plural}</Text>
-                </Pressable>
-              ))}
-              <Text style={styles.hint}>{STOCK_UNITS[stockUnitCode].hint} This unit is fixed after creation. All stock counts, transfers, returns and waste use this unit.</Text>
+            {STOCK_UNIT_SPLIT_ENABLED && !sellable ? <View style={styles.group}>
+              <StockUnitField value={stockUnitCode} onChange={setStockUnitCode} />
             </View> : null}
             {POS_AVAILABILITY_ENABLED ? <PosAvailabilityField value={sellable} onChange={changeSellable} /> : null}
           </View>

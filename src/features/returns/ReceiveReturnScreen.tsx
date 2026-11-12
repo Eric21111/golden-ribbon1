@@ -22,7 +22,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { useReceiveReturn, useReturn } from '@/hooks/useReturns';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { formatDate, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
 
 const schema = z.object({
   items: z
@@ -360,7 +360,7 @@ export function ReceiveReturnScreen() {
                             onChangeText={(value) => {
                               if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
                             }}
-                            style={styles.stepperInput}
+                            style={[styles.stepperInput, { width: quantityBoxWidth(quantity.value, { min: 40, fontSize: 15 }) }]}
                           />
                           <Pressable
                             accessibilityRole="button"

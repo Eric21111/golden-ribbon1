@@ -434,7 +434,7 @@ export function ReturnDiscrepanciesReportScreen({
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 12 },
+  column: { flexGrow: 1, padding: 20, gap: 12 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchField: { flex: 1 },
   iconButton: {

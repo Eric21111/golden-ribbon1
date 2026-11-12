@@ -52,13 +52,14 @@ const { VariantRecipePreview } = loadTs('src/features/products/VariantRecipePrev
   'react-native': { ...rnw, TextInput: props => { inputProps = props; return React.createElement('input', { value: props.value, readOnly: true }); } },
   '@react-native-vector-icons/ionicons': { __esModule: true, default: () => null },
   './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
+  './PortionPickerSheet': { PortionPickerSheet: () => null },
   './CategoryIcon': { CategoryIcon: () => null },
 });
 const html = renderToStaticMarkup(React.createElement(VariantRecipePreview, {
-  lines: [{ itemId: 'new', quantity: 2 }], productName: 'Extra Egg', ingredients: items,
+  lines: [{ itemId: 'legacy', quantity: 2 }], productName: 'Extra Egg', ingredients: items,
   onChange: value => changes.push(value),
 }));
-assert.match(html, /half-egg units/);
+assert.match(html, /stock units \(legacy\)/, 'legacy/whole-number items keep the integer entry');
 assert.ok(inputProps);
 assert.equal(inputProps.maxLength, undefined, 'native truncation must not turn pasted 10.5 into 10');
 inputProps.onChangeText('0.5');
@@ -66,5 +67,5 @@ inputProps.onChangeText('10.5');
 inputProps.onChangeText('-1');
 assert.equal(changes.length, 0);
 inputProps.onChangeText('1');
-assert.deepEqual(changes, [[{ itemId: 'new', quantity: 1 }]]);
+assert.deepEqual(changes, [[{ itemId: 'legacy', quantity: 1 }]]);
 console.log('Rendered recipe editor passed: correct unit and rejection of fractional/negative input.');

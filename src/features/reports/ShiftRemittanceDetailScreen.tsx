@@ -12,7 +12,7 @@ import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/Mana
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
-import { closingDispositionLabel, formatPcsQty } from '@/features/reports/reportDisplay';
+import { closingDispositionLabel, formatPcsQty, gcashResult } from '@/features/reports/reportDisplay';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftCloseReportDetail } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
@@ -48,6 +48,28 @@ const inventoryResultBadge: Record<ShiftProductReconResult, { label: string; ton
   excess: { label: 'Excess', tone: 'success' },
 };
 
+/** "Exact match" / "₱x shortage" / "₱x excess": the same pill for the cash card and the GCash card. */
+function ResultPill({ shortage, excess }: { shortage: number; excess: number }) {
+  const color = shortage > 0 ? '#B91C1C' : excess > 0 ? managerColors.green : managerColors.subtext;
+  return (
+    <View
+      style={[
+        styles.resultPill,
+        { backgroundColor: shortage > 0 ? '#FEE2E2' : excess > 0 ? '#DCFCE7' : managerColors.cardSurface },
+      ]}
+    >
+      <Ionicons
+        name={shortage > 0 ? 'trending-down-outline' : excess > 0 ? 'trending-up-outline' : 'checkmark-circle-outline'}
+        size={14}
+        color={color}
+      />
+      <Text style={[styles.resultPillText, { color }]}>
+        {shortage > 0 ? `${formatMoney(shortage)} shortage` : excess > 0 ? `${formatMoney(excess)} excess` : 'Exact match'}
+      </Text>
+    </View>
+  );
+}
+
 export function ShiftRemittanceDetailScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -75,6 +97,8 @@ export function ShiftRemittanceDetailScreen() {
 
   const shortage = detail?.cash_result === 'shortage' ? Math.abs(Number(detail.difference ?? 0)) : 0;
   const excess = detail?.cash_result === 'excess' ? Math.abs(Number(detail.difference ?? 0)) : 0;
+
+  const gcash = detail ? gcashResult(detail.expected_gcash, detail.actual_gcash) : null;
 
   const filterOptions: { label: string; value: ResultFilter }[] = [
     { label: `All (${counts.total})`, value: 'all' },
@@ -125,12 +149,6 @@ export function ShiftRemittanceDetailScreen() {
               ) : null}
             </View>
 
-            {detail.expected_gcash != null && <View style={styles.identityCard}>
-              <Text style={styles.section}>GCash</Text>
-              <Text>Expected: {formatMoney(detail.expected_gcash)}</Text>
-              <Text>Received: {detail.actual_gcash == null ? 'Pending' : formatMoney(detail.actual_gcash)}</Text>
-              {detail.actual_gcash != null && <Text>{detail.actual_gcash < detail.expected_gcash ? 'Shortage' : detail.actual_gcash > detail.expected_gcash ? 'Excess' : 'Exact'} · {formatMoney(Math.abs(detail.actual_gcash - detail.expected_gcash))}</Text>}
-            </View>}
             <Text style={styles.section}>{detail.expected_gcash == null ? 'Collections' : 'Cash'}</Text>
             <View style={styles.heroCard}>
               <View style={styles.heroStack}>
@@ -166,32 +184,49 @@ export function ShiftRemittanceDetailScreen() {
                   </Text>
                 </View>
               ) : (
-                <View
-                  style={[
-                    styles.resultPill,
-                    { backgroundColor: shortage > 0 ? '#FEE2E2' : excess > 0 ? '#DCFCE7' : managerColors.cardSurface },
-                  ]}
-                >
-                  <Ionicons
-                    name={shortage > 0 ? 'trending-down-outline' : excess > 0 ? 'trending-up-outline' : 'checkmark-circle-outline'}
-                    size={14}
-                    color={shortage > 0 ? '#B91C1C' : excess > 0 ? managerColors.green : managerColors.subtext}
-                  />
-                  <Text
-                    style={[
-                      styles.resultPillText,
-                      { color: shortage > 0 ? '#B91C1C' : excess > 0 ? managerColors.green : managerColors.subtext },
-                    ]}
-                  >
-                    {shortage > 0
-                      ? `${formatMoney(shortage)} shortage`
-                      : excess > 0
-                        ? `${formatMoney(excess)} excess`
-                        : 'Exact match'}
-                  </Text>
-                </View>
+                <ResultPill shortage={shortage} excess={excess} />
               )}
             </View>
+
+            {detail.expected_gcash != null ? (
+              <>
+                <Text style={styles.section}>GCash</Text>
+                <View style={styles.heroCard}>
+                  <View style={styles.heroStack}>
+                    <View style={styles.heroRowFull}>
+                      <View style={styles.heroLeft}>
+                        <View style={styles.heroIconChip}>
+                          <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
+                        </View>
+                        <Text style={styles.heroLabel}>Expected GCash</Text>
+                      </View>
+                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatMoney(detail.expected_gcash)}
+                      </Text>
+                    </View>
+                    <View style={styles.heroRowFull}>
+                      <View style={styles.heroLeft}>
+                        <View style={styles.heroIconChip}>
+                          <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
+                        </View>
+                        <Text style={styles.heroLabel}>Actual GCash</Text>
+                      </View>
+                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                        {detail.actual_gcash == null ? '—' : formatMoney(detail.actual_gcash)}
+                      </Text>
+                    </View>
+                  </View>
+                  {gcash ? (
+                    <ResultPill shortage={gcash.shortage} excess={gcash.excess} />
+                  ) : (
+                    <View style={styles.pendingNote}>
+                      <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+                      <Text style={styles.pendingNoteText}>GCash is still pending.</Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            ) : null}
 
             <Text style={styles.section}>Inventory close</Text>
             {detail.cash_status === 'pending' ? (
@@ -342,7 +377,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 12 },
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 12 },
   section: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',

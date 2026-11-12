@@ -35,6 +35,7 @@ const text = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
     'react-native': rnw,
     '@react-native-vector-icons/ionicons': icon,
     './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const drinks = [{ id: 'w', name: 'Bottled Water' }, { id: 'c', name: 'Coke Mismo' }];
   const render = (choice, showValidation = false) => text(renderToStaticMarkup(React.createElement(mod.VariantDrinkChoicePreview, { choice, productName: 'Fried Chicken', drinks, showValidation, onChange() {} })));
@@ -71,6 +72,7 @@ const text = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
     'react-native': rnw,
     '@react-native-vector-icons/ionicons': icon,
     './InventoryItemPickerModal': { InventoryItemPickerModal: (props) => { picker = props; return null; } },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const changes = [];
   renderToStaticMarkup(React.createElement(mod.VariantDrinkChoicePreview, { choice: { enabled: true, drinkIds: [] }, productName: 'Fried Chicken', drinks: [], showValidation: false, onChange: (next) => changes.push(next.drinkIds) }));
@@ -95,6 +97,7 @@ const text = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
     '@react-native-vector-icons/ionicons': icon,
     '@/components/GlyphIcon': { GlyphIcon: () => null },
     './InventoryItemPickerModal': { InventoryItemPickerModal: (props) => { picker = props; return null; } },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const changes = [];
   const ingredients = [{ id: 'rice', name: 'Rice' }, { id: 'egg', name: 'Egg' }].map((item) => ({ ...item, unit: { singular: 'pc', plural: 'pcs' }, hint: '' }));
@@ -120,6 +123,7 @@ const text = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
     '@react-native-vector-icons/ionicons': icon,
     '@/components/GlyphIcon': { GlyphIcon: () => null },
     './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const render = (props) => renderToStaticMarkup(React.createElement(mod.VariantRecipePreview, { label: 'STOCK DEDUCTION', lines: [{ itemId: 'this-product', quantity: 3 }], productName: 'Cheesestick', ingredients: [], onChange() {}, ...props }));
   const locked = render({ lockMainProduct: true, mainOnly: true });

@@ -96,6 +96,12 @@ function getGroups(isMain: boolean): SidebarGroup[] {
               icon: 'leaf-outline',
               selectedIcon: 'leaf',
             },
+            {
+              label: 'Stock corrections',
+              href: '/manager/reports/stock-corrections',
+              icon: 'create-outline',
+              selectedIcon: 'create',
+            },
           ]
         : [
             { label: 'Home', href: '/manager/dashboard', icon: 'home-outline', selectedIcon: 'home' },
@@ -138,6 +144,7 @@ function getOwnerGroups(): SidebarGroup[] {
             { label: 'Inventory reconciliation', href: '/owner/reports/inventory-reconciliation', icon: 'checkmark-done-outline', selectedIcon: 'checkmark-done' },
             { label: 'Transfer discrepancies', href: '/owner/reports/transfer-discrepancies', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
             { label: 'Return discrepancies', href: '/owner/reports/return-discrepancies', icon: 'return-up-back-outline', selectedIcon: 'return-up-back' },
+            { label: 'Stock corrections', href: '/owner/reports/stock-corrections', icon: 'create-outline', selectedIcon: 'create' },
           ],
         },
         { label: 'Employees', href: '/owner/employees', icon: 'people-outline', selectedIcon: 'people' },

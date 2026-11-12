@@ -1,4 +1,4 @@
-import { stockUnit, type StockUnitCode } from '@/lib/stockUnits';
+import { formatPortions, stockUnit, unitsPerWhole, unitsToPortions, type StockUnitCode } from '@/lib/stockUnits';
 /**
  * Stock Used Per Order — data helpers for the Create/Edit Product wizards.
  *
@@ -17,6 +17,8 @@ export type InventoryItemOption = {
   unit: RecipeUnit;
   /** Short note shown in the picker, e.g. what one unit means. */
   hint?: string;
+  /** The item's fixed counting unit. Portion units (half-egg, half/quarter-serving) are entered as physical portions. */
+  stockUnitCode?: StockUnitCode | null;
   /** Show in Cashier POS is off, or the product was saved as an inventory supply. */
   stockOnly?: boolean;
   /** Saved category is Drinks. Meal choices must not offer meals or supplies. */
@@ -58,6 +60,7 @@ export function ingredientOptionsFromProducts(
         id: product.id,
         name: product.name,
         unit: stockUnit(product.stockUnitCode) ?? { singular: 'stock unit (legacy)', plural: 'stock units (legacy)' },
+        ...(product.stockUnitCode ? { stockUnitCode: product.stockUnitCode } : {}),
         ...(hint ? { hint } : {}),
         stockOnly: product.sellInPos === false || product.category === 'supplies',
         isDrink: product.category === 'drinks',
@@ -164,6 +167,14 @@ export function matchesInventorySearch(item: InventoryItemOption, query: string)
   return item.name.toLowerCase().includes(term) || (item.hint?.toLowerCase().includes(term) ?? false);
 }
 
+/**
+ * How much one order uses, as the manager thinks of it. Portion items show physical portions ("0.5" for one half-egg
+ * unit); every other item shows its stored count unchanged. Display only: the saved quantity is always the integer.
+ */
+export function lineAmount(item: Pick<InventoryItemOption, 'stockUnitCode'> | undefined, quantity: number): string {
+  return item && unitsPerWhole(item.stockUnitCode) ? formatPortions(unitsToPortions(quantity, item.stockUnitCode)) : String(quantity);
+}
+
 export function unitLabel(unit: RecipeUnit, quantity: number): string {
   return quantity === 1 ? unit.singular : unit.plural;
 }
@@ -178,7 +189,8 @@ export function summarizeExtras(lines: RecipeLine[], productName: string, ingred
     .map((line) => {
       const item = findInventoryItem(line.itemId, productName, ingredients);
       if (!item) return null;
-      return line.quantity > 1 ? `${item.name} ×${line.quantity}` : item.name;
+      // A portion item always shows its amount: "+ Egg" would hide whether it is half an egg or a whole one.
+      return line.quantity > 1 || unitsPerWhole(item.stockUnitCode) ? `${item.name} ×${lineAmount(item, line.quantity)}` : item.name;
     })
     .filter((part): part is string => part !== null);
   return parts.length > 0 ? `+ ${parts.join(', ')}` : '';
@@ -230,7 +242,7 @@ export function summarizeDeduction(lines: RecipeLine[], productName: string, ing
       const item = findInventoryItem(line.itemId, productName, ingredients);
       if (!item) return null;
       const name = item.id === THIS_PRODUCT_ID ? productName.trim() || 'This product' : item.name;
-      return `${name} ×${line.quantity}`;
+      return `${name} ×${lineAmount(item, line.quantity)}`;
     })
     .filter((part): part is string => part !== null)
     .join(', ');

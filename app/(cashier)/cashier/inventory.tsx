@@ -5,7 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/components/Screen';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { getErrorMessage } from '@/lib/errors';
 import { stockUnit } from '@/lib/stockUnits';
 import { listCashierDayStock } from '@/services/inventoryService';
 
@@ -23,12 +25,12 @@ export default function BranchStock() {
     <ManagerScreenHeader title="Branch inventory" showBack />
     <ManagerActionButton label="Record local purchase" onPress={() => router.push('/cashier/local-purchase')} />
     <TextInput placeholder="Search stock" accessibilityLabel="Search stock" value={search} onChangeText={setSearch} style={{padding: 12}} />
-    {error ? <ManagerActionButton label="Unable to load stock · Retry" onPress={() => void refetch()} /> :
-      isLoading ? <Text>Loading stock…</Text> : rows?.length ? rows.map(row =>
+    {error ? <ErrorState message={getErrorMessage(error)} onRetry={() => void refetch()} /> :
+      isLoading ? <LoadingState label="Loading stock…" /> : rows?.length ? rows.map(row =>
         <View key={row.product_id} style={{paddingVertical: 10}}>
           <Text style={{fontWeight: '600'}}>{row.product_name}</Text>
           <Text>Available {row.available} {stockUnit(row.stock_unit_code)?.plural ?? 'pcs'}</Text>
           <Text>On hand {row.on_hand} · Held for return {row.awaiting_return}</Text>
-        </View>) : <Text>{search ? 'No matching stock.' : 'No branch stock recorded.'}</Text>}
+        </View>) : <EmptyState title={search ? 'No matching stock' : 'No stock recorded'} message={search ? 'Try another name.' : 'This branch has no stock recorded yet.'} />}
   </Screen>;
 }

@@ -167,7 +167,6 @@ export default function ManagerDashboard() {
 
             {isMain ? (
               <Section title="REPORTS">
-                <NavTile icon="create-outline" accent="blue" title="Stock corrections" onPress={() => router.push('/manager/reports/stock-corrections' as never)} />
                 <Row>
                   <NavTile
                     layout="tile"
@@ -183,6 +182,17 @@ export default function ManagerDashboard() {
                     title="Waste History"
                     onPress={() => router.push('/manager/reports/waste-history' as never)}
                   />
+                </Row>
+                <Row>
+                  <NavTile
+                    layout="tile"
+                    icon="create-outline"
+                    accent="blue"
+                    title="Stock corrections"
+                    onPress={() => router.push('/manager/reports/stock-corrections' as never)}
+                  />
+                  {/* keeps the tile the same size as the two above (a lone tile would stretch across the row) */}
+                  <View style={styles.rowSpacer} />
                 </Row>
               </Section>
             ) : null}
@@ -241,6 +251,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   row: { flexDirection: 'row', gap: spacing.sm },
+  rowSpacer: { flex: 1 },
   half: { flex: 1 },
   quietCard: {
     backgroundColor: managerColors.cardSurface,

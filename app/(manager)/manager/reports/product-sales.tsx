@@ -119,7 +119,7 @@ export default function ManagerProductSalesScreen() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1 },
-  column: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 14 },
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 14 },
   customDateRow: { flexDirection: 'row', gap: 12 },
   customDateField: { flex: 1 },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },

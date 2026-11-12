@@ -248,7 +248,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 16 },
+  column: { flexGrow: 1, padding: 20, gap: 16 },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',

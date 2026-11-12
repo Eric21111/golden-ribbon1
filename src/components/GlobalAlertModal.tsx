@@ -49,6 +49,11 @@ export function GlobalAlertModal() {
         />
         {request ? (
           <View style={styles.card}>
+            {request.kind === 'confirm' && request.closeButton ? (
+              <Pressable accessibilityLabel="Close" accessibilityRole="button" hitSlop={12} onPress={dismiss} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#98A2B3" />
+              </Pressable>
+            ) : null}
             <View style={[styles.badge, { backgroundColor: tone.background }]}>
               <Ionicons name={tone.icon} size={26} color={tone.color} />
             </View>
@@ -72,7 +77,19 @@ export function GlobalAlertModal() {
             {request.kind === 'confirm' ? (
               <View style={styles.buttonRow}>
                 <View style={styles.buttonHalf}>
-                  <ManagerActionButton label={request.cancelLabel} variant="secondary" onPress={dismiss} />
+                  <ManagerActionButton
+                    label={request.secondary ? request.secondary.label : request.cancelLabel}
+                    variant="secondary"
+                    onPress={
+                      request.secondary
+                        ? () => {
+                            const { onPress } = request.secondary!;
+                            dismiss();
+                            onPress();
+                          }
+                        : dismiss
+                    }
+                  />
                 </View>
                 <View style={styles.buttonHalf}>
                   <ManagerActionButton
@@ -115,6 +132,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignItems: 'center',
   },
+  closeButton: { position: 'absolute', top: 14, right: 14, zIndex: 1 },
   badge: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   title: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 18, textAlign: 'center' },
   message: { alignSelf: 'stretch', gap: 8 },

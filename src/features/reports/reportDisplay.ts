@@ -48,6 +48,20 @@ export function formatPersistedInventoryResult(
   return `${magnitude} pc${magnitude === 1 ? '' : 's'} excess`;
 }
 
+/**
+ * How the GCash received compares with what was expected, in the same shape as the cash result: a shortage (received less) or an
+ * excess (received more), both 0 for an exact match. Null while the GCash has not been remitted yet (actual is null).
+ */
+export function gcashResult(
+  expected: number | string | null | undefined,
+  actual: number | string | null | undefined,
+): { shortage: number; excess: number } | null {
+  if (expected == null || actual == null) return null;
+  const difference = Math.round((Number(actual) - Number(expected)) * 100) / 100;
+  if (!Number.isFinite(difference)) return null;
+  return { shortage: difference < 0 ? -difference : 0, excess: difference > 0 ? difference : 0 };
+}
+
 export function formatPcsQty(quantity: number | null | undefined, code?: import('@/lib/stockUnits').StockUnitCode | null): string {
   if (quantity == null || !Number.isFinite(Number(quantity))) return '—';
   return formatLiveStock(quantity, undefined, code);

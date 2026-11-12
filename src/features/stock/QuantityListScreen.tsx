@@ -16,7 +16,7 @@ import { buildListRows, groupByCategory, groupCounts } from '@/features/products
 import { productSearchText } from '@/features/products/listFilters';
 import { CATEGORY_CHIP_CHOICES, categoryOf, type CategoryFilter } from '@/features/products/productFilters';
 import { useClientPagination } from '@/hooks/useClientPagination';
-import { PIECE_QUANTITY_MAX_LENGTH, formatLiveStock } from '@/lib/format';
+import { PIECE_QUANTITY_MAX_LENGTH, formatLiveStock, quantityBoxWidth } from '@/lib/format';
 
 /**
  * The one layout for "enter a quantity for each product" screens that have no review step (Create return, Local purchase): the
@@ -195,7 +195,7 @@ export function QuantityListScreen({
                             onQuantityChange(row.id, capAtOnHand && Number(value) > row.onHand ? String(row.onHand) : value);
                           }
                         }}
-                        style={styles.stepperInput}
+                        style={[styles.stepperInput, { width: quantityBoxWidth(raw, { min: 48, fontSize: 18 }) }]}
                       />
                       <Pressable
                         accessibilityRole="button"

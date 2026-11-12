@@ -3,9 +3,11 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
+import { portionRatioNote, unitsPerWhole } from '@/lib/stockUnits';
 
 import { CategoryIcon } from './CategoryIcon';
 import { InventoryItemPickerModal } from './InventoryItemPickerModal';
+import { PortionPickerSheet } from './PortionPickerSheet';
 import { MIN_TOUCH_TARGET } from './touchTargets';
 import {
   MAX_RECIPE_QUANTITY,
@@ -14,6 +16,7 @@ import {
   THIS_PRODUCT_ID,
   findInventoryItem,
   getQuickAddItems,
+  lineAmount,
   stockModeOf,
   summarizeDeduction,
   unitLabel,
@@ -79,6 +82,8 @@ export function VariantRecipePreview({
   onChange: (lines: RecipeLine[]) => void;
 }) {
   const [quantityError, setQuantityError] = useState('');
+  // Index of the portion line whose amount sheet is open (portion items only; whole-number items keep the stepper).
+  const [portionSheetIndex, setPortionSheetIndex] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // True while the sheet was opened by tapping "Take from other items" with nothing to restore: the pick STARTS the list
   // instead of being added to "This Product". Closing the sheet without a pick changes nothing, so an "other items"
@@ -165,6 +170,7 @@ export function VariantRecipePreview({
           const locked = lockMainProduct && line.itemId === THIS_PRODUCT_ID;
           // The main product shows its real name ("Beef Pares"), not the generic "This Product".
           const shownName = item.id === THIS_PRODUCT_ID && productName.trim() ? productName.trim() : item.name;
+          const portion = item.id !== THIS_PRODUCT_ID && unitsPerWhole(item.stockUnitCode) ? item.stockUnitCode : null;
           return (
             <View key={line.itemId} style={[styles.line, index > 0 && styles.lineDivider]}>
               {item.id !== THIS_PRODUCT_ID ? <CategoryIcon category={item.category} size={22} /> : null}
@@ -173,12 +179,28 @@ export function VariantRecipePreview({
                   {shownName}
                 </Text>
                 {/* "Base product · Required" is wider than the room beside the stepper on a 360dp screen: let it wrap */}
-                <Text style={styles.itemUnit} numberOfLines={locked ? 2 : 1}>
+                <Text style={styles.itemUnit} numberOfLines={locked || portion ? 2 : 1}>
                   {locked
                     ? 'Base product · Required'
-                    : `${unitLabel(item.unit, line.quantity)}${item.id !== THIS_PRODUCT_ID && item.hint ? ` · ${item.hint}` : ''}`}
+                    : portion
+                      ? `Stored as ${line.quantity} ${unitLabel(item.unit, line.quantity)} · ${portionRatioNote(portion)}`
+                      : `${unitLabel(item.unit, line.quantity)}${item.id !== THIS_PRODUCT_ID && item.hint ? ` · ${item.hint}` : ''}`}
                 </Text>
               </View>
+              {portion ? (
+                <View style={styles.portionCol}>
+                  <Text style={styles.portionCaption}>Quantity</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name} quantity per order, ${lineAmount(item, line.quantity)}. Change quantity`}
+                    onPress={() => setPortionSheetIndex(index)}
+                    style={({ pressed }) => [styles.portionSelect, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.portionValue}>{lineAmount(item, line.quantity)}</Text>
+                    <Ionicons name="chevron-down" size={16} color={managerColors.subtext} />
+                  </Pressable>
+                </View>
+              ) : (
               <View style={styles.stepper}>
                 <Pressable
                   accessibilityRole="button"
@@ -217,6 +239,7 @@ export function VariantRecipePreview({
                   </View>
                 </Pressable>
               </View>
+              )}
               {locked ? (
                 <View
                   accessible
@@ -333,6 +356,24 @@ export function VariantRecipePreview({
 
       {stockModeChoice ? null : listBlock}
 
+      {(() => {
+        const open = portionSheetIndex === null ? undefined : lines[portionSheetIndex];
+        const openItem = open ? findInventoryItem(open.itemId, productName, ingredients) : undefined;
+        if (!open || !openItem || !unitsPerWhole(openItem.stockUnitCode)) return null;
+        return (
+          <PortionPickerSheet
+            item={openItem}
+            quantity={open.quantity}
+            onClose={() => setPortionSheetIndex(null)}
+            onSelect={(units) => {
+              setQuantityError('');
+              setQuantity(portionSheetIndex!, units);
+              setPortionSheetIndex(null);
+            }}
+          />
+        );
+      })()}
+
       {mainOnly ? null : (
         <InventoryItemPickerModal
           visible={pickerOpen}
@@ -379,6 +420,23 @@ const styles = StyleSheet.create({
   itemName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   itemUnit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
   stepper: { flexDirection: 'row', alignItems: 'center' },
+  // portion items: a labelled select that shows the physical portion (0.5), not the stored unit count
+  portionCol: { alignItems: 'flex-start', gap: 2 },
+  portionCaption: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11, paddingLeft: 4 },
+  portionSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    minWidth: 84,
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+  },
+  portionValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   // 44px tap area (stepTouch); the visible circle (stepButton) stays compact.
   stepTouch: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
   stepButton: {

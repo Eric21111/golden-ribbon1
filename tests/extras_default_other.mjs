@@ -37,6 +37,7 @@ const { extrasStockMissing, PRODUCT_STOCK_KEY } = loadTs('src/features/products/
     '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
     '@/components/GlyphIcon': { GlyphIcon: () => null },
     './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const rice = { id: 'rice', name: 'Rice', unit: { singular: 'pc', plural: 'pcs' }, hint: '' };
   const render = (props) => renderToStaticMarkup(React.createElement(mod.VariantRecipePreview, {
@@ -121,6 +122,7 @@ const { extrasStockMissing, PRODUCT_STOCK_KEY } = loadTs('src/features/products/
     '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
     '@/components/GlyphIcon': { GlyphIcon: () => null },
     './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
+    './PortionPickerSheet': { PortionPickerSheet: () => null },
   });
   const ingredients = [{ id: 'rice', name: 'Rice', unit: { singular: 'pc', plural: 'pcs' }, hint: 'Stock only' }];
   const plain = (props) => renderToStaticMarkup(React.createElement(mod.VariantRecipePreview, { label: 'STOCK DEDUCTION', stockModeChoice: true, productName: 'Extra Rice', ingredients, onChange() {}, lines: [], ...props })).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
