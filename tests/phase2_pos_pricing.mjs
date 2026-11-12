@@ -272,6 +272,7 @@ assert.equal(Number(pwd.total_amount), 120);
 assert.equal(Number(pwd.discount_amount), 40);
 assert.equal(await qty(), 16);
 
+await db.query("update public.products set product_category='meals' where id=$1",[meal]);
 // Back office / guard is ₱13 off catalog (ulam is 60 → 47)
 const guard = (
   await asUser(cashier, () =>
@@ -408,6 +409,21 @@ assert.equal(Number(guardOff.total_amount), 67);
 assert.equal(Number(guardOff.catalog_subtotal), 80);
 assert.equal(Number(guardOff.discount_amount), 13);
 assert.equal(await qty(), 11);
+
+// An eligible meal and a separately sold drink keep the same prices in the UI and receipt.
+await db.exec('begin');
+await db.query("update public.products set product_category='drinks' where id=$1",[side]);
+const categoryCart = [{product_id:meal, variant_id:ulamVar, quantity:1}, {product_id:side, quantity:1}];
+const categoryPreview = previewOrderTotals([{...categoryCart[0],unit_price:60},{...categoryCart[1],unit_price:33.33}],
+  'back_office_guard', null, new Map([[meal,'meals'],[side,'drinks']]));
+assert.equal(categoryPreview.chargedTotal,80.33);
+const categorySale = (await asUser(cashier, () => db.query(
+  "select (public.confirm_sale($1,$2::jsonb,80.33,'guard-mixed-categories-001','back_office_guard','gcash')).*",
+  [shiftId, JSON.stringify(categoryCart)]
+))).rows[0];
+assert.equal(Number(categorySale.total_amount),categoryPreview.chargedTotal);
+assert.equal(Number((await db.query('select unit_price from public.sale_items where sale_id=$1 and product_id=$2',[categorySale.id,side])).rows[0].unit_price),33.33);
+await db.exec('rollback');
 
 // Shift expected cash = sum(total_amount) includes paid programs only
 const expectedFinal = Number(

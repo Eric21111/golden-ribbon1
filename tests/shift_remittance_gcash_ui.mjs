@@ -28,6 +28,8 @@ assert.equal(gcashResult('x', 5), null, 'garbage is not a result');
 let detail;
 const Pass = (props) => React.createElement('div', null, props.children);
 const Detail = loadTs('src/features/reports/ShiftRemittanceDetailScreen.tsx', {
+  '@/lib/supabase': {supabase:{}},
+  '@/features/auth/AuthProvider': {useAuth:()=>({profile:{role:'manager'}})},
   'react-native': rnw,
   '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
   'expo-router': { useLocalSearchParams: () => ({ id: 's1' }) },
@@ -49,6 +51,7 @@ const base = {
   expected_cash: 48, actual_cash: 48, cash_status: 'reconciled', cash_result: 'exact', difference: 0, products: [],
 };
 const renderDetail = (over) => { detail = { ...base, ...over }; return renderToStaticMarkup(React.createElement(Detail)); };
+assert.match(flat(renderDetail({selected_return_close:true,return_number:'RET-123'})), /View return.*RET-123/);
 const money = (n) => `₱\\s?${n.toFixed(2).replace('.', '\\.')}`;
 
 // exact: Cash card, then a GCash card built the same way
@@ -79,7 +82,7 @@ let days;
 const List = loadTs('src/features/reports/ShiftRemittanceScreen.tsx', {
   'react-native': rnw,
   '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
-  'expo-router': { router: { push() {} } },
+  'expo-router': { router: { push() {} }, useFocusEffect: callback => callback() },
   '@/components/ConstrainedWidth': { ConstrainedWidth: Pass },
   '@/components/Pagination': { Pagination: () => null },
   '@/components/Screen': { Screen: Pass },
@@ -105,14 +108,14 @@ text = flat(renderList(day({ expected_gcash: 100, actual_gcash: 100, pending_gca
 assert.match(text, new RegExp(`Expected Cash\\|${money(48)}\\|Cash remitted\\|${money(48)}\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}`), 'the day card has GCash rows like Cash');
 assert.doesNotMatch(text, /GCash expected|Remitted ₱|Pending ₱/, 'the plain sentence is gone');
 assert.doesNotMatch(text, /GCash pending/, 'no pending note when nothing is pending');
-assert.match(text, new RegExp(`GCash ${money(100)} / ${money(100)}`), 'each shift keeps its GCash received / expected');
+assert.match(text, new RegExp(`GCash submitted ${money(100)} · expected ${money(100)}`), 'each shift keeps its GCash received / expected');
 assert.match(renderList(day({ expected_gcash: 100, actual_gcash: 100, pending_gcash: 0 })), /data-icon="phone-portrait-outline"/);
 
 // pending GCash is called out like pending cash
 text = flat(renderList(day({ expected_gcash: 100, actual_gcash: null, pending_gcash: 100 }, { expected_gcash: 100, actual_gcash: null })));
 assert.match(text, new RegExp(`GCash remitted\\|—`));
 assert.match(text, new RegExp(`${money(100)} GCash pending`));
-assert.match(text, new RegExp(`GCash — / ${money(100)}`));
+assert.match(text, new RegExp(`GCash submitted — · expected ${money(100)}`));
 
 // shifts without GCash: no GCash anywhere
 text = flat(renderList(day({ expected_gcash: null })));

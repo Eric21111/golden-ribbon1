@@ -155,7 +155,7 @@ const render = () => {
   return renderToStaticMarkup(createElement(OwnerDashboard));
 };
 const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;|&apos;/g, "'").replace(/\s+/g, ' ');
-const quickviewSlice = (t) => t.slice(t.indexOf('Today Quickview'), t.indexOf("TODAY'S PRODUCT PERFORMANCE"));
+const quickviewSlice = (t) => t.slice(t.indexOf('Today Quickview'), t.indexOf('Today Log'));
 const assertUnrelatedSections = (t) => {
   assert.match(t, /Hi, Test Owner/);
   assert.match(t, /Quantity discrepancy reported/);
@@ -163,8 +163,8 @@ const assertUnrelatedSections = (t) => {
   assert.match(t, /\[button:Review discrepancies\]/);
   assert.match(t, /Data Archive Due/);
   assert.match(t, /\[button:Export &amp; review\]|\[button:Export & review\]/);
-  assert.match(t, /TODAY'S PRODUCT PERFORMANCE/);
-  assert.match(t, /Chicken/);
+  assert.doesNotMatch(t, /TODAY'S PRODUCT PERFORMANCE/);
+  assert.doesNotMatch(t, /Chicken/);
   assert.match(t, /Sales by Branch/);
   assert.match(t, /Product Sales/);
   assert.match(t, /Branch Performance/);
@@ -221,7 +221,7 @@ sales.state.branchSales = query({ data: branchData });
   assert.match(qv, /₱\s*480\.00/);
   assert.match(qv, /Inactive · SM2/);
   assert.match(qv, /₱\s*80\.00/);
-  assert.match(qv, /\[button:Transactions & items sold\]|\[button:Transactions &amp; items sold\]/);
+  assert.doesNotMatch(qv, /\[button:Transactions & items sold\]|\[button:Transactions &amp; items sold\]/);
 }
 
 // 4. A failed background refetch keeps old data in the cache; it must not be shown as today's revenue.
@@ -257,7 +257,7 @@ sales.state.metrics = query({ data: metricsData });
   const sheet = source.slice(source.indexOf('<ManagerBottomSheet'), source.indexOf('</ManagerBottomSheet>'));
   assert.match(sheet, /\{quickviewError\}/);
   assert.match(sheet, /\(quickviewReady \? quickview\.branches : \[\]\)\.map/);
-  assert.match(source, /\{metricsQuery\.error \|\| summaryQuery\.error \? \(/, 'branch query not in the global gate');
+  assert.match(source, /\{metricsQuery\.error \? \(/, 'branch query not in the global gate');
 }
 
 // 8. Real React Query semantics: first failure -> error, retry success -> ready, failed refetch -> error.

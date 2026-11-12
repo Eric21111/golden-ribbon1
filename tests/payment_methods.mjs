@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 process.on('uncaughtException', e => { console.error(e.message, e.detail ?? '', e.where ?? '', e.stack?.split('\n').slice(-3).join('\n')); process.exit(1); });
 import { loadTs } from './_load_ts.mjs';
 import assert from 'node:assert/strict';
@@ -34,7 +35,7 @@ await assert.rejects(sell('gcash', 10, 'payment-method-cash-001'));
 await sell('gcash', 10, 'payment-method-gcash-001');
 const stock = (await db.query('select * from public.list_cashier_day_stock()')).rows;
 assert.equal(Number(stock.find(row => row.product_id === product).available), 3);
-const preview = (await db.query('select public.begin_cashier_shift_close($1) p', [shift])).rows[0].p;
+const preview = (await verifiedClose(db,shift)).rows[0].p;
 assert.equal(preview.expected_cash, 10);
 assert.equal(preview.expected_gcash, 10);
 const products = JSON.stringify(preview.products.map(p => ({ product_id: p.product_id, actual_remaining: String(p.system_balance_before_waste) })));

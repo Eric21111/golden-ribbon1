@@ -105,12 +105,14 @@ export default function ManagerDashboard() {
                   emphasis
                   icon="cash-outline"
                   label="Today's Sales"
+                  onPress={() => router.push('/manager/today-sales' as never)}
                   value={metrics ? formatMoney(metrics.today_sales) : '—'}
                 />
                 <StatTile
                   style={styles.half}
                   icon="cube-outline"
                   label="Products in stock"
+                  onPress={() => router.push('/manager/products')}
                   value={metrics?.current_inventory_count ?? '—'}
                 />
               </Row>
@@ -119,12 +121,14 @@ export default function ManagerDashboard() {
                   style={styles.half}
                   icon="download-outline"
                   label="Pending incoming"
+                  onPress={() => router.push('/manager/transfers')}
                   value={metrics?.pending_incoming_transfers_count ?? '—'}
                 />
                 <StatTile
                   style={styles.half}
                   icon="return-up-back-outline"
                   label="Returns in transit"
+                  onPress={() => router.push('/manager/returns')}
                   value={metrics?.returns_in_transit_count ?? '—'}
                 />
               </Row>
@@ -188,7 +192,7 @@ export default function ManagerDashboard() {
                     layout="tile"
                     icon="create-outline"
                     accent="blue"
-                    title="Stock corrections"
+                    title="Void logs"
                     onPress={() => router.push('/manager/reports/stock-corrections' as never)}
                   />
                   {/* keeps the tile the same size as the two above (a lone tile would stretch across the row) */}

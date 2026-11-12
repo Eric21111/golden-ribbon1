@@ -145,7 +145,7 @@ export const WASTE_HELPER = 'Damaged, spoiled, dropped, broken, or otherwise unu
 
 export const BEGIN_CLOSE_CONFIRM_MESSAGE =
   '- Sales and stock changes stop for this booth today\n' +
-  '- You count the remaining stock and cash to finish\n' +
+  '- Review stock and enter collections to finish\n' +
   '- Today cannot be reopened';
 
 export const FINALIZE_CONFIRM_MESSAGE =

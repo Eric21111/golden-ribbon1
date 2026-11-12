@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 process.on('uncaughtException', e => { console.error(e.message, e.detail ?? '', e.where ?? '', e.stack?.split('\n').slice(-3).join('\n')); process.exit(1); });
 import assert from 'node:assert/strict';
 import { readFileSync,readdirSync } from 'node:fs';
@@ -59,7 +60,7 @@ const ret=()=>as(cashier,()=>db.query('select public.create_stock_return($1::jso
 await ret();await ret();assert.equal(await q(egg.id),6);assert.equal(await q(egg.id,main),10,'returns do not restock sellable Main');
 await assert.rejects(db.query('update public.branch_inventory set quantity_on_hand=0.5 where branch_id=$1 and product_id=$2',[branch,egg.id]),/whole numbers/);
 const units=await as(cashier,()=>db.query('select * from public.get_stock_unit_codes($1::uuid[])',[[egg.id,bihon.id]]));assert.equal(units.rows.length,2);
-const preview=(await as(cashier,()=>db.query('select public.begin_cashier_shift_close($1) p',[shift]))).rows[0].p;
+const preview=(await as(cashier,()=>verifiedClose(db,shift))).rows[0].p;
 assert.equal(preview.products.find(p=>p.product_id===egg.id).system_balance_before_waste,6);
 assert.equal(preview.products.find(p=>p.product_id===bihon.id).system_balance_before_waste,7);
 const counts=preview.products.map(p=>({product_id:p.product_id,actual_remaining:String(p.system_balance_before_waste)}));

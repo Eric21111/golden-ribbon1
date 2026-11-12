@@ -39,11 +39,12 @@ export async function reopenCashierShift(reason: string): Promise<string> {
   return data;
 }
 
-async function readBeginCashierShiftClose(shiftId: string): Promise<ShiftCloseBeginResult> {
-  const { data, error } = await supabase.rpc('begin_cashier_shift_close', {
-    p_shift_id: shiftId,
-  });
-  if (error) throw error;
+async function readBeginCashierShiftClose(shiftId: string, credential: string): Promise<ShiftCloseBeginResult> {
+  const {data,error} = await supabase.functions.invoke('confirm-end-shift',{body:{shiftId,credential}});
+  if (error) {
+    const body = await error.context?.json?.().catch(() => null);
+    throw new Error(body?.message ?? 'Unable to confirm End Shift. Check your connection and shift status.');
+  }
   return data as ShiftCloseBeginResult;
 }
 
@@ -52,7 +53,16 @@ export async function finalizeCashierShiftReconciliation(
   actualCash: string,
   products: ShiftCloseFinalizeProduct[] = [],
   actualGcash?: string,
+  selection?: import('@/types/models').ShiftReturnSelection,
 ): Promise<ShiftCloseResult> {
+  if (selection) {
+    const { data, error } = await supabase.rpc('close_shift_with_returns', {
+      p_shift_id: shiftId, p_actual_cash: actualCash, p_actual_gcash: actualGcash ?? null,
+      p_return_ids: selection.productIds, p_waste: selection.waste,
+    });
+    if (error) throw error;
+    return data;
+  }
   const { data, error } = await supabase.rpc('finalize_cashier_shift_reconciliation', {
     p_shift_id: shiftId,
     p_actual_cash: actualCash,
@@ -87,19 +97,20 @@ async function readGetMyPendingShiftReconciliation(): Promise<PendingShiftReconc
  * Does not call Owner/Main Manager remittance reports.
  * start_cashier_shift remains the final authority if this is stale/unavailable.
  */
-export async function hasMyFinalizedCloseToday(branchId: string, cashierId: string): Promise<boolean> {
+export async function hasMyFinalizedCloseToday(branchId: string, cashierId: string): Promise<boolean | 'selected'> {
   if (!branchId || !cashierId) return false;
   try {
     const { start, end } = getTodayRangeManila();
     const { data: shifts, error: shiftError } = await supabase
       .from('shifts')
-      .select('id')
+      .select('*')
       .eq('cashier_id', cashierId)
       .eq('branch_id', branchId)
       .eq('status', 'closed')
       .gte('ended_at', start)
       .lt('ended_at', end);
     if (shiftError) return false;
+    if (shifts?.some(row => row.selected_return_close)) return 'selected';
     const shiftIds = (shifts ?? []).map((row) => row.id).filter(Boolean);
     if (shiftIds.length === 0) return false;
 
@@ -113,6 +124,12 @@ export async function hasMyFinalizedCloseToday(branchId: string, cashierId: stri
   } catch {
     return false;
   }
+}
+
+/** Confirm this exact shift after a lost response, including a shift closed before midnight. */
+export async function hasSelectedReturnClose(shiftId: string): Promise<boolean> {
+  const { data, error } = await supabase.from('shifts').select('selected_return_close').eq('id', shiftId).maybeSingle();
+  return !error && Boolean(data?.selected_return_close);
 }
 
 export async function getShiftSummary(shiftId: string): Promise<ShiftSummary> {
@@ -146,7 +163,7 @@ async function enrichWasteReportQuantities(report: ShiftWasteReport): Promise<Sh
   const shiftIds = new Set<string>();
   for (const day of report.days ?? []) {
     for (const shift of day.shifts ?? []) {
-      if (shift.waste_status === 'waste_recorded') shiftIds.add(shift.shift_id);
+      if (shift.waste_status === 'waste_recorded' && shift.occurrences.some(item => !item.occurrence_id)) shiftIds.add(shift.shift_id);
     }
   }
   if (shiftIds.size === 0) return report;
@@ -171,6 +188,7 @@ async function enrichWasteReportQuantities(report: ShiftWasteReport): Promise<Sh
       shifts: day.shifts.map((shift) => ({
         ...shift,
         occurrences: shift.occurrences.map((item) => {
+          if (item.occurrence_id) return item;
           const match = byShiftProduct.get(`${shift.shift_id}:${item.product_id}`);
           if (!match) return item;
           return {

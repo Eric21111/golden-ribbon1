@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -9,7 +9,6 @@ import { Pagination } from '@/components/Pagination';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
-import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
@@ -75,7 +74,8 @@ export default function TransferHistoryScreen() {
   const { profile } = useAuth();
   const isMain = isMainBranchManager(profile);
   const [branchId, setBranchId] = useState('');
-  const [status, setStatus] = useState<TransferStatusFilter>(isMain ? '' : 'pending_receipt');
+  const [chosenStatus, setStatus] = useState<TransferStatusFilter | null>(null);
+  const status = chosenStatus ?? (isMain ? '' : 'pending_receipt');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('newest');
   const [sortOpen, setSortOpen] = useState(false);
@@ -86,6 +86,11 @@ export default function TransferHistoryScreen() {
   const branches = useBranches();
   const sellingBranches = branches.data?.filter((branch) => !branch.is_main_branch) ?? [];
   const query = useTransfers(isMain ? branchId : (profile?.branch_id ?? ''), status);
+
+  const refetchTransfers = query.refetch;
+  useFocusEffect(useCallback(() => {
+    if (profile?.branch_id) void refetchTransfers();
+  }, [profile?.branch_id, refetchTransfers]));
 
   const destinationOptions = useMemo(
     () => [{ label: 'All branches', value: '' }, ...sellingBranches.map((b) => ({ label: b.name, value: b.id }))],
@@ -130,7 +135,7 @@ export default function TransferHistoryScreen() {
     status === '' && !search.trim() && !branchId && dateRange === 'all_time'
       ? {
           title: 'No transfer history',
-          message: isMain ? 'Create a transfer to send Main Branch stock.' : 'Transfers sent to your branch will appear here.',
+          message: isMain ? 'Stock sent to a branch will appear here.' : 'Transfers sent to your branch will appear here.',
         }
       : transferFilterEmptyMessage(status, Boolean(search.trim()), Boolean(branchId) || dateRange !== 'all_time');
 
@@ -146,24 +151,6 @@ export default function TransferHistoryScreen() {
     );
   }
 
-  if (isMain && branches.isLoading && !branches.data) {
-    return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
-        <ManagerScreenHeader title={title} subtitle={subtitle} />
-        <LoadingState label="Loading transfers…" />
-      </Screen>
-    );
-  }
-
-  if (isMain && branches.error) {
-    return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
-        <ManagerScreenHeader title={title} subtitle={subtitle} />
-        <ErrorState message={getErrorMessage(branches.error)} onRetry={() => void branches.refetch()} />
-      </Screen>
-    );
-  }
-
   const refresh = () => {
     if (isMain) void branches.refetch();
     void query.refetch();
@@ -173,6 +160,9 @@ export default function TransferHistoryScreen() {
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
       <ManagerScreenHeader title={title} subtitle={subtitle} />
+      {isMain && branches.error ? (
+        <ErrorState message="Branch filters could not load." onRetry={() => void branches.refetch()} />
+      ) : null}
 
       <ConstrainedWidth style={styles.column}>
         <View style={styles.filters}>
@@ -259,15 +249,7 @@ export default function TransferHistoryScreen() {
           />
         )}
 
-        {isMain ? (
-          <View style={styles.footer}>
-            <ManagerActionButton
-              label="Create transfer"
-              icon="add-circle-outline"
-              onPress={() => router.push('/manager/transfers/create' as never)}
-            />
-          </View>
-        ) : null}
+
       </ConstrainedWidth>
 
       <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>

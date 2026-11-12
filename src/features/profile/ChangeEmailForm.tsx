@@ -1,3 +1,4 @@
+import { PinField } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -43,7 +44,6 @@ export function ChangeEmailForm({
 }: ChangeEmailFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const schema = useMemo(() => changeEmailSchema(currentEmail), [currentEmail]);
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangeEmailValues>({
     resolver: zodResolver(schema),
@@ -87,25 +87,7 @@ export function ChangeEmailForm({
         control={control}
         name="current_password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="Current password"
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="current-password"
-            textContentType="password"
-            secureTextEntry={!showPassword}
-            rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowPassword((prev) => !prev)}
-            rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-            labelStyle={labelStyle}
-            errorStyle={errorStyle}
-            accentColor={accentColor}
-            style={inputStyle}
-          />
+          <PinField label="Current PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} allowPassword />
         )}
       />
       <Controller

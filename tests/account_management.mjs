@@ -32,7 +32,7 @@ const { canChangeOwnEmail, isMainBranchManager, isSellingBranchManager } = loadT
 const parsedEmail = createEmployeeSchema.safeParse({
   full_name: 'Main Manager Test',
   email: '  Test@Example.com  ',
-  password: 'Temporary#1',
+  password: '012345', confirm_password: '012345',
   role: 'manager',
   branch_id: '10000000-0000-4000-8000-000000000010',
   is_active: true,

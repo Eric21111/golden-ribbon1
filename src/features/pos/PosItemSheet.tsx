@@ -267,7 +267,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
             </View>
           </View>
           {remaining <= 0 ? <Text style={styles.limit}>No more stock available.</Text> : null}
-          {remaining <= 0 && onCorrectStock ? <ManagerActionButton label="Check actual stock" variant="secondary" onPress={onCorrectStock} /> : null}
+          {remaining <= 0 && onCorrectStock ? <ManagerActionButton label="View branch inventory" variant="secondary" onPress={onCorrectStock} /> : null}
         </View>
       ) : null}
     </ManagerBottomSheet>

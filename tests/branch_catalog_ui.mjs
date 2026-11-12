@@ -198,7 +198,10 @@ console.log('3. listing rule: ok');
   assert.equal(await stockRows(mgr), 0, 'the Main Branch Manager gets no rows for SM1 stock, so there is nothing truthful to show');
   // the other reads the screen needs ARE allowed
   assert.ok((await readFor(sm1)).variants.length > 0, 'option rows are readable');
-  console.log('6. stock is not readable by this role (so it is not shown): ok');
+  const {rows:catalogStock}=await as(mgr,()=>db.query('select * from public.manager_branch_stock($1)',[sm1]));
+  assert.ok(catalogStock.some(row=>Number(row.on_hand)>0));
+  await assert.rejects(as(cash1,()=>db.query('select * from public.manager_branch_stock($1)',[sm2])));
+  console.log('6. Main manager reads branch stock through the scoped report; raw-table isolation preserved: ok');
 }
 
 // ---------------------------------------------------------------- 7. the screen
@@ -219,7 +222,7 @@ console.log('3. listing rule: ok');
   assert.match(screen, /catalogEmptyState\(branchName, Boolean\(search\.trim\(\)\)\)/);
   assert.doesNotMatch(screen, /Listed means priced|Stock levels are not shown here/, 'the long explainer is gone from the list screen');
   assert.match(screen, /<ManagerActionButton label="Go to Products" variant="secondary" style=\{styles\.emptyAction\} onPress=\{\(\) => router\.push\('\/manager\/products'\)\} \/>/, 'empty state offers one way forward');
-  assert.doesNotMatch(screen + read('src/features/products/branchCatalogRows.ts'), /sellable|can sell it|Sellab/i, 'no "sellable" wording is left');
+  assert.match(screen, /manager_branch_stock/); assert.match(screen,/balance\?\.sellable/);
   assert.match(screen, /label: 'Cashier menu', value: row\.inPos \? 'In POS' : 'Not in POS'/);
   assert.match(screen, /row\.inPos \? 'in POS' : 'not in POS'/, 'the spoken card says it');
   // cards: one tappable control with a spoken description, the real price, blockers as badges

@@ -77,7 +77,7 @@ export default function CashierAccountScreen() {
               <View style={styles.actionIconChip}>
                 <Ionicons name="key-outline" size={18} color={managerColors.royalBlue} />
               </View>
-              <Text style={styles.actionLabel}>Change password</Text>
+              <Text style={styles.actionLabel}>Change PIN</Text>
               <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
             </Pressable>
           </View>
@@ -109,7 +109,7 @@ export default function CashierAccountScreen() {
         />
       </BottomSheet>
 
-      <BottomSheet visible={passwordOpen} title="Change password" scroll onClose={() => setPasswordOpen(false)}>
+      <BottomSheet visible={passwordOpen} title="Change PIN" scroll onClose={() => setPasswordOpen(false)}>
         <ChangePasswordForm
           onCancel={() => setPasswordOpen(false)}
           onSuccess={() => setPasswordOpen(false)}

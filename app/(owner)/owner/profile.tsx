@@ -105,7 +105,7 @@ export default function OwnerAccountScreen() {
             />
             <ActionRow
               icon="key-outline"
-              label="Change password"
+              label="Change PIN"
               onPress={() => setPasswordOpen(true)}
               showDivider={canChangeEmail}
             />
@@ -155,7 +155,7 @@ export default function OwnerAccountScreen() {
         />
       </BottomSheet>
 
-      <BottomSheet visible={passwordOpen} title="Change password" scroll onClose={() => setPasswordOpen(false)}>
+      <BottomSheet visible={passwordOpen} title="Change PIN" scroll onClose={() => setPasswordOpen(false)}>
         <ChangePasswordForm
           onCancel={() => setPasswordOpen(false)}
           onSuccess={() => setPasswordOpen(false)}

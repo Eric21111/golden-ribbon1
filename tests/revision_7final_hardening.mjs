@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
@@ -91,8 +92,8 @@ const startShift = (db, cashier) =>
   asUser(db, cashier, () => db.query('select public.start_cashier_shift() id')).then((r) => r.rows[0].id);
 
 const beginClose = (db, cashier, shiftId) =>
-  asUser(db, cashier, () => db.query('select public.begin_cashier_shift_close($1) preview', [shiftId])).then(
-    (r) => r.rows[0].preview,
+  asUser(db, cashier, () => verifiedClose(db, shiftId)).then(
+    (r) => r.rows[0].p,
   );
 
 const finalize = (db, cashier, shiftId, actualCash, products) =>

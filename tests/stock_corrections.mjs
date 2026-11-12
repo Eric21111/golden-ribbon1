@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 process.on('uncaughtException', e => { console.error(e.message, e.detail ?? '', e.where ?? '', e.stack?.split('\n').slice(-3).join('\n')); process.exit(1); });
 import assert from 'node:assert/strict';
 import { readFileSync,readdirSync } from 'node:fs';
@@ -75,7 +76,7 @@ for(const actor of [owner,manager,cashier]) {
   assert.equal(history.length,4); assert.equal(history[0].details.after,7); assert.equal(history[3].details.before,2);
 }
 const frozen=await request(6,'correction-frozen-001');
-const preview=(await as(cashier,()=>db.query('select public.begin_cashier_shift_close($1) p',[shift]))).rows[0].p;
+const preview=(await as(cashier,()=>verifiedClose(db,shift))).rows[0].p;
 const row=preview.products.find(p=>p.product_id===product);
 assert.equal(row.adjustment_quantity,6);assert.equal(row.system_balance_before_waste,7);
 await assert.rejects(correct(cashier,frozen),/frozen|remittance/);

@@ -1,9 +1,8 @@
+import { PinField } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { FormField } from '@/components/FormField';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { managerColors } from '@/components/dashboard/theme';
 import { resetPasswordSchema, type ResetPasswordValues } from '@/features/employees/employeeSchemas';
@@ -23,8 +22,6 @@ export function ResetPasswordForm({
   loading,
   onSubmit,
 }: ResetPasswordFormProps) {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const { control, handleSubmit } = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: '', confirm_password: '' },
@@ -35,59 +32,23 @@ export function ResetPasswordForm({
       <Text style={styles.subtitle}>
         {employeeName} · {employeeEmail}
       </Text>
-      <Text style={styles.notice}>This replaces the employee&apos;s password.</Text>
+      <Text style={styles.notice}>This replaces the employee&apos;s PIN.</Text>
       <Controller
         control={control}
         name="password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="New temporary password"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="newPassword"
-            autoComplete="new-password"
-            secureTextEntry={!showPassword}
-            rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowPassword((prev) => !prev)}
-            rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            labelStyle={styles.fieldLabel}
-            errorStyle={styles.fieldError}
-            accentColor={managerColors.royalBlue}
-            style={styles.fieldInput}
-          />
+          <PinField label="New PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
         )}
       />
       <Controller
         control={control}
         name="confirm_password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="Confirm password"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="newPassword"
-            autoComplete="new-password"
-            secureTextEntry={!showConfirm}
-            rightIcon={showConfirm ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowConfirm((prev) => !prev)}
-            rightIconAccessibilityLabel={showConfirm ? 'Hide password' : 'Show password'}
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            labelStyle={styles.fieldLabel}
-            errorStyle={styles.fieldError}
-            accentColor={managerColors.royalBlue}
-            style={styles.fieldInput}
-          />
+          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
         )}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ManagerActionButton label="Reset password" loading={loading} onPress={handleSubmit(onSubmit)} />
+      <ManagerActionButton label="Reset PIN" loading={loading} onPress={handleSubmit(onSubmit)} />
     </View>
   );
 }

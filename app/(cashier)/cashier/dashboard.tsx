@@ -1,3 +1,5 @@
+import { PinField } from '@/components/PinField';
+import { beginCashierShiftClose } from '@/services/shiftService';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -22,6 +24,7 @@ import {
   hasSellableStock,
   outOfStockProductNames,
 } from '@/features/pos/posInventory';
+import { SelectedReturnCloseForm } from '@/features/shifts/SelectedReturnCloseForm';
 import { CashierShiftCloseForm } from '@/features/shifts/CashierShiftCloseForm';
 import {
   BEGIN_CLOSE_CONFIRM_MESSAGE,
@@ -30,10 +33,11 @@ import {
   isNetworkishError,
 } from '@/features/shifts/closeDisplay';
 import { useCashierPosInventory } from '@/hooks/useInventory';
-import { reopenCashierShift } from '@/services/shiftService';
+import { hasSelectedReturnClose, reopenCashierShift } from '@/services/shiftService';
 import {
+  assertShiftCloseAllowed,
+  invalidateAfterShiftClose,
   useActiveShift,
-  useBeginCashierShiftClose,
   useFinalizeCashierShiftReconciliation,
   useMyFinalizedCloseToday,
   usePendingShiftReconciliation,
@@ -50,6 +54,7 @@ import { listCashierPosInventory } from '@/services/inventoryService';
 import { useCartStore } from '@/stores/cartStore';
 import type {
   InventoryItem,
+  ShiftReturnSelection,
   ShiftCloseFinalizeProduct,
   ShiftClosePreview,
   ShiftCloseResult,
@@ -62,6 +67,7 @@ type RemittanceAttempt = {
   actualCash: string;
   actualGcash?: string;
   products: ShiftCloseFinalizeProduct[];
+  selection?: ShiftReturnSelection;
   path: RemittancePath;
 };
 
@@ -82,7 +88,11 @@ export default function CashierDashboard() {
   const shiftQuery = useActiveShift(cashierId);
   const summaryQuery = useShiftSummary(shiftQuery.data?.id ?? '');
   const startMutation = useStartShift(cashierId);
-  const beginCloseMutation = useBeginCashierShiftClose(cashierId);
+  const [pinPrompt,setPinPrompt] = useState(false);
+  const [credential,setCredential] = useState('');
+  const [legacyClose,setLegacyClose]=useState(false);
+  const [verifying,setVerifying] = useState(false);
+  const verificationLock = useRef(false);
   const finalizeMutation = useFinalizeCashierShiftReconciliation(cashierId);
   const reconcileMutation = useReconcileClosedShift(cashierId);
   const [closePreview, setClosePreview] = useState<ShiftClosePreview | null>(null);
@@ -228,40 +238,42 @@ export default function CashierDashboard() {
       alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.', 'warning');
       return;
     }
-    if (beginCloseMutation.isPending) return;
+    setCredential(''); setLegacyClose(false); setPinPrompt(true);
+  };
+  const confirmEndShift = async () => {
+    const shiftId = shiftQuery.data?.id;
+    if (!shiftId || cartItems.length || !(legacyClose ? credential.length : /^[0-9]{6}$/.test(credential)) || verificationLock.current) return;
+    verificationLock.current=true; setVerifying(true);
+    try {
+      assertShiftCloseAllowed();
+      const result = await beginCashierShiftClose(shiftId,credential);
+      setPinPrompt(false);
+      void invalidateAfterShiftClose(queryClient,cashierId);
 
-    confirmAction(
-      'End Shift for today?',
-      BEGIN_CLOSE_CONFIRM_MESSAGE,
-      () => {
-        beginCloseMutation.mutate(shiftId, {
-          onSuccess: (result) => {
-            clearCart();
-            if (result.status === 'reconciled') {
-              setClosePreview(null);
-              setAwaitingFinalizeRetry(false);
-              lastFinalizeRef.current = null;
-              alertNotice(
-                'End Shift Complete',
-                result.message ?? "This shift remittance is already complete.",
-                'success',
-              );
-              void finalizedToday.refetch();
-              void pendingShift.refetch();
-              void shiftQuery.refetch();
-              return;
-            }
-            setClosePreview(result);
-            setAwaitingFinalizeRetry(false);
-            lastFinalizeRef.current = null;
-          },
-          onError: (error) => {
-            alertNotice('Cannot begin End Shift', getShiftErrorMessage(error), 'danger');
-          },
-        });
-      },
-      { cancel: 'Cancel', confirm: 'Start End Shift', tone: 'danger' },
-    );
+      clearCart();
+      if (result.status === 'reconciled') {
+        setClosePreview(null);
+        setAwaitingFinalizeRetry(false);
+        lastFinalizeRef.current = null;
+        alertNotice(
+          'End Shift Complete',
+          result.message ?? "This shift remittance is already complete.",
+          'success',
+        );
+        void finalizedToday.refetch();
+        void pendingShift.refetch();
+        void shiftQuery.refetch();
+        return;
+      }
+      setClosePreview(result);
+      setAwaitingFinalizeRetry(false);
+      lastFinalizeRef.current = null;
+    } catch (error) {
+      await Promise.allSettled([pendingShift.refetch(),shiftQuery.refetch(),finalizedToday.refetch()]);
+      alertNotice('Cannot begin End Shift',error instanceof Error ? error.message : 'Check shift status before retrying.','danger');
+    } finally {
+      setCredential(''); setVerifying(false); verificationLock.current=false;
+    }
   };
 
   const onRemittanceSuccess = (result: ShiftCloseResult) => {
@@ -272,7 +284,11 @@ export default function CashierDashboard() {
     lastFinalizeRef.current = null;
     setAwaitingFinalizeRetry(false);
     setClosePreview(null);
-    alertNotice('End Shift Complete', formatCloseSuccessSummary(result, names), 'success');
+    const summary = formatCloseSuccessSummary(result, names);
+    const dispatch = result.return_number
+      ? `Return ${result.return_number} sent to Main Branch for counting.`
+      : 'Stock kept at the branch.';
+    alertNotice('End Shift Complete', result.selected_return_close ? `${summary}\n${dispatch}` : summary, 'success');
     void finalizedToday.refetch();
     void pendingShift.refetch();
     void shiftQuery.refetch();
@@ -285,7 +301,11 @@ export default function CashierDashboard() {
         pendingShift.refetch(),
         finalizedToday.refetch(),
       ]);
-      if (!pendingResult.data && closedResult.data) {
+      const attempt = lastFinalizeRef.current;
+      const confirmed = attempt?.selection
+        ? await hasSelectedReturnClose(attempt.shiftId).catch(() => false)
+        : !pendingResult.error && !pendingResult.data && closedResult.data;
+      if (confirmed) {
         lastFinalizeRef.current = null;
         setAwaitingFinalizeRetry(false);
         setClosePreview(null);
@@ -334,6 +354,7 @@ export default function CashierDashboard() {
         actualCash: attempt.actualCash,
         actualGcash: attempt.actualGcash,
         products: attempt.products,
+        selection: attempt.selection,
       },
       handlers,
     );
@@ -344,17 +365,19 @@ export default function CashierDashboard() {
     actualCash: string,
     products: ShiftCloseFinalizeProduct[],
     actualGcash?: string,
+    selection?: ShiftReturnSelection,
   ) => {
     if (remittancePending || remittanceSubmitLock.current) return;
     const path: RemittancePath = isLegacyCashOnlyPreview(preview) && actualGcash === undefined ? 'legacy' : 'pcs';
     confirmAction(
       'Finalize End Shift?',
-      FINALIZE_CONFIRM_MESSAGE,
+      selection ? (selection.productIds.length ? `Send ${selection.productIds.length} selected stock items to Main Branch and save the remittance?` : 'Keep the remaining stock at this branch and save the remittance?') : FINALIZE_CONFIRM_MESSAGE,
       () =>
         runFinalize({
           shiftId: preview.shift_id,
           actualCash,
           actualGcash,
+          selection,
           products: path === 'legacy' ? [] : products,
           path,
         }),
@@ -376,7 +399,7 @@ export default function CashierDashboard() {
         : null;
 
   const sameDayClosedHint = Boolean(finalizedToday.data) && !pendingPreview && !shiftQuery.data;
-  const busy = beginCloseMutation.isPending || remittancePending;
+  const busy = verifying || remittancePending;
 
   const refreshing =
     shiftQuery.isRefetching ||
@@ -404,33 +427,38 @@ export default function CashierDashboard() {
   if (pendingPreview && !(shiftQuery.isLoading && !shiftQuery.data) && !shiftQuery.error) {
     const showRetry = awaitingFinalizeRetry && Boolean(lastFinalizeRef.current);
     const showError = Boolean(remittanceError) && !isNetworkishError(remittanceError);
+    const retryFooter = showRetry || showError ? (
+      <>
+        {showRetry ? (
+          <ManagerActionButton
+            label="Retry same remittance"
+            loading={remittancePending}
+            disabled={remittancePending}
+            onPress={retryLastFinalize}
+          />
+        ) : null}
+        {showError ? <Text style={styles.error}>{getShiftErrorMessage(remittanceError)}</Text> : null}
+      </>
+    ) : undefined;
     return (
       <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
         <ManagerScreenHeader title={shiftQuery.data ? 'End Shift' : 'Pending Remittance'} showBack hideMenu />
         <ConstrainedWidth fill>
-          <CashierShiftCloseForm
-            preview={pendingPreview}
-            branchName={profile?.branch?.name}
-            title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
-            submitLabel="Complete End Shift"
-            loading={remittancePending}
-            onSubmit={(actualCash, products, actualGcash) => requestFinalize(pendingPreview, actualCash, products, actualGcash)}
-            footerExtra={
-              showRetry || showError ? (
-                <>
-                  {showRetry ? (
-                    <ManagerActionButton
-                      label="Retry same remittance"
-                      loading={remittancePending}
-                      disabled={remittancePending}
-                      onPress={retryLastFinalize}
-                    />
-                  ) : null}
-                  {showError ? <Text style={styles.error}>{getShiftErrorMessage(remittanceError)}</Text> : null}
-                </>
-              ) : undefined
-            }
-          />
+          {pendingPreview.supports_selected_returns && pendingPreview.mode === 'pcs_inventory_cash' ? (
+            <SelectedReturnCloseForm key={pendingPreview.shift_id} preview={pendingPreview} operator={cashierName}
+              loading={remittancePending} footerExtra={retryFooter}
+              onSubmit={(cash, gcash, selection) => requestFinalize(pendingPreview, cash, [], gcash, selection)} />
+          ) : (
+            <CashierShiftCloseForm
+              preview={pendingPreview}
+              branchName={profile?.branch?.name}
+              title={shiftQuery.data ? 'End Shift' : 'Complete Pending Remittance'}
+              submitLabel="Complete End Shift"
+              loading={remittancePending}
+              onSubmit={(actualCash, products, actualGcash) => requestFinalize(pendingPreview, actualCash, products, actualGcash)}
+              footerExtra={retryFooter}
+            />
+          )}
         </ConstrainedWidth>
       </Screen>
     );
@@ -554,7 +582,7 @@ export default function CashierDashboard() {
               ) : null}
             </View>
             <ManagerActionButton label="Branch inventory" variant="secondary" onPress={() => router.push('/cashier/inventory' as never)} />
-            {sameDayClosedHint ? <Row>{leftoverReturnTile}</Row> : null}
+            {sameDayClosedHint && finalizedToday.data !== 'selected' ? <Row>{leftoverReturnTile}</Row> : null}
           </View>
         ) : (
           <View style={styles.content}>
@@ -596,13 +624,16 @@ export default function CashierDashboard() {
                   label="End Shift / Remit"
                   icon="stop-circle-outline"
                   variant="secondary"
-                  loading={beginCloseMutation.isPending}
-                  disabled={busy}
+                  loading={verifying}
+                  disabled={busy || pinPrompt}
                   onPress={requestEndShift}
                 />
-                {beginCloseMutation.error ? (
-                  <Text style={styles.error}>{getShiftErrorMessage(beginCloseMutation.error)}</Text>
-                ) : null}
+                {pinPrompt && <View style={{gap:12}}>
+                  <Text>{BEGIN_CLOSE_CONFIRM_MESSAGE}</Text>
+                  <PinField label="Confirm with your PIN" value={credential} onChangeText={setCredential} allowPassword onLegacyChange={setLegacyClose} />
+                  <ManagerActionButton label="Confirm End Shift" disabled={legacyClose ? !credential : !/^[0-9]{6}$/.test(credential)} loading={verifying} onPress={() => void confirmEndShift()} />
+                  <ManagerActionButton label="Cancel" disabled={verifying} variant="secondary" onPress={() => {setPinPrompt(false);setCredential('');}} />
+                </View>}
               </View>
             )}
 

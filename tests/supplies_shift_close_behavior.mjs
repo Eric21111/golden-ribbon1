@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 // What a shift close does to an Inventory Supplies item (Rice, Egg) depending on its closing_stock_behavior.
 // The Create wizard saves 'record_as_unsold' for every product whose "Keep Unsold Stock at Branch" switch is off, and the
 // Products list shows that as "Unsold at close". This test RECORDS the database's actual behaviour so the business-rule
@@ -69,7 +70,7 @@ const qty = async (p) => Number((await db.query('select quantity_on_hand q from 
 assert.equal(await qty(rice), 40);
 
 const shift = (await as(cashier, () => db.query('select public.start_cashier_shift() id'))).rows[0].id;
-const preview = (await as(cashier, () => db.query('select public.begin_cashier_shift_close($1) preview', [shift]))).rows[0].preview;
+const preview = (await as(cashier, () => verifiedClose(db,shift).then(result=>({rows:result.rows.map(row=>({preview:row.p}))})))).rows[0].preview;
 const listed = preview.products.map((p) => p.product_id);
 assert.ok(listed.includes(rice.id) && listed.includes(keptRice.id), 'supplies with stock at the branch are part of the close count');
 

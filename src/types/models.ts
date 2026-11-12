@@ -48,6 +48,7 @@ export type ProfileWithBranch = Profile & {
 };
 
 export type Shift = {
+  selected_return_close?: { return_key: string } | null;
   id: string;
   branch_id: string;
   cashier_id: string;
@@ -403,6 +404,9 @@ export type ShiftSummary = {
 export type ShiftProductReconResult = 'exact' | 'shortage' | 'excess';
 
 export type ShiftCloseProductPreview = {
+  returnable?: boolean;
+  previously_held?: number;
+  already_recorded_waste?: number;
   /** False only when the server verified zero opening/current stock and no shift movements. */
   requires_count?: boolean;
   product_id: string;
@@ -419,6 +423,7 @@ export type ShiftCloseProductPreview = {
 };
 
 export type ShiftClosePreview = {
+  supports_selected_returns?: boolean;
   expected_gcash?: number | null;
   unrecorded_count?: number;
   shift_id: string;
@@ -478,7 +483,11 @@ export type ShiftCloseFinalizeProduct = {
   discrepancy_note?: string;
 };
 
+export type ShiftReturnSelection = { productIds: string[]; waste: Record<string, number> };
+
 export type ShiftCloseResult = {
+  selected_return_close?: boolean;
+  return_number?: string | null;
   expected_gcash?: number | null;
   actual_gcash?: number | null;
   shift_id: string;
@@ -570,6 +579,8 @@ export type ShiftCloseReportProduct = {
 };
 
 export type ShiftCloseReportDetail = {
+  selected_return_close?: boolean;
+  return_number?: string | null;
   expected_gcash?: number | null;
   actual_gcash?: number | null;
   shift_id: string;

@@ -94,11 +94,11 @@ assert.match(formatCashResultLabel(100, '110', 'excess'), /excess/);
 
 // --- Begin confirmation wording reflects full-day freeze ---
 assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Sales and stock changes stop for this booth today/, 'the full-day freeze is still said, in three short bullets');
-assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /count the remaining stock and cash/);
+assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Review stock and enter collections/);
 assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Today cannot be reopened/);
 assert.match(dashboard, /BEGIN_CLOSE_CONFIRM_MESSAGE/);
 assert.match(dashboard, /confirmAction\(/);
-assert.match(dashboard, /Start End Shift/);
+assert.match(dashboard, /Confirm End Shift/);
 assert.match(dashboard, /End Shift \/ Remit/);
 assert.doesNotMatch(dashboard, /Step 1/);
 assert.doesNotMatch(dashboard, /Begin close/);
@@ -106,7 +106,7 @@ assert.doesNotMatch(dashboard, /stock operations pause/i);
 
 // Begin only after confirm — not merely by opening UI
 assert.match(dashboard, /requestEndShift/);
-assert.match(dashboard, /beginCloseMutation\.mutate/);
+assert.match(dashboard, /await beginCashierShiftClose\(shiftId,credential\)/);
 assert.doesNotMatch(dashboard, /onCancel/);
 assert.doesNotMatch(closeForm, /onCancel/);
 assert.doesNotMatch(closeForm, /Cancel End Shift|Reopen|Back to selling/i);
@@ -217,7 +217,7 @@ assert.doesNotMatch(dashboard, /kg_meal|KG-delivered|meal waste|p_waste|close_ca
 assert.doesNotMatch(closeDisplaySource, /kg_meal|p_waste/i);
 
 // Service RPCs: PCS finalize + legacy reconcile with explicit empty waste
-assert.match(shiftService, /begin_cashier_shift_close/);
+assert.match(shiftService, /confirm-end-shift/);
 assert.match(shiftService, /finalize_cashier_shift_reconciliation/);
 assert.match(shiftService, /get_my_pending_shift_reconciliation/);
 assert.match(shiftService, /reconcile_closed_shift/);

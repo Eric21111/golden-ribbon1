@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -15,6 +15,7 @@ import { formatShiftTimeRange } from '@/features/reports/reportDisplay';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftRemittances } from '@/hooks/useShifts';
+import { isReportRangeReady } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errors';
 import { formatManilaDate, formatMoney } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
@@ -56,13 +57,18 @@ export function ShiftRemittanceScreen() {
   const [customEnd, setCustomEnd] = useState('');
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftRemittances(rpcRangeType, startIso, endIso);
+  const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
+  const refresh = query.refetch;
+  useFocusEffect(useCallback(() => {
+    if (ready) void refresh();
+  }, [ready, refresh]));
   const days = query.data?.days ?? [];
   const pagination = useClientPagination(days, rangeType, DAYS_PER_PAGE);
   const isManager = profile?.role === 'manager';
   const detailBase = isManager ? '/manager/reports/shift-remittances' : '/owner/reports/shift-remittances';
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
+    <Screen refreshing={query.isRefetching} onRefresh={ready ? () => void refresh() : undefined} backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
       {/* Manager reaches this screen from a dedicated sidebar entry (same as Home/Products) —
           hamburger, not back. Owner only reaches it by drilling into the Reports hub, so it
           keeps the back button there. */}
@@ -82,7 +88,7 @@ export function ShiftRemittanceScreen() {
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
         {!query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
-          <EmptyState title="No remittances" message="No reconciliation-aware closed shifts in this range." />
+          <EmptyState title="No remittances" message="No closed shifts in this date range. Try another date." />
         ) : null}
         {pagination.pageItems.map((day) => {
           const shortage = Number(day.total_shortage);
@@ -250,13 +256,14 @@ export function ShiftRemittanceScreen() {
                     trailing={
                       <>
                         <Text style={styles.amount}>
+                          {row.expected_gcash == null ? 'Collections' : 'Cash'} {row.status === 'pending' ? 'expected' : 'submitted'}{' '}
                           {row.status === 'pending'
                             ? formatMoney(Number(row.expected_cash))
                             : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
                         </Text>
                         {row.expected_gcash != null ? (
-                          <Text style={styles.gcashLine} numberOfLines={1}>
-                            {`GCash ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} / ${formatMoney(Number(row.expected_gcash))}`}
+                          <Text style={styles.gcashLine}>
+                            {`GCash submitted ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} · expected ${formatMoney(Number(row.expected_gcash))}`}
                           </Text>
                         ) : null}
                         <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>

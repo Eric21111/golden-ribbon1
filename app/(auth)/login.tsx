@@ -1,9 +1,10 @@
+import { PinField } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -15,7 +16,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -44,14 +44,14 @@ const GOLD_MUTED = '#B7902B';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
-  const passwordRef = useRef<TextInput>(null);
+
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
   const formMaxWidth = isTablet ? 440 : 420;
   const logoWidth = Math.min(isTablet ? 260 : width * 0.5, isTablet ? 260 : 220);
   const logoHeight = logoWidth * 0.72;
   const horizontalPad = isTablet ? spacing.xl : spacing.lg;
-  const [showPassword, setShowPassword] = useState(false);
+  const [legacyLogin,setLegacyLogin]=useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -71,6 +71,7 @@ export default function LoginScreen() {
   });
 
   const submit = async (values: LoginValues) => {
+    if (!legacyLogin && !/^[0-9]{6}$/.test(values.password)) {setError('password',{message:'Enter all six digits.'}); return;}
     try {
       await signIn(values.email, values.password);
     } catch (error) {
@@ -162,9 +163,9 @@ export default function LoginScreen() {
                           autoComplete="email"
                           textContentType="emailAddress"
                           keyboardType="email-address"
-                          returnKeyType="next"
-                          blurOnSubmit={false}
-                          onSubmitEditing={() => passwordRef.current?.focus()}
+                          returnKeyType="done"
+
+
                         />
                       )}
                     />
@@ -173,31 +174,7 @@ export default function LoginScreen() {
                       control={control}
                       name="password"
                       render={({ field, fieldState }) => (
-                        <FormField
-                          ref={passwordRef}
-                          label="Password"
-                          placeholder="Enter your password"
-                          value={field.value}
-                          onBlur={field.onBlur}
-                          onChangeText={field.onChange}
-                          error={fieldState.error?.message}
-                          leftIcon="lock-closed-outline"
-                          rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                          iconSize={16}
-                          onRightIconPress={() => setShowPassword((prev) => !prev)}
-                          rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                          accentColor={GOLD_MUTED}
-                          labelStyle={styles.fieldLabel}
-                          errorStyle={styles.fieldError}
-                          style={styles.fieldInput}
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          autoComplete="password"
-                          textContentType="password"
-                          secureTextEntry={!showPassword}
-                          returnKeyType="go"
-                          onSubmitEditing={() => void onSubmit()}
-                        />
+                        <PinField label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} allowPassword onLegacyChange={setLegacyLogin} />
                       )}
                     />
 

@@ -70,7 +70,7 @@ const row = (n, over = {}) => ({
 
 // the same header as the other reports
 render({ data: [] });
-assert.equal(header.title, 'Stock corrections');
+assert.equal(header.title, 'Stock count changes');
 assert.equal(header.subtitle, undefined, 'the same plain header as Waste History: title only');
 assert.equal(header.showBack, true, 'the owner drills in from Reports: back arrow');
 role = 'manager';

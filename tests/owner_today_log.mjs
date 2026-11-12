@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
@@ -52,7 +53,7 @@ import {
   assert.match(dashboard, /No employee activity yet today\./);
   assert.match(dashboard, /Couldn't load today's activity\./);
   assert.match(dashboard, /useManilaDayRefresh\(\(\) => \{[\s\S]*?todayLogQuery\.refetch\(\)/);
-  assert.match(dashboard, /\{metricsQuery\.error \|\| summaryQuery\.error \? \(/, 'log errors stay out of the global gate');
+  assert.match(dashboard, /\{metricsQuery\.error \? \(/, 'log errors stay out of the global gate');
   const keys = readFileSync('src/lib/queryKeys.ts', 'utf8');
   assert.match(keys, /ownerTodayActivityLog: \['dashboard', 'owner', 'today-activity-log'\]/);
   const service = readFileSync('src/services/activityLogService.ts', 'utf8');
@@ -229,7 +230,7 @@ await asUser(mainMgr, () =>
 );
 // Manual close with a count shortage: writes a shift-close 'adjustment' movement at SM1 (unrelated to opening stock).
 await asUser(cashier1, async () => {
-  const preview = (await db.query('select public.begin_cashier_shift_close($1) p', [shift1])).rows[0].p;
+  const preview = (await verifiedClose(db,shift1)).rows[0].p;
   const products = preview.products.map((p) => ({
     product_id: p.product_id,
     actual_remaining: String(Number(p.system_balance_before_waste) - (p.product_id === piece ? 1 : 0)),
@@ -429,7 +430,7 @@ await db.exec(`
   update public.shifts set started_at = ${latestCutoff} - interval '1 minute' where id = '${shift3}';
   alter table public.shifts enable trigger shifts_protect_lifecycle;
 `);
-await asUser(cashier1, () => db.query('select public.begin_cashier_shift_close($1)', [shift3]));
+await asUser(cashier1, () => verifiedClose(db,shift3));
 {
   const row = (await readLog()).activities.find((r) => r.id === `shift_ended:${shift3}`);
   assert.equal(row.detail.possibly_automatic, true);

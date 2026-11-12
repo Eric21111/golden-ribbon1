@@ -127,7 +127,7 @@ export function EditEmployeeForm({
         {onResetPassword ? (
           <View style={styles.action}>
             <ManagerActionButton
-              label="Reset password"
+              label="Reset PIN"
               variant="secondary"
               disabled={loading || togglingActive}
               onPress={onResetPassword}

@@ -25,7 +25,7 @@ export function buildAttentionItems(counts: {
       title: 'Pending incoming',
       value: counts.pendingIncoming,
       description: 'Count and receive stock sent to this branch',
-      href: '/manager/incoming',
+      href: '/manager/transfers',
     },
     {
       title: 'Pending transfers',

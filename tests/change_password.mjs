@@ -34,35 +34,35 @@ function issues(values) {
 
 assert.deepEqual(issues({
   current_password: 'Current#1',
-  new_password: 'Current#2ok',
-  confirm_password: 'Current#2ok',
+  new_password: '012345',
+  confirm_password: '012345',
 }), []);
 
 assert.ok(issues({
   current_password: '',
-  new_password: 'Current#2ok',
-  confirm_password: 'Current#2ok',
+  new_password: '012345',
+  confirm_password: '012345',
 }).some((message) => message.includes('Current password is required.')));
 
 assert.ok(issues({
   current_password: 'Current#1',
   new_password: 'short',
   confirm_password: 'short',
-}).some((message) => message.includes('Use at least 8 characters.')));
+}).some((message) => message.includes('Enter exactly six digits.')));
 
 const mismatch = issues({
   current_password: 'Current#1',
-  new_password: 'Current#2ok',
+  new_password: '012345',
   confirm_password: 'Current#3ok',
 });
-assert.ok(mismatch.some((message) => message.includes('Passwords do not match.')));
+assert.ok(mismatch.some((message) => message.includes('PINs do not match.')));
 assert.equal(mismatch.some((message) => message.toLowerCase().includes('auth')), false, 'Mismatch must be rejected before any Auth request');
 
 assert.ok(issues({
-  current_password: 'SamePass1',
-  new_password: 'SamePass1',
-  confirm_password: 'SamePass1',
-}).some((message) => message.includes('New password must be different from the current password.')));
+  current_password: '123456',
+  new_password: '123456',
+  confirm_password: '123456',
+}).some((message) => message.includes('Choose a different PIN.')));
 
 assert.equal(
   getChangePasswordErrorMessage(new Error('Invalid login credentials')),
@@ -78,7 +78,7 @@ assert.equal(
 );
 assert.equal(
   getChangePasswordErrorMessage(new Error('Password is known to be leaked and is too weak')),
-  'New password does not meet the password policy. Use 8 to 72 characters.'
+  'The new PIN was rejected by the account security settings.'
 );
 assert.equal(
   getChangePasswordErrorMessage(new Error('TypeError: Failed to fetch')),
@@ -112,7 +112,8 @@ const screen = readFileSync('src/features/profile/ChangePasswordForm.tsx', 'utf8
 assert.equal(screen.includes('console.log'), false);
 assert.equal(screen.includes('user_id'), false);
 assert.equal(screen.includes('userId'), false);
-assert.match(screen, /secureTextEntry/);
+assert.match(screen, /<PinField/);
+assert.match(readFileSync('src/components/PinField.tsx','utf8'), /secureTextEntry/);
 
 for (const file of [
   'app/(owner)/owner/change-password.tsx',

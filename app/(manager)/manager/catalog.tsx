@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { stockUnit } from '@/lib/stockUnits';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useEffect, useMemo, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -101,8 +104,21 @@ export default function BranchCatalogScreen() {
   const [sort, setSort] = useState<SortOption>('name-asc');
   const [sortOpen, setSortOpen] = useState(false);
   const catalog = useBranchProducts(branchId, false);
+  const stock = useQuery({queryKey:['inventory','manager-branch',branchId],enabled:!!branchId,queryFn:async()=>{
+    const {data,error}=await supabase.rpc('manager_branch_stock',{p_branch:branchId});
+    if(error) throw error;
+    return new Map((data ?? []).map(item=>[item.product_id,item]));
+  }});
   const branchVariants = useBranchVariantsForBranch(branchId);
   const productIdsWithOptions = useProductIdsWithOptions();
+  const { refetch: refreshCatalog } = catalog;
+  const { refetch: refreshStock } = stock;
+  const { refetch: refreshVariants } = branchVariants;
+  const { refetch: refreshProducts } = products;
+  const { refetch: refreshOptions } = productIdsWithOptions;
+  useFocusEffect(useCallback(() => {
+    if (branchId) void Promise.all([refreshCatalog(), refreshStock(), refreshVariants(), refreshProducts(), refreshOptions()]);
+  }, [branchId, refreshCatalog, refreshStock, refreshVariants, refreshProducts, refreshOptions]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const branchName = sellingBranches.find((branch) => branch.id === branchId)?.name ?? 'this branch';
 
@@ -135,10 +151,19 @@ export default function BranchCatalogScreen() {
   const pagination = useClientPagination(visibleRows, `${branchId}|${search}|${sort}`, 10);
 
   const loading =
-    branches.isLoading || products.isLoading || (Boolean(branchId) && (catalog.isLoading || branchVariants.isLoading)) ||
+    (!!branchId && stock.isLoading) || branches.isLoading || products.isLoading || (Boolean(branchId) && (catalog.isLoading || branchVariants.isLoading)) ||
     productIdsWithOptions.isLoading;
-  const loadError = branches.error ?? products.error ?? catalog.error ?? branchVariants.error ?? productIdsWithOptions.error;
+  const loadError = stock.error ?? branches.error ?? products.error ?? catalog.error ?? branchVariants.error ?? productIdsWithOptions.error;
 
+  function stockLine(id: string) {
+    const balance=stock.data?.get(id);
+    const unit=stockUnit(products.data?.find(p=>p.id===id)?.stock_unit_code)?.plural ?? 'pcs';
+    return 'Available '+(balance?.available ?? 0)+' '+unit+' | On hand '+(balance?.on_hand ?? 0)+' | Held for return '+(balance?.held ?? 0)
+      +(balance?.sellable != null?' | Can sell '+balance.sellable+' orders':'');
+  }
+  const listedIds = new Set((catalog.data ?? []).filter(p=>p.is_active).map(p=>p.product_id));
+  const inventoryOnly=(products.data ?? []).filter(p=>!listedIds.has(p.id) && stock.data?.has(p.id) &&
+    (p.name+' '+p.sku).toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <MainBranchGuard>
       <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
@@ -184,7 +209,7 @@ export default function BranchCatalogScreen() {
               onRetry={() => {
                 void branches.refetch();
                 void products.refetch();
-                void catalog.refetch();
+                void catalog.refetch(); void stock.refetch();
                 void branchVariants.refetch();
                 void productIdsWithOptions.refetch();
               }}
@@ -198,11 +223,13 @@ export default function BranchCatalogScreen() {
             />
           ) : (
             <FlatList
+              refreshing={stock.isRefetching} onRefresh={()=>void stock.refetch()}
+              ListHeaderComponent={<>{inventoryOnly.map(p=><View key={p.id} style={styles.card}><Text style={styles.name}>{p.name}</Text><Text>{stockLine(p.id)}</Text></View>)}</>}
               data={pagination.pageItems}
               keyExtractor={(row) => row.product.id}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              ListEmptyComponent={
+              ListEmptyComponent={inventoryOnly.length ? null :
                 <View style={styles.empty}>
                   <EmptyState {...catalogEmptyState(branchName, Boolean(search.trim()))} />
                   {search.trim() ? null : (
@@ -240,6 +267,7 @@ export default function BranchCatalogScreen() {
                     {item.product.sku}
                     {item.options.length > 0 ? ` · ${item.activeOptionCount} ${item.activeOptionCount === 1 ? 'option' : 'options'}` : ''}
                   </Text>
+                  <Text>{stockLine(item.product.id)}</Text>
                   {item.badges.length > 0 ? (
                     <View style={styles.badges}>
                       {item.badges.map((badge) => (

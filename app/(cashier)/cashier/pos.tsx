@@ -266,7 +266,7 @@ export default function CashierPosScreen() {
 
   const searchField = (
     <View style={styles.searchBlock}>
-      <ManagerActionButton label="Correct stock count" variant="secondary" icon="create-outline" onPress={() => router.push('/cashier/correct-stock' as never)} />
+      <ManagerActionButton label="View branch inventory" variant="secondary" icon="create-outline" onPress={() => router.push('/cashier/inventory' as never)} />
       <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
       <FilterChipRow
         options={CATEGORY_CHIPS}
@@ -351,7 +351,7 @@ export default function CashierPosScreen() {
         </View>
       )}
       <PosItemSheet
-        onCorrectStock={() => { setSheetItem(null); router.push('/cashier/correct-stock' as never); }}
+        onCorrectStock={() => { setSheetItem(null); router.push('/cashier/inventory' as never); }}
         item={activeSheetItem}
         quantityByVariant={sheetItem ? quantitiesByProduct.get(sheetItem.product.id) ?? new Map() : new Map()}
         quantityByLine={quantitiesByDrinkLine}

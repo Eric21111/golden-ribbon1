@@ -8,6 +8,7 @@ import { cartLineKey, toCents } from '@/lib/money';
 import { cartLineLabel } from './cartLine';
 import {
   chargedUnitPrice,
+  linePricingProgram,
   previewOrderTotals,
   type SalePricingProgram,
   type SalePricingProgramSetting,
@@ -31,14 +32,14 @@ export function OrderSummary({
   /** Saved category per product id, for the picture on each line. */
   categoryByProductId?: Map<string, string | null | undefined>;
 }) {
-  const totals = previewOrderTotals(items, program, settings);
+  const totals = previewOrderTotals(items, program, settings, categoryByProductId);
   const discounted = totals.discountAmount > 0 || program === 'employee_meal';
 
   return (
     <View style={styles.card}>
       {items.length === 0 ? <Text style={styles.empty}>No products selected.</Text> : null}
       {items.map((item) => {
-        const charged = chargedUnitPrice(item.unit_price, program, settings);
+        const charged = chargedUnitPrice(item.unit_price, linePricingProgram(program, categoryByProductId?.get(item.product_id)), settings);
         return (
           <View key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)} style={styles.itemRow}>
             <CategoryIcon category={categoryByProductId?.get(item.product_id)} size={36} decorative />

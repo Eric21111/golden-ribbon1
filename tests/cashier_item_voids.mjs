@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 process.on('uncaughtException', e => { console.error(e.message, e.detail ?? '', e.where ?? '', e.stack?.split('\n').slice(-3).join('\n')); process.exit(1); });
 import { loadTs } from './_load_ts.mjs';
 import assert from 'node:assert/strict';
@@ -56,6 +57,28 @@ assert.equal(header.status,'completed');
 const row=(await db.query('select * from public.sale_items where id=$1',[item])).rows[0];
 assert.equal(Number(row.quantity),2);
 assert.equal(row.void_history[0].quantity,1);
+for (const [viewer,count] of [[cashier,1],[otherCashier,0],[manager,1],[owner,1]]) {
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[viewer]);
+  const logs=(await db.query('select * from public.list_sale_void_logs(0)')).rows;
+  assert.equal(logs.length,count);
+  if (count) assert.equal(logs[0].reason,'Wrong quantity');
+}
+await db.query("select set_config('request.jwt.claim.sub',$1,false)",[cashier]);
+await assert.rejects(db.query('select * from public.owner_cleanup_read_notices()'));
+await db.exec('reset role');
+const noticeIds=[id(70),id(71),id(72)];
+for(const [index,notice] of noticeIds.entries()) {
+  await db.query("insert into public.notifications(id,recipient_id,recipient_role,kind,entity_id,title,body,read_at) values($1,$2,'owner','return_submitted',$1,'Return','Ready',$3)",[notice,owner,index===2?null:new Date()]);
+}
+await db.exec('set role authenticated');
+await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
+const previewIds=(await db.query('select id from public.owner_cleanup_read_notices()')).rows.map(r=>r.id);
+assert.ok(previewIds.includes(noticeIds[0]) && !previewIds.includes(noticeIds[2]));
+await assert.rejects(db.query('select * from public.owner_cleanup_read_notices($1)',[[noticeIds[0],noticeIds[2]]]),/selection changed/);
+assert.equal((await db.query('select id from public.owner_cleanup_read_notices($1)',[[noticeIds[0]]])).rows[0].id,noticeIds[0]);
+assert.ok((await db.query('select id from public.owner_cleanup_read_notices()')).rows.some(r=>r.id===noticeIds[1]));
+await db.query("select set_config('request.jwt.claim.sub',$1,false)",[cashier]);
+
 await submit(2,2,'Other','Entered twice');
 assert.equal(await balance(),5);
 assert.equal((await db.query('select status from public.sales where id=$1',[sale])).rows[0].status,'voided');
@@ -77,7 +100,7 @@ assert.equal(Number((await db.query('select available from public.list_cashier_d
 assert.equal(Number((await db.query('select total_amount from public.sales where id=$1',[meal])).rows[0].total_amount),Number(mealLine.unit_price));
 const another=await sell(1,'void-test-checkout-002');
 const otherItem=(await db.query('select id from public.sale_items where sale_id=$1',[another])).rows[0].id;
-const preview=(await db.query('select public.begin_cashier_shift_close($1) p',[shift])).rows[0].p;
+const preview=(await verifiedClose(db,shift)).rows[0].p;
 assert.equal(preview.expected_gcash,10);
 assert.equal(preview.expected_cash,Number(mealLine.unit_price));
 await assert.rejects(db.query("select public.void_cashier_sale_item($1,1,1,'Wrong item','')",[otherItem]));

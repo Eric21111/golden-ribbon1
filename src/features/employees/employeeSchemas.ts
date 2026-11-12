@@ -5,11 +5,12 @@ export const employeeRoleSchema = z.enum(['manager', 'cashier']);
 export const createEmployeeSchema = z.object({
   full_name: z.string().trim().min(2, 'Full name is required.').max(120),
   email: z.string().trim().email('Enter a valid email address.').transform((value) => value.toLowerCase()),
-  password: z.string().min(8, 'Use at least 8 characters.').max(72, 'Use no more than 72 characters.'),
+  password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
+  confirm_password: z.string(),
   role: employeeRoleSchema,
   branch_id: z.string().uuid('Select an active branch.'),
   is_active: z.boolean(),
-});
+}).refine(v => v.password === v.confirm_password, {message:'PINs do not match.',path:['confirm_password']});
 
 export const editEmployeeSchema = z.object({
   full_name: z.string().trim().min(2, 'Full name is required.').max(120),
@@ -19,10 +20,10 @@ export const editEmployeeSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  password: z.string().min(8, 'Use at least 8 characters.').max(72, 'Use no more than 72 characters.'),
+  password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
   confirm_password: z.string().min(1, 'Confirm the temporary password.'),
 }).refine((values) => values.password === values.confirm_password, {
-  message: 'Passwords do not match.',
+  message: 'PINs do not match.',
   path: ['confirm_password'],
 });
 

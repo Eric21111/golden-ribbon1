@@ -35,7 +35,7 @@ export function PortionPickerSheet({
   return (
     <BottomSheet visible title="Quantity per order" scroll onClose={onClose}>
       <Text style={styles.intro}>
-        How much {item.name} one order uses. {portionRatioNote(code)}. The app saves this as whole {item.unit.plural}; the saved count is
+        Each sale takes this amount from {item.name} stock. {portionRatioNote(code)}. The app saves this as whole {item.unit.plural}; the saved count is
         shown under each choice.
       </Text>
       {choices.map((choice) => {

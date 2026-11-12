@@ -97,6 +97,8 @@ const tryFiles = (base) =>
     (candidate) => existsSync(candidate) && !candidate.endsWith('/'),
   );
 
+// Load React Native Web's cyclic CommonJS modules before installing ESM route mocks.
+require('react-native-web');
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier in stubs) return { url: stubUrl(specifier), shortCircuit: true };
@@ -215,6 +217,7 @@ sales.state.metrics = query({ data: metrics() });
     [
       ['Shift remittances', '/manager/reports/shift-remittances'],
       ['Waste History', '/manager/reports/waste-history'],
+      ['Void logs', '/manager/reports/stock-corrections'],
     ],
     'only the Reports tiles remain; Quick Access tiles are gone',
   );
@@ -229,7 +232,7 @@ sales.state.metrics = query({ data: metrics({ pending_incoming_transfers_count: 
   assert.deepEqual(
     alerts.map((tile) => [tile.title, tile.value, press(tile)]),
     [
-      ['Pending incoming', 3, '/manager/incoming'],
+      ['Pending incoming', 3, '/manager/transfers'],
       ['Returns in transit', 2, '/manager/returns'],
     ],
   );

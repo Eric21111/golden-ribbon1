@@ -1,6 +1,9 @@
 import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { supabase } from '@/lib/supabase';
+import { Alert } from 'react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -71,6 +74,16 @@ function ResultPill({ shortage, excess }: { shortage: number; excess: number }) 
 }
 
 export function ShiftRemittanceDetailScreen() {
+  const { profile } = useAuth();
+  async function openReturn(number: string) {
+    try {
+      const { data, error } = await supabase.from('stock_returns').select('id').eq('return_number', number).single();
+      if (error) throw error;
+      router.push({ pathname: '/manager/returns/[id]', params: { id: data.id } });
+    } catch (error) {
+      Alert.alert('Unable to open return', getErrorMessage(error));
+    }
+  }
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const query = useShiftCloseReportDetail(id ?? '');
@@ -89,9 +102,9 @@ export function ShiftRemittanceDetailScreen() {
 
   const filteredProducts = useMemo(() => {
     const products = detail?.products ?? [];
-    if (resultFilter === 'all') return products;
+    if (detail?.selected_return_close || resultFilter === 'all') return products;
     return products.filter((p) => p.result === resultFilter);
-  }, [detail?.products, resultFilter]);
+  }, [detail?.products, detail?.selected_return_close, resultFilter]);
 
   const pagination = useClientPagination(filteredProducts, resultFilter);
 
@@ -228,7 +241,12 @@ export function ShiftRemittanceDetailScreen() {
               </>
             ) : null}
 
-            <Text style={styles.section}>Inventory close</Text>
+            <Text style={styles.section}>{detail.selected_return_close ? 'End shift stock' : 'Inventory close'}</Text>
+            {detail.selected_return_close && (detail.return_number && profile?.role === 'manager' ? (
+              <Pressable accessibilityRole="link" onPress={() => void openReturn(detail.return_number!)}>
+                <Text style={{color: managerColors.royalBlue}}>View return {detail.return_number} ›</Text>
+              </Pressable>
+            ) : <Text>{detail.return_number ? 'Return ' + detail.return_number : 'All remaining stock was kept at the branch.'}</Text>)}
             {detail.cash_status === 'pending' ? (
               <EmptyState
                 title="Not available yet"
@@ -245,12 +263,12 @@ export function ShiftRemittanceDetailScreen() {
               />
             ) : (
               <>
-                <FilterChipRow options={filterOptions} value={resultFilter} onChange={setResultFilter} />
+                {!detail.selected_return_close && <FilterChipRow options={filterOptions} value={resultFilter} onChange={setResultFilter} />}
                 {filteredProducts.length === 0 ? (
                   <EmptyState title="No matching products" message="Try a different filter." />
                 ) : (
                   pagination.pageItems.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard key={product.id} product={product} systemClose={detail.selected_return_close} />
                   ))
                 )}
                 {pagination.showPagination ? (
@@ -267,7 +285,7 @@ export function ShiftRemittanceDetailScreen() {
   );
 }
 
-function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
+function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduct; systemClose?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const badge = inventoryResultBadge[product.result];
   const isIssue = product.result !== 'exact';
@@ -289,7 +307,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
           {product.product_name_snapshot}
         </Text>
           <StockUnitHint code={product.stock_unit_code} />
-        <ManagerBadge label={badge.label} tone={badge.tone} />
+        {systemClose ? <ManagerBadge label={product.unsold_quantity ? 'Sent back' : 'Kept at branch'} tone="info" /> : <ManagerBadge label={badge.label} tone={badge.tone} />}
       </View>
 
       <View style={styles.subRow}>
@@ -305,7 +323,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={managerColors.subtext} />
       </View>
 
-      <View style={styles.summaryRow}>
+      {systemClose ? <Text>System quantity after waste · {formatPcsQty(product.expected_remaining, product.stock_unit_code)}</Text> : <View style={styles.summaryRow}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel} numberOfLines={1}>Expected</Text>
           <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.expected_remaining, product.stock_unit_code)}</Text>
@@ -323,7 +341,7 @@ function ProductCard({ product }: { product: ShiftCloseReportProduct }) {
             {product.discrepancy > 0 ? `+${formatPcsQty(product.discrepancy, product.stock_unit_code)}` : formatPcsQty(product.discrepancy, product.stock_unit_code)}
           </Text>
         </View>
-      </View>
+      </View>}
 
       {product.discrepancy_note ? (
         <Text style={styles.noteLine} accessibilityLabel="Discrepancy note">

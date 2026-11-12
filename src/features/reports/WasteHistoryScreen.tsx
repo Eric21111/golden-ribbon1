@@ -41,7 +41,10 @@ function isQuietDay(day: { occurrence_count: number; shifts: Array<{ waste_statu
 }
 
 function occurrenceMeta(item: ShiftWasteOccurrenceRow): string | undefined {
-  return item.note ?? undefined;
+  const time = item.recorded_at ? new Date(item.recorded_at).toLocaleTimeString('en-PH', {
+    hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila',
+  }) : '';
+  return [time, item.note?.trim() ? 'Reason: ' + item.note.trim() : 'No reason recorded'].filter(Boolean).join(' · ');
 }
 
 function shiftTotalPcs(occurrences: ShiftWasteOccurrenceRow[]): number | null {

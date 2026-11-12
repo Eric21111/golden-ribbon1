@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { isReportRangeReady } from '@/lib/format';
 import {
-  beginCashierShiftClose,
   finalizeCashierShiftReconciliation,
   getActiveShift,
   getMyPendingShiftReconciliation,
@@ -17,9 +16,9 @@ import {
 } from '@/services/shiftService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
-import type { ShiftCloseBeginResult, ShiftCloseFinalizeProduct, ShiftCloseResult } from '@/types/models';
+import type { ShiftCloseFinalizeProduct, ShiftCloseResult } from '@/types/models';
 
-function assertShiftCloseAllowed() {
+export function assertShiftCloseAllowed() {
   if (useCheckoutStore.getState().request || useCheckoutStore.getState().pending) {
     throw new Error('Finish the sale confirmation before ending the shift.');
   }
@@ -28,7 +27,7 @@ function assertShiftCloseAllowed() {
   }
 }
 
-async function invalidateAfterShiftClose(client: ReturnType<typeof useQueryClient>, cashierId: string) {
+export async function invalidateAfterShiftClose(client: ReturnType<typeof useQueryClient>, cashierId: string) {
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.activeShift(cashierId) }),
     client.invalidateQueries({ queryKey: ['shifts', 'pending', cashierId] }),
@@ -36,6 +35,7 @@ async function invalidateAfterShiftClose(client: ReturnType<typeof useQueryClien
     client.invalidateQueries({ queryKey: ['shifts'] }),
     client.invalidateQueries({ queryKey: ['inventory'] }),
     client.invalidateQueries({ queryKey: ['inventory', 'cashier-pos'] }),
+    client.invalidateQueries({ queryKey: ['cashier-day-stock'] }),
     client.invalidateQueries({ queryKey: ['return-inventory'] }),
     client.invalidateQueries({ queryKey: ['stock-returns'] }),
     client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
@@ -71,28 +71,15 @@ export function useStartShift(cashierId: string) {
   });
 }
 
-export function useBeginCashierShiftClose(cashierId: string) {
-  const client = useQueryClient();
-  return useMutation<ShiftCloseBeginResult, Error, string>({
-    mutationFn: async (shiftId) => {
-      assertShiftCloseAllowed();
-      return beginCashierShiftClose(shiftId);
-    },
-    onSuccess: async () => {
-      await invalidateAfterShiftClose(client, cashierId);
-    },
-  });
-}
-
 export function useFinalizeCashierShiftReconciliation(cashierId: string) {
   const client = useQueryClient();
   return useMutation<
     ShiftCloseResult,
     Error,
-    { shiftId: string; actualCash: string; actualGcash?: string; products?: ShiftCloseFinalizeProduct[] }
+    { shiftId: string; actualCash: string; actualGcash?: string; selection?: import('@/types/models').ShiftReturnSelection; products?: ShiftCloseFinalizeProduct[] }
   >({
-    mutationFn: ({ shiftId, actualCash, products, actualGcash }) =>
-      finalizeCashierShiftReconciliation(shiftId, actualCash, products ?? [], actualGcash),
+    mutationFn: ({ shiftId, actualCash, products, actualGcash, selection }) =>
+      finalizeCashierShiftReconciliation(shiftId, actualCash, products ?? [], actualGcash, selection),
     onSuccess: async () => {
       await invalidateAfterShiftClose(client, cashierId);
     },

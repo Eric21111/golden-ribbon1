@@ -43,7 +43,7 @@ export const PRICING_PROGRAM_OPTIONS: Array<{
   {
     value: 'back_office_guard',
     label: 'Back office / guard',
-    hint: `₱${BACK_OFFICE_GUARD_AMOUNT_OFF} off each item`,
+    hint: `₱${BACK_OFFICE_GUARD_AMOUNT_OFF} off meals and snacks`,
   },
 ];
 
@@ -77,16 +77,21 @@ export function chargedUnitPrice(
   return Math.max(0, toCents(catalogUnitPrice) - toCents(amount)) / 100;
 }
 
+export function linePricingProgram(program: SalePricingProgram, category?: string | null): SalePricingProgram {
+  return program === 'back_office_guard' && category !== 'meals' && category !== 'snacks' ? 'standard' : program;
+}
+
 export function previewOrderTotals(
-  lines: Array<{ unit_price: number; quantity: number }>,
+  lines: Array<{ product_id?: string; unit_price: number; quantity: number }>,
   program: SalePricingProgram,
   settings?: Partial<Record<SalePricingProgram, SalePricingProgramSetting>> | null,
+  categories?: ReadonlyMap<string, string | null | undefined>,
 ): { catalogSubtotal: number; discountAmount: number; chargedTotal: number } {
   let catalogCents = 0;
   let chargedCents = 0;
   for (const line of lines) {
     const catalog = toCents(line.unit_price) * line.quantity;
-    const charged = toCents(chargedUnitPrice(line.unit_price, program, settings)) * line.quantity;
+    const charged = toCents(chargedUnitPrice(line.unit_price, linePricingProgram(program, categories?.get(line.product_id ?? '')), settings)) * line.quantity;
     catalogCents += catalog;
     chargedCents += charged;
   }

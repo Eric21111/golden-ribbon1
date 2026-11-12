@@ -1,5 +1,6 @@
+import { PinField } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -30,13 +31,13 @@ const ROLE_OPTIONS = [
  * and Cancel | Create side by side like the other sheets.
  */
 export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCancel }: CreateEmployeeFormProps) {
-  const [showPassword, setShowPassword] = useState(false);
   const { control, handleSubmit, formState, watch, setValue } = useForm<CreateEmployeeValues>({
     resolver: zodResolver(createEmployeeSchema),
     defaultValues: {
       full_name: '',
       email: '',
       password: '',
+      confirm_password: '',
       role: 'cashier',
       branch_id: '',
       is_active: true,
@@ -98,28 +99,13 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           control={control}
           name="password"
           render={({ field, fieldState }) => (
-            <FormField
-              label="Temporary password"
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              autoComplete="new-password"
-              secureTextEntry={!showPassword}
-              rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
-              onRightIconPress={() => setShowPassword((prev) => !prev)}
-              rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-              value={field.value}
-              onBlur={field.onBlur}
-              onChangeText={field.onChange}
-              error={fieldState.error?.message}
-              labelStyle={styles.fieldLabel}
-              errorStyle={styles.fieldError}
-              accentColor={managerColors.royalBlue}
-              style={styles.fieldInput}
-            />
+            <PinField label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
           )}
         />
-        {formState.errors.password?.message ? null : <Text style={styles.hint}>8–72 characters.</Text>}
+        <Controller control={control} name="confirm_password" render={({field, fieldState}) => (
+          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+        )} />
+        {formState.errors.password?.message ? null : <Text style={styles.hint}>Six digits.</Text>}
       </View>
 
       <View style={styles.section}>

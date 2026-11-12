@@ -30,6 +30,7 @@ export async function changeOwnName(fullName: string): Promise<string> {
  * Does not accept a target user id. Passwords never leave Supabase Auth.
  */
 export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  if (!/^[0-9]{6}$/.test(newPassword)) throw new Error('Enter exactly six digits.');
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user?.email) {
     throw new Error('Your session has expired. Sign in again.');

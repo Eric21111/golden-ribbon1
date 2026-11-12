@@ -15,16 +15,27 @@ interface TransferFilters {
 }
 
 export async function listTransfers(filters: TransferFilters = {}): Promise<StockTransferSummary[]> {
-  let query = supabase
-    .from('stock_transfers')
-    .select('*, from_branch:branches!stock_transfers_from_branch_id_fkey(*), to_branch:branches!stock_transfers_to_branch_id_fkey(*), items:stock_transfer_items(id)')
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (filters.branchId) query = query.eq('to_branch_id', filters.branchId);
-  if (filters.status) query = query.eq('status', filters.status);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as unknown as StockTransferSummary[];
+  const transfers: StockTransferSummary[] = [];
+  const pageSize = 100;
+  let cursor: Pick<StockTransferSummary, 'created_at' | 'id'> | undefined;
+  while (true) {
+    let query = supabase
+      .from('stock_transfers')
+      .select('*, from_branch:branches!stock_transfers_from_branch_id_fkey(*), to_branch:branches!stock_transfers_to_branch_id_fkey(*), items:stock_transfer_items(id)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+    if (filters.branchId) query = query.eq('to_branch_id', filters.branchId);
+    if (filters.status) query = query.eq('status', filters.status);
+    if (cursor) {
+      query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
+    }
+    const { data, error } = await query.limit(pageSize);
+    if (error) throw error;
+    const page = (data ?? []) as unknown as StockTransferSummary[];
+    transfers.push(...page);
+    if (page.length < pageSize) return transfers;
+    cursor = page[page.length - 1];
+  }
 }
 
 /** Exact count of transfers this branch sent that the receiving branch has not yet received. */

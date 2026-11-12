@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
@@ -7,7 +8,7 @@ const returnPage = readFileSync('app/(cashier)/cashier/returns/create.tsx', 'utf
 assert.match(returnPage, /createStockReturn/);
 assert.match(dashboard, /title="Leftover return"/);
 assert.match(dashboard, /router\.push\('\/cashier\/returns\/create'\)/);
-assert.match(dashboard, /\{sameDayClosedHint \? <Row>\{leftoverReturnTile\}<\/Row> : null\}/);
+assert.match(dashboard, /\{sameDayClosedHint && finalizedToday\.data !== 'selected' \? <Row>\{leftoverReturnTile\}<\/Row> : null\}/);
 assert.doesNotMatch(dashboard, /Go to Leftover Return/);
 
 async function boot() {
@@ -85,7 +86,7 @@ async function sellAndClose(db, ctx) {
     ]),
   );
   assert.equal(await onHand(db, ctx.branch, ctx.meal), 5);
-  const preview = (await asUser(db, ctx.cashier, () => db.query('select public.begin_cashier_shift_close($1) preview', [shift]))).rows[0].preview;
+  const preview = (await asUser(db, ctx.cashier, () => verifiedClose(db,shift).then(result=>({rows:result.rows.map(row=>({preview:row.p}))})))).rows[0].preview;
   await asUser(db, ctx.cashier, () =>
     assert.rejects(
       () => db.query('select public.create_stock_return($1::jsonb,null,$2)', [

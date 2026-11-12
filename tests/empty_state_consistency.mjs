@@ -106,7 +106,7 @@ const feedback = read('src/components/Feedback.tsx');
 assert.match(feedback, /center: \{ flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center'/);
 
 // ---- 3. cashier screens that used loose text now use the shared states
-for (const file of ['app/(cashier)/cashier/inventory.tsx', 'app/(cashier)/cashier/payment-totals.tsx', 'app/(cashier)/cashier/correct-stock.tsx']) {
+for (const file of ['app/(cashier)/cashier/inventory.tsx', 'app/(cashier)/cashier/payment-totals.tsx']) {
   const src = read(file);
   assert.match(src, /from '@\/components\/dashboard\/ManagerFeedback'/, `${file}: the shared states`);
   assert.doesNotMatch(src, /<Text>(Loading (stock|sales)…|No active shift\.|No matching branch stock items\.)<\/Text>/, `${file}: no loose status text`);
@@ -117,6 +117,5 @@ assert.match(inv, /<LoadingState label="Loading stock…" \/>/);
 assert.match(inv, /<ErrorState message=\{getErrorMessage\(error\)\} onRetry=/);
 assert.match(inv, /title=\{search \? 'No matching stock' : 'No stock recorded'\}/);
 assert.match(read('app/(cashier)/cashier/payment-totals.tsx'), /<EmptyState title="No active shift" message="Start a shift to see its sales\." \/>/);
-assert.match(read('app/(cashier)/cashier/correct-stock.tsx'), /<EmptyState title="No matching stock" message="Try another name\." \/>/);
 
 console.log('Empty state consistency passed: Waste History, report screens, and the cashier screens with loose text.');

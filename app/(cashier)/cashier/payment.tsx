@@ -176,12 +176,17 @@ export default function PaymentScreen() {
       return;
     }
     if (!shift.data || !pricesReady) return;
+    if (pricingProgram === 'back_office_guard' && (!categories.data || categories.error)) {
+      setValidation('Reloading product categories. Check the discount and try again.');
+      void categories.refetch();
+      return;
+    }
     const liveItems = useCartStore.getState().items;
     if (liveItems.length === 0) {
       setValidation('Cart is empty after stock adjustment. Return to POS and rebuild the order.');
       return;
     }
-    const charged = previewOrderTotals(liveItems, pricingProgram, pricingSettings).chargedTotal;
+    const charged = previewOrderTotals(liveItems, pricingProgram, pricingSettings, categories.data).chargedTotal;
     setValidation('');
     void checkout.submit({
       shiftId: shift.data.id,
@@ -206,6 +211,11 @@ export default function PaymentScreen() {
       return;
     }
     if (!shift.data || !pricesReady) return;
+    if (pricingProgram === 'back_office_guard' && (!categories.data || categories.error)) {
+      setValidation('Reloading product categories. Check the discount and try again.');
+      void categories.refetch();
+      return;
+    }
     setValidation('');
     void (async () => {
       const stockOk = await ensureLiveStockAllowsCheckout();
@@ -214,6 +224,7 @@ export default function PaymentScreen() {
         useCartStore.getState().items,
         pricingProgram,
         pricingSettings,
+        categories.data,
       );
       const programName = pricingProgramLabel(pricingProgram);
       confirmAction(
@@ -343,7 +354,7 @@ export default function PaymentScreen() {
                 <SignOutButton />
               </View>
             ) : null}
-            {validation && !checkout.request && !checkout.sale ? <ManagerActionButton label="Check actual stock" variant="secondary" onPress={() => router.push('/cashier/correct-stock' as never)} /> : null}
+            {validation && !checkout.request && !checkout.sale ? <ManagerActionButton label="View branch inventory" variant="secondary" onPress={() => router.push('/cashier/inventory' as never)} /> : null}
           </ScrollView>
 
           <View style={styles.footer}>

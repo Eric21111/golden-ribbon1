@@ -146,7 +146,7 @@ Deno.serve(async (request) => {
 
       if (fullName.length < 2 || fullName.length > 120) return response(400, { message: 'Enter a valid full name.' });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return response(400, { message: 'Enter a valid email address.' });
-      if (password.length < 8 || password.length > 72) return response(400, { message: 'Temporary password must contain 8 to 72 characters.' });
+      if (!/^[0-9]{6}$/.test(password)) return response(400, { message: 'Enter exactly six digits for the PIN.' });
       if (role !== 'manager' && role !== 'cashier') return response(400, { message: 'Select Manager or Cashier.' });
       if (!isUuid(branchId)) return response(400, { message: 'Select an active branch.' });
       if (typeof isActive !== 'boolean') return response(400, { message: 'Employee status is required.' });
@@ -220,7 +220,7 @@ Deno.serve(async (request) => {
         return response(duplicate ? 409 : 400, {
           message: duplicate
             ? 'That email is already registered.'
-            : 'Employee account could not be created. Check the email and temporary password.',
+            : 'Employee account could not be created. Check the email and PIN.',
         });
       }
 
@@ -247,7 +247,7 @@ Deno.serve(async (request) => {
       const employeeId = body.employeeId;
       const password = typeof body.password === 'string' ? body.password : '';
       if (!isUuid(employeeId)) return response(400, { message: 'Employee account was not found.' });
-      if (password.length < 8 || password.length > 72) return response(400, { message: 'Temporary password must contain 8 to 72 characters.' });
+      if (!/^[0-9]{6}$/.test(password)) return response(400, { message: 'Enter exactly six digits for the PIN.' });
 
       const { data: employee, error: employeeError } = await adminClient
         .from('profiles')
@@ -259,7 +259,7 @@ Deno.serve(async (request) => {
       if (!employee) return response(404, { message: 'Employee account was not found.' });
 
       const { error: updateError } = await adminClient.auth.admin.updateUserById(employeeId, { password });
-      if (updateError) return response(400, { message: 'Password could not be reset. Check the temporary password and try again.' });
+      if (updateError) return response(400, { message: 'PIN could not be reset. Check the new PIN and try again.' });
       return response(200, { success: true });
     }
 

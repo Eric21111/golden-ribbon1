@@ -317,7 +317,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      list_sale_void_logs: { Args: { p_offset: number }; Returns: {
+        event_id: string; recorded_at: string; sale_number: string; product_name: string;
+        branch_name: string; cashier_name: string; quantity: number; amount: number; reason: string; note: string | null;
+      }[] };
+      owner_cleanup_read_notices: { Args: { p_ids?: string[] }; Returns: {id: string; title: string; read_at: string}[] };
       list_cashier_correction_stock: { Args: Record<string, never>; Returns: import('@/services/stockCorrectionService').CorrectionStock[] };
+      record_branch_stock_action: { Args: import('@/services/stockCorrectionService').BranchStockRequest; Returns: string };
       correct_cashier_stock_count: { Args: import('@/services/stockCorrectionService').CorrectionRequest; Returns: string };
       list_stock_count_corrections: { Args: { p_offset?: number }; Returns: import('@/services/stockCorrectionService').CorrectionHistory[] };
       get_stock_unit_codes: {
@@ -521,9 +527,15 @@ export type Database = {
       start_cashier_shift: { Args: Record<string, never>; Returns: string };
       reopen_cashier_shift: { Args: { p_reason: string }; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
+      manager_today_payments: { Args: {p_branch?:string}; Returns: {method:string;program:string;amount:number;orders:number}[] };
+      manager_branch_stock: { Args: {p_branch:string}; Returns: {product_id:string;available:number;on_hand:number;held:number;sellable:number|null}[] };
       begin_cashier_shift_close: {
         Args: { p_shift_id: string };
         Returns: import('./models').ShiftCloseBeginResult;
+      };
+      close_shift_with_returns: {
+        Args: { p_shift_id: string; p_actual_cash: string; p_actual_gcash: string | null; p_return_ids: string[]; p_waste: Record<string, number> };
+        Returns: import('./models').ShiftCloseResult;
       };
       finalize_cashier_shift_reconciliation: {
         Args: {

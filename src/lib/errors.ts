@@ -120,7 +120,7 @@ export function getAuthErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 
   if (message.includes('invalid login credentials')) {
-    return 'The email or password is incorrect.';
+    return 'The email or sign-in credential is incorrect.';
   }
   if (message.includes('email not confirmed')) {
     return 'This account has not been confirmed yet.';
@@ -167,7 +167,7 @@ export function getChangePasswordErrorMessage(error: unknown): string {
     message.includes('too short') ||
     message.includes('characters')
   ) {
-    return 'New password does not meet the password policy. Use 8 to 72 characters.';
+    return 'The new PIN was rejected by the account security settings.';
   }
   if (isNetworkError(message)) {
     return 'Unable to connect. Check your internet connection and try again.';
@@ -514,7 +514,7 @@ export function getEmployeeErrorMessage(error: unknown): string {
     return 'Employee has an unfinished shift or remittance. Complete reconciliation before changing branch, role, or active status.';
   }
   if (message.includes('selling branch') || message.includes('assigned branch')) return 'Select an active selling branch.';
-  if (message.includes('password')) return 'Temporary password must contain 8 to 72 characters.';
+  if (message.includes('password')) return 'Enter exactly six digits for the PIN.';
   if (message.includes('owner access') || message.includes('unauthorized') || message.includes('permission')) return 'Only an active Owner can manage employees.';
   if (message.includes('not found')) return 'Employee account was not found.';
   if (message.includes('fetch') || message.includes('network') || message.includes('failed to send')) return 'Network unavailable. Check your connection and try again.';

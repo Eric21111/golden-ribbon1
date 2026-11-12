@@ -1,1 +1,1 @@
-export { default } from '@/features/reports/StockCorrectionsScreen';
+export { default } from '@/features/reports/VoidLogsScreen';

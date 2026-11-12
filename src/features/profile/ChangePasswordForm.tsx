@@ -1,3 +1,4 @@
+import { PinField } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -5,7 +6,6 @@ import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
-import { FormField } from '@/components/FormField';
 import { colors, spacing } from '@/constants/theme';
 import { changePasswordSchema, type ChangePasswordValues } from '@/features/profile/changePasswordSchema';
 import { getChangePasswordErrorMessage } from '@/lib/errors';
@@ -41,9 +41,6 @@ export function ChangePasswordForm({
 }: ChangePasswordFormProps) {
   const lock = useRef(false);
   const [success, setSuccess] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const { control, handleSubmit, reset, setError, formState } = useForm<ChangePasswordValues>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { current_password: '', new_password: '', confirm_password: '' },
@@ -62,7 +59,7 @@ export function ChangePasswordForm({
     try {
       await changeOwnPassword(values.current_password, values.new_password);
       reset({ current_password: '', new_password: '', confirm_password: '' });
-      setSuccess('Password updated.');
+      setSuccess('PIN updated.');
     } catch (error) {
       const message = getChangePasswordErrorMessage(error);
       if (message === 'Current password is incorrect.') {
@@ -77,82 +74,29 @@ export function ChangePasswordForm({
 
   return (
     <View style={styles.form}>
+      <Text style={hintStyle}>Changing this PIN affects everyone using this account.</Text>
       <Controller
         control={control}
         name="current_password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="Current password"
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="current-password"
-            textContentType="password"
-            secureTextEntry={!showCurrent}
-            rightIcon={showCurrent ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowCurrent((prev) => !prev)}
-            rightIconAccessibilityLabel={showCurrent ? 'Hide current password' : 'Show current password'}
-            labelStyle={labelStyle}
-            errorStyle={errorStyle}
-            accentColor={accentColor}
-            style={inputStyle}
-          />
+          <PinField label="Current PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} allowPassword />
         )}
       />
       <Controller
         control={control}
         name="new_password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="New password"
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="new-password"
-            textContentType="newPassword"
-            secureTextEntry={!showNew}
-            rightIcon={showNew ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowNew((prev) => !prev)}
-            rightIconAccessibilityLabel={showNew ? 'Hide new password' : 'Show new password'}
-            labelStyle={labelStyle}
-            errorStyle={errorStyle}
-            accentColor={accentColor}
-            style={inputStyle}
-          />
+          <PinField label="New PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
         )}
       />
       {formState.errors.new_password?.message ? null : (
-        <Text style={[styles.hint, hintStyle]}>At least 8 characters.</Text>
+        <Text style={[styles.hint, hintStyle]}>Six digits.</Text>
       )}
       <Controller
         control={control}
         name="confirm_password"
         render={({ field, fieldState }) => (
-          <FormField
-            label="Confirm password"
-            value={field.value}
-            onBlur={field.onBlur}
-            onChangeText={field.onChange}
-            error={fieldState.error?.message}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="new-password"
-            textContentType="newPassword"
-            secureTextEntry={!showConfirm}
-            rightIcon={showConfirm ? 'eye-outline' : 'eye-off-outline'}
-            onRightIconPress={() => setShowConfirm((prev) => !prev)}
-            rightIconAccessibilityLabel={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
-            labelStyle={labelStyle}
-            errorStyle={errorStyle}
-            accentColor={accentColor}
-            style={inputStyle}
-          />
+          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
         )}
       />
       {formState.errors.root?.message ? (

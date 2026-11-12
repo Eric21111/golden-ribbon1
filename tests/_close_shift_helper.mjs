@@ -1,3 +1,4 @@
+import { verifiedClose } from './_verified_cashier_close.mjs';
 /**
  * Revision 7C test helper: begin close + finalize with system-exact counts.
  * Prefer importing this over resurrecting close_cashier_shift.
@@ -17,8 +18,8 @@ function productsFromBegin(preview) {
 
 export async function closeShiftExact(db, shiftId, actualCash = '0') {
   const preview = (
-    await db.query('select public.begin_cashier_shift_close($1) preview', [shiftId])
-  ).rows[0].preview;
+    await verifiedClose(db, shiftId)
+  ).rows[0].p;
 
   // Already finalized begin response — still run identical finalize for idempotency coverage.
   let products = productsFromBegin(preview);

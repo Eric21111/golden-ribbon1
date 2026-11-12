@@ -21,7 +21,6 @@ import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive'
 import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
 import { useOwnerTodayActivityLog } from '@/hooks/useOwnerTodayLog';
 import {
-  useOwnerDailyProductSummary,
   useOwnerDashboardMetrics,
   useOwnerTodayBranchSales,
 } from '@/hooks/useSales';
@@ -82,7 +81,6 @@ function InlineError({
 export default function OwnerDashboard() {
   const { profile } = useAuth();
   const metricsQuery = useOwnerDashboardMetrics();
-  const summaryQuery = useOwnerDailyProductSummary();
   const branchSalesQuery = useOwnerTodayBranchSales();
   const todayLogQuery = useOwnerTodayActivityLog();
   const archiveQuery = useArchiveStatus();
@@ -91,7 +89,6 @@ export default function OwnerDashboard() {
   const [showFullLog, setShowFullLog] = useState(false);
 
   const metrics = metricsQuery.data;
-  const summary = summaryQuery.data ?? [];
   const archive = archiveQuery.data;
   const quickview = useMemo(
     () => buildTodayQuickview(branchSalesQuery.data?.branches),
@@ -117,7 +114,6 @@ export default function OwnerDashboard() {
   const visibleLog = showFullLog ? todayLog : todayLog.slice(0, TODAY_LOG_PREVIEW);
   const refreshing =
     metricsQuery.isRefetching ||
-    summaryQuery.isRefetching ||
     branchSalesQuery.isRefetching ||
     todayLogQuery.isRefetching ||
     archiveQuery.isRefetching;
@@ -125,7 +121,6 @@ export default function OwnerDashboard() {
 
   const refresh = () => {
     void metricsQuery.refetch();
-    void summaryQuery.refetch();
     void branchSalesQuery.refetch();
     void todayLogQuery.refetch();
     void archiveQuery.refetch();
@@ -133,7 +128,6 @@ export default function OwnerDashboard() {
 
   useManilaDayRefresh(() => {
     void metricsQuery.refetch();
-    void summaryQuery.refetch();
     void branchSalesQuery.refetch();
     void todayLogQuery.refetch();
   });
@@ -165,9 +159,9 @@ export default function OwnerDashboard() {
       </View>
 
       <ConstrainedWidth style={styles.column}>
-        {metricsQuery.error || summaryQuery.error ? (
+        {metricsQuery.error ? (
           <ErrorState
-            message={getErrorMessage(metricsQuery.error ?? summaryQuery.error)}
+            message={getErrorMessage(metricsQuery.error)}
             onRetry={refresh}
           />
         ) : (
@@ -260,31 +254,6 @@ export default function OwnerDashboard() {
                     ))}
                     {pair.length === 1 ? <View style={styles.half} /> : null}
                   </Row>
-                ))
-              )}
-              <ManagerActionButton
-                label="Transactions & items sold"
-                icon="receipt-outline"
-                variant="secondary"
-                onPress={() => setDetailsOpen(true)}
-              />
-            </Section>
-
-            <Section title="TODAY'S PRODUCT PERFORMANCE">
-              {summaryQuery.isLoading && summary.length === 0 ? (
-                <LoadingState label="Loading daily product summary…" />
-              ) : summary.length === 0 ? (
-                <View style={styles.quietCard}>
-                  <Text style={styles.quiet}>No completed sales or declared returns today.</Text>
-                </View>
-              ) : (
-                summary.map((row) => (
-                  <ListRowCard
-                    key={row.product_id}
-                    title={row.product_name}
-                    meta={`Sold ${row.quantity_sold} · Returned ${row.quantity_returned}`}
-                    trailing={<Text style={styles.revenue}>{formatMoney(row.revenue)}</Text>}
-                  />
                 ))
               )}
             </Section>
@@ -420,29 +389,12 @@ export default function OwnerDashboard() {
         onClose={() => setDetailsOpen(false)}
         scroll
       >
-        <Row>
-          <StatTile
-            style={styles.half}
-            compact
-            icon="receipt-outline"
-            label="Transactions"
-            value={quickviewReady ? quickview.totalTransactions : '—'}
-          />
-          <StatTile
-            style={styles.half}
-            compact
-            icon="cube-outline"
-            label="Items sold"
-            value={metrics?.today_units_sold ?? '—'}
-          />
-        </Row>
         {quickviewError}
         {(quickviewReady ? quickview.branches : []).map((branch) => (
           <ListRowCard
             key={branch.branchId}
             icon="storefront-outline"
             title={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
-            meta={`${branch.transactions} transaction${branch.transactions === 1 ? '' : 's'}`}
             trailing={<Text style={styles.revenue}>{formatMoney(branch.revenue)}</Text>}
           />
         ))}

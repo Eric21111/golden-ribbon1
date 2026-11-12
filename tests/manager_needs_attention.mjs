@@ -21,7 +21,7 @@ import { buildAttentionItems, countUnresolved } from '../src/features/reports/ma
       (item) => [item.title, item.value, item.href],
     ),
     [
-      ['Pending incoming', 1, '/manager/incoming'],
+      ['Pending incoming', 1, '/manager/transfers'],
       ['Pending transfers', 2, '/manager/transfers'],
       ['Returns in transit', 3, '/manager/returns'],
       ['Transfer discrepancies', 4, '/manager/reports/transfer-discrepancies'],

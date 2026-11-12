@@ -67,10 +67,10 @@ import {
   assert.doesNotMatch(quickviewSection, /label="Transactions"|label="Items sold"/, 'moved out of the quickview');
   assert.doesNotMatch(source, /'SM1'|'SM2'|"SM1"|"SM2"/, 'no hardcoded branch names');
   const sheet = source.slice(source.indexOf('<ManagerBottomSheet'), source.indexOf('</ManagerBottomSheet>'));
-  assert.match(sheet, /label="Transactions"/);
-  assert.match(sheet, /label="Items sold"/);
+  assert.doesNotMatch(sheet, /label="Transactions"/);
+  assert.doesNotMatch(sheet, /label="Items sold"/);
   assert.match(source, /transfer_discrepancies_count/);
-  assert.match(source, /TODAY'S PRODUCT PERFORMANCE/);
+  assert.doesNotMatch(source, /TODAY'S PRODUCT PERFORMANCE/);
   assert.match(source, /reminder_visible/);
 
   assert.match(source, /buildTodayQuickview\(branchSalesQuery\.data\?\.branches\)/);

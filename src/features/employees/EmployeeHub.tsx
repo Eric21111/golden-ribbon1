@@ -169,7 +169,7 @@ export function EmployeeHub({
       {
         onSuccess: () => {
           setCreateOpen(false);
-          alertNotice('Employee created', 'They can sign in with the email and temporary password.', 'success');
+          alertNotice('Employee created', 'They can sign in with the email and PIN.', 'success');
         },
       }
     );
@@ -199,8 +199,8 @@ export function EmployeeHub({
         onSuccess: () => {
           setResetEmployee(null);
           alertNotice(
-            'Password reset',
-            'Give the new temporary password to the employee securely.',
+            'PIN reset',
+            'Give the new PIN privately to the employee.',
             'success',
           );
         },
@@ -370,7 +370,7 @@ export function EmployeeHub({
 
       <BottomSheet
         visible={resetEmployee != null}
-        title="Reset password"
+        title="Reset PIN"
         scroll
         onClose={() => setResetEmployee(null)}
       >

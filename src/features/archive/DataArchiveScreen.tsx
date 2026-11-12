@@ -1,3 +1,4 @@
+import { ReadNoticeCleanup } from './ReadNoticeCleanup';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -80,6 +81,7 @@ export function DataArchiveScreen() {
         <ManagerScreenHeader showBack title="Data Archive" />
 
         <View style={styles.body}>
+          <ReadNoticeCleanup />
           {statusQuery.error ? (
             <ErrorState message={getArchiveErrorMessage(statusQuery.error)} onRetry={() => void statusQuery.refetch()} />
           ) : !status ? (
