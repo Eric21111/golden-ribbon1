@@ -96,7 +96,7 @@ export function DateRangeFilter({
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rowScroll} contentContainerStyle={styles.row}>
         {DATE_RANGE_OPTIONS.map((option) => {
           const selected = option.value === value;
           return (
@@ -158,6 +158,8 @@ export function DateRangeFilter({
 }
 
 const styles = StyleSheet.create({
+  // a horizontal ScrollView grows to fill spare height by default; the pill row must stay one pill tall
+  rowScroll: { flexGrow: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 16 },
   chip: {
     paddingHorizontal: 16,

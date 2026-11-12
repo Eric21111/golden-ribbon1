@@ -87,6 +87,20 @@ for (const [file, pattern] of grow) {
   assert.match(src, pattern, `${file}: the column grows`);
   assert.match(src, /screenContent: \{ flexGrow: 1|screen: \{ flexGrow: 1/, `${file}: and so does the screen content it sits in`);
 }
+// ...and the rows that sit above that message must NOT grow with it. A horizontal ScrollView fills spare height by default, which
+// pushed the date pills to the middle of the screen with big gaps around them.
+const pills = read('src/features/reports/DateRangeFilter.tsx');
+assert.match(pills, /<ScrollView horizontal[^>]*style=\{styles\.rowScroll\}/, 'the date-range pills');
+assert.match(pills, /rowScroll: \{ flexGrow: 0 \}/);
+const chips = read('src/components/dashboard/FilterChipRow.tsx');
+assert.match(chips, /style=\{\[styles\.scroll, bleed > 0/, 'every chip row');
+assert.match(chips, /scroll: \{ flexGrow: 0 \}/);
+// no other horizontal ScrollView sits in a report column without being kept to its own height
+for (const [file] of grow) {
+  const src = read(file);
+  for (const match of src.matchAll(/<ScrollView\b[^>]*horizontal[^>]*>/g)) assert.match(match[0], /flexGrow|styles\.\w*[Ss]croll/, `${file}: a horizontal ScrollView stays its own height`);
+}
+
 // the shared state itself centres within whatever room it is given
 const feedback = read('src/components/Feedback.tsx');
 assert.match(feedback, /center: \{ flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center'/);

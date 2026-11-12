@@ -63,7 +63,7 @@ export function FilterChipRow<T extends string>({
         offsetX.current = event.nativeEvent.contentOffset.x;
       }}
       scrollEventThrottle={16}
-      style={bleed > 0 ? { marginHorizontal: -bleed } : undefined}
+      style={[styles.scroll, bleed > 0 ? { marginHorizontal: -bleed } : null]}
       contentContainerStyle={[styles.content, bleed > 0 && { paddingLeft: bleed, paddingRight: bleed }]}
     >
       {options.map((option) => (
@@ -86,5 +86,7 @@ export function FilterChipRow<T extends string>({
 }
 
 const styles = StyleSheet.create({
+  // a horizontal ScrollView grows to fill spare height by default; a chip row must stay one chip tall
+  scroll: { flexGrow: 0 },
   content: { flexDirection: 'row', gap: 10, paddingRight: 16 },
 });
