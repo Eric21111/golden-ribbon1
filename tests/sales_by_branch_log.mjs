@@ -215,5 +215,80 @@ await asUser(cashier2, async () => {
   );
 });
 
+// Inactive branch historical drill-in: Owner can still expand week / month / all-time.
+await db.exec(`update public.branches set is_active = false where id = '${branch1}'`);
+
+await asUser(owner, async () => {
+  const inactiveAll = (
+    await db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null) result`, [branch1])
+  ).rows[0].result;
+  assert.equal(inactiveAll.length, 3, 'inactive branch keeps live + archived daily rows');
+  assert.equal(
+    Number(inactiveAll.reduce((sum, row) => sum + Number(row.total_sales), 0)),
+    560,
+    'inactive all-time total matches live+archive without double-count',
+  );
+  assert.equal(String(inactiveAll[2].business_date), '2026-08-01');
+  assert.equal(Number(inactiveAll[2].total_sales), 320);
+
+  const monthBounds = (
+    await db.query(`
+      select
+        date_trunc('month', timezone('Asia/Manila', now()))::date::timestamp at time zone 'Asia/Manila' as start,
+        (date_trunc('month', timezone('Asia/Manila', now()))::date + interval '1 month')::timestamp at time zone 'Asia/Manila' as end
+    `)
+  ).rows[0];
+  const monthDays = (
+    await db.query(`select public.report_branch_daily_sales($1, 'custom', $2, $3) result`, [
+      branch1,
+      monthBounds.start,
+      monthBounds.end,
+    ])
+  ).rows[0].result;
+  assert.equal(monthDays.length, 2, 'this-month custom range for inactive branch');
+  assert.equal(Number(monthDays.reduce((sum, row) => sum + Number(row.total_sales), 0)), 240);
+  assert.ok(!monthDays.some((row) => String(row.business_date) === '2026-08-01'));
+
+  const weekBounds = (
+    await db.query(`
+      select ((timezone('Asia/Manila', now()))::date - 1)::timestamp at time zone 'Asia/Manila' as start,
+             ((timezone('Asia/Manila', now()))::date + 1)::timestamp at time zone 'Asia/Manila' as end
+    `)
+  ).rows[0];
+  const weekDays = (
+    await db.query(`select public.report_branch_daily_sales($1, 'custom', $2, $3) result`, [
+      branch1,
+      weekBounds.start,
+      weekBounds.end,
+    ])
+  ).rows[0].result;
+  assert.equal(weekDays.length, 2, 'week-style custom range for inactive branch');
+  assert.equal(Number(weekDays.reduce((sum, row) => sum + Number(row.total_sales), 0)), 240);
+
+  // Archive-only day still appears when no live sales exist for that Manila date.
+  const archiveOnly = inactiveAll.find((row) => String(row.business_date) === '2026-08-01');
+  assert.ok(archiveOnly);
+  assert.equal(Number(archiveOnly.transaction_count), 2);
+
+  const stillActiveEmpty = (
+    await db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null) result`, [branch2])
+  ).rows[0].result;
+  assert.equal(stillActiveEmpty.length, 0, 'active branch with no sales still returns []');
+
+  await assert.rejects(
+    () => db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null)`, [main]),
+    /Selling branch is missing/,
+  );
+});
+
+await asUser(cashier2, async () => {
+  await assert.rejects(
+    () => db.query(`select public.report_branch_daily_sales($1, 'all_time', null, null)`, [branch1]),
+    /Owner access required/,
+  );
+});
+
 await db.close();
-console.log('Sales by Branch log tests passed: orders today, daily totals for longer ranges.');
+console.log(
+  'Sales by Branch log tests passed: orders today, daily totals, inactive drill-in, archive, unauthorized.',
+);
