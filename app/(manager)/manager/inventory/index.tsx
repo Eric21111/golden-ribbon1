@@ -27,6 +27,7 @@ import {
 } from '@/features/inventory/inventoryStatus';
 import { CategoryGroupHeading } from '@/features/products/CategoryGroupHeading';
 import { buildListRows, groupByCategory, groupCounts } from '@/features/products/categoryGroups';
+import { MainInventoryWasteSheet } from '@/features/inventory/MainInventoryWasteSheet';
 import { MainStockDetails } from '@/features/inventory/MainStockDetails';
 import { buildStockSetup } from '@/features/inventory/sharedStock';
 import { useStockSetupData } from '@/hooks/useStockSetup';
@@ -91,6 +92,7 @@ export default function ManagerInventoryScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
+  const [wasteItem, setWasteItem] = useState<InventoryItem | null>(null);
   // names for the recipe lines (every product Main lists) and the selling branches for the price lines
   const productNames = useMemo(() => new Map((query.data ?? []).map((entry) => [entry.product.id, entry.product.name])), [query.data]);
   const nameOf = useCallback((productId: string) => productNames.get(productId) ?? 'Unknown item', [productNames]);
@@ -349,6 +351,11 @@ export default function ManagerInventoryScreen() {
                   setSelected(null);
                   router.push('/manager/transfers/create' as never);
                 }}
+                onWaste={() => {
+                  const current = selected;
+                  setSelected(null);
+                  setWasteItem(current);
+                }}
                 sharedSources={stockSetup?.sources.get(selected.product.id) ?? null}
                 setupReady={!stockSetupData.isLoading}
                 onOpening={() => {
@@ -391,6 +398,8 @@ export default function ManagerInventoryScreen() {
           </View>
         ) : null}
       </BottomSheet>
+
+      <MainInventoryWasteSheet item={wasteItem} onClose={() => setWasteItem(null)} />
 
       <ListFiltersSheet
         visible={filtersOpen}

@@ -25,6 +25,7 @@ const wasteDay = (date) => ({
 let state = { days: [], isFetched: true, error: null, isLoading: false };
 const { WasteHistoryScreen } = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
   'react-native': rnw,
+  'expo-router': { useLocalSearchParams: () => ({ branchId: 'b' }) },
   '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
   '@/components/GlyphIcon': { GlyphIcon: () => null },
   '@/components/ConstrainedWidth': { ConstrainedWidth: (p) => React.createElement('div', null, p.children) },
@@ -42,7 +43,10 @@ const { WasteHistoryScreen } = loadTs('src/features/reports/WasteHistoryScreen.t
   '@/hooks/useClientPagination': { useClientPagination: (items) => ({ pageItems: items, showPagination: items.length > 5, page: 0, totalPages: 2, setPage() {} }) },
   '@/hooks/useShifts': { useShiftWaste: () => ({ data: { days: state.days }, isLoading: state.isLoading, error: state.error, isFetched: state.isFetched, refetch() {} }) },
 });
-const waste = (next) => { state = { days: [], isFetched: true, error: null, isLoading: false, ...next }; return flat(renderToStaticMarkup(React.createElement(WasteHistoryScreen))); };
+const waste = (next) => {
+  state = { days: [], isFetched: true, error: null, isLoading: false, ...next };
+  return flat(renderToStaticMarkup(React.createElement(WasteHistoryScreen, { branchId: 'b' })));
+};
 
 // nothing wasted on any day: one centred message, not a list of identical lines (the screenshot)
 let text = waste({ days: [quietDay('2026-11-12'), quietDay('2026-11-11')] });
@@ -65,7 +69,7 @@ assert.doesNotMatch(text, /EMPTY:/);
 assert.match(text, /Nov 12, 2026\|Pending\|/);
 
 // the other states are unchanged
-assert.match(waste({ days: [] }), /EMPTY:No waste history\|No reconciliation-aware closed shifts in this range\./);
+assert.match(waste({ days: [] }), /EMPTY:No waste history\|No recorded waste for this branch in this range\./);
 assert.match(waste({ days: [], error: new Error('x') }), /ERROR/);
 assert.doesNotMatch(waste({ days: [quietDay('2026-11-12')], error: new Error('x') }), /EMPTY:No waste recorded/, 'an error is never shown as "no waste"');
 assert.match(waste({ days: [], isLoading: true, isFetched: false }), /LOADING/);

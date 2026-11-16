@@ -42,6 +42,10 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   assert.match(off.hint, /disabled product can't be sent/);
   assert.equal(d.sendAction(item({ product: { is_active: false }, updated_at: null })).kind, 'blocked', 'a disabled product is refused whatever its stock');
   assert.equal(d.sendAction(item({ quantity_on_hand: 1 })).kind, 'send');
+  assert.equal(d.wasteAction(item({})).kind, 'waste');
+  assert.equal(d.wasteAction(item({ updated_at: null, quantity_on_hand: 0 })).kind, 'hidden');
+  assert.equal(d.wasteAction(item({ quantity_on_hand: 0 })).kind, 'hidden');
+  assert.equal(d.wasteAction(item({ quantity_on_hand: 2.5 })).kind, 'hidden');
   console.log('2. send action: ok');
 }
 
@@ -143,7 +147,7 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   });
   const names = { rice: 'Rice', egg: 'Egg', water: 'Bottled Water', coke: 'Coke Mismo' };
   const render = (item, props = {}) => renderToStaticMarkup(React.createElement(mod.MainStockDetails, {
-    item, sellingBranches: [SM1, SM2], nameOf: (id) => names[id] ?? 'x', onSend() {}, onOpening() {}, onOpenProduct() {}, sharedSources: null, setupReady: true, ...props,
+    item, sellingBranches: [SM1, SM2], nameOf: (id) => names[id] ?? 'x', onSend() {}, onWaste() {}, onOpening() {}, onOpenProduct() {}, sharedSources: null, setupReady: true, ...props,
   })).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
   const row = (id, name, patch = {}) => ({ product: { id, name, is_active: true, sell_in_pos: true, selling_price: 30, ...patch.product }, quantity_on_hand: patch.quantity_on_hand ?? 0, updated_at: patch.updated_at ?? null });
   const COUNTED = '2026-11-01T08:00:00Z';
@@ -173,13 +177,17 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   assert.doesNotMatch(open, /Default|Each selling branch sets|Options have no stock of their own|WHAT A SALE TAKES|Last updated/, 'no default price, no explanation paragraphs');
   assert.doesNotMatch(open, /Base price|Not assigned|Not initialized|New branches start at/, 'old labels are gone');
 
-  // ---- counted with stock: Send stock
+  // ---- counted with stock: Send stock, then Add to waste under it
   const counted = render(row('curry', 'Beef Curry', { quantity_on_hand: 12, updated_at: COUNTED }));
   assert.match(counted, /On hand\|12 pcs/);
   assert.match(counted, /\|Send stock\|/);
-  // zero on hand / disabled: blocked with the reason
+  assert.match(counted, /\|Send stock\|Add to waste\|/, 'Add to waste sits under Send stock');
+  // zero on hand / disabled: blocked with the reason; no waste when empty
   assert.match(render(row('curry', 'Beef Curry', { quantity_on_hand: 0, updated_at: COUNTED })), /Send stock\|Main has none left to send\./);
-  assert.match(render(row('curry', 'Beef Curry', { product: { is_active: false }, quantity_on_hand: 9, updated_at: COUNTED })), /Send stock\|A disabled product can(?:'|&#x27;)t be sent/);
+  assert.doesNotMatch(render(row('curry', 'Beef Curry', { quantity_on_hand: 0, updated_at: COUNTED })), /Add to waste/);
+  const disabled = render(row('curry', 'Beef Curry', { product: { is_active: false }, quantity_on_hand: 9, updated_at: COUNTED }));
+  assert.match(disabled, /A disabled product can(?:'|&#x27;)t be sent/);
+  assert.match(disabled, /\|Send stock\|Add to waste\|/, 'disabled products with Main stock can still be written off');
 
   // ---- Snacks: quantity of its own item
   state = { ...state, variants: [{ id: 'a', name: '3 Pcs', default_price: 30, is_active: true, sort_order: 1 }], branchVariants: [{ branch_id: 'sm1', name: '3 Pcs', selling_price: 30, is_active: true }], uses: [{ variant_id: 'a', ingredient_product_id: 'cheese', quantity: 3 }], drinks: [] };
@@ -205,10 +213,10 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   assert.match(extra, /View Rice stock/);
   assert.doesNotMatch(extra, /TAKES FROM STOCK|Takes:/, 'the "Rice ×1" recipe is not repeated under the source card');
   assert.match(extra, /SELLING PRICES\|SM 1\|₱10\.00/, 'its prices are still there');
-  assert.doesNotMatch(extra, /Set opening stock\|Nothing can be sent|\|Send stock\||On hand|Not set/, 'it never asks for its own opening stock or a transfer');
+  assert.doesNotMatch(extra, /Set opening stock\|Nothing can be sent|\|Send stock\||On hand|Not set|Add to waste/, 'it never asks for its own opening stock, transfer, or waste');
   const extraSent = render(row('extra-rice', 'Extra Rice', { product: { selling_price: 10 }, quantity_on_hand: 3, updated_at: COUNTED }), { sharedSources: riceSource });
   assert.match(extraSent, /Own balance\|3 pcs · not used by sales/, 'a leftover own balance is shown, labelled as unused');
-  assert.doesNotMatch(extraSent, /\|Send stock\|/);
+  assert.doesNotMatch(extraSent, /\|Send stock\||Add to waste/);
   // Extra Egg the same way, with two sources it lists both
   state = { ...state, uses: [{ variant_id: null, ingredient_product_id: 'egg', quantity: 1 }, { variant_id: null, ingredient_product_id: 'rice', quantity: 1 }] };
   assert.match(render(row('extra-egg', 'Extra Egg'), { sharedSources: [{ id: 'egg', name: 'Egg' }, { id: 'rice', name: 'Rice' }] }), /Uses stock from\|Egg, Rice/);
@@ -238,6 +246,8 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   assert.ok(screen.includes('key={selected.product.id}'), 'switching to another product starts fresh');
   assert.ok(screen.includes("router.push({ pathname: '/manager/inventory/setup', params: { product: productId } } as never);"), 'Set opening stock goes to the Opening stock screen, on this product');
   assert.ok(screen.includes('onOpenProduct={(productId) => {'), 'View Rice opens Rice\'s details');
+  assert.ok(screen.includes('onWaste={() => {'), 'Add to waste opens the Main waste sheet');
+  assert.ok(screen.includes('MainInventoryWasteSheet'), 'waste confirmation lives in its own sheet');
   assert.ok(screen.includes("label: 'Branch price'") && screen.includes('label="View returns"'), 'a branch manager keeps the sheet they had');
   // that route is a real screen, the same one the footer button opens
   const setup = read('app/(manager)/manager/inventory/setup.tsx');
@@ -246,6 +256,7 @@ const SM2 = { id: 'sm2', name: 'SM 2' };
   const details = read('src/features/inventory/MainStockDetails.tsx');
   assert.doesNotMatch(details, /Collapsible|useState|initiallyOpen/, 'nothing is hidden behind a tap');
   assert.match(details, /label=\{action\.label\}\s+variant="secondary"/, 'Set opening stock / Send stock use the light blue button, like View Rice stock');
+  assert.match(details, /label="Add to waste"/, 'Add to waste is offered under Send stock');
   assert.ok(details.includes("priceValue: { color: managerColors.royalBlue"), 'prices are blue');
   assert.doesNotMatch(details, /priceValueMuted: \{ color: managerColors\.royalBlue/, 'Off / Not added stay gray so they do not read as a price');
   assert.ok(details.includes('styles.priceLabel') && details.includes('numberOfLines={2}') && details.includes("priceLabel: { flex: 1, minWidth: 0"), 'a long branch name wraps instead of pushing the price off');

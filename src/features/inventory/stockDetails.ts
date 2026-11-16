@@ -68,6 +68,15 @@ export function sendAction(item: StockItem & { product: { is_active: boolean } }
   return { kind: 'send', label: 'Send stock', hint: null };
 }
 
+/** Whether "Add to waste" makes sense: Main has counted own stock with a positive whole balance. */
+export function wasteAction(item: StockItem): { kind: 'waste' } | { kind: 'hidden' } {
+  if (item.updated_at == null) return { kind: 'hidden' };
+  const shown = formatLiveStock(item.quantity_on_hand, undefined, item.product?.stock_unit_code);
+  if (shown === INVALID_QUANTITY_LABEL) return { kind: 'hidden' };
+  if (Number(item.quantity_on_hand) <= 0) return { kind: 'hidden' };
+  return { kind: 'waste' };
+}
+
 // ---------------------------------------------------------------- prices
 
 export type BranchRef = { id: string; name: string };

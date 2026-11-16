@@ -1,5 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -12,7 +13,6 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { managerColors, statChipColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { formatPcsQty, formatShiftTimeRange } from '@/features/reports/reportDisplay';
-import { useAuth } from '@/features/auth/AuthProvider';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftWaste } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
@@ -41,10 +41,16 @@ function isQuietDay(day: { occurrence_count: number; shifts: Array<{ waste_statu
 }
 
 function occurrenceMeta(item: ShiftWasteOccurrenceRow): string | undefined {
-  const time = item.recorded_at ? new Date(item.recorded_at).toLocaleTimeString('en-PH', {
-    hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila',
-  }) : '';
-  return [time, item.note?.trim() ? 'Reason: ' + item.note.trim() : 'No reason recorded'].filter(Boolean).join(' · ');
+  const time = item.recorded_at
+    ? new Date(item.recorded_at).toLocaleTimeString('en-PH', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'Asia/Manila',
+      })
+    : '';
+  const staff = item.recorded_by_name?.trim() ? item.recorded_by_name.trim() : '';
+  const reason = item.note?.trim() ? 'Reason: ' + item.note.trim() : 'No reason recorded';
+  return [time, staff, reason].filter(Boolean).join(' · ');
 }
 
 function shiftTotalPcs(occurrences: ShiftWasteOccurrenceRow[]): number | null {
@@ -74,66 +80,93 @@ function dayTotalPcs(day: { shifts: Array<{ occurrences: ShiftWasteOccurrenceRow
 
 const productCount = (shift: ShiftWasteShiftRow) => new Set(shift.occurrences.map((item) => item.product_id)).size;
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const rowKey = (shift: ShiftWasteShiftRow) =>
+  shift.shift_id ?? `main-${shift.branch_id}-${shift.business_date}-${shift.started_at ?? 'x'}`;
 
-/** What one shift wrote off, product by product (shown in the details sheet). */
+function paramValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+const DATE_FILTERS = new Set<DateFilterType>(['today', 'this_week', 'this_month', 'custom', 'all_time']);
+
+function parseRangeParam(value: string): DateFilterType {
+  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'today';
+}
+
+/** What one shift / Main inventory day wrote off, product by product (shown in the details sheet). */
 export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
   const total = shiftTotalPcs(shift.occurrences);
+  const isMain = shift.entry_kind === 'main_inventory' || shift.shift_id == null;
   return (
     <View style={styles.sheetBody}>
-            <View style={styles.sheetHead}>
-              <Text style={styles.branchName}>{shift.branch_name}</Text>
-              <Text style={styles.metaItemText}>{formatShiftTimeRange(shift.started_at, shift.ended_at)}</Text>
-              {shift.branch_name !== shift.cashier_name ? <Text style={styles.metaItemText}>{shift.cashier_name}</Text> : null}
+      <View style={styles.sheetHead}>
+        <Text style={styles.branchName}>{shift.branch_name}</Text>
+        <Text style={styles.metaItemText}>
+          {isMain ? 'Main inventory write-off' : formatShiftTimeRange(shift.started_at, shift.ended_at)}
+        </Text>
+        {!isMain && shift.branch_name !== shift.cashier_name ? (
+          <Text style={styles.metaItemText}>{shift.cashier_name}</Text>
+        ) : null}
+      </View>
+      <View style={styles.sheetCard}>
+        {shift.occurrences.map((item, index) => (
+          <View
+            key={item.occurrence_id ?? `${rowKey(shift)}-${item.product_id}-${index}`}
+            style={[styles.itemRow, index < shift.occurrences.length - 1 && styles.itemRowDivider]}
+          >
+            <View style={styles.itemCopy}>
+              <Text style={styles.itemName} numberOfLines={2}>
+                {item.product_name}
+              </Text>
+              {occurrenceMeta(item) ? <Text style={styles.itemNote}>{occurrenceMeta(item)}</Text> : null}
             </View>
-            <View style={styles.sheetCard}>
-              {shift.occurrences.map((item, index) => (
-                <View
-                  key={item.occurrence_id ?? `${shift.shift_id}-${item.product_id}`}
-                  style={[styles.itemRow, index < shift.occurrences.length - 1 && styles.itemRowDivider]}
-                >
-                  <View style={styles.itemCopy}>
-                    <Text style={styles.itemName} numberOfLines={2}>
-                      {item.product_name}
-                    </Text>
-                    {occurrenceMeta(item) ? <Text style={styles.itemNote}>{occurrenceMeta(item)}</Text> : null}
-                  </View>
-                  {item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
-                    <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity, item.stock_unit_code)}</Text>
-                  ) : null}
-                </View>
-              ))}
-              <View style={styles.sheetTotal}>
-                <Text style={styles.sheetTotalLabel}>Total</Text>
-                <Text style={styles.sheetTotalValue}>
-                  {total != null ? `${total} stock units (mixed items)` : '—'}
-                </Text>
-              </View>
-            </View>
+            {item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
+              <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity, item.stock_unit_code)}</Text>
+            ) : null}
           </View>
+        ))}
+        <View style={styles.sheetTotal}>
+          <Text style={styles.sheetTotalLabel}>Total</Text>
+          <Text style={styles.sheetTotalValue}>
+            {total != null ? `${total} stock units (mixed items)` : '—'}
+          </Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
-export function WasteHistoryScreen() {
-  const { profile } = useAuth();
-  const isManager = profile?.role === 'manager';
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+export function WasteHistoryScreen({
+  branchId: branchIdProp,
+  branchName: branchNameProp,
+}: {
+  branchId?: string;
+  branchName?: string;
+} = {}) {
+  const params = useLocalSearchParams<{ branchId?: string; range?: string; start?: string; end?: string }>();
+  const branchId = branchIdProp || paramValue(params.branchId);
+  const initialRange = parseRangeParam(paramValue(params.range));
+  // Default matches other reports when the hub did not pass a range query param.
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange || 'today');
+  const [customStart, setCustomStart] = useState(paramValue(params.start));
+  const [customEnd, setCustomEnd] = useState(paramValue(params.end));
   const [selected, setSelected] = useState<ShiftWasteShiftRow | null>(null);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
-  const query = useShiftWaste(rpcRangeType, startIso, endIso);
+  const query = useShiftWaste(rpcRangeType, startIso, endIso, branchId || null);
   const days = query.data?.days ?? [];
   const pagination = useClientPagination(days, rangeType, DAYS_PER_PAGE);
-  // Nothing wasted on any day (and no shift still pending): one centred "No waste recorded", like the other reports, instead of a
-  // list of identical "No waste recorded" lines. If any day has waste or a pending shift, the day list is shown as before.
+  const title = useMemo(() => {
+    if (branchNameProp) return `Waste · ${branchNameProp}`;
+    const fromDays = days.flatMap((day) => day.shifts).find((shift) => shift.branch_id === branchId)?.branch_name;
+    return fromDays ? `Waste · ${fromDays}` : 'Waste History';
+  }, [branchNameProp, days, branchId]);
+
+  // Nothing wasted on any day (and no shift still pending): one centred "No waste recorded".
   const noWaste = query.isFetched && !query.error && days.length > 0 && days.every((day) => isQuietDay(day));
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
-      {/* Manager reaches this screen from a dedicated sidebar entry (same as Home/Products) —
-          hamburger, not back. Owner only reaches it by drilling into the Reports hub, so it
-          keeps the back button there. */}
-      <ManagerScreenHeader title="Waste History" showBack={!isManager} />
+      <ManagerScreenHeader title={title} showBack />
       <ConstrainedWidth style={styles.column}>
         <DateRangeFilter
           value={rangeType}
@@ -143,20 +176,26 @@ export function WasteHistoryScreen() {
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
-        {query.isLoading ? <LoadingState label="Loading waste history…" /> : null}
-        {query.error ? <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : null}
-        {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
+        {!branchId ? (
+          <EmptyState title="Choose a branch" message="Open Waste History and select a branch to view recorded waste." />
+        ) : null}
+        {branchId && query.isLoading ? <LoadingState label="Loading waste history…" /> : null}
+        {branchId && query.error ? (
+          <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
+        ) : null}
+        {branchId && rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
-        {!query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
-          <EmptyState title="No waste history" message="No reconciliation-aware closed shifts in this range." />
+        {branchId && !query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
+          <EmptyState title="No waste history" message="No recorded waste for this branch in this range." />
         ) : null}
-        {noWaste ? <EmptyState title="No waste recorded" message="No waste was recorded in this period." /> : null}
+        {branchId && noWaste ? (
+          <EmptyState title="No waste recorded" message="No waste was recorded in this period." />
+        ) : null}
 
-        {(noWaste ? [] : pagination.pageItems).map((day) => {
+        {(branchId && !noWaste ? pagination.pageItems : []).map((day) => {
           const totalPcs = dayTotalPcs(day);
 
-          // a day with no waste is one quiet line, not an empty summary card
           if (day.occurrence_count === 0) {
             const pending = day.shifts.some((shift) => shift.waste_status === 'pending');
             return (
@@ -199,20 +238,28 @@ export function WasteHistoryScreen() {
                 const recorded = shift.waste_status === 'waste_recorded';
                 const totalForShift = shiftTotalPcs(shift.occurrences);
                 const chip = statChipColors[accentForName(shift.branch_name)];
+                const isMain = shift.entry_kind === 'main_inventory' || shift.shift_id == null;
+                const rowTitle = isMain ? 'Main inventory' : shift.branch_name;
                 const content = (
                   <View style={styles.shiftRow}>
                     <View style={[styles.branchChip, { backgroundColor: chip.chip }]}>
-                      <GlyphIcon name="storefront-outline" size={18} color={chip.icon} />
+                      <GlyphIcon
+                        name={isMain ? 'home-outline' : 'storefront-outline'}
+                        size={18}
+                        color={chip.icon}
+                      />
                     </View>
                     <View style={styles.shiftCopy}>
                       <Text style={styles.branchName} numberOfLines={2}>
-                        {shift.branch_name}
+                        {rowTitle}
                       </Text>
                       <View style={styles.metaItem}>
                         <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
-                        <Text style={styles.metaItemText}>{formatShiftTimeRange(shift.started_at, shift.ended_at)}</Text>
+                        <Text style={styles.metaItemText}>
+                          {formatShiftTimeRange(shift.started_at, shift.ended_at)}
+                        </Text>
                       </View>
-                      {shift.branch_name !== shift.cashier_name ? (
+                      {!isMain && shift.branch_name !== shift.cashier_name ? (
                         <View style={styles.metaItem}>
                           <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
                           <Text style={styles.metaItemText}>{shift.cashier_name}</Text>
@@ -222,7 +269,9 @@ export function WasteHistoryScreen() {
                     <View style={styles.shiftTrail}>
                       {recorded ? (
                         <>
-                          <Text style={styles.amount}>{totalForShift != null ? `${totalForShift} stock units (mixed items)` : '—'}</Text>
+                          <Text style={styles.amount}>
+                            {totalForShift != null ? `${totalForShift} stock units (mixed items)` : '—'}
+                          </Text>
                           <Text style={styles.trailSub}>{plural(productCount(shift), 'product', 'products')}</Text>
                         </>
                       ) : (
@@ -238,16 +287,16 @@ export function WasteHistoryScreen() {
                 );
                 return recorded ? (
                   <Pressable
-                    key={shift.shift_id}
+                    key={rowKey(shift)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Waste details for ${shift.branch_name}`}
+                    accessibilityLabel={`Waste details for ${rowTitle}`}
                     onPress={() => setSelected(shift)}
                     style={({ pressed }) => [styles.shiftCard, pressed && styles.pressed]}
                   >
                     {content}
                   </Pressable>
                 ) : (
-                  <View key={shift.shift_id} style={styles.shiftCard}>
+                  <View key={rowKey(shift)} style={styles.shiftCard}>
                     {content}
                   </View>
                 );
@@ -255,7 +304,7 @@ export function WasteHistoryScreen() {
             </View>
           );
         })}
-        {pagination.showPagination && !noWaste ? (
+        {branchId && pagination.showPagination && !noWaste ? (
           <View style={styles.pager}>
             <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
           </View>
@@ -271,7 +320,6 @@ export function WasteHistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  // flexGrow: with nothing to list, the loading / error / empty message fills the space under the filter and sits in the middle
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
   dayBlock: { gap: 10 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
@@ -293,7 +341,14 @@ const styles = StyleSheet.create({
   },
   heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  heroIconChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DCE8FC' },
+  heroIconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DCE8FC',
+  },
   heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
   heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, flexShrink: 1 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -333,7 +388,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
   },
-  itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 12 },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+  },
   itemRowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
   itemCopy: { flex: 1, minWidth: 0, gap: 2 },
   itemName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },

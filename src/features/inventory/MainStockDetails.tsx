@@ -11,7 +11,15 @@ import { useProductDrinkChoices, useProductStockUses, useProductVariants } from 
 import { formatMoney } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
 
-import { buildPriceSummary, buildUseRows, sendAction, stockDisplay, type BranchPriceState, type BranchRef } from './stockDetails';
+import {
+  buildPriceSummary,
+  buildUseRows,
+  sendAction,
+  stockDisplay,
+  wasteAction,
+  type BranchPriceState,
+  type BranchRef,
+} from './stockDetails';
 
 const TONE_COLORS = { danger: '#B91C1C', warning: managerColors.goldMuted } as const;
 
@@ -27,6 +35,7 @@ export function MainStockDetails({
   sellingBranches,
   nameOf,
   onSend,
+  onWaste,
   onOpening,
   onOpenProduct,
   sharedSources,
@@ -36,6 +45,8 @@ export function MainStockDetails({
   sellingBranches: BranchRef[];
   nameOf: (productId: string) => string;
   onSend: () => void;
+  /** Write off unsellable Main stock (shown under Send stock when Main has own counted stock). */
+  onWaste: () => void;
   onOpening: () => void;
   /** Show another product's stock details (the product this one takes its stock from). */
   onOpenProduct: (productId: string) => void;
@@ -103,6 +114,7 @@ export function MainStockDetails({
     };
   };
   const toneColor = stock.tone === 'danger' || stock.tone === 'warning' ? TONE_COLORS[stock.tone] : undefined;
+  const canWaste = !sharedStock && wasteAction(item).kind === 'waste';
 
   return (
     <View style={styles.wrap}><StockUnitHint code={item.product.stock_unit_code} />
@@ -152,6 +164,14 @@ export function MainStockDetails({
               disabled={action.kind === 'blocked'}
               onPress={action.kind === 'opening' ? onOpening : onSend}
             />
+            {canWaste ? (
+              <ManagerActionButton
+                label="Add to waste"
+                variant="secondary"
+                icon="trash-outline"
+                onPress={onWaste}
+              />
+            ) : null}
             {action.hint ? <Text style={styles.note}>{action.hint}</Text> : null}
           </>
         )}

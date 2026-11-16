@@ -37,3 +37,18 @@ export async function recordBranchStockAction(request: BranchStockRequest) {
   if (!data) throw new Error('Please retry to confirm whether the change was saved.');
   return data;
 }
+
+export type MainInventoryWasteRequest = {
+  p_product_id: string;
+  p_quantity: number;
+  p_expected_on_hand: number;
+  p_reason: string;
+  p_key: string;
+};
+
+export async function recordMainInventoryWaste(request: MainInventoryWasteRequest) {
+  const { data, error } = await supabase.rpc('record_main_inventory_waste', request);
+  if (error) throw error;
+  if (!data) throw new Error('Please retry to confirm whether the waste was saved.');
+  return data;
+}

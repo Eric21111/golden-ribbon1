@@ -549,6 +549,8 @@ export type ShiftWasteOccurrenceRow = {
   product_name: string;
   recorded_at: string;
   recorded_by: string;
+  /** Staff display name when the report joins profiles. */
+  recorded_by_name?: string | null;
   note: string | null;
   /** Quantified PCS from 7C; null for legacy occurrence-only rows. */
   quantity?: number | null;
@@ -603,14 +605,17 @@ export type ShiftCloseReportDetail = {
 };
 
 export type ShiftWasteShiftRow = {
-  shift_id: string;
+  /** Null for Main inventory waste rows (no selling shift). */
+  shift_id: string | null;
   business_date: string;
   branch_id: string;
   branch_name: string;
-  cashier_id: string;
+  cashier_id: string | null;
   cashier_name: string;
   started_at: string;
   ended_at: string | null;
+  /** shift = selling-branch close/mid-shift waste; main_inventory = Main write-off. */
+  entry_kind?: 'shift' | 'main_inventory';
   waste_status: ShiftWasteStatus;
   occurrences: ShiftWasteOccurrenceRow[];
 };

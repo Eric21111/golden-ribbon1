@@ -163,7 +163,13 @@ async function enrichWasteReportQuantities(report: ShiftWasteReport): Promise<Sh
   const shiftIds = new Set<string>();
   for (const day of report.days ?? []) {
     for (const shift of day.shifts ?? []) {
-      if (shift.waste_status === 'waste_recorded' && shift.occurrences.some(item => !item.occurrence_id)) shiftIds.add(shift.shift_id);
+      if (
+        shift.shift_id &&
+        shift.waste_status === 'waste_recorded' &&
+        shift.occurrences.some((item) => !item.occurrence_id)
+      ) {
+        shiftIds.add(shift.shift_id);
+      }
     }
   }
   if (shiftIds.size === 0) return report;
