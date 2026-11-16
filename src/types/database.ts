@@ -581,6 +581,10 @@ export type Database = {
         Args: { p_range_type?: string; p_start_date?: string | null; p_end_date?: string | null };
         Returns: BranchSalesReportItem[];
       };
+      report_owner_sales_by_branch: {
+        Args: { p_range_type?: string; p_start_date?: string | null; p_end_date?: string | null };
+        Returns: BranchSalesReportItem[];
+      };
       report_branch_daily_sales: {
         Args: {
           p_branch_id: string;

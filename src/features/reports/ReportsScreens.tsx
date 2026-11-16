@@ -1,5 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -19,10 +20,26 @@ import {
 } from '@/features/reports/DateRangeFilter';
 import { accentForRank } from '@/features/reports/reportAccents';
 import { useBranches } from '@/hooks/useBranches';
-import { useBranchDailySales, useBranchSalesLog, useProductSales, useSalesByBranch } from '@/hooks/useSales';
+import {
+  useBranchDailySales,
+  useBranchSalesLog,
+  useOwnerSalesByBranch,
+  useProductSales,
+  useSalesByBranch,
+} from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatManilaDate, formatMoney } from '@/lib/format';
+import { formatDate, formatManilaDate, formatMoney, isReportRangeReady } from '@/lib/format';
 import type { BranchSalesReportItem, ProductSalesReportItem } from '@/types/models';
+
+const DATE_FILTERS = new Set<DateFilterType>(['all_time', 'today', 'this_week', 'this_month', 'custom']);
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+function parseDateFilter(value: string): DateFilterType {
+  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'today';
+}
 
 function BranchSalesCard({
   rank,
@@ -69,7 +86,7 @@ function BranchSalesCard({
             <Ionicons name="storefront-outline" size={18} color={accent.icon} />
           </LinearGradient>
           <Text style={styles.rankRowTitle} numberOfLines={1}>
-            {item.branch_name}
+            {item.is_active === false ? `Inactive · ${item.branch_name}` : item.branch_name}
           </Text>
           <Text style={styles.rankRowAmount}>{formatMoney(item.total_sales)}</Text>
         </View>
@@ -154,22 +171,41 @@ function ProductSalesRow({ rank, item, share }: { rank: number; item: ProductSal
 }
 
 export function SalesByBranchScreen() {
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [openBranchId, setOpenBranchId] = useState<string | null>(null);
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const focusBranchId = firstParam(params.branchId);
+  const initialRange = parseDateFilter(firstParam(params.range));
+  const initialStart = firstParam(params.start);
+  const initialEnd = firstParam(params.end);
+
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
+  const [openBranchId, setOpenBranchId] = useState<string | null>(focusBranchId || null);
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
-  const query = useSalesByBranch(rpcRangeType, startIso, endIso);
+  const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
+  // Focused drill-in from Total Sales uses the owner RPC so inactive branches with sales stay visible.
+  // Normal Sales by Branch (no focus) keeps the active-only report unchanged.
+  const focused = Boolean(focusBranchId);
+  const activeQuery = useSalesByBranch(rpcRangeType, startIso, endIso, !focused);
+  const ownerQuery = useOwnerSalesByBranch(rpcRangeType, startIso, endIso, focused && ready);
+  const query = focused ? ownerQuery : activeQuery;
 
-  const report = query.data ?? [];
-  const activeBranches = report.filter((item) => Number(item.transaction_count) > 0);
-  const totalCompletedTx = activeBranches.reduce((acc, r) => acc + Number(r.transaction_count), 0);
-  const totalCompletedSales = activeBranches.reduce((acc, r) => acc + Number(r.total_sales), 0);
+  const reportReady = ready && !query.isError && query.data !== undefined;
+  const report = reportReady ? (query.data ?? []) : [];
+  const listedBranches = report.filter((item) => Number(item.transaction_count) > 0 || item.branch_id === focusBranchId);
+  const totalCompletedTx = listedBranches.reduce((acc, r) => acc + Number(r.transaction_count), 0);
+  const totalCompletedSales = listedBranches.reduce((acc, r) => acc + Number(r.total_sales), 0);
   const rankedBranches = useMemo(
-    () => [...activeBranches].sort((a, b) => Number(b.total_sales) - Number(a.total_sales)),
-    [activeBranches],
+    () => [...listedBranches].sort((a, b) => Number(b.total_sales) - Number(a.total_sales)),
+    [listedBranches],
   );
+  const totalsValue = !ready || query.isLoading || query.isError ? '—' : undefined;
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
@@ -185,13 +221,18 @@ export function SalesByBranchScreen() {
         />
 
         <View style={styles.statsRow}>
-          <StatTile style={styles.statHalf} icon="receipt-outline" label="Transactions" value={totalCompletedTx} />
+          <StatTile
+            style={styles.statHalf}
+            icon="receipt-outline"
+            label="Transactions"
+            value={totalsValue ?? totalCompletedTx}
+          />
           <StatTile
             style={styles.statHalf}
             emphasis
             icon="cash-outline"
             label="Total sales"
-            value={formatMoney(totalCompletedSales)}
+            value={totalsValue ?? formatMoney(totalCompletedSales)}
           />
         </View>
 
@@ -199,10 +240,10 @@ export function SalesByBranchScreen() {
         {query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : null}
-        {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
+        {rangeType === 'custom' && !ready ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
-        {activeBranches.length === 0 && !query.isLoading && query.isFetched ? (
+        {reportReady && !query.isLoading && rankedBranches.length === 0 ? (
           <EmptyState title="No sales recorded" message="Selling branches have no completed sales for this range." />
         ) : null}
 

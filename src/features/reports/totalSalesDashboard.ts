@@ -1,4 +1,5 @@
 import type { BranchSalesReportItem, ShiftRemittanceReport } from '../../types/models';
+import type { DateFilterType } from './DateRangeFilter';
 import { remittanceSummary } from './branchPerformanceCards';
 
 export type BranchSalesRemittanceRow = {
@@ -8,7 +9,25 @@ export type BranchSalesRemittanceRow = {
   transactions: number;
   remitted: number | null;
   reconciledShifts: number;
+  isActive: boolean;
 };
+
+/** Preserve Total Sales date filter + expand the tapped branch in Sales by Branch. */
+export function salesByBranchHref(args: {
+  branchId: string;
+  rangeType: DateFilterType;
+  customStart?: string;
+  customEnd?: string;
+}): string {
+  const params = new URLSearchParams();
+  params.set('branchId', args.branchId);
+  params.set('range', args.rangeType);
+  if (args.rangeType === 'custom') {
+    if (args.customStart) params.set('start', args.customStart);
+    if (args.customEnd) params.set('end', args.customEnd);
+  }
+  return `/owner/reports/sales-by-branch?${params.toString()}`;
+}
 
 const toCents = (value: unknown) => {
   const amount = Number(value);
@@ -89,6 +108,7 @@ export function buildTotalSalesBranchRows(
       transactions: Math.max(0, Math.trunc(Number(item.transaction_count) || 0)),
       remitted: cash?.remitted ?? null,
       reconciledShifts: cash?.reconciledShifts ?? 0,
+      isActive: item.is_active !== false,
     });
   }
 
@@ -101,6 +121,7 @@ export function buildTotalSalesBranchRows(
       transactions: 0,
       remitted: cash.remitted,
       reconciledShifts: cash.reconciledShifts,
+      isActive: true,
     });
   }
 

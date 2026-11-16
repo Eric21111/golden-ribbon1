@@ -631,6 +631,8 @@ export type BranchSalesReportItem = {
   branch_name: string;
   transaction_count: number;
   total_sales: number;
+  /** Present on owner company totals / focused drill-in; omitted by active-only Sales by Branch. */
+  is_active?: boolean;
 };
 
 export type OwnerTodayBranchSales = {

@@ -21,8 +21,8 @@ export const queryKeys = {
   returnDiscrepancies: ['return-discrepancies'] as const,
   sale: (id: string) => ['sales', id] as const,
   shiftSummary: (id: string) => ['shifts', 'summary', id] as const,
-  salesByBranch: (rangeType = 'today', startDate = '', endDate = '') =>
-    ['reports', 'sales-by-branch', { rangeType, startDate, endDate }] as const,
+  salesByBranch: (rangeType = 'today', startDate = '', endDate = '', mode: 'active' | 'owner' = 'active') =>
+    ['reports', 'sales-by-branch', { rangeType, startDate, endDate, mode }] as const,
   branchSalesLog: (branchId: string, rangeType = 'today', startDate = '', endDate = '') =>
     ['reports', 'sales-by-branch', 'log', branchId, { rangeType, startDate, endDate }] as const,
   branchDailySales: (branchId: string, rangeType = 'all_time', startDate = '', endDate = '') =>

@@ -12,9 +12,10 @@ import { managerColors } from '@/components/dashboard/theme';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import {
   buildTotalSalesBranchRows,
+  salesByBranchHref,
   totalRemittance,
 } from '@/features/reports/totalSalesDashboard';
-import { useSalesByBranch } from '@/hooks/useSales';
+import { useOwnerSalesByBranch } from '@/hooks/useSales';
 import { useShiftRemittances } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney, isReportRangeReady } from '@/lib/format';
@@ -27,23 +28,30 @@ export function TotalSalesDashboardScreen() {
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
 
-  const salesQuery = useSalesByBranch(rpcRangeType, startIso, endIso);
+  const salesQuery = useOwnerSalesByBranch(rpcRangeType, startIso, endIso, ready);
   const remittanceQuery = useShiftRemittances(rpcRangeType, startIso, endIso);
 
-  const salesRows = salesQuery.data ?? [];
-  const totalSales = useMemo(
-    () => salesRows.reduce((sum, row) => sum + (Number(row.total_sales) || 0), 0),
-    [salesRows],
+  const salesReady = ready && !salesQuery.isError && salesQuery.data !== undefined;
+  const remittanceReady = ready && !remittanceQuery.isError && remittanceQuery.data !== undefined;
+
+  const totalSales = useMemo(() => {
+    if (!salesReady) return null;
+    return (salesQuery.data ?? []).reduce((sum, row) => sum + (Number(row.total_sales) || 0), 0);
+  }, [salesReady, salesQuery.data]);
+
+  const cash = useMemo(
+    () => (remittanceReady ? totalRemittance(remittanceQuery.data) : null),
+    [remittanceReady, remittanceQuery.data],
   );
-  const cash = useMemo(() => totalRemittance(remittanceQuery.data), [remittanceQuery.data]);
-  const branches = useMemo(
-    () => buildTotalSalesBranchRows(salesQuery.data, remittanceQuery.data),
-    [salesQuery.data, remittanceQuery.data],
-  );
+
+  const branches = useMemo(() => {
+    if (!salesReady) return [];
+    return buildTotalSalesBranchRows(salesQuery.data, remittanceReady ? remittanceQuery.data : undefined);
+  }, [salesReady, remittanceReady, salesQuery.data, remittanceQuery.data]);
 
   const salesLoading = ready && salesQuery.isLoading;
   const remittanceLoading = ready && remittanceQuery.isLoading;
-  const customIncomplete = rangeType === 'custom' && !ready && !salesQuery.isLoading;
+  const customIncomplete = rangeType === 'custom' && !ready;
 
   return (
     <Screen
@@ -80,21 +88,21 @@ export function TotalSalesDashboardScreen() {
           emphasis
           icon="cash-outline"
           label="Total sales revenue"
-          value={salesLoading ? '—' : formatMoney(totalSales)}
+          value={salesLoading || customIncomplete || salesQuery.isError ? '—' : formatMoney(totalSales ?? 0)}
         />
         <StatTile
           layout="wide"
           icon="wallet-outline"
           label="Total remittance"
           value={
-            remittanceLoading
+            remittanceLoading || customIncomplete || remittanceQuery.isError
               ? '—'
-              : cash.remitted == null
+              : cash == null || cash.remitted == null
                 ? 'None yet'
                 : formatMoney(cash.remitted)
           }
         />
-        {!remittanceLoading && cash.pendingShifts > 0 ? (
+        {remittanceReady && cash && cash.pendingShifts > 0 ? (
           <Text style={styles.pendingNote}>
             {cash.pendingShifts} shift{cash.pendingShifts === 1 ? '' : 's'} awaiting remittance (
             {formatMoney(cash.pendingExpected)} expected).
@@ -105,43 +113,59 @@ export function TotalSalesDashboardScreen() {
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
 
-        {salesQuery.error ? (
+        {ready && salesQuery.error ? (
           <ErrorState message={getErrorMessage(salesQuery.error)} onRetry={() => void salesQuery.refetch()} />
         ) : null}
-        {!salesQuery.error && remittanceQuery.error ? (
+        {ready && !salesQuery.error && remittanceQuery.error ? (
           <ErrorState
             message={`Couldn't load remittance. ${getErrorMessage(remittanceQuery.error)}`}
             onRetry={() => void remittanceQuery.refetch()}
           />
         ) : null}
 
-        {salesLoading && remittanceLoading ? <LoadingState label="Loading company sales…" /> : null}
+        {salesLoading ? <LoadingState label="Loading company sales…" /> : null}
 
-        {!salesLoading && !salesQuery.error && ready && branches.length === 0 ? (
+        {salesReady && !salesLoading && branches.length === 0 ? (
           <EmptyState
             title="No sales or remittance"
             message="Selling branches have no completed sales or remitted shifts in this range."
           />
         ) : null}
 
-        {branches.length > 0 ? (
+        {salesReady && branches.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>SELLING BRANCHES</Text>
-            {branches.map((branch) => (
-              <ListRowCard
-                key={branch.branchId}
-                icon="storefront-outline"
-                iconColor={accentForName(branch.branchName)}
-                title={branch.branchName}
-                meta={`${branch.transactions} ${branch.transactions === 1 ? 'sale' : 'sales'} · Remitted ${
-                  branch.remitted == null ? 'none yet' : formatMoney(branch.remitted)
-                }`}
-                trailing={<Text style={styles.salesAmount}>{formatMoney(branch.sales)}</Text>}
-                onPress={() => router.push('/owner/reports/sales-by-branch' as never)}
-                accessibilityLabel={`${branch.branchName} sales ${formatMoney(branch.sales)}`}
-                accessibilityHint="Opens Sales by Branch"
-              />
-            ))}
+            {branches.map((branch) => {
+              const title = branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`;
+              return (
+                <ListRowCard
+                  key={branch.branchId}
+                  icon="storefront-outline"
+                  iconColor={accentForName(branch.branchName)}
+                  title={title}
+                  meta={`${branch.transactions} ${branch.transactions === 1 ? 'sale' : 'sales'} · Remitted ${
+                    remittanceReady
+                      ? branch.remitted == null
+                        ? 'none yet'
+                        : formatMoney(branch.remitted)
+                      : '—'
+                  }`}
+                  trailing={<Text style={styles.salesAmount}>{formatMoney(branch.sales)}</Text>}
+                  onPress={() =>
+                    router.push(
+                      salesByBranchHref({
+                        branchId: branch.branchId,
+                        rangeType,
+                        customStart,
+                        customEnd,
+                      }) as never,
+                    )
+                  }
+                  accessibilityLabel={`${title} sales ${formatMoney(branch.sales)}`}
+                  accessibilityHint="Opens Sales by Branch for this range"
+                />
+              );
+            })}
           </View>
         ) : null}
       </ConstrainedWidth>

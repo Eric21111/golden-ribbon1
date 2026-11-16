@@ -12,6 +12,7 @@ import {
   getSale,
   listBranchSalesLog,
   reportBranchDailySales,
+  reportOwnerSalesByBranch,
   reportProductSales,
   reportSalesByBranch,
 } from '@/services/saleService';
@@ -27,12 +28,27 @@ export function useSale(id: string) {
 export function useSalesByBranch(
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: queryKeys.salesByBranch(rangeType, startDate, endDate),
+    queryKey: queryKeys.salesByBranch(rangeType, startDate, endDate, 'active'),
     queryFn: () => reportSalesByBranch(rangeType, startDate, endDate),
-    enabled: isReportRangeReady(rangeType, startDate, endDate),
+    enabled: enabled && isReportRangeReady(rangeType, startDate, endDate),
+  });
+}
+
+/** Owner Total Sales / focused drill-in: includes inactive branches that sold in range. */
+export function useOwnerSalesByBranch(
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.salesByBranch(rangeType, startDate, endDate, 'owner'),
+    queryFn: () => reportOwnerSalesByBranch(rangeType, startDate, endDate),
+    enabled: enabled && isReportRangeReady(rangeType, startDate, endDate),
   });
 }
 

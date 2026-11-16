@@ -229,6 +229,21 @@ export async function reportSalesByBranch(
   return (data as unknown as BranchSalesReportItem[]) ?? [];
 }
 
+/** Owner company totals: active selling branches plus inactive branches with sales in range. */
+export async function reportOwnerSalesByBranch(
+  rangeType: 'today' | 'custom' | 'all_time' = 'today',
+  startDate?: string,
+  endDate?: string
+): Promise<BranchSalesReportItem[]> {
+  const { data, error } = await supabase.rpc('report_owner_sales_by_branch', {
+    p_range_type: rangeType,
+    p_start_date: startDate || null,
+    p_end_date: endDate || null,
+  });
+  if (error) throw error;
+  return (data as unknown as BranchSalesReportItem[]) ?? [];
+}
+
 export async function reportProductSales(
   rangeType: 'today' | 'custom' | 'all_time' = 'today',
   branchId?: string,
