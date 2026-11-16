@@ -5,11 +5,15 @@ import { PGlite } from '@electric-sql/pglite';
 const source = readFileSync('src/features/reports/InventoryReconciliationScreen.tsx', 'utf8');
 assert.match(source, /export function hasVisibleReconciliationIssue/);
 assert.match(source, /export function reconciliationIssueBadge/);
+assert.match(source, /export function hasResolvedDiscrepancy/);
+assert.match(source, /export function resolvedDiscrepancySummary/);
 assert.match(source, /Return issue/);
+assert.match(source, /'Resolved'/);
 assert.match(source, /auditDiscrepancySummary/);
 assert.match(source, /Return issues/);
 assert.match(source, /Count differences stay listed even when stock totals match/);
 assert.match(source, /hasVisibleReconciliationIssue\(item\)/);
+assert.match(source, /resolvedDiscrepancySummary\(item\)/);
 assert.match(source, /formatLiveStock/);
 assert.doesNotMatch(source, /formatSnapshottedQuantity/);
 assert.doesNotMatch(source, /has_reconciliation_issue\)\.length/);
@@ -40,6 +44,7 @@ const cashier = id(3);
 const main = id(10);
 const branch = id(11);
 const product = id(20);
+const productB = id(21);
 
 await db.exec(`
   insert into auth.users values ('${owner}','o@test'),('${mainMgr}','m@test'),('${cashier}','c@test');
@@ -49,12 +54,16 @@ await db.exec(`
     ('${owner}','Owner','owner',null),
     ('${mainMgr}','Main Manager','manager','${main}'),
     ('${cashier}','Cashier','cashier','${branch}');
-  insert into public.products(id,name,sku,selling_price,is_active) values ('${product}','Chicken','CH',80,true);
-  insert into public.branch_products(branch_id,product_id,selling_price,is_active) values ('${branch}','${product}',80,true);
+  insert into public.products(id,name,sku,selling_price,is_active) values
+    ('${product}','Chicken','CH',80,true),
+    ('${productB}','Rice','RI',40,true);
+  insert into public.branch_products(branch_id,product_id,selling_price,is_active) values
+    ('${branch}','${product}',80,true),('${branch}','${productB}',40,true);
   insert into public.branch_inventory(branch_id,product_id,quantity_on_hand) values
-    ('${branch}','${product}',12),('${main}','${product}',40);
+    ('${branch}','${product}',0),('${main}','${product}',40),
+    ('${branch}','${productB}',8),('${main}','${productB}',20);
   insert into public.inventory_movements(branch_id,product_id,movement_type,quantity,reference_type,created_by)
-  values ('${branch}','${product}','opening_stock',12,'opening_stock','${owner}');
+  values ('${branch}','${productB}','opening_stock',8,'opening_stock','${owner}');
 `);
 
 const asUser = async (userId, work) => {
@@ -66,36 +75,145 @@ const asUser = async (userId, work) => {
   }
 };
 
-const leftoverId = (
-  await asUser(cashier, () => db.query("select public.return_leftover_stock(null,'recon-leftover-key01') id"))
-).rows[0].id;
+const reconFor = async (branchId, productId) => {
+  const result = (
+    await asUser(owner, () => db.query(`select public.report_inventory_reconciliation($1) result`, [branchId]))
+  ).rows[0].result;
+  return result.find((row) => row.product_id === productId);
+};
 
-const leftoverItem = (
-  await db.query('select id, quantity_returned from public.stock_return_items where stock_return_id=$1', [leftoverId])
-).rows[0];
-assert.equal(Number(leftoverItem.quantity_returned), 12);
+const seedReturnDisc = async (suffix, productId, expected, received) => {
+  const returnId = id(100 + suffix);
+  const itemId = id(200 + suffix);
+  const discId = id(300 + suffix);
+  await db.exec(`
+    insert into public.stock_returns (
+      id, return_number, from_branch_id, to_branch_id, status, created_by, returned_by,
+      from_branch_name, to_branch_name, returned_by_name, idempotency_key, request_items,
+      returned_at, received_by, received_at, receive_idempotency_key
+    ) values (
+      '${returnId}', 'RET-RECON-${String(suffix).padStart(3, '0')}', '${branch}', '${main}',
+      'received_with_discrepancy', '${cashier}', '${cashier}', 'SM1', 'Main', 'Cashier',
+      'return-recon-key-${String(suffix).padStart(4, '0')}', '[]'::jsonb, now(), '${mainMgr}', now(),
+      'recv-recon-key-${String(suffix).padStart(4, '0')}'
+    );
+    insert into public.stock_return_items (
+      id, stock_return_id, product_id, quantity_returned, quantity_received, product_name, product_sku
+    ) values ('${itemId}', '${returnId}', '${productId}', ${expected}, ${received}, 'Item', 'SKU');
+    insert into public.return_discrepancies (
+      id, stock_return_id, stock_return_item_id, product_id, quantity_expected, quantity_received,
+      difference, discrepancy_type, recorded_by
+    ) values (
+      '${discId}', '${returnId}', '${itemId}', '${productId}', ${expected}, ${received},
+      ${expected - received}, '${expected - received > 0 ? 'missing' : 'excess'}', '${mainMgr}'
+    );
+  `);
+  return discId;
+};
+
+const seedTransferDisc = async (suffix, productId, expected, received) => {
+  const transferId = id(400 + suffix);
+  const itemId = id(500 + suffix);
+  const discId = id(600 + suffix);
+  await db.exec(`
+    insert into public.stock_transfers (
+      id, transfer_number, from_branch_id, to_branch_id, status, created_by, sent_by, received_by, sent_at, received_at
+    ) values (
+      '${transferId}', 'TR-RECON-${String(suffix).padStart(3, '0')}', '${main}', '${branch}',
+      'received_with_discrepancy', '${mainMgr}', '${mainMgr}', '${cashier}', now(), now()
+    );
+    insert into public.stock_transfer_items (id, stock_transfer_id, product_id, quantity_sent, quantity_received)
+    values ('${itemId}', '${transferId}', '${productId}', ${expected}, ${received});
+    insert into public.transfer_discrepancies (
+      id, stock_transfer_id, stock_transfer_item_id, product_id, quantity_expected, quantity_received,
+      difference, discrepancy_type, recorded_by
+    ) values (
+      '${discId}', '${transferId}', '${itemId}', '${productId}', ${expected}, ${received},
+      ${expected - received}, '${expected - received > 0 ? 'missing' : 'excess'}', '${cashier}'
+    );
+  `);
+  return discId;
+};
+
+const openDiscId = await seedReturnDisc(1, product, 12, 10);
+
+const chickenOpen = await reconFor(branch, product);
+assert.ok(chickenOpen);
+assert.equal(Number(chickenOpen.variance), 0);
+assert.equal(chickenOpen.has_reconciliation_issue, false);
+assert.equal(Number(chickenOpen.return_missing_qty), 2);
+assert.equal(Number(chickenOpen.return_excess_qty), 0);
+assert.equal(Number(chickenOpen.current_stock), 0);
+assert.equal(Number(chickenOpen.calculated_stock), 0);
+assert.deepEqual(chickenOpen.resolved_discrepancies ?? [], []);
+
+const resolved = (
+  await asUser(mainMgr, () =>
+    db.query('select public.resolve_return_discrepancy($1,$2,$3) result', [
+      openDiscId,
+      'confirmed_shortage',
+      '2 pieces confirmed missing on return.',
+    ]),
+  )
+).rows[0].result;
+assert.equal(resolved.status, 'resolved');
+assert.equal(resolved.resolution_reason, 'confirmed_shortage');
+
+const chickenResolved = await reconFor(branch, product);
+assert.equal(Number(chickenResolved.return_missing_qty), 0);
+assert.equal(Number(chickenResolved.return_excess_qty), 0);
+assert.equal(chickenResolved.has_reconciliation_issue, false);
+assert.equal(Number(chickenResolved.variance), 0);
+assert.equal((chickenResolved.resolved_discrepancies ?? []).length, 1);
+assert.equal(chickenResolved.resolved_discrepancies[0].kind, 'return');
+assert.equal(chickenResolved.resolved_discrepancies[0].resolution_reason, 'confirmed_shortage');
+assert.match(chickenResolved.resolved_discrepancies[0].resolution_note, /confirmed missing/);
+assert.equal(Number(chickenResolved.resolved_discrepancies[0].difference), 2);
+
+// Mixed open + resolved on same product.
+await seedReturnDisc(2, product, 5, 3);
+const chickenMixed = await reconFor(branch, product);
+assert.equal(Number(chickenMixed.return_missing_qty), 2);
+assert.equal((chickenMixed.resolved_discrepancies ?? []).length, 1);
+assert.equal(chickenMixed.resolved_discrepancies[0].resolution_reason, 'confirmed_shortage');
+assert.match(chickenMixed.resolved_discrepancies[0].resolution_note, /confirmed missing/);
+
+// Transfer open vs resolved on product B.
+const transferDiscId = await seedTransferDisc(1, productB, 10, 8);
+const riceOpenTransfer = await reconFor(branch, productB);
+assert.equal(Number(riceOpenTransfer.transfer_missing_qty), 2);
+assert.equal(Number(riceOpenTransfer.return_missing_qty), 0);
+assert.deepEqual(riceOpenTransfer.resolved_discrepancies ?? [], []);
 
 await asUser(mainMgr, () =>
-  db.query('select public.receive_stock_return($1,$2::jsonb,null,$3)', [
-    leftoverId,
-    JSON.stringify([{ stock_return_item_id: leftoverItem.id, quantity_received: 10 }]),
-    'recon-receive-short-01',
+  db.query('select public.resolve_transfer_discrepancy($1,$2,$3) result', [
+    transferDiscId,
+    'counting_error',
+    'Recount matched sent quantity.',
   ]),
 );
 
-await asUser(owner, async () => {
-  const beforeExpandWouldHide = (
-    await db.query(`select public.report_inventory_reconciliation($1) result`, [branch])
-  ).rows[0].result;
-  const chicken = beforeExpandWouldHide.find((row) => row.product_id === product);
-  assert.ok(chicken);
-  assert.equal(Number(chicken.variance), 0);
-  assert.equal(chicken.has_reconciliation_issue, false);
-  assert.equal(Number(chicken.return_missing_qty), 2);
-  assert.equal(Number(chicken.return_excess_qty), 0);
-  assert.equal(Number(chicken.current_stock), 0);
-  assert.equal(Number(chicken.calculated_stock), 0);
-});
+const riceResolvedTransfer = await reconFor(branch, productB);
+assert.equal(Number(riceResolvedTransfer.transfer_missing_qty), 0);
+assert.equal(Number(riceResolvedTransfer.transfer_excess_qty), 0);
+assert.equal(riceResolvedTransfer.has_reconciliation_issue, false);
+assert.equal((riceResolvedTransfer.resolved_discrepancies ?? []).length, 1);
+assert.equal(riceResolvedTransfer.resolved_discrepancies[0].kind, 'transfer');
+assert.equal(riceResolvedTransfer.resolved_discrepancies[0].resolution_reason, 'counting_error');
+assert.match(riceResolvedTransfer.resolved_discrepancies[0].resolution_note, /Recount matched/);
+
+const historicReturn = (
+  await db.query(
+    'select status, resolution_reason, resolution_note, difference from public.return_discrepancies where id=$1',
+    [openDiscId],
+  )
+).rows[0];
+assert.equal(historicReturn.status, 'resolved');
+assert.equal(historicReturn.resolution_reason, 'confirmed_shortage');
+assert.match(historicReturn.resolution_note, /confirmed missing/);
+assert.equal(Number(historicReturn.difference), 2);
 
 await db.close();
-console.log('Inventory reconciliation return-issue tests passed: leftover count shows without ledger variance.');
+console.log(
+  'Inventory reconciliation return-issue tests passed: open qty, resolve clears active issue, resolved notes, mixed open/resolved, transfer resolved.',
+);

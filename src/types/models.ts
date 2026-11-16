@@ -879,6 +879,16 @@ export type ReturnDiscrepancyReportItem = {
   resolved_by_name: string | null;
 };
 
+export type InventoryReconciliationResolvedDiscrepancy = {
+  kind: 'return' | 'transfer';
+  id: string;
+  discrepancy_type: 'missing' | 'excess';
+  difference: number;
+  resolution_reason: DiscrepancyResolutionReason | null;
+  resolution_note: string | null;
+  resolved_at: string | null;
+};
+
 export type InventoryReconciliationItem = {
   branch_id: string;
   branch_name: string;
@@ -901,6 +911,8 @@ export type InventoryReconciliationItem = {
   transfer_excess_qty: number;
   return_missing_qty: number;
   return_excess_qty: number;
+  /** Historical resolved return/transfer discrepancies for this branch+product. */
+  resolved_discrepancies?: InventoryReconciliationResolvedDiscrepancy[];
 };
 
 export type DataArchiveStatus = 'prepared' | 'exported' | 'verified' | 'cleaned' | 'failed';

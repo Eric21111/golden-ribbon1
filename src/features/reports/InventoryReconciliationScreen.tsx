@@ -17,7 +17,11 @@ import { useInventoryReconciliation } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
 import { formatLiveStock } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
-import type { InventoryReconciliationItem } from '@/types/models';
+import type {
+  DiscrepancyResolutionReason,
+  InventoryReconciliationItem,
+  InventoryReconciliationResolvedDiscrepancy,
+} from '@/types/models';
 
 /** Live/current reconciliation quantities are whole PCS after Revision 7. */
 function formatReconQty(quantity: number, code?: import('@/lib/stockUnits').StockUnitCode | null): string {
@@ -31,6 +35,31 @@ function qtyPart(missing: number, excess: number): string {
   return parts.join(' · ');
 }
 
+const RESOLUTION_REASON_LABELS: Record<DiscrepancyResolutionReason, string> = {
+  confirmed_shortage: 'Confirmed shortage',
+  confirmed_excess: 'Confirmed excess',
+  counting_error: 'Counting error',
+  encoding_error: 'Encoding error',
+  transfer_handling_issue: 'Transfer handling issue',
+  return_handling_issue: 'Return handling issue',
+  other: 'Other',
+};
+
+export function resolutionReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return 'Resolved';
+  return RESOLUTION_REASON_LABELS[reason as DiscrepancyResolutionReason] ?? reason.replace(/_/g, ' ');
+}
+
+export function resolvedDiscrepancies(
+  item: InventoryReconciliationItem,
+): InventoryReconciliationResolvedDiscrepancy[] {
+  return item.resolved_discrepancies ?? [];
+}
+
+export function hasResolvedDiscrepancy(item: InventoryReconciliationItem): boolean {
+  return resolvedDiscrepancies(item).length > 0;
+}
+
 export function hasAuditDiscrepancy(item: InventoryReconciliationItem): boolean {
   return (
     Number(item.transfer_missing_qty) > 0 ||
@@ -40,20 +69,24 @@ export function hasAuditDiscrepancy(item: InventoryReconciliationItem): boolean 
   );
 }
 
-/** Ledger variance or a counted return/transfer difference — testers see this as an issue. */
+/** Ledger variance or an open return/transfer difference — testers see this as an issue. */
 export function hasVisibleReconciliationIssue(item: InventoryReconciliationItem): boolean {
   return Boolean(item.has_reconciliation_issue) || hasAuditDiscrepancy(item);
 }
 
-export function reconciliationIssueBadge(item: InventoryReconciliationItem): { label: string; tone: 'danger' | 'warning' | 'success' } {
+export function reconciliationIssueBadge(item: InventoryReconciliationItem): {
+  label: string;
+  tone: 'danger' | 'warning' | 'success';
+} {
   const ledger = Boolean(item.has_reconciliation_issue);
   const transfer = Number(item.transfer_missing_qty) > 0 || Number(item.transfer_excess_qty) > 0;
   const returned = Number(item.return_missing_qty) > 0 || Number(item.return_excess_qty) > 0;
-  if (!ledger && !transfer && !returned) return { label: 'Balanced', tone: 'success' };
   if (ledger) return { label: 'Issue', tone: 'danger' };
   if (returned && transfer) return { label: 'Audit issue', tone: 'warning' };
   if (returned) return { label: 'Return issue', tone: 'warning' };
-  return { label: 'Transfer issue', tone: 'warning' };
+  if (transfer) return { label: 'Transfer issue', tone: 'warning' };
+  if (hasResolvedDiscrepancy(item)) return { label: 'Resolved', tone: 'success' };
+  return { label: 'Balanced', tone: 'success' };
 }
 
 export function auditDiscrepancySummary(item: InventoryReconciliationItem): string | null {
@@ -63,6 +96,18 @@ export function auditDiscrepancySummary(item: InventoryReconciliationItem): stri
   if (transfer) parts.push(`Transfer ${transfer}`);
   if (returned) parts.push(`Return ${returned}`);
   return parts.length ? parts.join(' · ') : null;
+}
+
+export function resolvedDiscrepancySummary(item: InventoryReconciliationItem): string | null {
+  const rows = resolvedDiscrepancies(item);
+  if (!rows.length) return null;
+  return rows
+    .map((row) => {
+      const reason = resolutionReasonLabel(row.resolution_reason);
+      const note = row.resolution_note?.trim();
+      return note ? `${reason} · ${note}` : reason;
+    })
+    .join(' · ');
 }
 
 export function InventoryReconciliationScreen() {
@@ -132,6 +177,8 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
   const isIssue = hasVisibleReconciliationIssue(item);
   const badge = reconciliationIssueBadge(item);
   const auditSummary = auditDiscrepancySummary(item);
+  const resolutionSummary = resolvedDiscrepancySummary(item);
+  const resolvedRows = resolvedDiscrepancies(item);
   const varianceTone = ledgerIssue ? styles.varianceIssue : styles.varianceOk;
   const varianceLabel = item.variance > 0
     ? `+${formatReconQty(item.variance, item.stock_unit_code)}`
@@ -182,6 +229,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
         </View>
       </View>
       {auditSummary ? <Text style={styles.auditSummary}>{auditSummary}</Text> : null}
+      {resolutionSummary ? <Text style={styles.resolutionSummary}>{resolutionSummary}</Text> : null}
 
       {expanded ? (
         <View style={styles.ledger}>
@@ -220,7 +268,7 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
             <View style={styles.auditRefSection}>
               <View style={styles.auditRefHeader}>
                 <Ionicons name="information-circle-outline" size={13} color={managerColors.subtext} />
-                <Text style={styles.auditRefTitle}>Audit discrepancies (reference only)</Text>
+                <Text style={styles.auditRefTitle}>Open audit discrepancies</Text>
               </View>
               {item.transfer_missing_qty > 0 || item.transfer_excess_qty > 0 ? (
                 <View style={styles.ledgerRow}>
@@ -240,6 +288,26 @@ function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem })
               ) : null}
             </View>
           ) : null}
+
+          {resolvedRows.length ? (
+            <View style={styles.auditRefSection}>
+              <View style={styles.auditRefHeader}>
+                <Ionicons name="checkmark-circle-outline" size={13} color={managerColors.subtext} />
+                <Text style={styles.auditRefTitle}>Resolved discrepancies</Text>
+              </View>
+              {resolvedRows.map((row) => {
+                const note = row.resolution_note?.trim();
+                return (
+                  <View key={`${row.kind}-${row.id}`} style={styles.resolutionRow}>
+                    <Text style={styles.ledgerLabel}>
+                      {row.kind === 'return' ? 'Return' : 'Transfer'} · {resolutionReasonLabel(row.resolution_reason)}
+                    </Text>
+                    {note ? <Text style={styles.meta}>{note}</Text> : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Pressable>
@@ -257,6 +325,7 @@ const styles = StyleSheet.create({
   },
   hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, lineHeight: 18, marginTop: -6 },
   auditSummary: { color: '#92400E', fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18 },
+  resolutionSummary: { color: managerColors.green, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   statsRow: { flexDirection: 'row', gap: 10 },
   statHalf: { flex: 1 },
   pager: { paddingVertical: 8 },
@@ -304,6 +373,7 @@ const styles = StyleSheet.create({
   ledgerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   ledgerLabel: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
   ledgerValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 12.5 },
+  resolutionRow: { gap: 2 },
   auditRefSection: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
