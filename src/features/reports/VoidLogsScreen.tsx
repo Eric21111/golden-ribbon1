@@ -13,10 +13,14 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
 const PAGE_SIZE = 50;
+
+function formatVoidRecordedAt(value: string): string {
+  return new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
+}
 
 export default function VoidLogsScreen() {
   const { profile } = useAuth();
@@ -93,7 +97,7 @@ export default function VoidLogsScreen() {
                     {reason}
                   </Text>
                 </View>
-                <Text style={styles.time}>{formatDate(row.recorded_at)}</Text>
+                <Text style={styles.time}>{formatVoidRecordedAt(row.recorded_at)}</Text>
               </View>
             </View>
           );
