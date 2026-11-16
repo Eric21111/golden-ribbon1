@@ -7,6 +7,7 @@ import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
@@ -42,13 +43,6 @@ function remittanceRowBadge(
   if (result === 'excess') return { label: `+${formatMoney(Math.abs(Number(difference ?? 0)))}`, tone: 'success' };
   return { label: 'Exact', tone: 'info' };
 }
-
-const badgeToneStyles = {
-  danger: { bg: '#FEE2E2', text: '#B91C1C' },
-  success: { bg: '#DCFCE7', text: managerColors.green },
-  warning: { bg: '#FEF3C7', text: managerColors.goldMuted },
-  info: { bg: '#DBEAFE', text: '#1E40AF' },
-} as const;
 
 export function ShiftRemittanceScreen() {
   const { profile } = useAuth();
@@ -231,7 +225,6 @@ export function ShiftRemittanceScreen() {
 
               {day.shifts.map((row) => {
                 const badge = remittanceRowBadge(row.status, row.result, row.difference);
-                const tone = badgeToneStyles[badge.tone];
                 return (
                   <ListRowCard
                     key={row.shift_id}
@@ -254,24 +247,23 @@ export function ShiftRemittanceScreen() {
                     }
                     onPress={() => router.push(`${detailBase}/${row.shift_id}` as never)}
                     trailing={
-                      <>
-                        <Text style={styles.amount}>
+                      <View style={styles.trailingCol}>
+                        <Text style={styles.amount} numberOfLines={2}>
                           {row.expected_gcash == null ? 'Collections' : 'Cash'} {row.status === 'pending' ? 'expected' : 'submitted'}{' '}
                           {row.status === 'pending'
                             ? formatMoney(Number(row.expected_cash))
                             : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
                         </Text>
                         {row.expected_gcash != null ? (
-                          <Text style={styles.gcashLine}>
+                          <Text style={styles.gcashLine} numberOfLines={2}>
                             {`GCash submitted ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} · expected ${formatMoney(Number(row.expected_gcash))}`}
                           </Text>
                         ) : null}
-                        <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
-                          <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
-                            {row.expected_gcash != null ? 'Cash: ' : ''}{badge.label}
-                          </Text>
-                        </View>
-                      </>
+                        <ManagerBadge
+                          label={`${row.expected_gcash != null ? 'Cash: ' : ''}${badge.label}`}
+                          tone={badge.tone}
+                        />
+                      </View>
                     }
                   />
                 );
@@ -294,8 +286,8 @@ const styles = StyleSheet.create({
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   dayBlock: { gap: 12 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
-  gcashLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14, textAlign: 'right' },
+  gcashLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12, textAlign: 'right' },
   pendingNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12 },
   pendingNoteText: { flex: 1, color: managerColors.goldMuted, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
   heroCard: {
@@ -322,11 +314,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#DCE8FC',
   },
-  heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-  heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 20 },
-  pillRow: { flexDirection: 'row', gap: 8 },
+  heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13, flexShrink: 1 },
+  heroValue: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '55%',
+    textAlign: 'right',
+  },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 140,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
@@ -344,15 +345,14 @@ const styles = StyleSheet.create({
     borderTopColor: managerColors.cardBorder,
     paddingTop: 14,
   },
-  footerStat: { flex: 1, alignItems: 'center', gap: 4 },
-  footerStatTop: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  footerStatValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  footerStat: { flex: 1, alignItems: 'center', gap: 4, minWidth: 0 },
+  footerStatTop: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
+  footerStatValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15, flexShrink: 1 },
   footerStatWarning: { color: managerColors.goldMuted },
-  footerStatLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
+  footerStatLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, textAlign: 'center' },
   footerDivider: { width: 1, height: 30, backgroundColor: managerColors.cardBorder },
-  rowBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  rowBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 12.5 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaItemText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  trailingCol: { alignItems: 'flex-end', gap: 6, flexShrink: 1, maxWidth: 180 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' },
+  metaItemText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, flexShrink: 1 },
   pager: { paddingVertical: 8 },
 });

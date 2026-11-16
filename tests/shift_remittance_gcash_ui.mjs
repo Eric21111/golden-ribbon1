@@ -87,6 +87,7 @@ const List = loadTs('src/features/reports/ShiftRemittanceScreen.tsx', {
   '@/components/Pagination': { Pagination: () => null },
   '@/components/Screen': { Screen: Pass },
   '@/components/dashboard/ListRowCard': { ListRowCard: (p) => React.createElement('div', null, p.title, p.metaRow, p.trailing) },
+  '@/components/dashboard/ManagerBadge': { ManagerBadge: ({ label }) => React.createElement('span', null, label) },
   '@/components/dashboard/ManagerFeedback': { EmptyState: () => null, ErrorState: () => null, LoadingState: () => null },
   '@/components/dashboard/ManagerScreenHeader': { ManagerScreenHeader: () => null },
   '@/components/dashboard/theme': { managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' } },
