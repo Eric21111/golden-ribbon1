@@ -7,7 +7,6 @@ import { Screen } from '@/components/Screen';
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
-import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
@@ -85,7 +84,6 @@ export default function OwnerDashboard() {
   const todayLogQuery = useOwnerTodayActivityLog();
   const archiveQuery = useArchiveStatus();
   const dismissReminder = useDismissArchiveReminder();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [showFullLog, setShowFullLog] = useState(false);
 
   const metrics = metricsQuery.data;
@@ -131,11 +129,6 @@ export default function OwnerDashboard() {
     void branchSalesQuery.refetch();
     void todayLogQuery.refetch();
   });
-
-  const openReport = (path: '/owner/reports/sales-by-branch' | '/owner/reports/product-sales') => {
-    setDetailsOpen(false);
-    router.push(path);
-  };
 
   return (
     <Screen
@@ -228,7 +221,7 @@ export default function OwnerDashboard() {
                 icon="cash-outline"
                 label="Total · selling branches"
                 value={quickviewReady ? formatMoney(quickview.totalRevenue) : '—'}
-                onPress={() => setDetailsOpen(true)}
+                onPress={() => router.push('/owner/reports/total-sales' as never)}
               />
               {quickviewStatus === 'loading' ? (
                 <LoadingState label="Loading branch revenue…" />
@@ -382,37 +375,6 @@ export default function OwnerDashboard() {
           </View>
         )}
       </ConstrainedWidth>
-
-      <ManagerBottomSheet
-        visible={detailsOpen}
-        title="Today's sales details"
-        onClose={() => setDetailsOpen(false)}
-        scroll
-      >
-        {quickviewError}
-        {(quickviewReady ? quickview.branches : []).map((branch) => (
-          <ListRowCard
-            key={branch.branchId}
-            icon="storefront-outline"
-            title={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
-            trailing={<Text style={styles.revenue}>{formatMoney(branch.revenue)}</Text>}
-          />
-        ))}
-        <Text style={styles.quiet}>
-          Completed sales for today (Asia/Manila). Sales revenue, not cash remitted.
-        </Text>
-        <ManagerActionButton
-          label="Sales by Branch"
-          icon="stats-chart-outline"
-          onPress={() => openReport('/owner/reports/sales-by-branch')}
-        />
-        <ManagerActionButton
-          label="Product Sales"
-          icon="pricetag-outline"
-          variant="secondary"
-          onPress={() => openReport('/owner/reports/product-sales')}
-        />
-      </ManagerBottomSheet>
     </Screen>
   );
 }
@@ -459,7 +421,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
-  revenue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
   logTime: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   alertCard: {
     backgroundColor: '#FEF2F2',

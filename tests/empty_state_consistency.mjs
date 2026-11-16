@@ -80,6 +80,7 @@ const grow = [
   ['src/features/reports/BranchPerformanceScreens.tsx', /column: \{ flexGrow: 1,/],
   ['src/features/reports/DiscrepancyReportsScreens.tsx', /column: \{ flexGrow: 1,/],
   ['src/features/reports/InventoryReconciliationScreen.tsx', /column: \{ flexGrow: 1,/],
+  ['src/features/reports/TotalSalesDashboardScreen.tsx', /column: \{ flexGrow: 1,/],
   ['app/(manager)/manager/reports/product-sales.tsx', /column: \{ flexGrow: 1,/],
 ];
 for (const [file, pattern] of grow) {

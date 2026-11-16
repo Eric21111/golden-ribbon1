@@ -251,12 +251,11 @@ sales.state.metrics = query({ error: new Error('metrics down'), isError: true })
 }
 sales.state.metrics = query({ data: metricsData });
 
-// 7. Details sheet source: rows only when ready, inline error reused there.
+// 7. Total revenue opens the Total Sales dashboard (no details sheet).
 {
   const source = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
-  const sheet = source.slice(source.indexOf('<ManagerBottomSheet'), source.indexOf('</ManagerBottomSheet>'));
-  assert.match(sheet, /\{quickviewError\}/);
-  assert.match(sheet, /\(quickviewReady \? quickview\.branches : \[\]\)\.map/);
+  assert.doesNotMatch(source, /ManagerBottomSheet/);
+  assert.match(source, /\/owner\/reports\/total-sales/);
   assert.match(source, /\{metricsQuery\.error \? \(/, 'branch query not in the global gate');
 }
 

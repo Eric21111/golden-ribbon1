@@ -16,6 +16,7 @@ function OwnerStack() {
       <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="owner/dashboard" />
         <Stack.Screen name="owner/reports/index" />
+        <Stack.Screen name="owner/reports/total-sales" />
         <Stack.Screen name="owner/reports/sales-by-branch" />
         <Stack.Screen name="owner/reports/shift-remittances/index" />
         <Stack.Screen name="owner/reports/shift-remittances/[id]" />

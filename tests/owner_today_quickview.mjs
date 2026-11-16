@@ -66,9 +66,8 @@ import {
   assert.match(quickviewSection, /quickview\.branches/);
   assert.doesNotMatch(quickviewSection, /label="Transactions"|label="Items sold"/, 'moved out of the quickview');
   assert.doesNotMatch(source, /'SM1'|'SM2'|"SM1"|"SM2"/, 'no hardcoded branch names');
-  const sheet = source.slice(source.indexOf('<ManagerBottomSheet'), source.indexOf('</ManagerBottomSheet>'));
-  assert.doesNotMatch(sheet, /label="Transactions"/);
-  assert.doesNotMatch(sheet, /label="Items sold"/);
+  assert.doesNotMatch(source, /ManagerBottomSheet/, 'total revenue opens the Total Sales dashboard, not a sheet');
+  assert.match(quickviewSection, /\/owner\/reports\/total-sales/);
   assert.match(source, /transfer_discrepancies_count/);
   assert.doesNotMatch(source, /TODAY'S PRODUCT PERFORMANCE/);
   assert.match(source, /reminder_visible/);
