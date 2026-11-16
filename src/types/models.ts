@@ -968,6 +968,16 @@ export type ArchiveExportSale = {
   sold_at: string;
 };
 
+export type ArchiveVoidEvent = {
+  id: string;
+  quantity: number;
+  amount: number;
+  reason: string;
+  note: string;
+  cashier_id: string;
+  at: string;
+};
+
 export type ArchiveExportSaleItem = {
   id: string;
   sale_id: string;
@@ -978,6 +988,24 @@ export type ArchiveExportSaleItem = {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  /** Full void event list; required before cleanup so void detail is not lost with sale_items. */
+  void_history?: ArchiveVoidEvent[];
+};
+
+export type ArchiveExportVoidEvent = {
+  void_event_id: string;
+  sale_item_id: string;
+  sale_id: string;
+  sale_number: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  amount: number;
+  reason: string;
+  note: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  voided_at: string;
 };
 
 export type ArchiveExportShift = {
@@ -1000,6 +1028,7 @@ export type ArchiveManifest = {
   sales_row_count: number;
   sale_item_row_count: number;
   shift_row_count: number;
+  void_event_row_count?: number;
   revenue_total: number;
   units_sold: number;
 };
@@ -1008,6 +1037,8 @@ export type ArchiveExportPackage = {
   archive: DataArchiveRecord;
   sales: ArchiveExportSale[];
   sale_items: ArchiveExportSaleItem[];
+  /** Flattened void events for saved files; may be empty when no voids exist. */
+  void_events?: ArchiveExportVoidEvent[];
   shifts: ArchiveExportShift[];
   manifest: ArchiveManifest;
 };

@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { loadTs } from './_load_ts.mjs';
 
 const db = new PGlite();
 await db.exec(`
@@ -68,54 +69,83 @@ const dates = (await db.query(`
 const oldShift = id(30);
 const recentShift = id(31);
 const openShift = id(32);
+const pendingShift = id(33);
 const oldSale = id(40);
 const voidSale = id(41);
 const recentSale = id(42);
 const todaySale = id(43);
+const pendingCashSale = id(44);
+const pendingGcashSale = id(45);
+const voidEventId = id(50);
 
 await db.exec(`
-  insert into public.shifts(id,branch_id,cashier_id,status,started_at,ended_at) values
+  insert into public.shifts(id,branch_id,cashier_id,status,started_at,ended_at,reconciliation_required) values
     ('${oldShift}','${branch1}','${cashier1}','closed',
       ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila'),
-      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '8 hours'),
+      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '8 hours', false),
+    ('${pendingShift}','${branch1}','${cashier2}','closed',
+      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '9 hours',
+      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '12 hours', true),
     ('${recentShift}','${branch1}','${cashier1}','closed',
       ('${dates.recent_date}'::date::timestamp at time zone 'Asia/Manila'),
-      ('${dates.recent_date}'::date::timestamp at time zone 'Asia/Manila') + interval '8 hours'),
+      ('${dates.recent_date}'::date::timestamp at time zone 'Asia/Manila') + interval '8 hours', false),
     ('${openShift}','${branch1}','${cashier2}','open',
-      now() - interval '1 hour', null);
+      now() - interval '1 hour', null, false);
 
-  insert into public.sales(id,sale_number,branch_id,shift_id,cashier_id,subtotal,total_amount,amount_paid,change_amount,status,sold_at,idempotency_key,request_items)
+  insert into public.sales(
+    id,sale_number,branch_id,shift_id,cashier_id,subtotal,total_amount,amount_paid,change_amount,
+    status,sold_at,idempotency_key,request_items,payment_method
+  )
   values
     ('${oldSale}','SALE-ARCH-OLD','${branch1}','${oldShift}','${cashier1}',400,400,400,0,'completed',
       ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '2 hours',
-      'archive-old-sale-key01','[]'),
-    ('${voidSale}','SALE-ARCH-VOID','${branch1}','${oldShift}','${cashier1}',80,80,80,0,'voided',
+      'archive-old-sale-key01','[]','cash'),
+    ('${voidSale}','SALE-ARCH-VOID','${branch1}','${oldShift}','${cashier1}',0,0,0,0,'voided',
       ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '3 hours',
-      'archive-void-sale-key01','[]'),
+      'archive-void-sale-key01','[]',null),
+    ('${pendingCashSale}','SALE-ARCH-PCASH','${branch1}','${pendingShift}','${cashier2}',160,160,160,0,'completed',
+      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '10 hours',
+      'archive-pending-cash-k01','[]','cash'),
+    ('${pendingGcashSale}','SALE-ARCH-PGCASH','${branch1}','${pendingShift}','${cashier2}',80,80,80,0,'completed',
+      ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '11 hours',
+      'archive-pending-gcash-k1','[]','gcash'),
     ('${recentSale}','SALE-ARCH-REC','${branch1}','${recentShift}','${cashier1}',160,160,160,0,'completed',
       ('${dates.recent_date}'::date::timestamp at time zone 'Asia/Manila') + interval '2 hours',
-      'archive-recent-sale-k01','[]'),
+      'archive-recent-sale-k01','[]','cash'),
     ('${todaySale}','SALE-ARCH-TOD','${branch1}','${recentShift}','${cashier1}',240,240,240,0,'completed',
       (timezone('Asia/Manila', now()))::date::timestamp at time zone 'Asia/Manila' + interval '2 hours',
-      'archive-today-sale-k01','[]');
+      'archive-today-sale-k01','[]','cash');
 
-  insert into public.sale_items(sale_id,product_id,quantity,unit_price,subtotal) values
-    ('${oldSale}','${chicken}',5,80,400),
-    ('${voidSale}','${chicken}',1,80,80),
-    ('${recentSale}','${chicken}',2,80,160),
-    ('${todaySale}','${chicken}',3,80,240);
+  insert into public.sale_items(sale_id,product_id,quantity,unit_price,subtotal,void_history) values
+    ('${oldSale}','${chicken}',5,80,400,'[]'::jsonb),
+    ('${voidSale}','${chicken}',0,80,0,
+      jsonb_build_array(jsonb_build_object(
+        'id', '${voidEventId}',
+        'quantity', 1,
+        'amount', 80,
+        'reason', 'Customer changed mind',
+        'note', 'Wanted different size',
+        'cashier_id', '${cashier1}',
+        'at', (('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') + interval '3 hours 5 minutes')
+      ))),
+    ('${pendingCashSale}','${chicken}',2,80,160,'[]'::jsonb),
+    ('${pendingGcashSale}','${chicken}',1,80,80,'[]'::jsonb),
+    ('${recentSale}','${chicken}',2,80,160,'[]'::jsonb),
+    ('${todaySale}','${chicken}',3,80,240,'[]'::jsonb);
 
   insert into public.branch_inventory(branch_id,product_id,quantity_on_hand)
-  values ('${branch1}','${chicken}',90);
+  values ('${branch1}','${chicken}',87);
 
   insert into public.inventory_movements(branch_id,product_id,movement_type,quantity,reference_type,reference_id,created_by)
   values
     ('${branch1}','${chicken}','opening_stock',100,'opening_stock',null,'${mainMgr}'),
     ('${branch1}','${chicken}','sale',-5,'sale','${oldSale}','${cashier1}'),
+    ('${branch1}','${chicken}','sale',-2,'sale','${pendingCashSale}','${cashier2}'),
+    ('${branch1}','${chicken}','sale',-1,'sale','${pendingGcashSale}','${cashier2}'),
     ('${branch1}','${chicken}','sale',-2,'sale','${recentSale}','${cashier1}'),
     ('${branch1}','${chicken}','sale',-3,'sale','${todaySale}','${cashier1}');
 
-  -- Real remittance + waste children on the old shift (RESTRICT). Cleanup must keep them.
+  -- Reconciled old shift keeps remittance/waste after sales cleanup.
   insert into public.shift_reconciliations(
     shift_id, branch_id, expected_cash, actual_cash, difference, result, recorded_by
   ) values ('${oldShift}', '${branch1}', 400, 400, 0, 'exact', '${cashier1}');
@@ -133,6 +163,15 @@ assert.match(
   readFileSync('supabase/migrations/20261117090000_archive_cleanup_sales_only.sql', 'utf8'),
   /Keeps shifts, remittances, waste/,
 );
+assert.match(
+  readFileSync('supabase/migrations/20261117103000_archive_void_history_remittance_guard.sql', 'utf8'),
+  /void_history/,
+);
+assert.match(
+  readFileSync('supabase/migrations/20261117103000_archive_void_history_remittance_guard.sql', 'utf8'),
+  /archive_assert_remittance_safe/,
+);
+assert.match(readFileSync('src/lib/archiveExport.ts', 'utf8'), /void_events\.csv/);
 assert.doesNotMatch(readFileSync('src/components/RoleNavigation.tsx', 'utf8'), /data-archive/);
 // ManagerSidebar.tsx renders both the Manager and Owner drawers from one file — only the
 // Manager-only route table (getGroups) must stay free of Data Archive; Owner's own table
@@ -168,11 +207,22 @@ const beforeTransfers = (await db.query('select count(*)::int as n from public.s
 await asUser(owner, async () => {
   const status = (await db.query('select public.get_archive_status() status')).rows[0].status;
   assert.equal(status.retention_days, 90);
-  assert.equal(Number(status.eligible_sales_count), 2);
-  assert.equal(Number(status.eligible_sale_items_count), 2);
-  assert.equal(Number(status.eligible_shift_count), 1);
-  assert.equal(Number(status.estimated_records), 4, 'preview counts sales+items only, not kept shifts');
+  assert.equal(Number(status.eligible_sales_count), 4);
+  assert.equal(Number(status.eligible_sale_items_count), 4);
+  assert.equal(Number(status.eligible_shift_count), 2);
+  assert.equal(Number(status.estimated_records), 8, 'preview counts sales+items only, not kept shifts');
   assert.equal(status.archive_due, true);
+
+  const pendingRemit = (
+    await db.query(`select public.report_branch_shift_remittances(null, 'all_time', null, null) result`)
+  ).rows[0].result;
+  const pendingRow = (pendingRemit.days ?? [])
+    .flatMap((day) => day.shifts ?? [])
+    .find((row) => row.shift_id === pendingShift);
+  assert.ok(pendingRow, 'pending shift appears in remittance report');
+  assert.equal(pendingRow.status, 'pending');
+  assert.equal(Number(pendingRow.expected_cash), 160);
+  assert.equal(Number(pendingRow.expected_gcash), 80);
   assert.equal(status.reminder_visible, true);
 
   const dismissed = (await db.query('select public.dismiss_archive_reminder() status')).rows[0].status;
@@ -192,28 +242,28 @@ await asUser(owner, async () => {
 
   const prepared = (await db.query('select public.prepare_sales_archive() archive')).rows[0].archive;
   assert.equal(prepared.status, 'prepared');
-  assert.equal(Number(prepared.sales_count), 2);
-  assert.equal(Number(prepared.sale_items_count), 2);
-  assert.equal(Number(prepared.shift_count), 1);
-  assert.equal(Number(prepared.revenue_total), 400);
-  assert.equal(Number(prepared.units_sold), 5);
+  assert.equal(Number(prepared.sales_count), 4);
+  assert.equal(Number(prepared.sale_items_count), 4);
+  assert.equal(Number(prepared.shift_count), 2);
+  assert.equal(Number(prepared.revenue_total), 640);
+  assert.equal(Number(prepared.units_sold), 8);
 
   const summaries = (await db.query(`
     select quantity_sold, revenue, transaction_count
     from public.daily_branch_sales_summary
     where business_date = '${dates.old_date}'::date
   `)).rows[0];
-  assert.equal(Number(summaries.quantity_sold), 5);
-  assert.equal(Number(summaries.revenue), 400);
-  assert.equal(Number(summaries.transaction_count), 1);
+  assert.equal(Number(summaries.quantity_sold), 8);
+  assert.equal(Number(summaries.revenue), 640);
+  assert.equal(Number(summaries.transaction_count), 3);
 
   const productSummary = (await db.query(`
     select quantity_sold, revenue
     from public.daily_product_sales_summary
     where business_date = '${dates.old_date}'::date and product_id = '${chicken}'
   `)).rows[0];
-  assert.equal(Number(productSummary.quantity_sold), 5);
-  assert.equal(Number(productSummary.revenue), 400);
+  assert.equal(Number(productSummary.quantity_sold), 8);
+  assert.equal(Number(productSummary.revenue), 640);
 
   await assert.rejects(
     db.query(`select public.verify_sales_archive('${prepared.id}')`),
@@ -225,15 +275,38 @@ await asUser(owner, async () => {
   );
 
   const exported = (await db.query(`select public.get_archive_export('${prepared.id}') pack`)).rows[0].pack;
-  assert.equal(exported.sales.length, 2);
-  assert.equal(exported.sale_items.length, 2);
-  assert.equal(exported.shifts.length, 1);
+  assert.equal(exported.sales.length, 4);
+  assert.equal(exported.sale_items.length, 4);
+  assert.equal(exported.shifts.length, 2);
   assert.ok(exported.sales.some((row) => row.status === 'voided'));
   assert.ok(exported.sales.some((row) => row.id === oldSale));
   assert.ok(!exported.sales.some((row) => row.id === recentSale));
-  assert.equal(exported.manifest.sales_row_count, 2);
-  assert.equal(Number(exported.manifest.revenue_total), 400);
+  assert.equal(exported.manifest.sales_row_count, 4);
+  assert.equal(Number(exported.manifest.revenue_total), 640);
   assert.match(exported.manifest.package_name, /^golden-ribbon-archive-/);
+
+  const voidItem = exported.sale_items.find((row) => row.sale_id === voidSale);
+  assert.ok(voidItem?.void_history?.length >= 1, 'export preserves sale_items.void_history');
+  assert.equal(Number(voidItem.void_history[0].quantity), 1);
+  assert.equal(Number(voidItem.void_history[0].amount), 80);
+  assert.equal(voidItem.void_history[0].reason, 'Customer changed mind');
+  assert.equal(voidItem.void_history[0].note, 'Wanted different size');
+  assert.equal(voidItem.void_history[0].cashier_id, cashier1);
+  assert.ok(voidItem.void_history[0].at);
+
+  assert.equal(exported.void_events?.length, 1);
+  assert.equal(exported.void_events[0].void_event_id, voidEventId);
+  assert.equal(exported.void_events[0].actor_id, cashier1);
+  assert.equal(exported.void_events[0].actor_name, 'Cashier 1');
+  assert.equal(Number(exported.manifest.void_event_row_count), 1);
+
+  const { buildArchiveFiles } = loadTs('src/lib/archiveExport.ts', {
+    'react-native': { Platform: { OS: 'web' }, Share: { share: async () => {} } },
+  });
+  const files = buildArchiveFiles(exported);
+  assert.ok(files.some((file) => file.name === 'void_events.csv' && file.content.includes(voidEventId)));
+  assert.ok(files.some((file) => file.name === 'sale_items.csv' && file.content.includes('void_history')));
+  assert.ok(files.some((file) => file.name === 'sale_items.csv' && file.content.includes('Customer changed mind')));
 
   await db.exec('reset role');
   await db.exec(`update public.data_archives set sales_count = sales_count + 1 where id = '${prepared.id}'`);
@@ -245,7 +318,7 @@ await asUser(owner, async () => {
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${oldSale}'`)).rows[0].n, 1);
 
   await db.exec('reset role');
-  await db.exec(`update public.data_archives set sales_count = 2, status = 'exported' where id = '${prepared.id}'`);
+  await db.exec(`update public.data_archives set sales_count = 4, status = 'exported' where id = '${prepared.id}'`);
   await db.exec(`update public.daily_branch_sales_summary set revenue = revenue + 1 where business_date = '${dates.old_date}'::date`);
   await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
   await assert.rejects(
@@ -255,9 +328,53 @@ await asUser(owner, async () => {
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${oldSale}'`)).rows[0].n, 1);
 
   await db.exec('reset role');
-  await db.exec(`update public.daily_branch_sales_summary set revenue = 400 where business_date = '${dates.old_date}'::date`);
+  await db.exec(`update public.daily_branch_sales_summary set revenue = 640 where business_date = '${dates.old_date}'::date`);
   await db.exec(`update public.data_archives set status = 'exported' where id = '${prepared.id}'`);
   await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+
+  // Fail closed: unresolved pending Cash/GCash remittance still depends on live sales.
+  await assert.rejects(
+    db.query(`select public.verify_sales_archive('${prepared.id}')`),
+    /still need remittance|Expected Cash\/GCash/,
+  );
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set status = 'verified', verified_at = now()
+    where id = '${prepared.id}'
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+  await assert.rejects(
+    db.query(`select public.cleanup_archived_sales('${prepared.id}','DELETE ARCHIVED DATA')`),
+    /still need remittance|Expected Cash\/GCash/,
+  );
+  assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${pendingCashSale}'`)).rows[0].n, 1);
+  assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${pendingGcashSale}'`)).rows[0].n, 1);
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set status = 'exported', verified_at = null
+    where id = '${prepared.id}'
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+
+  await db.exec('reset role');
+  await db.exec(`
+    insert into public.shift_reconciliations(
+      shift_id, branch_id, expected_cash, actual_cash, difference, result, recorded_by, expected_gcash, actual_gcash
+    ) values ('${pendingShift}', '${branch1}', 160, 160, 0, 'exact', '${cashier2}', 80, 80);
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+
+  const remittedPending = (
+    await db.query(`select public.report_branch_shift_remittances(null, 'all_time', null, null) result`)
+  ).rows[0].result;
+  const remittedRow = (remittedPending.days ?? [])
+    .flatMap((day) => day.shifts ?? [])
+    .find((row) => row.shift_id === pendingShift);
+  assert.equal(remittedRow.status, 'reconciled');
+  assert.equal(Number(remittedRow.expected_cash), 160);
+  assert.equal(Number(remittedRow.expected_gcash), 80);
 
   const verified = (await db.query(`select public.verify_sales_archive('${prepared.id}') archive`)).rows[0].archive;
   assert.equal(verified.status, 'verified');
@@ -280,9 +397,12 @@ await asUser(owner, async () => {
 
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${oldSale}'`)).rows[0].n, 0);
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${voidSale}'`)).rows[0].n, 0);
+  assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${pendingCashSale}'`)).rows[0].n, 0);
+  assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${pendingGcashSale}'`)).rows[0].n, 0);
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${recentSale}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${todaySale}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${oldShift}'`)).rows[0].n, 1);
+  assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${pendingShift}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${recentShift}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${openShift}'`)).rows[0].n, 1);
   assert.equal(
@@ -291,14 +411,29 @@ await asUser(owner, async () => {
     'remittance retained after sales cleanup',
   );
   assert.equal(
+    (await db.query(`select count(*)::int as n from public.shift_reconciliations where shift_id = '${pendingShift}'`)).rows[0].n,
+    1,
+    'pending remittance retained after sales cleanup',
+  );
+  assert.equal(
     (await db.query(`select count(*)::int as n from public.shift_waste_occurrences where shift_id = '${oldShift}'`)).rows[0].n,
     1,
     'waste retained after sales cleanup',
   );
+
+  const afterCleanupRemit = (
+    await db.query(`select public.report_branch_shift_remittances(null, 'all_time', null, null) result`)
+  ).rows[0].result;
+  const afterPending = (afterCleanupRemit.days ?? [])
+    .flatMap((day) => day.shifts ?? [])
+    .find((row) => row.shift_id === pendingShift);
+  assert.equal(Number(afterPending.expected_cash), 160, 'reconciled expected cash stays without live sales');
+  assert.equal(Number(afterPending.expected_gcash), 80, 'reconciled expected gcash stays without live sales');
+
   assert.equal((await db.query('select count(*)::int as n from public.inventory_movements')).rows[0].n, beforeMovements);
   assert.equal((await db.query('select count(*)::int as n from public.stock_transfers')).rows[0].n, beforeTransfers);
   assert.equal((await db.query('select count(*)::int as n from public.products')).rows[0].n, 1);
-  assert.equal(Number((await db.query(`select quantity_on_hand from public.branch_inventory where product_id='${chicken}'`)).rows[0].quantity_on_hand), 90);
+  assert.equal(Number((await db.query(`select quantity_on_hand from public.branch_inventory where product_id='${chicken}'`)).rows[0].quantity_on_hand), 87);
 
   const recon = (await db.query('select public.report_inventory_reconciliation(null) result')).rows[0].result;
   const chickenRow = recon.find((row) => row.product_id === chicken && row.branch_id === branch1);
@@ -309,8 +444,8 @@ await asUser(owner, async () => {
     [`${dates.old_date}T00:00:00+08:00`, `${dates.old_next}T00:00:00+08:00`],
   )).rows[0].result;
   const oldBranch = oldRange.find((row) => row.branch_id === branch1);
-  assert.equal(Number(oldBranch.transaction_count), 1);
-  assert.equal(Number(oldBranch.total_sales), 400);
+  assert.equal(Number(oldBranch.transaction_count), 3);
+  assert.equal(Number(oldBranch.total_sales), 640);
 
   const recentRange = (await db.query(
     `select public.report_sales_by_branch('custom', $1::timestamptz, $2::timestamptz) result`,
@@ -325,25 +460,25 @@ await asUser(owner, async () => {
     [`${dates.old_date}T00:00:00+08:00`, `${dates.tomorrow}T00:00:00+08:00`],
   )).rows[0].result;
   const crossBranch = cross.find((row) => row.branch_id === branch1);
-  assert.equal(Number(crossBranch.transaction_count), 3);
-  assert.equal(Number(crossBranch.total_sales), 800);
+  assert.equal(Number(crossBranch.transaction_count), 5);
+  assert.equal(Number(crossBranch.total_sales), 1040);
 
   const products = (await db.query(
     `select public.report_product_sales('custom', null, $1::timestamptz, $2::timestamptz) result`,
     [`${dates.old_date}T00:00:00+08:00`, `${dates.tomorrow}T00:00:00+08:00`],
   )).rows[0].result;
   const productRow = products.find((row) => row.product_id === chicken);
-  assert.equal(Number(productRow.quantity_sold), 10);
-  assert.equal(Number(productRow.total_revenue), 800);
+  assert.equal(Number(productRow.quantity_sold), 13);
+  assert.equal(Number(productRow.total_revenue), 1040);
 
   const performance = (await db.query(
     `select public.report_branch_performance('custom', $1::timestamptz, $2::timestamptz) result`,
     [`${dates.old_date}T00:00:00+08:00`, `${dates.tomorrow}T00:00:00+08:00`],
   )).rows[0].result;
   const perfRow = performance.find((row) => row.branch_id === branch1);
-  assert.equal(Number(perfRow.transaction_count), 3);
-  assert.equal(Number(perfRow.quantity_sold), 10);
-  assert.equal(Number(perfRow.total_sales), 800);
+  assert.equal(Number(perfRow.transaction_count), 5);
+  assert.equal(Number(perfRow.quantity_sold), 13);
+  assert.equal(Number(perfRow.total_sales), 1040);
 
   const todayMetrics = (await db.query('select public.get_owner_dashboard_metrics() metrics')).rows[0].metrics;
   assert.equal(Number(todayMetrics.today_transactions), 1);
