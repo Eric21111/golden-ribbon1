@@ -81,7 +81,22 @@ export function DataArchiveScreen() {
         <ManagerScreenHeader showBack title="Data Archive" />
 
         <View style={styles.body}>
+          <Text style={styles.sectionTitle}>CLEANUP OPTIONS</Text>
+          <Text style={styles.quiet}>
+            Two Owner tools only: remove eligible read notifications, or archive and delete old sales details.
+            Shifts, remittances, inventory, transfers, returns, products, and accounts are never deleted here.
+          </Text>
+
+          <Text style={styles.optionTitle}>1. Read notifications</Text>
+          <Text style={styles.optionHint}>Select specific read notices to permanently remove.</Text>
           <ReadNoticeCleanup />
+
+          <Text style={styles.optionTitle}>2. Old sales details</Text>
+          <Text style={styles.optionHint}>
+            Export → Save Copy → Verify → Confirm Cleanup. Removes sale rows older than the retention window.
+            Related shifts stay for remittance and audit history.
+          </Text>
+
           {statusQuery.error ? (
             <ErrorState message={getArchiveErrorMessage(statusQuery.error)} onRetry={() => void statusQuery.refetch()} />
           ) : !status ? (
@@ -90,10 +105,10 @@ export function DataArchiveScreen() {
             <>
               {status.archive_due ? (
                 <View style={styles.warningCard}>
-                  <Text style={styles.warningTitle}>Data cleanup recommended</Text>
+                  <Text style={styles.warningTitle}>Old sales cleanup recommended</Text>
                   <Text style={styles.warningBody}>
                     {status.eligible_sales_count.toLocaleString()} sales are older than {status.retention_days} days.
-                    Export and verify the archive before cleaning old records.
+                    Export and verify before deleting sales details. Shifts and remittances are kept.
                   </Text>
                 </View>
               ) : (
@@ -107,14 +122,19 @@ export function DataArchiveScreen() {
                   style={styles.statHalf}
                   emphasis
                   icon="trash-outline"
-                  label="Estimated records to remove"
+                  label="Sales details to remove"
                   value={status.estimated_records}
                 />
                 <StatTile style={styles.statHalf} icon="receipt-outline" label="Sales eligible" value={status.eligible_sales_count} />
               </View>
               <View style={styles.statsRow}>
                 <StatTile style={styles.statHalf} icon="pricetags-outline" label="Items eligible" value={status.eligible_sale_items_count} />
-                <StatTile style={styles.statHalf} icon="checkmark-done-outline" label="Shifts eligible" value={status.eligible_shift_count} />
+                <StatTile
+                  style={styles.statHalf}
+                  icon="checkmark-done-outline"
+                  label="Related shifts (kept)"
+                  value={status.eligible_shift_count}
+                />
               </View>
 
               <SummaryCard
@@ -214,7 +234,7 @@ export function DataArchiveScreen() {
                   style={styles.fieldInput}
                 />
                 <ManagerActionButton
-                  label="Delete archived data"
+                  label="Delete archived sales details"
                   icon="trash-outline"
                   variant="danger"
                   loading={cleanup.isPending}
@@ -224,7 +244,9 @@ export function DataArchiveScreen() {
                       if (!archive) return;
                       await cleanup.mutateAsync({ archiveId: archive.id, confirmation });
                       setConfirmation('');
-                      setNotice('Eligible detailed sales were removed. Historical summaries and inventory remain.');
+                      setNotice(
+                        'Eligible sales details were removed. Shifts, remittances, summaries, and inventory remain.',
+                      );
                     })
                   }
                 />
@@ -236,8 +258,8 @@ export function DataArchiveScreen() {
                 onClose={() => setWorkflowInfoOpen(false)}
               >
                 <Text style={styles.sheetBody}>
-                  Workflow: Export → Save Copy → Verify → Confirm Cleanup. Inventory, transfers, returns, and open
-                  shifts are never removed.
+                  Workflow: Export → Save Copy → Verify → Confirm Cleanup. Only old sales and sale items are deleted.
+                  Shifts, remittances, waste, inventory movements, transfers, returns, products, and accounts stay.
                 </Text>
               </ManagerBottomSheet>
 
@@ -247,8 +269,8 @@ export function DataArchiveScreen() {
                 onClose={() => setCleanupInfoOpen(false)}
               >
                 <Text style={styles.sheetBody}>
-                  This will permanently remove detailed sales data that has already been archived. Historical
-                  analytics will remain available from summary data.
+                  This permanently removes archived sales details only. Related shifts remain for remittance and audit
+                  history. Historical analytics stay available from daily summary data.
                 </Text>
               </ManagerBottomSheet>
             </>
@@ -262,6 +284,14 @@ export function DataArchiveScreen() {
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 14 },
+  sectionTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+  },
+  optionTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  optionHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, marginTop: -6 },
   warningCard: {
     backgroundColor: '#FEF3C7',
     borderWidth: 1,

@@ -29,9 +29,17 @@ export function ReadNoticeCleanup() {
     onSuccess: count => { setNotice('Read notifications removed: ' + count); },
     onSettled: () => { setSelected([]); void preview.refetch(); },
   });
-  if (!open) return <ManagerActionButton label="Clean up read notifications" variant="secondary" onPress={() => setOpen(true)} />;
+  if (!open) {
+    return (
+      <ManagerActionButton
+        label="Select read notifications to delete"
+        variant="secondary"
+        onPress={() => setOpen(true)}
+      />
+    );
+  }
   return <View style={{gap:10}}>
-    <Text>Choose read notifications to delete. The oldest 50 eligible notices appear first.</Text>
+    <Text>Choose specific read notifications to delete. The oldest 50 eligible notices appear first. Unread and in-flight push notices stay.</Text>
     {preview.isPending && <Text>Loading notifications…</Text>}
     {preview.isSuccess && !preview.data.length && <Text>No eligible read notifications.</Text>}
     {preview.data?.map(row => <Pressable accessibilityRole="checkbox" accessibilityState={{checked:selected.includes(row.id)}}

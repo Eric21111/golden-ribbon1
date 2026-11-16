@@ -114,11 +114,25 @@ await db.exec(`
     ('${branch1}','${chicken}','sale',-5,'sale','${oldSale}','${cashier1}'),
     ('${branch1}','${chicken}','sale',-2,'sale','${recentSale}','${cashier1}'),
     ('${branch1}','${chicken}','sale',-3,'sale','${todaySale}','${cashier1}');
+
+  -- Real remittance + waste children on the old shift (RESTRICT). Cleanup must keep them.
+  insert into public.shift_reconciliations(
+    shift_id, branch_id, expected_cash, actual_cash, difference, result, recorded_by
+  ) values ('${oldShift}', '${branch1}', 400, 400, 0, 'exact', '${cashier1}');
+  insert into public.shift_waste_occurrences(shift_id, branch_id, product_id, recorded_by, note)
+  values ('${oldShift}', '${branch1}', '${chicken}', '${cashier1}', 'archive retain waste');
 `);
 
 assert.match(readFileSync('src/types/models.ts', 'utf8'), /DELETE ARCHIVED DATA/);
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Export → Save Copy → Verify → Confirm Cleanup/);
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Related shifts \(kept\)/);
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Delete archived sales details/);
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Read notifications/);
 assert.match(readFileSync('supabase/migrations/20260913140000_milestone_11_3_data_archive.sql', 'utf8'), /DELETE ARCHIVED DATA/);
+assert.match(
+  readFileSync('supabase/migrations/20261117090000_archive_cleanup_sales_only.sql', 'utf8'),
+  /Keeps shifts, remittances, waste/,
+);
 assert.doesNotMatch(readFileSync('src/components/RoleNavigation.tsx', 'utf8'), /data-archive/);
 // ManagerSidebar.tsx renders both the Manager and Owner drawers from one file — only the
 // Manager-only route table (getGroups) must stay free of Data Archive; Owner's own table
@@ -157,6 +171,7 @@ await asUser(owner, async () => {
   assert.equal(Number(status.eligible_sales_count), 2);
   assert.equal(Number(status.eligible_sale_items_count), 2);
   assert.equal(Number(status.eligible_shift_count), 1);
+  assert.equal(Number(status.estimated_records), 4, 'preview counts sales+items only, not kept shifts');
   assert.equal(status.archive_due, true);
   assert.equal(status.reminder_visible, true);
 
@@ -267,9 +282,19 @@ await asUser(owner, async () => {
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${voidSale}'`)).rows[0].n, 0);
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${recentSale}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${todaySale}'`)).rows[0].n, 1);
-  assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${oldShift}'`)).rows[0].n, 0);
+  assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${oldShift}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${recentShift}'`)).rows[0].n, 1);
   assert.equal((await db.query(`select count(*)::int as n from public.shifts where id = '${openShift}'`)).rows[0].n, 1);
+  assert.equal(
+    (await db.query(`select count(*)::int as n from public.shift_reconciliations where shift_id = '${oldShift}'`)).rows[0].n,
+    1,
+    'remittance retained after sales cleanup',
+  );
+  assert.equal(
+    (await db.query(`select count(*)::int as n from public.shift_waste_occurrences where shift_id = '${oldShift}'`)).rows[0].n,
+    1,
+    'waste retained after sales cleanup',
+  );
   assert.equal((await db.query('select count(*)::int as n from public.inventory_movements')).rows[0].n, beforeMovements);
   assert.equal((await db.query('select count(*)::int as n from public.stock_transfers')).rows[0].n, beforeTransfers);
   assert.equal((await db.query('select count(*)::int as n from public.products')).rows[0].n, 1);
