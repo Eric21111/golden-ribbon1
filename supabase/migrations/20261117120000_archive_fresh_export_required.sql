@@ -10,14 +10,16 @@ alter table public.data_archives
 comment on column public.data_archives.export_format_version is
   '1 = pre-void-history export; 2 = includes void_history/void_events. Verify/cleanup require >= 2.';
 
--- Invalidate open archives that may lack void-event backups. Do not touch cleaned rows.
+-- Invalidate existing exported/verified archives that may lack void-event backups.
+-- Leave failed and cleaned history unchanged (multiple failed rows must not become prepared
+-- or data_archives_one_open_idx would reject the migration).
 update public.data_archives
 set
   status = 'prepared',
   export_generated_at = null,
   verified_at = null,
   export_format_version = 1
-where status in ('exported', 'verified', 'failed');
+where status in ('exported', 'verified');
 
 create or replace function public.get_archive_export(p_archive_id uuid)
 returns jsonb

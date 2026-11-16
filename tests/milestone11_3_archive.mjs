@@ -181,6 +181,10 @@ assert.match(
 );
 assert.match(
   readFileSync('supabase/migrations/20261117120000_archive_fresh_export_required.sql', 'utf8'),
+  /status in \('exported', 'verified'\)/,
+);
+assert.doesNotMatch(
+  readFileSync('supabase/migrations/20261117120000_archive_fresh_export_required.sql', 'utf8'),
   /status in \('exported', 'verified', 'failed'\)/,
 );
 assert.match(readFileSync('src/lib/archiveExport.ts', 'utf8'), /void_events\.csv/);
@@ -567,7 +571,7 @@ await asUser(owner, async () => {
   await db.exec(`
     update public.data_archives
     set status = 'prepared', export_generated_at = null, verified_at = null, export_format_version = 1
-    where status in ('exported', 'verified', 'failed')
+    where status in ('exported', 'verified')
   `);
   const cleanedAfterInvalidate = (
     await db.query(`select status, export_format_version from public.data_archives where id = $1`, [prepared.id])
@@ -575,6 +579,85 @@ await asUser(owner, async () => {
   assert.equal(cleanedAfterInvalidate.status, 'cleaned');
   assert.equal(Number(cleanedAfterInvalidate.export_format_version), 2);
 });
+
+// Multiple historical failed rows + one open archive: reset only the open exported/verified row.
+{
+  const failedA = id(91);
+  const failedB = id(92);
+  const openArchive = id(93);
+  await db.exec(`
+    insert into public.data_archives(
+      id, period_start, period_end, status,
+      sales_count, sale_items_count, shift_count, revenue_total, units_sold,
+      export_generated_at, verified_at, export_format_version
+    ) values
+      (
+        '${failedA}',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '40 days',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '30 days',
+        'failed', 1, 1, 0, 80, 1, now() - interval '20 days', null, 1
+      ),
+      (
+        '${failedB}',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '29 days',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '20 days',
+        'failed', 2, 2, 0, 160, 2, now() - interval '15 days', null, 1
+      ),
+      (
+        '${openArchive}',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '19 days',
+        ('${dates.old_date}'::date::timestamp at time zone 'Asia/Manila') - interval '10 days',
+        'verified', 3, 3, 1, 240, 3, now() - interval '5 days', now() - interval '4 days', 1
+      );
+  `);
+
+  await db.exec(`
+    update public.data_archives
+    set status = 'prepared', export_generated_at = null, verified_at = null, export_format_version = 1
+    where status in ('exported', 'verified')
+  `);
+
+  const afterReset = (
+    await db.query(`
+      select id, status, export_generated_at, verified_at, export_format_version
+      from public.data_archives
+      where id in ('${failedA}', '${failedB}', '${openArchive}')
+      order by id
+    `)
+  ).rows;
+  const byId = Object.fromEntries(afterReset.map((row) => [row.id, row]));
+  assert.equal(byId[failedA].status, 'failed');
+  assert.equal(byId[failedB].status, 'failed');
+  assert.ok(byId[failedA].export_generated_at);
+  assert.ok(byId[failedB].export_generated_at);
+  assert.equal(byId[openArchive].status, 'prepared');
+  assert.equal(byId[openArchive].export_generated_at, null);
+  assert.equal(byId[openArchive].verified_at, null);
+  assert.equal(Number(byId[openArchive].export_format_version), 1);
+
+  const openCount = (
+    await db.query(`
+      select count(*)::int as n from public.data_archives
+      where status in ('prepared', 'exported', 'verified')
+    `)
+  ).rows[0].n;
+  assert.equal(openCount, 1, 'only one open archive after reset with multiple failed rows present');
+
+  // Document why failed must stay failed: promoting multiple failed rows to prepared violates the open-archive unique index.
+  await assert.rejects(
+    db.exec(`
+      update public.data_archives
+      set status = 'prepared'
+      where status = 'failed'
+    `),
+    /data_archives_one_open_idx|unique/i,
+  );
+  assert.equal(
+    (await db.query(`select count(*)::int as n from public.data_archives where id in ('${failedA}','${failedB}') and status = 'failed'`))
+      .rows[0].n,
+    2,
+  );
+}
 
 await asUser(owner, async () => {
   await assert.rejects(db.query('select public.prepare_sales_archive()'), /older than 90 days/);
