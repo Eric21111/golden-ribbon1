@@ -403,3 +403,10 @@ export async function getShiftCloseReportDetail(...args: Parameters<typeof readG
 export async function listShiftWaste(...args: Parameters<typeof readListShiftWaste>) {
   return withStockUnits(await readListShiftWaste(...args));
 }
+
+/** Completed sale totals by tender + pricing program for one shift (remittance detail breakdown). */
+export async function listManagerShiftPayments(shiftId: string) {
+  const { data, error } = await supabase.rpc('manager_shift_payments', { p_shift_id: shiftId });
+  if (error) throw error;
+  return (data ?? []) as import('@/features/sales/paymentMethods').ShiftPaymentRow[];
+}

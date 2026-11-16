@@ -9,6 +9,7 @@ import {
   getShiftCloseReportDetail,
   getShiftSummary,
   hasMyFinalizedCloseToday,
+  listManagerShiftPayments,
   listShiftRemittances,
   listShiftWaste,
   reconcileClosedShift,
@@ -157,5 +158,14 @@ export function useShiftCloseReportDetail(shiftId: string) {
     queryKey: ['shifts', 'close-report-detail', shiftId],
     queryFn: () => getShiftCloseReportDetail(shiftId),
     enabled: Boolean(shiftId),
+  });
+}
+
+/** Sales composition for remittance Cash/GCash expand (not remitted actuals). */
+export function useManagerShiftPayments(shiftId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['shifts', 'payments', shiftId],
+    queryFn: () => listManagerShiftPayments(shiftId),
+    enabled: Boolean(shiftId) && enabled,
   });
 }

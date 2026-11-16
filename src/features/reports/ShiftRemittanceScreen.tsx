@@ -94,6 +94,7 @@ export function ShiftRemittanceScreen() {
               <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
 
               <View style={styles.heroCard}>
+                <Text style={styles.tenderTitle}>{day.expected_gcash == null ? 'Collections' : 'Cash'}</Text>
                 <View style={styles.heroStack}>
                   <View style={styles.heroRowFull}>
                     <View style={styles.heroLeft}>
@@ -117,40 +118,7 @@ export function ShiftRemittanceScreen() {
                       {formatKnownMoney(day.actual_remitted == null ? null : Number(day.actual_remitted))}
                     </Text>
                   </View>
-                  {day.expected_gcash != null ? (
-                    <>
-                      <View style={styles.heroRowFull}>
-                        <View style={styles.heroLeft}>
-                          <View style={styles.heroIconChip}>
-                            <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
-                          </View>
-                          <Text style={styles.heroLabel}>Expected GCash</Text>
-                        </View>
-                        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                          {formatMoney(Number(day.expected_gcash))}
-                        </Text>
-                      </View>
-                      <View style={styles.heroRowFull}>
-                        <View style={styles.heroLeft}>
-                          <View style={styles.heroIconChip}>
-                            <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-                          </View>
-                          <Text style={styles.heroLabel}>GCash remitted</Text>
-                        </View>
-                        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                          {formatKnownMoney(day.actual_gcash == null ? null : Number(day.actual_gcash))}
-                        </Text>
-                      </View>
-                    </>
-                  ) : null}
                 </View>
-
-                {day.expected_gcash != null && Number(day.pending_gcash ?? 0) > 0 ? (
-                  <View style={styles.pendingNote}>
-                    <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
-                    <Text style={styles.pendingNoteText}>{`${formatMoney(Number(day.pending_gcash))} GCash pending`}</Text>
-                  </View>
-                ) : null}
                 <View style={styles.pillRow}>
                   <View style={[styles.pill, { backgroundColor: shortage > 0 ? '#FEE2E2' : managerColors.cardSurface }]}>
                     <Ionicons
@@ -179,7 +147,6 @@ export function ShiftRemittanceScreen() {
                     </Text>
                   </View>
                 </View>
-
                 <View style={styles.footerRow}>
                   <View style={styles.footerStat}>
                     <View style={styles.footerStatTop}>
@@ -223,6 +190,42 @@ export function ShiftRemittanceScreen() {
                 </View>
               </View>
 
+              {day.expected_gcash != null ? (
+                <View style={styles.heroCard}>
+                  <Text style={styles.tenderTitle}>GCash</Text>
+                  <View style={styles.heroStack}>
+                    <View style={styles.heroRowFull}>
+                      <View style={styles.heroLeft}>
+                        <View style={styles.heroIconChip}>
+                          <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
+                        </View>
+                        <Text style={styles.heroLabel}>Expected GCash</Text>
+                      </View>
+                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatMoney(Number(day.expected_gcash))}
+                      </Text>
+                    </View>
+                    <View style={styles.heroRowFull}>
+                      <View style={styles.heroLeft}>
+                        <View style={styles.heroIconChip}>
+                          <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
+                        </View>
+                        <Text style={styles.heroLabel}>GCash remitted</Text>
+                      </View>
+                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatKnownMoney(day.actual_gcash == null ? null : Number(day.actual_gcash))}
+                      </Text>
+                    </View>
+                  </View>
+                  {Number(day.pending_gcash ?? 0) > 0 ? (
+                    <View style={styles.pendingNote}>
+                      <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+                      <Text style={styles.pendingNoteText}>{`${formatMoney(Number(day.pending_gcash))} GCash pending`}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               {day.shifts.map((row) => {
                 const badge = remittanceRowBadge(row.status, row.result, row.difference);
                 return (
@@ -249,7 +252,8 @@ export function ShiftRemittanceScreen() {
                     trailing={
                       <View style={styles.trailingCol}>
                         <Text style={styles.amount} numberOfLines={2}>
-                          {row.expected_gcash == null ? 'Collections' : 'Cash'} {row.status === 'pending' ? 'expected' : 'submitted'}{' '}
+                          {row.expected_gcash == null ? 'Collections' : 'Cash'}{' '}
+                          {row.status === 'pending' ? 'expected' : 'submitted'}{' '}
                           {row.status === 'pending'
                             ? formatMoney(Number(row.expected_cash))
                             : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
@@ -286,6 +290,12 @@ const styles = StyleSheet.create({
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   dayBlock: { gap: 12 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  tenderTitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
   amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14, textAlign: 'right' },
   gcashLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12, textAlign: 'right' },
   pendingNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12 },

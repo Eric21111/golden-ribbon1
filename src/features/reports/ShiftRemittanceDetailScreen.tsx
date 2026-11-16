@@ -16,8 +16,14 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { closingDispositionLabel, formatPcsQty, gcashResult } from '@/features/reports/reportDisplay';
+import {
+  PRICING_PROGRAM_LABELS,
+  shiftPaymentBreakdown,
+  type PricingProgramKey,
+  type ShiftPaymentRow,
+} from '@/features/sales/paymentMethods';
 import { useClientPagination } from '@/hooks/useClientPagination';
-import { useShiftCloseReportDetail } from '@/hooks/useShifts';
+import { useManagerShiftPayments, useShiftCloseReportDetail } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import type { ShiftCloseReportProduct, ShiftProductReconResult } from '@/types/models';
@@ -73,6 +79,121 @@ function ResultPill({ shortage, excess }: { shortage: number; excess: number }) 
   );
 }
 
+const PROGRAM_ORDER: PricingProgramKey[] = ['standard', 'pwd', 'back_office_guard', 'employee_meal'];
+
+/** Remittance expected/actual stay above; expand shows completed-sale composition for that tender. */
+function TenderRemittanceCard({
+  title,
+  expectedLabel,
+  actualLabel,
+  expected,
+  actual,
+  icon,
+  pending,
+  pendingMessage,
+  result,
+  expanded,
+  onToggle,
+  salesBreakdown,
+  salesLoading,
+  salesError,
+}: {
+  title: string;
+  expectedLabel: string;
+  actualLabel: string;
+  expected: number;
+  actual: number | null;
+  icon: 'cash-outline' | 'phone-portrait-outline' | 'wallet-outline';
+  pending: boolean;
+  pendingMessage: string;
+  result: { shortage: number; excess: number } | null;
+  expanded: boolean;
+  onToggle: () => void;
+  salesBreakdown: ReturnType<typeof shiftPaymentBreakdown> | null;
+  salesLoading: boolean;
+  salesError: string | null;
+}) {
+  return (
+    <>
+      <Text style={styles.section}>{title}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${title} remittance${expanded ? ', hide sales breakdown' : ', show sales breakdown'}`}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
+      >
+        <View style={styles.heroStack}>
+          <View style={styles.heroRowFull}>
+            <View style={styles.heroLeft}>
+              <View style={styles.heroIconChip}>
+                <Ionicons name={icon} size={18} color={managerColors.royalBlue} />
+              </View>
+              <Text style={styles.heroLabel}>{expectedLabel}</Text>
+            </View>
+            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatMoney(expected)}
+            </Text>
+          </View>
+          <View style={styles.heroRowFull}>
+            <View style={styles.heroLeft}>
+              <View style={styles.heroIconChip}>
+                <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
+              </View>
+              <Text style={styles.heroLabel}>{actualLabel}</Text>
+            </View>
+            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+              {actual == null ? '—' : formatMoney(actual)}
+            </Text>
+          </View>
+        </View>
+
+        {pending ? (
+          <View style={styles.pendingNote}>
+            <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+            <Text style={styles.pendingNoteText}>{pendingMessage}</Text>
+          </View>
+        ) : result ? (
+          <ResultPill shortage={result.shortage} excess={result.excess} />
+        ) : null}
+
+        <View style={styles.expandHint}>
+          <Text style={styles.expandHintText}>
+            {expanded ? 'Hide sales breakdown' : 'Show standard / PWD / back office / meals'}
+          </Text>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={managerColors.subtext} />
+        </View>
+
+        {expanded ? (
+          <View style={styles.breakdownBox}>
+            <Text style={styles.breakdownCaption}>
+              Completed sales by pricing (not remitted cash). Sales revenue and remittance are different.
+            </Text>
+            {salesLoading ? <Text style={styles.breakdownLine}>Loading sales…</Text> : null}
+            {salesError ? <Text style={styles.breakdownDanger}>{salesError}</Text> : null}
+            {!salesLoading && !salesError && salesBreakdown ? (
+              <>
+                {PROGRAM_ORDER.map((key) =>
+                  key === 'employee_meal' ? (
+                    <Text key={key} style={styles.breakdownLine}>
+                      {PRICING_PROGRAM_LABELS[key]}: {salesBreakdown.employeeMeals} orders ·{' '}
+                      {formatMoney(salesBreakdown.groups.employee_meal)}
+                    </Text>
+                  ) : (
+                    <Text key={key} style={styles.breakdownLine}>
+                      {PRICING_PROGRAM_LABELS[key]}: {formatMoney(salesBreakdown.groups[key])}
+                    </Text>
+                  ),
+                )}
+                <Text style={styles.breakdownTotal}>Sales total: {formatMoney(salesBreakdown.total)}</Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </Pressable>
+    </>
+  );
+}
+
 export function ShiftRemittanceDetailScreen() {
   const { profile } = useAuth();
   async function openReturn(number: string) {
@@ -88,7 +209,9 @@ export function ShiftRemittanceDetailScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const query = useShiftCloseReportDetail(id ?? '');
   const detail = query.data;
+  const paymentsQuery = useManagerShiftPayments(id ?? '', Boolean(id));
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+  const [openTender, setOpenTender] = useState<'cash' | 'gcash' | null>(null);
 
   const counts = useMemo(() => {
     const products = detail?.products ?? [];
@@ -107,6 +230,9 @@ export function ShiftRemittanceDetailScreen() {
   }, [detail?.products, detail?.selected_return_close, resultFilter]);
 
   const pagination = useClientPagination(filteredProducts, resultFilter);
+  const paymentRows = (paymentsQuery.data ?? []) as ShiftPaymentRow[];
+  const cashSales = useMemo(() => shiftPaymentBreakdown(paymentRows, 'cash'), [paymentRows]);
+  const gcashSales = useMemo(() => shiftPaymentBreakdown(paymentRows, 'gcash'), [paymentRows]);
 
   const shortage = detail?.cash_result === 'shortage' ? Math.abs(Number(detail.difference ?? 0)) : 0;
   const excess = detail?.cash_result === 'excess' ? Math.abs(Number(detail.difference ?? 0)) : 0;
@@ -162,83 +288,40 @@ export function ShiftRemittanceDetailScreen() {
               ) : null}
             </View>
 
-            <Text style={styles.section}>{detail.expected_gcash == null ? 'Collections' : 'Cash'}</Text>
-            <View style={styles.heroCard}>
-              <View style={styles.heroStack}>
-                <View style={styles.heroRowFull}>
-                  <View style={styles.heroLeft}>
-                    <View style={styles.heroIconChip}>
-                      <Ionicons name="cash-outline" size={18} color={managerColors.royalBlue} />
-                    </View>
-                    <Text style={styles.heroLabel}>Expected Cash</Text>
-                  </View>
-                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {formatMoney(detail.expected_cash)}
-                  </Text>
-                </View>
-                <View style={styles.heroRowFull}>
-                  <View style={styles.heroLeft}>
-                    <View style={styles.heroIconChip}>
-                      <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-                    </View>
-                    <Text style={styles.heroLabel}>Actual Cash</Text>
-                  </View>
-                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {detail.actual_cash == null ? '—' : formatMoney(detail.actual_cash)}
-                  </Text>
-                </View>
-              </View>
-
-              {detail.cash_status === 'pending' ? (
-                <View style={styles.pendingNote}>
-                  <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
-                  <Text style={styles.pendingNoteText}>
-                    Remittance is still pending. Actual cash and inventory results are not available yet.
-                  </Text>
-                </View>
-              ) : (
-                <ResultPill shortage={shortage} excess={excess} />
-              )}
-            </View>
+            <TenderRemittanceCard
+              title={detail.expected_gcash == null ? 'Collections' : 'Cash'}
+              expectedLabel="Expected Cash"
+              actualLabel="Actual Cash"
+              expected={Number(detail.expected_cash)}
+              actual={detail.actual_cash == null ? null : Number(detail.actual_cash)}
+              icon="cash-outline"
+              pending={detail.cash_status === 'pending'}
+              pendingMessage="Remittance is still pending. Actual cash and inventory results are not available yet."
+              result={detail.cash_status === 'pending' ? null : { shortage, excess }}
+              expanded={openTender === 'cash'}
+              onToggle={() => setOpenTender((current) => (current === 'cash' ? null : 'cash'))}
+              salesBreakdown={cashSales}
+              salesLoading={paymentsQuery.isLoading}
+              salesError={paymentsQuery.error ? getErrorMessage(paymentsQuery.error) : null}
+            />
 
             {detail.expected_gcash != null ? (
-              <>
-                <Text style={styles.section}>GCash</Text>
-                <View style={styles.heroCard}>
-                  <View style={styles.heroStack}>
-                    <View style={styles.heroRowFull}>
-                      <View style={styles.heroLeft}>
-                        <View style={styles.heroIconChip}>
-                          <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
-                        </View>
-                        <Text style={styles.heroLabel}>Expected GCash</Text>
-                      </View>
-                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                        {formatMoney(detail.expected_gcash)}
-                      </Text>
-                    </View>
-                    <View style={styles.heroRowFull}>
-                      <View style={styles.heroLeft}>
-                        <View style={styles.heroIconChip}>
-                          <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-                        </View>
-                        <Text style={styles.heroLabel}>Actual GCash</Text>
-                      </View>
-                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                        {detail.actual_gcash == null ? '—' : formatMoney(detail.actual_gcash)}
-                      </Text>
-                    </View>
-                  </View>
-                  {gcash ? (
-                    <ResultPill shortage={gcash.shortage} excess={gcash.excess} />
-                  ) : (
-                    <View style={styles.pendingNote}>
-                      <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
-                      <Text style={styles.pendingNoteText}>GCash is still pending.</Text>
-                    </View>
-                  )}
-                </View>
-              </>
+              <TenderRemittanceCard
+                title="GCash"
+                expectedLabel="Expected GCash"
+                actualLabel="Actual GCash"
+                expected={Number(detail.expected_gcash)}
+                actual={detail.actual_gcash == null ? null : Number(detail.actual_gcash)}
+                icon="phone-portrait-outline"
+                pending={gcash == null}
+                pendingMessage="GCash is still pending."
+                result={gcash}
+                expanded={openTender === 'gcash'}
+                onToggle={() => setOpenTender((current) => (current === 'gcash' ? null : 'gcash'))}
+                salesBreakdown={gcashSales}
+                salesLoading={paymentsQuery.isLoading}
+                salesError={paymentsQuery.error ? getErrorMessage(paymentsQuery.error) : null}
+              />
             ) : null}
 
             <Text style={styles.section}>{detail.selected_return_close ? 'End shift stock' : 'Inventory close'}</Text>
@@ -476,6 +559,21 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   pendingNoteText: { flex: 1, color: managerColors.goldMuted, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
+  expandHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingTop: 12,
+  },
+  expandHintText: { flex: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5 },
+  breakdownBox: { gap: 8, paddingTop: 4 },
+  breakdownCaption: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  breakdownLine: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
+  breakdownTotal: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14, marginTop: 2 },
+  breakdownDanger: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
 
   pager: { paddingVertical: 8 },
   card: {

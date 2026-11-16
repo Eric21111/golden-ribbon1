@@ -43,7 +43,10 @@ const Detail = loadTs('src/features/reports/ShiftRemittanceDetailScreen.tsx', {
   '@/components/dashboard/ManagerScreenHeader': { ManagerScreenHeader: () => null },
   '@/components/dashboard/theme': { managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' } },
   '@/hooks/useClientPagination': { useClientPagination: () => ({ pageItems: [], showPagination: false, page: 0, totalPages: 1, setPage: () => {} }) },
-  '@/hooks/useShifts': { useShiftCloseReportDetail: () => ({ data: detail, isLoading: false, error: null, refetch: () => {} }) },
+  '@/hooks/useShifts': {
+    useShiftCloseReportDetail: () => ({ data: detail, isLoading: false, error: null, refetch: () => {} }),
+    useManagerShiftPayments: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }),
+  },
   '@/lib/errors': { getErrorMessage: (e) => String(e) },
 }).ShiftRemittanceDetailScreen;
 const base = {
@@ -56,8 +59,10 @@ const money = (n) => `₱\\s?${n.toFixed(2).replace('.', '\\.')}`;
 
 // exact: Cash card, then a GCash card built the same way
 let text = flat(renderDetail({ expected_gcash: 100, actual_gcash: 100 }));
-assert.match(text, new RegExp(`Cash\\|Expected Cash\\|${money(48)}\\|Actual Cash\\|${money(48)}\\|Exact match\\|GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`), 'Cash card, then a GCash card with the same rows and pill');
+assert.match(text, new RegExp(`Cash\\|Expected Cash\\|${money(48)}\\|Actual Cash\\|${money(48)}\\|Exact match`));
+assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`));
 assert.ok(text.indexOf('Expected Cash') < text.indexOf('Expected GCash'), 'Cash first, like the list screen');
+assert.match(text, /Show standard \/ PWD \/ back office \/ meals/, 'Cash/GCash cards open a sales breakdown');
 assert.doesNotMatch(text, /Expected:|Received:|Exact ·/, 'no plain-text lines');
 assert.match(renderDetail({ expected_gcash: 100, actual_gcash: 100 }), /data-icon="phone-portrait-outline"/, 'a GCash icon chip');
 
@@ -66,7 +71,8 @@ assert.match(flat(renderDetail({ expected_gcash: 100, actual_gcash: 80 })), new 
 assert.match(flat(renderDetail({ expected_gcash: 100, actual_gcash: 125.5 })), new RegExp(`${money(25.5)} excess`));
 // the two cards are independent: cash short, GCash exact
 text = flat(renderDetail({ cash_result: 'shortage', difference: -5, actual_cash: 43, expected_gcash: 100, actual_gcash: 100 }));
-assert.match(text, new RegExp(`${money(5)} shortage\\|GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`));
+assert.match(text, new RegExp(`${money(5)} shortage`));
+assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`));
 
 // GCash not remitted yet
 text = flat(renderDetail({ expected_gcash: 100, actual_gcash: null }));
@@ -106,7 +112,8 @@ const day = (over = {}, shiftOver = {}) => ({
 const renderList = (d) => { days = [d]; return renderToStaticMarkup(React.createElement(List)); };
 
 text = flat(renderList(day({ expected_gcash: 100, actual_gcash: 100, pending_gcash: 0 }, { expected_gcash: 100, actual_gcash: 100 })));
-assert.match(text, new RegExp(`Expected Cash\\|${money(48)}\\|Cash remitted\\|${money(48)}\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}`), 'the day card has GCash rows like Cash');
+assert.match(text, new RegExp(`Cash\\|Expected Cash\\|${money(48)}\\|Cash remitted\\|${money(48)}`));
+assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}`), 'GCash is its own card like Cash');
 assert.doesNotMatch(text, /GCash expected|Remitted ₱|Pending ₱/, 'the plain sentence is gone');
 assert.doesNotMatch(text, /GCash pending/, 'no pending note when nothing is pending');
 assert.match(text, new RegExp(`GCash submitted ${money(100)} · expected ${money(100)}`), 'each shift keeps its GCash received / expected');

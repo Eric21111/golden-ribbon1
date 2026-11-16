@@ -529,6 +529,10 @@ export type Database = {
       reopen_cashier_shift: { Args: { p_reason: string }; Returns: string };
       end_cashier_shift: { Args: { p_shift_id: string }; Returns: ShiftSummary };
       manager_today_payments: { Args: {p_branch?:string}; Returns: {method:string;program:string;amount:number;orders:number}[] };
+      manager_shift_payments: {
+        Args: { p_shift_id: string };
+        Returns: { method: string; program: string; amount: number; orders: number }[];
+      };
       manager_branch_stock: { Args: {p_branch:string}; Returns: {product_id:string;available:number;on_hand:number;held:number;sellable:number|null}[] };
       begin_cashier_shift_close: {
         Args: { p_shift_id: string };
