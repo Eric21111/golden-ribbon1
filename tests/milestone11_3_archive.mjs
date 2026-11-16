@@ -154,10 +154,14 @@ await db.exec(`
 `);
 
 assert.match(readFileSync('src/types/models.ts', 'utf8'), /DELETE ARCHIVED DATA/);
+assert.match(readFileSync('src/types/models.ts', 'utf8'), /ARCHIVE_EXPORT_FORMAT_VERSION = 2/);
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Export → Save Copy → Verify → Confirm Cleanup/);
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Related shifts \(kept\)/);
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Delete archived sales details/);
 assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Read notifications/);
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /backupSavedAcknowledged/);
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /I saved the backup files/);
+assert.doesNotMatch(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Saved \$\{pack\.manifest\.package_name\}/);
 assert.match(readFileSync('supabase/migrations/20260913140000_milestone_11_3_data_archive.sql', 'utf8'), /DELETE ARCHIVED DATA/);
 assert.match(
   readFileSync('supabase/migrations/20261117090000_archive_cleanup_sales_only.sql', 'utf8'),
@@ -171,7 +175,18 @@ assert.match(
   readFileSync('supabase/migrations/20261117103000_archive_void_history_remittance_guard.sql', 'utf8'),
   /archive_assert_remittance_safe/,
 );
+assert.match(
+  readFileSync('supabase/migrations/20261117120000_archive_fresh_export_required.sql', 'utf8'),
+  /export_format_version/,
+);
+assert.match(
+  readFileSync('supabase/migrations/20261117120000_archive_fresh_export_required.sql', 'utf8'),
+  /status in \('exported', 'verified', 'failed'\)/,
+);
 assert.match(readFileSync('src/lib/archiveExport.ts', 'utf8'), /void_events\.csv/);
+assert.match(readFileSync('src/lib/archiveExport.ts', 'utf8'), /browser_download_started/);
+assert.match(readFileSync('src/lib/archiveExport.ts', 'utf8'), /share_sheet_opened/);
+assert.doesNotMatch(readFileSync('src/lib/archiveExport.ts', 'utf8'), /files were successfully saved/);
 assert.doesNotMatch(readFileSync('src/components/RoleNavigation.tsx', 'utf8'), /data-archive/);
 // ManagerSidebar.tsx renders both the Manager and Owner drawers from one file — only the
 // Manager-only route table (getGroups) must stay free of Data Archive; Owner's own table
@@ -283,6 +298,8 @@ await asUser(owner, async () => {
   assert.ok(!exported.sales.some((row) => row.id === recentSale));
   assert.equal(exported.manifest.sales_row_count, 4);
   assert.equal(Number(exported.manifest.revenue_total), 640);
+  assert.equal(Number(exported.manifest.export_format_version), 2);
+  assert.equal(Number(exported.archive.export_format_version), 2);
   assert.match(exported.manifest.package_name, /^golden-ribbon-archive-/);
 
   const voidItem = exported.sale_items.find((row) => row.sale_id === voidSale);
@@ -300,13 +317,53 @@ await asUser(owner, async () => {
   assert.equal(exported.void_events[0].actor_name, 'Cashier 1');
   assert.equal(Number(exported.manifest.void_event_row_count), 1);
 
-  const { buildArchiveFiles } = loadTs('src/lib/archiveExport.ts', {
-    'react-native': { Platform: { OS: 'web' }, Share: { share: async () => {} } },
+  const { buildArchiveFiles, saveArchivePackage } = loadTs('src/lib/archiveExport.ts', {
+    'react-native': { Platform: { OS: 'ios' }, Share: { share: async () => ({ action: 'sharedAction' }) } },
   });
   const files = buildArchiveFiles(exported);
   assert.ok(files.some((file) => file.name === 'void_events.csv' && file.content.includes(voidEventId)));
   assert.ok(files.some((file) => file.name === 'sale_items.csv' && file.content.includes('void_history')));
   assert.ok(files.some((file) => file.name === 'sale_items.csv' && file.content.includes('Customer changed mind')));
+
+  const offer = await saveArchivePackage(exported);
+  assert.equal(offer.delivery, 'share_sheet_opened');
+  assert.match(offer.message, /share sheet was opened/i);
+  assert.doesNotMatch(offer.message, /^Saved /);
+  assert.ok(offer.fileNames.includes('void_events.csv'));
+
+  // Stale pre-void-history export format cannot verify or clean.
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set export_format_version = 1, status = 'exported', verified_at = null
+    where id = '${prepared.id}'
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+  await assert.rejects(
+    db.query(`select public.verify_sales_archive('${prepared.id}')`),
+    /fresh archive backup that includes void history/,
+  );
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set export_format_version = 1, status = 'verified', verified_at = now()
+    where id = '${prepared.id}'
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
+  await assert.rejects(
+    db.query(`select public.cleanup_archived_sales('${prepared.id}','DELETE ARCHIVED DATA')`),
+    /fresh archive backup that includes void history/,
+  );
+  assert.equal((await db.query(`select count(*)::int as n from public.sales where id = '${oldSale}'`)).rows[0].n, 1);
+
+  // Restore current void-history export stamp for the remainder of the flow.
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set export_format_version = 2, status = 'exported', verified_at = null
+    where id = '${prepared.id}'
+  `);
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${owner}',false);`);
 
   await db.exec('reset role');
   await db.exec(`update public.data_archives set sales_count = sales_count + 1 where id = '${prepared.id}'`);
@@ -493,6 +550,30 @@ await asUser(owner, async () => {
   const after = (await db.query('select public.get_archive_status() status')).rows[0].status;
   assert.equal(after.archive_due, false);
   assert.equal(Number(after.eligible_sales_count), 0);
+
+  const cleanedHistory = (
+    await db.query(
+      `select status, export_format_version, cleaned_at is not null as has_cleaned_at
+       from public.data_archives where id = $1`,
+      [prepared.id],
+    )
+  ).rows[0];
+  assert.equal(cleanedHistory.status, 'cleaned');
+  assert.equal(Number(cleanedHistory.export_format_version), 2);
+  assert.equal(cleanedHistory.has_cleaned_at, true);
+
+  // Migration-style invalidation must not rewrite cleaned archive history.
+  await db.exec('reset role');
+  await db.exec(`
+    update public.data_archives
+    set status = 'prepared', export_generated_at = null, verified_at = null, export_format_version = 1
+    where status in ('exported', 'verified', 'failed')
+  `);
+  const cleanedAfterInvalidate = (
+    await db.query(`select status, export_format_version from public.data_archives where id = $1`, [prepared.id])
+  ).rows[0];
+  assert.equal(cleanedAfterInvalidate.status, 'cleaned');
+  assert.equal(Number(cleanedAfterInvalidate.export_format_version), 2);
 });
 
 await asUser(owner, async () => {

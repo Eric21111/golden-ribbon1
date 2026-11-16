@@ -930,10 +930,15 @@ export type DataArchiveRecord = {
   revenue_total: number;
   units_sold: number;
   export_generated_at: string | null;
+  /** 2+ includes void_history/void_events. Older exports must be regenerated. */
+  export_format_version?: number;
   verified_at: string | null;
   cleaned_at: string | null;
   created_at: string;
 };
+
+/** Current archive backup package format (void history included). */
+export const ARCHIVE_EXPORT_FORMAT_VERSION = 2;
 
 export type ArchiveStatus = {
   retention_days: number;
@@ -1025,6 +1030,7 @@ export type ArchiveManifest = {
   start_date: string;
   end_date: string;
   generated_at: string;
+  export_format_version?: number;
   sales_row_count: number;
   sale_item_row_count: number;
   shift_row_count: number;

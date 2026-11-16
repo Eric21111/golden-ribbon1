@@ -142,13 +142,32 @@ function downloadWebFile(file: ArchiveDownloadFile) {
   URL.revokeObjectURL(url);
 }
 
-export async function saveArchivePackage(pack: ArchiveExportPackage): Promise<void> {
+/** Result of offering archive files to the Owner. Does not prove the files were saved. */
+export type ArchiveSaveOffer = {
+  packageName: string;
+  fileNames: string[];
+  delivery: 'browser_download_started' | 'share_sheet_opened';
+  message: string;
+};
+
+/**
+ * Offers archive backup files for the Owner to save.
+ * Browser download start / share-sheet open is not confirmation that files were stored.
+ */
+export async function saveArchivePackage(pack: ArchiveExportPackage): Promise<ArchiveSaveOffer> {
   const files = buildArchiveFiles(pack);
+  const fileNames = files.map((file) => file.name);
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     for (const [index, file] of files.entries()) {
       window.setTimeout(() => downloadWebFile(file), index * 250);
     }
-    return;
+    return {
+      packageName: pack.manifest.package_name,
+      fileNames,
+      delivery: 'browser_download_started',
+      message:
+        `Browser downloads were started for ${pack.manifest.package_name}. Check your downloads for ${fileNames.join(', ')}, including void_events.csv, then confirm the backup was saved before verifying.`,
+    };
   }
 
   const combined = files.map((file) => `===== ${file.name} =====\n${file.content}`).join('\n');
@@ -156,4 +175,11 @@ export async function saveArchivePackage(pack: ArchiveExportPackage): Promise<vo
     title: pack.manifest.package_name,
     message: combined,
   });
+  return {
+    packageName: pack.manifest.package_name,
+    fileNames,
+    delivery: 'share_sheet_opened',
+    message:
+      `The share sheet was opened for ${pack.manifest.package_name}. Save the archive files to a location you control, check that void_events.csv is included, then confirm the backup was saved before verifying.`,
+  };
 }

@@ -42,12 +42,18 @@ export function DataArchiveScreen() {
   const [confirmation, setConfirmation] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [backupSavedAcknowledged, setBackupSavedAcknowledged] = useState(false);
   const [workflowInfoOpen, setWorkflowInfoOpen] = useState(false);
   const [cleanupInfoOpen, setCleanupInfoOpen] = useState(false);
 
   const status = statusQuery.data;
   const archive = status?.active_archive ?? null;
   const busy = prepare.isPending || exportArchive.isPending || verify.isPending || cleanup.isPending;
+  const canVerify =
+    Boolean(archive?.export_generated_at) &&
+    (archive?.export_format_version ?? 0) >= 2 &&
+    backupSavedAcknowledged &&
+    !busy;
   const canCleanup =
     archive?.status === 'verified' && confirmation === ARCHIVE_CLEANUP_CONFIRMATION && !busy;
 
@@ -63,10 +69,11 @@ export function DataArchiveScreen() {
 
   const exportAndSave = () =>
     run(async () => {
+      setBackupSavedAcknowledged(false);
       const prepared = archive ?? (await prepare.mutateAsync());
       const pack = await exportArchive.mutateAsync(prepared.id);
-      await saveArchivePackage(pack);
-      setNotice(`Saved ${pack.manifest.package_name}. Store this copy before verifying cleanup.`);
+      const offer = await saveArchivePackage(pack);
+      setNotice(offer.message);
     });
 
   return (
@@ -195,12 +202,28 @@ export function DataArchiveScreen() {
                   disabled={busy || !status.archive_due}
                   onPress={() => void exportAndSave()}
                 />
+                {archive?.export_generated_at ? (
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: backupSavedAcknowledged }}
+                    accessibilityLabel="I saved and checked the archive backup files"
+                    disabled={busy}
+                    onPress={() => setBackupSavedAcknowledged((current) => !current)}
+                    style={({ pressed }) => [styles.ackRow, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.ackMark}>{backupSavedAcknowledged ? '☑' : '☐'}</Text>
+                    <Text style={styles.ackLabel}>
+                      I saved the backup files and checked that they include sales, sale items, void_events, and the
+                      manifest.
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <ManagerActionButton
                   label="Verify export"
                   icon="shield-checkmark-outline"
                   variant="secondary"
                   loading={verify.isPending}
-                  disabled={busy || !archive || !archive.export_generated_at}
+                  disabled={!canVerify}
                   onPress={() =>
                     void run(async () => {
                       if (!archive) return;
@@ -258,8 +281,10 @@ export function DataArchiveScreen() {
                 onClose={() => setWorkflowInfoOpen(false)}
               >
                 <Text style={styles.sheetBody}>
-                  Workflow: Export → Save Copy → Verify → Confirm Cleanup. Only old sales and sale items are deleted.
-                  Shifts, remittances, waste, inventory movements, transfers, returns, products, and accounts stay.
+                  Workflow: Export → Save Copy → Confirm backup saved → Verify → Confirm Cleanup. Opening downloads or
+                  the share sheet does not prove files were stored — check the backup (including void_events) before
+                  verifying. Only old sales and sale items are deleted. Shifts, remittances, waste, inventory
+                  movements, transfers, returns, products, and accounts stay.
                 </Text>
               </ManagerBottomSheet>
 
@@ -292,6 +317,9 @@ const styles = StyleSheet.create({
   },
   optionTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
   optionHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, marginTop: -6 },
+  ackRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 },
+  ackMark: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 22 },
+  ackLabel: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_400Regular', fontSize: 13.5, lineHeight: 19 },
   warningCard: {
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
