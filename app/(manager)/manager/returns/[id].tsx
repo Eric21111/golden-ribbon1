@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import {
+  DetailProductListSection,
+  type DetailLineStatus,
+} from '@/components/dashboard/DetailProductListSection';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { RouteBanner } from '@/components/dashboard/RouteBanner';
@@ -17,7 +21,9 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { useMarkNotificationsReviewed } from '@/hooks/useNotifications';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatSnapshottedQuantity } from '@/lib/format';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
+import { listCashierProductCategories } from '@/services/inventoryService';
 import { getReturn } from '@/services/returnService';
 
 export default function ManagerReturnDetailsScreen() {
@@ -29,6 +35,11 @@ export default function ManagerReturnDetailsScreen() {
     queryKey: ['stock-returns', profile?.id, returnId],
     queryFn: () => getReturn(returnId),
     enabled: Boolean(returnId),
+  });
+  const categoriesQuery = useQuery({
+    queryKey: ['cashier-product-categories'],
+    queryFn: listCashierProductCategories,
+    staleTime: 5 * 60 * 1000,
   });
   useMarkNotificationsReviewed('return_submitted', returnId, returnId && query.data ? query.dataUpdatedAt : 0);
 
@@ -52,101 +63,143 @@ export default function ManagerReturnDetailsScreen() {
   const row = query.data;
   const canReceive = row.status === 'in_transit' && isMainBranchManager(profile);
   const notesByItemId = new Map(row.discrepancies?.map((disc) => [disc.stock_return_item_id, disc.notes]) ?? []);
+  const discrepancyIdByItemId = new Map(
+    row.discrepancies?.map((disc) => [disc.stock_return_item_id, disc.id]) ?? [],
+  );
+  const categories = categoriesQuery.data;
   const summaryRows = [
     { label: 'Returned by', value: row.returned_by_name, icon: 'person-outline' as const },
     { label: 'Returned at', value: formatDate(row.returned_at), icon: 'time-outline' as const },
-    ...(row.received_by_name ? [{ label: 'Received by', value: row.received_by_name, icon: 'person-outline' as const }] : []),
-    ...(row.received_at ? [{ label: 'Received at', value: formatDate(row.received_at), icon: 'time-outline' as const }] : []),
+    ...(row.received_by_name
+      ? [{ label: 'Received by', value: row.received_by_name, icon: 'person-outline' as const }]
+      : []),
+    ...(row.received_at
+      ? [{ label: 'Received', value: formatDate(row.received_at), icon: 'time-outline' as const }]
+      : []),
     ...(row.notes ? [{ label: 'Notes', value: row.notes, icon: 'document-text-outline' as const }] : []),
   ];
 
+  const lineItems = row.items.map((item) => {
+    const isReceived = item.quantity_received !== null;
+    const diff = isReceived ? item.quantity_returned - item.quantity_received! : null;
+    const expectedLabel = formatSnapshottedQuantity(
+      item.quantity_returned,
+      item.inventory_mode,
+      item.stock_unit_code,
+    );
+    const receivedLabel = isReceived
+      ? formatSnapshottedQuantity(item.quantity_received, item.inventory_mode, item.stock_unit_code)
+      : null;
+    const lineStatus: DetailLineStatus =
+      diff === null ? 'pending' : diff === 0 ? 'match' : diff > 0 ? 'missing' : 'excess';
+    return {
+      id: item.id,
+      name: item.product_name,
+      sku: item.product_sku,
+      category: categories?.get(item.product_id) ?? null,
+      lineStatus,
+      diff,
+      note: notesByItemId.get(item.id),
+      discrepancyId: discrepancyIdByItemId.get(item.id),
+      expectedLine: `Expected ${expectedLabel}`,
+      receivedLine: receivedLabel ? `Received ${receivedLabel}` : 'Received Pending',
+    };
+  });
+
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      scroll={false}
+      contentContainerStyle={styles.screenContent}
+    >
       <ManagerScreenHeader
         title={row.return_number}
         subtitle={`${row.from_branch_name} → ${row.to_branch_name}`}
         badge={<ManagerBadge label={returnStatusBadgeLabel(row.status)} tone={returnStatusTone(row.status)} />}
         showBack
       />
-      <ConstrainedWidth style={styles.column}>
-        <RouteBanner
-          from={{ label: row.from_branch_name, isMain: false }}
-          to={{ label: row.to_branch_name, isMain: true }}
-          connectorIcon="return-up-back"
-        />
-        <SummaryCard rows={summaryRows} />
+      <ConstrainedWidth fill style={styles.body}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.column}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <RouteBanner
+            from={{ label: row.from_branch_name, isMain: false }}
+            to={{ label: row.to_branch_name, isMain: true }}
+            connectorIcon="return-up-back"
+          />
+          <SummaryCard rows={summaryRows} />
+
+          <DetailProductListSection
+            title="RETURNED PRODUCTS"
+            matchLabel="Exact"
+            items={lineItems}
+            renderItem={(item) => (
+              <ListRowCard
+                {...categoryRowProps(item.category)}
+                title={item.name}
+                subtitle={item.expectedLine}
+                meta={[item.receivedLine, item.note ? `Note: ${item.note}` : null]
+                  .filter(Boolean)
+                  .join('\n')}
+                trailing={
+                  item.diff === null ? (
+                    <ManagerBadge label="Pending" tone="neutral" size="md" />
+                  ) : (
+                    <ManagerBadge
+                      label={
+                        item.diff === 0
+                          ? 'Exact'
+                          : item.diff > 0
+                            ? `${item.diff} missing`
+                            : `${Math.abs(item.diff)} excess`
+                      }
+                      tone={item.diff === 0 ? 'success' : item.diff > 0 ? 'danger' : 'warning'}
+                      size="md"
+                    />
+                  )
+                }
+                onPress={
+                  item.discrepancyId
+                    ? () => router.push(`/manager/discrepancies/return/${item.discrepancyId}` as never)
+                    : undefined
+                }
+              />
+            )}
+          />
+        </ScrollView>
 
         {canReceive ? (
-          <ManagerActionButton
-            label="Count & receive return"
-            icon="clipboard-outline"
-            onPress={() =>
-              router.push({ pathname: '/manager/returns/receive/[id]', params: { id: row.id } })
-            }
-          />
-        ) : null}
-
-        <Text style={styles.sectionTitle}>RETURNED PRODUCTS</Text>
-        {(row.discrepancies ?? []).length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>DISCREPANCIES</Text>
-            {row.discrepancies.map((disc) => (
-              <ListRowCard
-                key={disc.id}
-                title={disc.product?.name ?? `Product (${disc.product_id})`}
-                subtitle={`${disc.quantity_expected} expected · ${disc.quantity_received} received`}
-                meta={disc.notes ? `Note: ${disc.notes}` : undefined}
-                trailing={
-                  <ManagerBadge
-                    label={
-                      disc.discrepancy_type === 'missing'
-                        ? `${disc.difference} missing`
-                        : `${Math.abs(disc.difference)} excess`
-                    }
-                    tone={disc.discrepancy_type === 'missing' ? 'danger' : 'warning'}
-                  />
-                }
-                onPress={() => router.push(`/manager/discrepancies/return/${disc.id}` as never)}
-              />
-            ))}
-          </>
-        ) : null}
-
-        {row.items.map((item) => {
-          const isReceived = item.quantity_received !== null;
-          const diff = isReceived ? item.quantity_returned - item.quantity_received! : null;
-          const note = notesByItemId.get(item.id);
-          const baseMeta = `Expected ${item.quantity_returned} · Received ${isReceived ? item.quantity_received : 'Pending'}`;
-          return (
-            <ListRowCard
-              key={item.id}
-              title={item.product_name}
-              subtitle={item.product_sku}
-              meta={note ? `${baseMeta} · Note: ${note}` : baseMeta}
-              trailing={
-                diff !== null ? (
-                  <ManagerBadge
-                    label={diff === 0 ? 'Exact match' : diff > 0 ? `${diff} missing` : `${Math.abs(diff)} excess`}
-                    tone={diff === 0 ? 'success' : 'warning'}
-                  />
-                ) : undefined
+          <View style={styles.footer}>
+            <ManagerActionButton
+              label="Count & receive return"
+              icon="clipboard-outline"
+              onPress={() =>
+                router.push({ pathname: '/manager/returns/receive/[id]', params: { id: row.id } })
               }
             />
-          );
-        })}
+          </View>
+        ) : null}
       </ConstrainedWidth>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 12 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-    marginTop: 8,
+  screenContent: { flex: 1, flexGrow: 1, padding: 0, gap: 0 },
+  body: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
+  column: { padding: 20, gap: 12, paddingBottom: 24 },
+  footer: {
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
   },
 });

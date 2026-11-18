@@ -21,14 +21,10 @@ import {
   type BranchRef,
 } from './stockDetails';
 
-const TONE_COLORS = { danger: '#B91C1C', warning: managerColors.goldMuted } as const;
-
 /**
- * The body of the Main Inventory "Stock details" sheet, in the order a manager needs it: Main's own stock and what to do about it
- * first, then ONE card for how it is sold: per option, what each selling branch charges and, in small gray text beside it, what a
- * sale takes from stock. Everything is visible (no collapsing) and built from the same rounded cards as the rest of the sheet.
- * Read only, with as little text as it can get away with. A product whose sales take from other items (Extra Rice -> Rice) has no
- * stock of its own to count or send, so it points at those items instead of asking for its own opening stock.
+ * The body of the Main Inventory "Stock details" sheet: product hero (above) already shows on-hand, so this keeps Updated,
+ * Send/Waste side-by-side, then ONE card for how it is sold. A product whose sales take from other items has no stock of its
+ * own to count or send, so it points at those items instead.
  */
 export function MainStockDetails({
   item,
@@ -113,7 +109,6 @@ export function MainStockDetails({
       drink: row.drinks.length === 0 ? null : row.drinks.length === 1 ? row.drinks[0]! : `${row.drinks.slice(0, -1).join(', ')} or ${row.drinks[row.drinks.length - 1]}`,
     };
   };
-  const toneColor = stock.tone === 'danger' || stock.tone === 'warning' ? TONE_COLORS[stock.tone] : undefined;
   const canWaste = !sharedStock && wasteAction(item).kind === 'waste';
 
   return (
@@ -129,20 +124,15 @@ export function MainStockDetails({
           />
         ) : (
           <>
-            <View style={styles.tiles}>
-              <View style={styles.tile}>
-                <Text style={styles.tileLabel}>On hand</Text>
-                <Text style={[styles.tileValue, styles.tileValueMain, toneColor ? { color: toneColor } : null]} numberOfLines={1}>
-                  {stock.value}
-                </Text>
-              </View>
-              <View style={styles.tile}>
-                <Text style={styles.tileLabel}>Updated</Text>
-                <Text style={styles.tileValue} numberOfLines={2}>
-                  {stock.updated}
-                </Text>
-              </View>
-            </View>
+            <SummaryCard
+              rows={[
+                {
+                  label: 'Updated',
+                  value: stock.updated,
+                  icon: 'time-outline' as const,
+                },
+              ]}
+            />
             {stock.note ? <Text style={styles.note}>{stock.note}</Text> : null}
           </>
         )}
@@ -157,21 +147,27 @@ export function MainStockDetails({
           <Text style={styles.note}>Checking stock setup…</Text>
         ) : (
           <>
-            <ManagerActionButton
-              label={action.label}
-              variant="secondary"
-              icon={action.kind === 'opening' ? 'create-outline' : 'paper-plane-outline'}
-              disabled={action.kind === 'blocked'}
-              onPress={action.kind === 'opening' ? onOpening : onSend}
-            />
-            {canWaste ? (
-              <ManagerActionButton
-                label="Add to waste"
-                variant="secondary"
-                icon="trash-outline"
-                onPress={onWaste}
-              />
-            ) : null}
+            <View style={styles.actionRow}>
+              <View style={styles.actionButton}>
+                <ManagerActionButton
+                  label={action.label}
+                  variant="secondary"
+                  icon={action.kind === 'opening' ? 'create-outline' : 'paper-plane-outline'}
+                  disabled={action.kind === 'blocked'}
+                  onPress={action.kind === 'opening' ? onOpening : onSend}
+                />
+              </View>
+              {canWaste ? (
+                <View style={styles.actionButton}>
+                  <ManagerActionButton
+                    label="Add to waste"
+                    variant="secondary"
+                    icon="trash-outline"
+                    onPress={onWaste}
+                  />
+                </View>
+              ) : null}
+            </View>
             {action.hint ? <Text style={styles.note}>{action.hint}</Text> : null}
           </>
         )}
@@ -264,20 +260,8 @@ const styles = StyleSheet.create({
   label: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.6 },
   note: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
   actions: { gap: 8 },
-  tiles: { flexDirection: 'row', gap: 12 },
-  tile: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
-  },
-  tileLabel: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13 },
-  tileValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16 },
-  tileValueMain: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 20 },
+  actionRow: { flexDirection: 'row', gap: 8 },
+  actionButton: { flex: 1, minWidth: 0 },
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

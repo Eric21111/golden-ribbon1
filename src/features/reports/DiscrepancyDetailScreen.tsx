@@ -1,7 +1,8 @@
 import { StockUnitHint } from '@/components/StockUnitHint';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { FilterDropdown } from '@/components/FilterDropdown';
@@ -14,10 +15,11 @@ import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
+import { alertNotice } from '@/lib/confirmAction';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatLiveStock } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getReturnDiscrepancy,
@@ -123,101 +125,164 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
   const isReturn = kind === 'return';
   const returnRow = isReturn && 'stock_return' in row ? row : null;
   const transferRow = !isReturn && 'stock_transfer' in row ? row : null;
-  const expected = row.quantity_expected;
-  const received = row.quantity_received;
+  const productName = row.product?.name ?? 'Product';
+  const expectedLabel = formatLiveStock(row.quantity_expected, undefined, row.stock_unit_code);
+  const receivedLabel = formatLiveStock(row.quantity_received, undefined, row.stock_unit_code);
+  const differenceAbs = Math.abs(Number(row.difference));
+  const differenceLabel = formatLiveStock(differenceAbs, undefined, row.stock_unit_code);
+  const differenceTone = isMissing ? styles.diffMissing : styles.diffExcess;
+  const showResolve = canResolve && status === 'open';
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      scroll={false}
+      contentContainerStyle={styles.screenContent}
+    >
       <ManagerScreenHeader
-        title={isReturn ? 'Return discrepancy' : 'Transfer discrepancy'}
+        title={productName}
+        subtitle={isReturn ? 'Return discrepancy' : 'Transfer discrepancy'}
+        badge={
+          <ManagerBadge
+            label={status === 'resolved' ? 'Resolved' : 'Open'}
+            tone={status === 'resolved' ? 'success' : 'warning'}
+          />
+        }
         showBack
       />
-      <ConstrainedWidth style={styles.column}><StockUnitHint code={row.stock_unit_code} />
-        <View style={styles.badges}>
-          <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
-          <ManagerBadge
-            label={isMissing ? `${row.difference} missing` : `${Math.abs(Number(row.difference))} excess`}
-            tone={isMissing ? 'danger' : 'warning'}
+      <ConstrainedWidth fill style={styles.body}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.column}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <View style={styles.heroItem}>
+              <Text style={styles.heroLabel}>{isReturn ? 'Expected' : 'Sent'}</Text>
+              <Text style={styles.heroValue} numberOfLines={1}>
+                {expectedLabel}
+              </Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroItem}>
+              <Text style={styles.heroLabel}>Received</Text>
+              <Text style={styles.heroValue} numberOfLines={1}>
+                {receivedLabel}
+              </Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroItem}>
+              <Text style={styles.heroLabel}>{isMissing ? 'Missing' : 'Excess'}</Text>
+              <Text style={[styles.heroValue, differenceTone]} numberOfLines={1}>
+                {differenceLabel}
+              </Text>
+            </View>
+          </View>
+          <StockUnitHint code={row.stock_unit_code} />
+
+          <SummaryCard
+            rows={[
+              ...(isReturn
+                ? [
+                    {
+                      label: 'Selling branch',
+                      value: returnRow?.stock_return?.from_branch_name ?? '—',
+                      icon: 'storefront-outline' as const,
+                    },
+                    {
+                      label: 'Return',
+                      value: returnRow?.stock_return?.return_number ?? '—',
+                      icon: 'return-up-back-outline' as const,
+                    },
+                  ]
+                : [
+                    {
+                      label: 'Source',
+                      value: transferRow?.stock_transfer?.from_branch?.name ?? '—',
+                      icon: 'paper-plane-outline' as const,
+                    },
+                    {
+                      label: 'Destination',
+                      value: transferRow?.stock_transfer?.to_branch?.name ?? '—',
+                      icon: 'storefront-outline' as const,
+                    },
+                    {
+                      label: 'Transfer',
+                      value: transferRow?.stock_transfer?.transfer_number ?? '—',
+                      icon: 'swap-horizontal-outline' as const,
+                    },
+                  ]),
+              { label: 'Recorded', value: formatDate(row.created_at), icon: 'time-outline' },
+              ...(row.notes ? [{ label: 'Receive note', value: row.notes, icon: 'document-text-outline' as const }] : []),
+            ]}
           />
-        </View>
 
-        <SummaryCard
-          rows={[
-            {
-              label: isReturn ? 'Expected / returned' : 'Expected / sent',
-              value: String(expected),
-              icon: 'cube-outline',
-            },
-            { label: 'Received', value: String(received), icon: 'checkmark-outline' },
-            {
-              label: 'Difference',
-              value: isMissing ? `${row.difference} missing` : `${Math.abs(Number(row.difference))} excess`,
-              icon: 'alert-circle-outline',
-            },
-            ...(isReturn
-              ? [
-                  {
-                    label: 'Selling branch',
-                    value: returnRow?.stock_return?.from_branch_name ?? '—',
-                    icon: 'storefront-outline' as const,
-                  },
-                  {
-                    label: 'Return',
-                    value: returnRow?.stock_return?.return_number ?? '—',
-                    icon: 'return-up-back-outline' as const,
-                  },
-                ]
-              : [
-                  {
-                    label: 'Source',
-                    value: transferRow?.stock_transfer?.from_branch?.name ?? '—',
-                    icon: 'paper-plane-outline' as const,
-                  },
-                  {
-                    label: 'Destination',
-                    value: transferRow?.stock_transfer?.to_branch?.name ?? '—',
-                    icon: 'storefront-outline' as const,
-                  },
-                  {
-                    label: 'Transfer',
-                    value: transferRow?.stock_transfer?.transfer_number ?? '—',
-                    icon: 'swap-horizontal-outline' as const,
-                  },
-                ]),
-            { label: 'Recorded', value: formatDate(row.created_at), icon: 'time-outline' },
-            ...(row.notes ? [{ label: 'Receive note', value: row.notes, icon: 'document-text-outline' as const }] : []),
-          ]}
-        />
-
-        {status === 'resolved' ? (
-          <ListRowCard
-            title="Resolution"
-            subtitle={reasonLabel(row.resolution_reason)}
-            meta={`Resolved ${formatDate(row.resolved_at)}${row.resolution_note ? ` · ${row.resolution_note}` : ''}`}
-          />
-        ) : null}
-
-        {canResolve && status === 'open' ? (
-          <View style={styles.resolve}>
-            <Text style={styles.sectionTitle}>RESOLVE</Text>
-            <Text style={styles.help}>
-              Resolving records the investigation only. Inventory and original quantities stay unchanged.
-            </Text>
-            <FilterDropdown
-              label="Resolution reason"
-              options={REASON_OPTIONS}
-              value={reason}
-              onChange={setReason}
+          {status === 'resolved' ? (
+            <ListRowCard
+              title="Resolution"
+              subtitle={reasonLabel(row.resolution_reason)}
+              meta={`Resolved ${formatDate(row.resolved_at)}${row.resolution_note ? ` · ${row.resolution_note}` : ''}`}
             />
-            <FormField
-              label={reason === 'other' ? 'Resolution note (required)' : 'Resolution note (optional)'}
-              value={note}
-              onChangeText={setNote}
-              multiline
-              maxLength={1000}
-              accentColor={managerColors.royalBlue}
-            />
-            {formError ? <Text style={styles.error}>{formError}</Text> : null}
+          ) : null}
+
+          {showResolve ? (
+            <View style={styles.resolveCard}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>RESOLVE</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Resolve discrepancy help"
+                  hitSlop={10}
+                  onPress={() =>
+                    alertNotice(
+                      'Resolve discrepancy',
+                      'Resolving records the investigation only. Inventory and original quantities stay unchanged.',
+                    )
+                  }
+                  style={({ pressed }) => [styles.infoHit, pressed && styles.pressed]}
+                >
+                  <Ionicons name="information-circle-outline" size={20} color={managerColors.royalBlue} />
+                </Pressable>
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Reason</Text>
+                <FilterDropdown
+                  label="Resolution reason"
+                  options={REASON_OPTIONS}
+                  value={reason}
+                  onChange={(value) => {
+                    setReason(value);
+                    setFormError('');
+                  }}
+                />
+              </View>
+              <FormField
+                label="Note"
+                hint={reason === 'other' ? 'Required when reason is Other.' : 'Optional'}
+                required={reason === 'other'}
+                value={note}
+                onChangeText={(value) => {
+                  setNote(value);
+                  setFormError('');
+                }}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                maxLength={1000}
+                accentColor={managerColors.royalBlue}
+                labelStyle={styles.fieldLabel}
+                hintStyle={styles.fieldHint}
+                style={styles.noteInput}
+              />
+              {formError ? <Text style={styles.error}>{formError}</Text> : null}
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {showResolve ? (
+          <View style={styles.footer}>
             <ManagerActionButton
               label="Resolve discrepancy"
               loading={mutation.isPending}
@@ -231,16 +296,80 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
 }
 
 const styles = StyleSheet.create({
-  screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 14 },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  resolve: { gap: 12 },
+  screenContent: { flex: 1, flexGrow: 1, padding: 0, gap: 0 },
+  body: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
+  column: { padding: 20, gap: 14, paddingBottom: 24 },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  heroItem: { flex: 1, alignItems: 'center', gap: 4, paddingHorizontal: 6 },
+  heroDivider: { width: 1, backgroundColor: managerColors.cardBorder },
+  heroLabel: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+  },
+  heroValue: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+  },
+  diffMissing: { color: '#B91C1C' },
+  diffExcess: { color: '#92400E' },
+  resolveCard: {
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    padding: 16,
+  },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     letterSpacing: 0.8,
   },
-  help: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
+  infoHit: { padding: 2 },
+  pressed: { opacity: 0.7 },
+  field: { gap: 6 },
+  fieldLabel: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  fieldHint: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  noteInput: {
+    minHeight: 88,
+    maxHeight: 140,
+    backgroundColor: managerColors.cardSurface,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 12,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  footer: {
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+  },
 });

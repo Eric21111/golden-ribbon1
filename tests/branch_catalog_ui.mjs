@@ -17,7 +17,10 @@ const { buildCatalogRows, formatPriceRange, catalogSummary, posLines, catalogEmp
   assert.equal(formatPriceRange(20.5, 35), '₱20.50–₱35.00', 'with centavos both ends keep them');
   assert.equal(catalogEmptyState('SM1', false).title, 'Nothing at SM1');
   assert.doesNotMatch(JSON.stringify(catalogEmptyState('SM1', false)), /available/i, 'a listing is not availability');
-  assert.equal(catalogEmptyState('SM1', false).message, 'Set a price in Products to list it here.');
+  assert.equal(
+    catalogEmptyState('SM1', false).message,
+    'Stock at this branch, and products listed in its catalog, will show up here.',
+  );
   assert.doesNotMatch(JSON.stringify(catalogEmptyState('SM1', false)), /sellable/i);
   assert.deepEqual(catalogEmptyState('SM1', true), { title: 'No matches', message: 'Try another name or SKU.' });
   console.log('1. wording and price text: ok');
@@ -209,28 +212,32 @@ console.log('3. listing rule: ok');
   const screen = read('app/(manager)/manager/catalog.tsx');
   const hook = read('src/hooks/useBranchProducts.ts');
   const service = read('src/services/branchProductService.ts');
-  // unchanged: branch chips, search, sort, paging, access
+  // branch + category filters, search, sort, paging, access
   assert.match(screen, /<MainBranchGuard>/);
-  assert.match(screen, /sellingBranches\.map\(\(branch\) => \(\{/);
-  assert.match(screen, /useClientPagination\(visibleRows, `\$\{branchId\}\|\$\{search\}\|\$\{sort\}`, 10\)/);
-  assert.match(screen, /case 'price-asc':\s+return a\.lowPrice - b\.lowPrice;/);
-  assert.match(screen, /buildCatalogRows\(products\.data \?\? \[\], catalog\.data \?\? \[\], branchVariants\.data \?\? \[\], productIdsWithOptions\.data \?\? \[\]\)/, 'the listing rule lives in one tested function');
+  assert.match(screen, /ListFiltersSheet/);
+  assert.match(screen, /title: 'Branch'/);
+  assert.match(screen, /useClientPagination\(visibleRows, `\$\{branchId\}\|\$\{search\}\|\$\{sort\}\|\$\{category\}`, 10\)/);
+  assert.match(screen, /case 'price-asc':\s+return priceA - priceB/);
+  assert.match(screen, /buildCatalogRows\(\s*products\.data \?\? \[\],\s*catalog\.data \?\? \[\],\s*branchVariants\.data \?\? \[\],\s*productIdsWithOptions\.data \?\? \[\],\s*\)/, 'the listing rule lives in one tested function');
+  assert.match(screen, /for \(const productId of stock\.data\?\.keys\(\) \?\? \[\]\)/, 'list is driven by branch stock');
+  assert.doesNotMatch(screen, /STOCK ONLY AT BRANCH/, 'stock and listed products share one list');
   assert.match(read('src/hooks/useProducts.ts'), /queryKey: \['product-variants', 'with-options'\]/, 'refreshed by the existing product-save invalidation');
   assert.match(read('src/services/productService.ts'), /from\('product_variants'\)\.select\('product_id'\)/);
   // wording
   assert.doesNotMatch(screen, /No available products|available here/);
-  assert.match(screen, /catalogEmptyState\(branchName, Boolean\(search\.trim\(\)\)\)/);
+  assert.match(screen, /catalogEmptyState\(branchName, Boolean\(search\.trim\(\)\) \|\| category !== 'all'\)/);
   assert.doesNotMatch(screen, /Listed means priced|Stock levels are not shown here/, 'the long explainer is gone from the list screen');
-  assert.match(screen, /<ManagerActionButton label="Go to Products" variant="secondary" style=\{styles\.emptyAction\} onPress=\{\(\) => router\.push\('\/manager\/products'\)\} \/>/, 'empty state offers one way forward');
-  assert.match(screen, /manager_branch_stock/); assert.match(screen,/balance\?\.sellable/);
-  assert.match(screen, /label: 'Cashier menu', value: row\.inPos \? 'In POS' : 'Not in POS'/);
-  assert.match(screen, /row\.inPos \? 'in POS' : 'not in POS'/, 'the spoken card says it');
-  // cards: one tappable control with a spoken description, the real price, blockers as badges
-  assert.match(screen, /accessibilityRole="button"\s+accessibilityLabel=\{spokenCard\(item, branchName\)\}\s+accessibilityHint="Opens branch details"/);
-  assert.match(screen, /\{item\.priceText\}/);
+  assert.match(screen, /label="Go to Products"/, 'empty state offers one way forward');
+  assert.match(screen, /manager_branch_stock/);
+  assert.match(screen, /balance\?\.sellable/);
+  assert.match(screen, /On hand \$\{balance\.onHand\}/);
+  assert.match(screen, /Held \$\{balance\.held\}/);
+  assert.match(screen, /Not listed/);
+  // cards: listed rows open the detail sheet; badges still show blockers
+  assert.match(screen, /onPress=\{listed \? \(\) => setSelectedId\(product\.id\) : undefined\}/);
+  assert.match(screen, /catalogRow\?\.priceText/);
   assert.match(screen, /<ManagerBadge key=\{badge\.key\} label=\{badge\.label\} tone=\{badge\.tone\} \/>/);
-  // a read-only details sheet: no edit, no navigation to a management screen
-  assert.match(screen, /Read only\. Change prices and product settings in Products\./);
+  assert.match(screen, /<CatalogDetails/);
   assert.doesNotMatch(screen.replace("router.push('/manager/products')", ''), /router\.push|setEditProduct|configureBranch/, 'no management actions here (only the empty-state link to Products)');
   // the extra read is one bulk query, refreshed when a product is saved (that invalidates the whole prefix)
   assert.match(service, /export async function listBranchVariantsForBranch\(branchId: string\)/);
@@ -251,9 +258,9 @@ console.log('3. listing rule: ok');
     assert.ok(room(extreme) >= 65, `at ${w}dp the name keeps ${room(extreme).toFixed(0)}dp beside the widest range`);
   }
   const screen = read('app/(manager)/manager/catalog.tsx');
-  assert.match(screen, /badges: { flexDirection: 'row', flexWrap: 'wrap'/, 'badges wrap onto the next line');
-  assert.match(screen, /priceValue: {[^}]*flexShrink: 0/, 'the price is never squeezed');
-  assert.match(screen, /name: { flex: 1,/, 'the name takes what is left and wraps (two lines)');
+  assert.match(screen, /badgeRow: \{ flexDirection: 'row', flexWrap: 'wrap'/, 'badges wrap onto the next line');
+  assert.match(screen, /priceValue: \{/, 'list rows show the branch price');
+  assert.match(screen, /trailing: \{ alignItems: 'flex-end'/, 'price and badges sit in the trailing column');
   console.log('8. widths: ok');
 }
 

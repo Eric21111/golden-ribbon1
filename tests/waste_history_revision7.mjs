@@ -320,7 +320,11 @@ await assert.rejects(
 
 assert.match(
   readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'),
-  /stock units \(mixed items\)/,
+  /stock units/,
+);
+assert.doesNotMatch(
+  readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'),
+  /mixed items/,
 );
 assert.match(readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'), /formatPcsQty\(/);
 

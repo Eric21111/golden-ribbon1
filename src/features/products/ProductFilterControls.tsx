@@ -259,7 +259,9 @@ export function ListFiltersSheet({
     if (!visible) setOpenKey(null);
   }, [visible]);
   const extras = toExtras(extra);
-  const on = countListFilters(filters, keys) + extras.filter((row) => row.value !== 'all').length;
+  const on =
+    countListFilters(filters, keys) +
+    extras.filter((row) => row.countsAsFilter !== false && row.value !== 'all').length;
   const categoryOptions = categoryOptionsWithIcons();
   const rowCount = keys.length + extras.length;
 
@@ -308,7 +310,10 @@ export function ListFiltersSheet({
                 variant="secondary"
                 onPress={() => {
                   onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
-                  extras.forEach((row) => row.onChange('all'));
+                  extras.forEach((row) => {
+                    if (row.countsAsFilter === false) return;
+                    row.onChange('all');
+                  });
                   setOpenKey(null);
                 }}
               />
@@ -326,9 +331,14 @@ const toExtras = (extra: ExtraListFilter | ExtraListFilter[] | undefined): Extra
 /** A filter row that belongs to one screen only. `value` "all" means it is off. */
 export type ExtraListFilter = {
   title: string;
-  options: Array<{ label: string; value: string }>;
+  options: Array<{ label: string; value: string; leading?: ReactNode }>;
   value: string;
   onChange: (value: string) => void;
+  /**
+   * When false, this row is a required picker (e.g. which branch catalog), not a clearable filter:
+   * it does not raise the Reset / badge count, and Reset leaves it alone. Default true.
+   */
+  countsAsFilter?: boolean;
 };
 
 /** Only while a filter is on: "3 of 12 products", a removable tag for each filter, and Clear all. Nothing otherwise. */
@@ -349,13 +359,18 @@ export function ListFilterSummary({
 }) {
   const extras = toExtras(extra);
   const extraTags = extras.flatMap((row, index) =>
-    row.value !== 'all' ? [{ key: `extra-${index}`, label: row.options.find((option) => option.value === row.value)?.label ?? 'Filter' }] : [],
+    row.countsAsFilter !== false && row.value !== 'all'
+      ? [{ key: `extra-${index}`, label: row.options.find((option) => option.value === row.value)?.label ?? 'Filter' }]
+      : [],
   );
   const tags: Array<{ key: string; label: string }> = [...listFilterTags(filters, keys), ...extraTags];
   if (tags.length === 0) return null;
   const clearAll = () => {
     onChange({ ...filters, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_LIST_FILTERS[key]])) } as ListFilters);
-    extras.forEach((row) => row.onChange('all'));
+    extras.forEach((row) => {
+      if (row.countsAsFilter === false) return;
+      row.onChange('all');
+    });
   };
   return (
     <View style={styles.summary}>

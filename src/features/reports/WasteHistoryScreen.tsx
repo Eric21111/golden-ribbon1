@@ -128,7 +128,7 @@ export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
         <View style={styles.sheetTotal}>
           <Text style={styles.sheetTotalLabel}>Total</Text>
           <Text style={styles.sheetTotalValue}>
-            {total != null ? `${total} stock units (mixed items)` : '—'}
+            {total != null ? `${total} stock units` : '—'}
           </Text>
         </View>
       </View>
@@ -211,17 +211,15 @@ export function WasteHistoryScreen({
               <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
 
               <View style={styles.heroCard}>
-                <View style={styles.heroRow}>
-                  <View style={styles.heroLeft}>
-                    <View style={styles.heroIconChip}>
-                      <Ionicons name="trash-outline" size={18} color={managerColors.royalBlue} />
-                    </View>
-                    <Text style={styles.heroLabel}>Total waste</Text>
+                <View style={styles.heroTop}>
+                  <View style={styles.heroIconChip}>
+                    <Ionicons name="trash-outline" size={18} color={managerColors.royalBlue} />
                   </View>
-                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {totalPcs != null ? `${totalPcs} stock units (mixed items)` : '—'}
-                  </Text>
+                  <Text style={styles.heroLabel}>Total waste</Text>
                 </View>
+                <Text style={styles.heroValue}>
+                  {totalPcs != null ? `${totalPcs} stock units` : '—'}
+                </Text>
                 <View style={styles.pillRow}>
                   <View style={styles.pill}>
                     <Text style={styles.pillText}>{plural(day.occurrence_count, 'occurrence', 'occurrences')}</Text>
@@ -239,7 +237,13 @@ export function WasteHistoryScreen({
                 const totalForShift = shiftTotalPcs(shift.occurrences);
                 const chip = statChipColors[accentForName(shift.branch_name)];
                 const isMain = shift.entry_kind === 'main_inventory' || shift.shift_id == null;
-                const rowTitle = isMain ? 'Main inventory' : shift.branch_name;
+                const timeLabel = isMain
+                  ? 'Main inventory write-off'
+                  : formatShiftTimeRange(shift.started_at, shift.ended_at);
+                const cashierLabel =
+                  !isMain && shift.cashier_name.trim() && shift.branch_name !== shift.cashier_name
+                    ? shift.cashier_name
+                    : null;
                 const content = (
                   <View style={styles.shiftRow}>
                     <View style={[styles.branchChip, { backgroundColor: chip.chip }]}>
@@ -251,18 +255,12 @@ export function WasteHistoryScreen({
                     </View>
                     <View style={styles.shiftCopy}>
                       <Text style={styles.branchName} numberOfLines={2}>
-                        {rowTitle}
+                        {timeLabel}
                       </Text>
-                      <View style={styles.metaItem}>
-                        <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
-                        <Text style={styles.metaItemText}>
-                          {formatShiftTimeRange(shift.started_at, shift.ended_at)}
-                        </Text>
-                      </View>
-                      {!isMain && shift.branch_name !== shift.cashier_name ? (
+                      {cashierLabel ? (
                         <View style={styles.metaItem}>
                           <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
-                          <Text style={styles.metaItemText}>{shift.cashier_name}</Text>
+                          <Text style={styles.metaItemText}>{cashierLabel}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -270,7 +268,7 @@ export function WasteHistoryScreen({
                       {recorded ? (
                         <>
                           <Text style={styles.amount}>
-                            {totalForShift != null ? `${totalForShift} stock units (mixed items)` : '—'}
+                            {totalForShift != null ? String(totalForShift) : '—'}
                           </Text>
                           <Text style={styles.trailSub}>{plural(productCount(shift), 'product', 'products')}</Text>
                         </>
@@ -289,7 +287,7 @@ export function WasteHistoryScreen({
                   <Pressable
                     key={rowKey(shift)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Waste details for ${rowTitle}`}
+                    accessibilityLabel={`Waste details for ${timeLabel}`}
                     onPress={() => setSelected(shift)}
                     style={({ pressed }) => [styles.shiftCard, pressed && styles.pressed]}
                   >
@@ -332,15 +330,14 @@ const styles = StyleSheet.create({
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
     padding: 16,
-    gap: 12,
+    gap: 10,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroIconChip: {
     width: 34,
     height: 34,
@@ -350,7 +347,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCE8FC',
   },
   heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
-  heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, flexShrink: 1 },
+  heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 28 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: managerColors.cardSurface },
   pillText: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
@@ -372,8 +369,8 @@ const styles = StyleSheet.create({
   branchChip: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   shiftCopy: { flex: 1, minWidth: 0, gap: 3 },
   branchName: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  shiftTrail: { alignItems: 'flex-end', gap: 2, flexShrink: 0 },
-  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  shiftTrail: { alignItems: 'flex-end', gap: 2, flexShrink: 0, minWidth: 44 },
+  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
   trailSub: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
   rowBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   rowBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 12 },

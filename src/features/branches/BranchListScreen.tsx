@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
@@ -22,14 +23,17 @@ import {
 import type { BranchFormValues } from '@/features/branches/branchSchema';
 import { useBranches, useCreateBranch, useUpdateBranch } from '@/hooks/useBranches';
 import { getErrorMessage } from '@/lib/errors';
+import { accentForName } from '@/lib/nameAccent';
 import type { Branch } from '@/types/models';
 
 type BranchListScreenProps = {
   canCreate: boolean;
   canEdit: boolean;
+  /** Manager Branches: footer opens all catalogs; selling-branch rows open that branch’s catalog. */
+  openCatalog?: boolean;
 };
 
-export function BranchListScreen({ canCreate, canEdit }: BranchListScreenProps) {
+export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: BranchListScreenProps) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<BranchFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
@@ -98,32 +102,50 @@ export function BranchListScreen({ canCreate, canEdit }: BranchListScreenProps) 
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={<EmptyState title={empty.title} message={empty.message} />}
-            renderItem={({ item }) => (
-              <ListRowCard
-                title={item.name}
-                meta={`${item.code} · ${item.is_main_branch ? 'Main Branch' : 'Selling Branch'}`}
-                trailing={
-                  <ManagerBadge
-                    label={item.is_active ? 'Active' : 'Inactive'}
-                    tone={item.is_active ? 'success' : 'neutral'}
-                  />
-                }
-                onPress={canEdit ? () => setEditBranch(item) : undefined}
-              />
-            )}
+            renderItem={({ item }) => {
+              const openBranchCatalog =
+                openCatalog && !item.is_main_branch
+                  ? () => router.push(`/manager/catalog?branchId=${encodeURIComponent(item.id)}` as never)
+                  : undefined;
+              return (
+                <ListRowCard
+                  icon={item.is_main_branch ? 'home-outline' : 'storefront-outline'}
+                  iconColor={accentForName(item.name)}
+                  title={item.name}
+                  meta={`${item.code} · ${item.is_main_branch ? 'Main Branch' : 'Selling Branch'}`}
+                  trailing={
+                    <ManagerBadge
+                      label={item.is_active ? 'Active' : 'Inactive'}
+                      tone={item.is_active ? 'success' : 'neutral'}
+                    />
+                  }
+                  onPress={canEdit ? () => setEditBranch(item) : openBranchCatalog}
+                />
+              );
+            }}
           />
         )}
 
-        {canCreate ? (
+        {canCreate || openCatalog ? (
           <View style={styles.footer}>
-            <ManagerActionButton
-              label="Create branch"
-              icon="add-circle-outline"
-              onPress={() => {
-                createMutation.reset();
-                setCreateOpen(true);
-              }}
-            />
+            {openCatalog ? (
+              <ManagerActionButton
+                label="Branch Catalogs"
+                icon="git-branch-outline"
+                variant={canCreate ? 'secondary' : undefined}
+                onPress={() => router.push('/manager/catalog' as never)}
+              />
+            ) : null}
+            {canCreate ? (
+              <ManagerActionButton
+                label="Create branch"
+                icon="add-circle-outline"
+                onPress={() => {
+                  createMutation.reset();
+                  setCreateOpen(true);
+                }}
+              />
+            ) : null}
           </View>
         ) : null}
       </ConstrainedWidth>

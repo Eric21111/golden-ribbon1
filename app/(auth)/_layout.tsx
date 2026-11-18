@@ -17,12 +17,20 @@ export default function AuthLayout() {
   });
   if (isLoading || !fontsLoaded) {
     return (
-      <Screen backgroundColor="#FFFFFF">
+      <Screen backgroundColor="#0A1224">
         <LoadingState label="Checking session…" />
       </Screen>
     );
   }
   if (session && profile) return <Redirect href={roleHome[profile.role]} />;
   if (session) return <Redirect href="/" />;
-  return <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'default',
+        contentStyle: { backgroundColor: '#0A1224' },
+      }}
+    />
+  );
 }

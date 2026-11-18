@@ -4,13 +4,14 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { NavTile } from '@/components/dashboard/NavTile';
@@ -27,7 +28,6 @@ import {
 import { SelectedReturnCloseForm } from '@/features/shifts/SelectedReturnCloseForm';
 import { CashierShiftCloseForm } from '@/features/shifts/CashierShiftCloseForm';
 import {
-  BEGIN_CLOSE_CONFIRM_MESSAGE,
   FINALIZE_CONFIRM_MESSAGE,
   formatCloseSuccessSummary,
   isNetworkishError,
@@ -191,9 +191,21 @@ export default function CashierDashboard() {
 
   const openPos = () => void ensureStockAllowsPos(() => router.push('/cashier/pos'));
 
+  const closeReopenSheet = () => {
+    if (reopenBusy) return;
+    setReopenOpen(false);
+    setReopenReason('');
+    setReopenError('');
+  };
+
   const submitReopen = () => {
+    if (reopenBusy) return;
     const reason = reopenReason.trim();
-    if (reason.length < 8 || reopenBusy) {
+    if (!reason) {
+      setReopenError('Reason is required.');
+      return;
+    }
+    if (reason.length < 8) {
       setReopenError('Enter a reason of at least 8 characters.');
       return;
     }
@@ -211,16 +223,6 @@ export default function CashierDashboard() {
       .finally(() => setReopenBusy(false));
   };
 
-  const showIncomingTile = profile?.branch?.receiving_mode === 'cashier_confirm';
-  const incomingTile = showIncomingTile ? (
-    <NavTile
-      layout="tile"
-      icon="cube-outline"
-      accent="gold"
-      title="Incoming shipments"
-      onPress={() => router.push('/cashier/incoming' as never)}
-    />
-  ) : null;
   const leftoverReturnTile = (
     <NavTile
       layout="tile"
@@ -231,6 +233,13 @@ export default function CashierDashboard() {
     />
   );
 
+  const closeEndShiftSheet = () => {
+    if (verifying) return;
+    setPinPrompt(false);
+    setCredential('');
+    setLegacyClose(false);
+  };
+
   const requestEndShift = () => {
     const shiftId = shiftQuery.data?.id;
     if (!shiftId) return;
@@ -238,7 +247,9 @@ export default function CashierDashboard() {
       alertNotice('Unfinished cart', 'Remove every item from the cart before ending the shift.', 'warning');
       return;
     }
-    setCredential(''); setLegacyClose(false); setPinPrompt(true);
+    setCredential('');
+    setLegacyClose(false);
+    setPinPrompt(true);
   };
   const confirmEndShift = async () => {
     const shiftId = shiftQuery.data?.id;
@@ -501,69 +512,49 @@ export default function CashierDashboard() {
             onRetry={() => void shiftQuery.refetch()}
           />
         ) : !shiftQuery.data ? (
-          <View style={styles.content}>
-            <View style={styles.noticeCard}>
-              {sameDayClosedHint ? (
-                <>
-                  <View style={styles.closedHead}>
-                    <View style={styles.closedBadge}>
-                      <Ionicons name="checkmark" size={30} color="#15803D" />
-                    </View>
-                    <Text style={styles.closedTitle}>Shift closed for today</Text>
-                    <Text style={styles.closedText}>End Shift is complete. Start again next business day.</Text>
+          <View style={[styles.content, styles.contentClosed]}>
+            {sameDayClosedHint ? (
+              <View style={styles.closedEmpty}>
+                <View style={styles.closedHead}>
+                  <View style={styles.closedBadge}>
+                    <Ionicons name="checkmark" size={32} color="#15803D" />
                   </View>
-                  {reopenOpen ? (
-                    <View style={styles.reopenForm}>
-                      <FormField
-                        label="Reason"
-                        value={reopenReason}
-                        onChangeText={setReopenReason}
-                        placeholder="Why POS needs to reopen"
-                        accentColor={managerColors.royalBlue}
-                      />
-                      <Text style={styles.note}>The system decides whether a new shift can start.</Text>
-                      {reopenError ? <Text style={styles.error}>{reopenError}</Text> : null}
-                      <View style={styles.closedActions}>
-                        <View style={styles.closedAction}>
-                          <ManagerActionButton
-                            label="Cancel"
-                            variant="secondary"
-                            disabled={reopenBusy}
-                            onPress={() => {
-                              setReopenOpen(false);
-                              setReopenError('');
-                            }}
-                          />
-                        </View>
-                        <View style={styles.closedAction}>
-                          <ManagerActionButton label="Confirm" loading={reopenBusy} disabled={reopenBusy} onPress={submitReopen} />
-                        </View>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.reopenRow}>
-                      <Text style={styles.reopenQuestion}>Need to sell more today?</Text>
-                      <Pressable
-                        accessibilityRole="button"
-                        hitSlop={10}
-                        onPress={() => {
-                          setReopenError('');
-                          setReopenOpen(true);
-                        }}
-                      >
-                        <Text style={styles.reopenLink}>Reopen POS</Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.noticeTitle}>No Active Shift</Text>
-                  <Text style={styles.noticeText}>
+                  <Text style={styles.closedTitle}>Shift closed for today</Text>
+                  <Text style={styles.closedText}>
+                    End Shift is complete. Start again next business day.
+                  </Text>
+                </View>
+
+                <View style={styles.reopenActions}>
+                  <Text style={styles.reopenQuestion}>Need to sell more today?</Text>
+                  <ManagerActionButton
+                    label="Reopen POS"
+                    variant="secondary"
+                    onPress={() => {
+                      setReopenError('');
+                      setReopenReason('');
+                      setReopenOpen(true);
+                    }}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.closedEmpty}>
+                <View style={styles.closedHead}>
+                  <View style={styles.startBadge}>
+                    <Ionicons name="play" size={28} color={managerColors.royalBlue} />
+                  </View>
+                  <Text style={styles.closedTitle}>No Active Shift</Text>
+                  <Text style={styles.closedText}>
                     Start a shift to begin selling and receiving stock.
                   </Text>
+                </View>
+
+                <View style={styles.reopenActions}>
                   {startMutation.error ? (
-                    <Text style={styles.error}>{getShiftErrorMessage(startMutation.error)}</Text>
+                    <Text style={[styles.error, styles.startError]}>
+                      {getShiftErrorMessage(startMutation.error)}
+                    </Text>
                   ) : null}
                   <ManagerActionButton
                     label="Start shift"
@@ -572,17 +563,9 @@ export default function CashierDashboard() {
                     disabled={startMutation.isPending}
                     onPress={startShift}
                   />
-                </>
-              )}
-              {showIncomingTile && !sameDayClosedHint ? (
-                <>
-                  <Text style={styles.sectionTitle}>BRANCH ACTIONS</Text>
-                  <Row>{incomingTile}</Row>
-                </>
-              ) : null}
-            </View>
-            <ManagerActionButton label="Branch inventory" variant="secondary" onPress={() => router.push('/cashier/inventory' as never)} />
-            {sameDayClosedHint && finalizedToday.data !== 'selected' ? <Row>{leftoverReturnTile}</Row> : null}
+                </View>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.content}>
@@ -618,24 +601,16 @@ export default function CashierDashboard() {
               </View>
             </View>
 
-            {(
-              <View style={styles.endShiftSection}>
-                <ManagerActionButton
-                  label="End Shift / Remit"
-                  icon="stop-circle-outline"
-                  variant="secondary"
-                  loading={verifying}
-                  disabled={busy || pinPrompt}
-                  onPress={requestEndShift}
-                />
-                {pinPrompt && <View style={{gap:12}}>
-                  <Text>{BEGIN_CLOSE_CONFIRM_MESSAGE}</Text>
-                  <PinField label="Confirm with your PIN" value={credential} onChangeText={setCredential} allowPassword onLegacyChange={setLegacyClose} />
-                  <ManagerActionButton label="Confirm End Shift" disabled={legacyClose ? !credential : !/^[0-9]{6}$/.test(credential)} loading={verifying} onPress={() => void confirmEndShift()} />
-                  <ManagerActionButton label="Cancel" disabled={verifying} variant="secondary" onPress={() => {setPinPrompt(false);setCredential('');}} />
-                </View>}
-              </View>
-            )}
+            <View style={styles.endShiftSection}>
+              <ManagerActionButton
+                label="End Shift / Remit"
+                icon="stop-circle-outline"
+                variant="secondary"
+                loading={verifying}
+                disabled={busy || pinPrompt}
+                onPress={requestEndShift}
+              />
+            </View>
 
             {summaryQuery.error ? (
               <Text style={styles.error}>Unable to load shift totals. Pull to refresh.</Text>
@@ -663,11 +638,98 @@ export default function CashierDashboard() {
                   />
                   {leftoverReturnTile}
                 </Row>
+                <Row>
+                  <NavTile
+                    layout="tile"
+                    icon="create-outline"
+                    accent="blue"
+                    title="Void logs"
+                    onPress={() => router.push('/cashier/stock-corrections' as never)}
+                  />
+                  <View style={styles.rowSpacer} />
+                </Row>
               </>
             ) : null}
           </View>
         )}
       </ConstrainedWidth>
+
+      <ManagerBottomSheet
+        visible={pinPrompt}
+        title="End Shift / Remit"
+        scroll
+        onClose={closeEndShiftSheet}
+      >
+        <View style={styles.endShiftSheet}>
+          <PinField
+            label="Confirm with your PIN"
+            value={credential}
+            onChangeText={setCredential}
+            allowPassword
+            onLegacyChange={setLegacyClose}
+          />
+          <View style={styles.closedActions}>
+            <View style={styles.closedAction}>
+              <ManagerActionButton
+                label="Cancel"
+                variant="secondary"
+                disabled={verifying}
+                onPress={closeEndShiftSheet}
+              />
+            </View>
+            <View style={styles.closedAction}>
+              <ManagerActionButton
+                label="Confirm"
+                loading={verifying}
+                disabled={legacyClose ? !credential : !/^[0-9]{6}$/.test(credential)}
+                onPress={() => void confirmEndShift()}
+              />
+            </View>
+          </View>
+        </View>
+      </ManagerBottomSheet>
+
+      <ManagerBottomSheet
+        visible={reopenOpen}
+        title="Reopen POS"
+        scroll
+        onClose={closeReopenSheet}
+      >
+        <View style={styles.reopenSheet}>
+          <Text style={styles.reopenSubtitle}>The system decides whether a new shift can start.</Text>
+          <FormField
+            label="Reason"
+            required
+            value={reopenReason}
+            onChangeText={(value) => {
+              setReopenReason(value);
+              if (reopenError) setReopenError('');
+            }}
+            placeholder="Why POS needs to reopen"
+            accentColor={managerColors.royalBlue}
+            error={reopenError || undefined}
+            autoCapitalize="sentences"
+          />
+          <View style={styles.closedActions}>
+            <View style={styles.closedAction}>
+              <ManagerActionButton
+                label="Cancel"
+                variant="secondary"
+                disabled={reopenBusy}
+                onPress={closeReopenSheet}
+              />
+            </View>
+            <View style={styles.closedAction}>
+              <ManagerActionButton
+                label="Confirm"
+                loading={reopenBusy}
+                disabled={reopenBusy}
+                onPress={submitReopen}
+              />
+            </View>
+          </View>
+        </View>
+      </ManagerBottomSheet>
     </Screen>
   );
 }
@@ -708,47 +770,69 @@ const styles = StyleSheet.create({
     maxWidth: 200,
   },
   branchPillText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
-  column: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
+  column: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   content: { gap: spacing.md },
+  contentClosed: { flexGrow: 1 },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     letterSpacing: 0.8,
   },
-  noticeCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    padding: spacing.lg,
-    gap: spacing.md,
-    shadowColor: '#0A1224',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  noticeTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 19 },
-  noticeText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
   note: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
-  closedHead: { alignItems: 'center', gap: 8, paddingTop: 4 },
-  closedBadge: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  closedTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 19, textAlign: 'center' },
-  closedText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  reopenRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  closedEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  closedHead: { alignItems: 'center', gap: 10 },
+  closedBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: managerColors.cardBorder,
-    paddingTop: spacing.md,
+    marginBottom: 2,
   },
-  reopenQuestion: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
-  reopenLink: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
-  reopenForm: { gap: 10, borderTopWidth: 1, borderTopColor: managerColors.cardBorder, paddingTop: spacing.md },
+  startBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EAF0FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  closedTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, textAlign: 'center' },
+  closedText: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  reopenActions: { gap: spacing.sm, width: '100%', maxWidth: 320 },
+  reopenQuestion: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  startError: { textAlign: 'center' },
+  reopenSheet: { gap: 12, paddingBottom: 8 },
+  reopenSubtitle: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: -4,
+  },
+  endShiftSheet: { gap: 14, paddingBottom: 8 },
   closedActions: { flexDirection: 'row', gap: 10 },
   closedAction: { flex: 1 },
   shiftCard: {
@@ -771,6 +855,7 @@ const styles = StyleSheet.create({
   startedText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
+  rowSpacer: { flex: 1 },
   warningCard: {
     backgroundColor: '#FEF3C7',
     borderRadius: 12,

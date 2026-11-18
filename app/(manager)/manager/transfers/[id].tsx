@@ -1,7 +1,11 @@
-import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { StyleSheet } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import {
+  DetailProductListSection,
+  type DetailLineStatus,
+} from '@/components/dashboard/DetailProductListSection';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
@@ -10,10 +14,15 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { RouteBanner } from '@/components/dashboard/RouteBanner';
 import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { transferStatusBadgeLabel, transferStatusTone } from '@/components/dashboard/statusTone';
-import { managerColors } from '@/components/dashboard/theme';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import { useTransfer } from '@/hooks/useTransfers';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatTransferLineSummary, isKgMeal } from '@/lib/format';
+import {
+  formatDate,
+  formatSnapshottedQuantity,
+  formatTransferReceivedQuantity,
+  isKgMeal,
+} from '@/lib/format';
 
 export default function ManagerTransferDetailsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -39,6 +48,27 @@ export default function ManagerTransferDetailsScreen() {
 
   const transfer = query.data;
   const notesByItemId = new Map(transfer.discrepancies.map((disc) => [disc.stock_transfer_item_id, disc.notes]));
+  const discrepancyIdByItemId = new Map(
+    transfer.discrepancies.map((disc) => [disc.stock_transfer_item_id, disc.id]),
+  );
+
+  const lineItems = transfer.items.map((item) => {
+    const kgMeal = isKgMeal(item.inventory_mode);
+    const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
+    const lineStatus: DetailLineStatus =
+      difference === null ? 'pending' : difference === 0 ? 'match' : difference > 0 ? 'missing' : 'excess';
+    return {
+      id: item.id,
+      name: item.product?.name ?? `Unavailable product (${item.product_id})`,
+      sku: item.product?.sku ?? '',
+      category: item.product?.product_category ?? null,
+      lineStatus,
+      item,
+      difference,
+      note: notesByItemId.get(item.id),
+      discrepancyId: discrepancyIdByItemId.get(item.id),
+    };
+  });
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
@@ -65,41 +95,53 @@ export default function ManagerTransferDetailsScreen() {
           ]}
         />
 
-        <Text style={styles.sectionTitle}>PRODUCTS</Text>
-        {transfer.items.map((item) => {
-          const kgMeal = isKgMeal(item.inventory_mode);
-          const difference = kgMeal || item.quantity_received === null ? null : item.quantity_sent - item.quantity_received;
-          const note = notesByItemId.get(item.id);
-          const baseSubtitle = formatTransferLineSummary(
-            transfer.status,
-            item.quantity_sent,
-            item.quantity_received,
-            item.inventory_mode,
-            item.stock_unit_code,
-          );
-          return (
+        <DetailProductListSection
+          title="PRODUCTS"
+          matchLabel="Complete"
+          filterMode="category"
+          items={lineItems}
+          renderItem={(row) => (
             <ListRowCard
-              key={item.id}
-              title={item.product?.name ?? `Unavailable product (${item.product_id})`}
-              subtitle={baseSubtitle}
-              meta={note ? `Note: ${note}` : undefined}
+              {...categoryRowProps(row.category)}
+              title={row.name}
+              subtitle={`Sent ${formatSnapshottedQuantity(
+                row.item.quantity_sent,
+                row.item.inventory_mode,
+                row.item.stock_unit_code,
+              )}`}
+              meta={[
+                `Received ${formatTransferReceivedQuantity(
+                  transfer.status,
+                  row.item.quantity_received,
+                  row.item.inventory_mode,
+                  row.item.stock_unit_code,
+                )}`,
+                row.note ? `Note: ${row.note}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n')}
               trailing={
-                difference === null ? undefined : (
+                row.difference === null ? undefined : (
                   <ManagerBadge
                     label={
-                      difference === 0
+                      row.difference === 0
                         ? 'Complete'
-                        : difference > 0
-                          ? `${difference} missing`
-                          : `${Math.abs(difference)} excess`
+                        : row.difference > 0
+                          ? `${row.difference} missing`
+                          : `${Math.abs(row.difference)} excess`
                     }
-                    tone={difference === 0 ? 'success' : 'warning'}
+                    tone={row.difference === 0 ? 'success' : 'warning'}
                   />
                 )
               }
+              onPress={
+                row.discrepancyId
+                  ? () => router.push(`/manager/discrepancies/transfer/${row.discrepancyId}` as never)
+                  : undefined
+              }
             />
-          );
-        })}
+          )}
+        />
       </ConstrainedWidth>
     </Screen>
   );
@@ -108,11 +150,4 @@ export default function ManagerTransferDetailsScreen() {
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { padding: 20, gap: 12 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-    marginTop: 8,
-  },
 });

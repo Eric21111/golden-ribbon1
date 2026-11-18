@@ -1,36 +1,84 @@
-import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
+import {
+  DetailProductListSection,
+  type DetailLineStatus,
+} from '@/components/dashboard/DetailProductListSection';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { categoryOf } from '@/features/products/productFilters';
+import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import {
   useCashierPendingTransfers,
   useConfirmShipmentArrival,
   useReportShipmentIssue,
 } from '@/hooks/useTransfers';
 import { useMarkNotificationsReviewed } from '@/hooks/useNotifications';
+import { useProducts } from '@/hooks/useProducts';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatDate, formatSnapshottedQuantity, makeIdempotencyKey } from '@/lib/format';
-import type { CashierPendingTransfer } from '@/types/models';
+import type { CashierPendingTransfer, CashierPendingTransferItem } from '@/types/models';
+
+type LineItem = {
+  id: string;
+  name: string;
+  sku: string;
+  category: string | null;
+  lineStatus: DetailLineStatus;
+  line: CashierPendingTransferItem;
+};
+
+function lineStatusFor(
+  line: CashierPendingTransferItem,
+  reporting: boolean,
+  receivedByItem: Record<string, string>,
+): DetailLineStatus {
+  if (!reporting) return 'pending';
+  const raw = receivedByItem[line.stock_transfer_item_id] ?? '';
+  if (!/^\d+$/.test(raw)) return 'pending';
+  const received = Number(raw);
+  const sent = Number(line.quantity_sent);
+  if (received === sent) return 'match';
+  if (received < sent) return 'missing';
+  return 'excess';
+}
 
 export default function CashierIncomingShipments() {
   const { session } = useAuth();
   const pending = useCashierPendingTransfers(session?.user.id ?? '');
+  const products = useProducts();
   useMarkNotificationsReviewed('transfer_pending', null, pending.isSuccess ? pending.dataUpdatedAt : 0);
   const arrival = useConfirmShipmentArrival();
   const issue = useReportShipmentIssue();
   const keysRef = useRef<Map<string, string>>(new Map());
   const [reportingId, setReportingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [receivedByItem, setReceivedByItem] = useState<Record<string, string>>({});
   const [issueNotes, setIssueNotes] = useState('');
+
+  const categoryByProductId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const product of products.data ?? []) {
+      map.set(product.id, categoryOf(product));
+    }
+    return map;
+  }, [products.data]);
+
+  const transfers = pending.data ?? [];
+  const footerTransfer = useMemo(() => {
+    const activeId = reportingId ?? expandedId;
+    if (!activeId) return null;
+    return transfers.find((transfer) => transfer.id === activeId) ?? null;
+  }, [reportingId, expandedId, transfers]);
 
   const keyFor = (transferId: string) => {
     const existing = keysRef.current.get(transferId);
@@ -42,9 +90,8 @@ export default function CashierIncomingShipments() {
 
   const beginReport = (transfer: CashierPendingTransfer) => {
     setReportingId(transfer.id);
+    setExpandedId(transfer.id);
     setIssueNotes('');
-    // Prefill with what was sent — most lines match, so the cashier only has to edit the ones
-    // that differ instead of retyping every quantity from scratch.
     setReceivedByItem(
       Object.fromEntries(
         transfer.items.map((line) => [line.stock_transfer_item_id, String(line.quantity_sent)]),
@@ -58,6 +105,11 @@ export default function CashierIncomingShipments() {
     setReportingId(null);
     setIssueNotes('');
     setReceivedByItem({});
+  };
+
+  const toggleExpanded = (transferId: string) => {
+    if (reportingId === transferId) return;
+    setExpandedId((current) => (current === transferId ? null : transferId));
   };
 
   const confirmArrival = (transfer: CashierPendingTransfer) => {
@@ -139,6 +191,188 @@ export default function CashierIncomingShipments() {
     );
   };
 
+  function actionState(transfer: CashierPendingTransfer) {
+    const reporting = reportingId === transfer.id;
+    const countsReady = transfer.items.every((line) =>
+      /^\d+$/.test(receivedByItem[line.stock_transfer_item_id] ?? ''),
+    );
+    const hasDifference = transfer.items.some(
+      (line) => Number(receivedByItem[line.stock_transfer_item_id] ?? '') !== Number(line.quantity_sent),
+    );
+    const notesReady = issueNotes.trim().length >= 3;
+    const busy =
+      (arrival.isPending && arrival.variables?.transferId === transfer.id) ||
+      (issue.isPending && issue.variables?.transferId === transfer.id);
+    const otherBusy =
+      (arrival.isPending && arrival.variables?.transferId !== transfer.id) ||
+      (issue.isPending && issue.variables?.transferId !== transfer.id);
+    const actionError =
+      (arrival.error && arrival.variables?.transferId === transfer.id
+        ? getInventoryErrorMessage(arrival.error)
+        : null) ||
+      (issue.error && issue.variables?.transferId === transfer.id
+        ? getInventoryErrorMessage(issue.error)
+        : null);
+    return { reporting, countsReady, hasDifference, notesReady, busy, otherBusy, actionError };
+  }
+
+  function renderActions(transfer: CashierPendingTransfer) {
+    const { reporting, countsReady, hasDifference, notesReady, busy, otherBusy } = actionState(transfer);
+    if (reporting) {
+      return (
+        <View style={styles.buttonRow}>
+          <View style={styles.buttonHalf}>
+            <ManagerActionButton label="Cancel" variant="secondary" disabled={busy} onPress={cancelReport} />
+          </View>
+          <View style={styles.buttonHalf}>
+            <ManagerActionButton
+              label="Confirm issue"
+              icon="alert-circle-outline"
+              loading={issue.isPending && issue.variables?.transferId === transfer.id}
+              disabled={!countsReady || !hasDifference || !notesReady || otherBusy}
+              onPress={() => confirmIssue(transfer)}
+            />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.buttonRow}>
+        <View style={styles.buttonHalf}>
+          <ManagerActionButton
+            label="Report issue"
+            variant="secondary"
+            disabled={busy || otherBusy || reportingId != null}
+            onPress={() => beginReport(transfer)}
+          />
+        </View>
+        <View style={styles.buttonHalf}>
+          <ManagerActionButton
+            label="Arrived"
+            icon="checkmark-circle-outline"
+            loading={arrival.isPending && arrival.variables?.transferId === transfer.id}
+            disabled={otherBusy || reportingId != null}
+            onPress={() => confirmArrival(transfer)}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  function renderTransfer(transfer: CashierPendingTransfer, stickyActions: boolean) {
+    const { reporting, actionError } = actionState(transfer);
+    const expanded = reporting || expandedId === transfer.id;
+    const lineItems: LineItem[] = transfer.items.map((line) => ({
+      id: line.stock_transfer_item_id,
+      name: line.product_name,
+      sku: line.product_sku,
+      category: categoryByProductId.get(line.product_id) ?? null,
+      lineStatus: lineStatusFor(line, reporting, receivedByItem),
+      line,
+    }));
+
+    return (
+      <View style={styles.transferBlock}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${transfer.transfer_number}, ${expanded ? 'collapse' : 'expand'} products`}
+          onPress={() => toggleExpanded(transfer.id)}
+          style={({ pressed }) => [
+            styles.headerCard,
+            reporting && styles.headerCardReporting,
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={styles.cardTopIconChip}>
+            <Ionicons name="cube-outline" size={18} color={managerColors.royalBlue} />
+          </View>
+          <View style={styles.cardTopCopy}>
+            <Text style={styles.transferNumber}>{transfer.transfer_number}</Text>
+            <Text style={styles.meta}>
+              From {transfer.from_branch_name} · Sent {formatDate(transfer.sent_at)}
+            </Text>
+            <Text style={styles.itemCount}>
+              {transfer.items.length} {transfer.items.length === 1 ? 'product' : 'products'}
+            </Text>
+          </View>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={managerColors.subtext}
+          />
+        </Pressable>
+
+        {expanded ? (
+          <>
+            <DetailProductListSection
+              title="PRODUCTS"
+              matchLabel="Complete"
+              showFilters={false}
+              showGroupHeadings={false}
+              items={lineItems}
+              renderItem={(row) => {
+                const sentLabel = formatSnapshottedQuantity(
+                  row.line.quantity_sent,
+                  row.line.inventory_mode,
+                  row.line.stock_unit_code,
+                );
+                return (
+                  <ListRowCard
+                    {...categoryRowProps(row.category)}
+                    title={row.name}
+                    subtitle={reporting ? `Sent ${sentLabel}` : row.sku || undefined}
+                    meta={reporting ? (row.sku || undefined) : undefined}
+                    trailing={
+                      reporting ? (
+                        <TextInput
+                          accessibilityLabel={`Actual received quantity for ${row.name}`}
+                          keyboardType="number-pad"
+                          value={receivedByItem[row.line.stock_transfer_item_id] ?? ''}
+                          onChangeText={(value) => {
+                            if (value === '' || /^\d{1,6}$/.test(value)) {
+                              setReceivedByItem((current) => ({
+                                ...current,
+                                [row.line.stock_transfer_item_id]: value,
+                              }));
+                            }
+                          }}
+                          placeholder="0"
+                          placeholderTextColor={managerColors.subtext}
+                          maxLength={6}
+                          selectTextOnFocus
+                          style={styles.qtyInput}
+                        />
+                      ) : (
+                        <Text style={styles.itemQty}>{sentLabel}</Text>
+                      )
+                    }
+                  />
+                );
+              }}
+            />
+
+            {reporting ? (
+              <FormField
+                label="What is wrong"
+                value={issueNotes}
+                onChangeText={setIssueNotes}
+                multiline
+                placeholder="Short, damaged, missing items…"
+                maxLength={1000}
+                accentColor={managerColors.royalBlue}
+                labelStyle={styles.fieldLabel}
+                style={styles.fieldInput}
+              />
+            ) : null}
+            {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+            {!stickyActions ? <View style={styles.inlineActions}>{renderActions(transfer)}</View> : null}
+          </>
+        ) : null}
+      </View>
+    );
+  }
+
   if (pending.isLoading) return <LoadingState label="Loading incoming shipments…" />;
   if (pending.error) {
     return (
@@ -151,18 +385,24 @@ export default function CashierIncomingShipments() {
     );
   }
 
+  const stickyFooter = footerTransfer != null;
+
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
       <View style={styles.layout}>
         <ManagerScreenHeader title="Incoming Shipments" showBack />
         <FlatList
-          data={pending.data ?? []}
+          data={transfers}
           keyExtractor={(item) => item.id}
           style={styles.list}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           refreshControl={
-            <RefreshControl refreshing={pending.isRefetching} onRefresh={() => void pending.refetch()} tintColor={managerColors.royalBlue} />
+            <RefreshControl
+              refreshing={pending.isRefetching}
+              onRefresh={() => void pending.refetch()}
+              tintColor={managerColors.royalBlue}
+            />
           }
           ListEmptyComponent={
             <EmptyState
@@ -171,129 +411,11 @@ export default function CashierIncomingShipments() {
             />
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          renderItem={({ item }) => {
-            const reporting = reportingId === item.id;
-            const countsReady = item.items.every((line) =>
-              /^\d+$/.test(receivedByItem[line.stock_transfer_item_id] ?? ''),
-            );
-            const hasDifference = item.items.some(
-              (line) => Number(receivedByItem[line.stock_transfer_item_id] ?? '') !== Number(line.quantity_sent),
-            );
-            const notesReady = issueNotes.trim().length >= 3;
-            const busy =
-              (arrival.isPending && arrival.variables?.transferId === item.id) ||
-              (issue.isPending && issue.variables?.transferId === item.id);
-            const otherBusy =
-              (arrival.isPending && arrival.variables?.transferId !== item.id) ||
-              (issue.isPending && issue.variables?.transferId !== item.id);
-            const actionError =
-              (arrival.error && arrival.variables?.transferId === item.id
-                ? getInventoryErrorMessage(arrival.error)
-                : null) ||
-              (issue.error && issue.variables?.transferId === item.id
-                ? getInventoryErrorMessage(issue.error)
-                : null);
-
-            return (
-              <View style={[styles.card, reporting && styles.cardReporting]}>
-                <View style={styles.cardTop}>
-                  <View style={styles.cardTopIconChip}>
-                    <Ionicons name="cube-outline" size={18} color={managerColors.royalBlue} />
-                  </View>
-                  <View style={styles.cardTopCopy}>
-                    <Text style={styles.transferNumber}>{item.transfer_number}</Text>
-                    <Text style={styles.meta}>From {item.from_branch_name} · Sent {formatDate(item.sent_at)}</Text>
-                  </View>
-                </View>
-                {item.items.map((line) => (
-                  <View key={line.stock_transfer_item_id} style={styles.itemRow}>
-                    <Text style={styles.itemName} numberOfLines={1}>{line.product_name}</Text>
-          <StockUnitHint code={line.stock_unit_code} />
-                    {reporting ? (
-                      <TextInput
-                        accessibilityLabel={`Actual received quantity for ${line.product_name}`}
-                        keyboardType="number-pad"
-                        value={receivedByItem[line.stock_transfer_item_id] ?? ''}
-                        onChangeText={(value) => {
-                          if (value === '' || /^\d{1,6}$/.test(value)) {
-                            setReceivedByItem((current) => ({
-                              ...current,
-                              [line.stock_transfer_item_id]: value,
-                            }));
-                          }
-                        }}
-                        placeholder="0"
-                        placeholderTextColor={managerColors.subtext}
-                        maxLength={6}
-                        selectTextOnFocus
-                        style={styles.qtyInput}
-                      />
-                    ) : (
-                      <Text style={styles.itemQty} numberOfLines={1}>
-                        {formatSnapshottedQuantity(line.quantity_sent, line.inventory_mode, line.stock_unit_code)}
-                      </Text>
-                    )}
-                  </View>
-                ))}
-                {reporting ? (
-                  <FormField
-                    label="What is wrong"
-                    value={issueNotes}
-                    onChangeText={setIssueNotes}
-                    multiline
-                    placeholder="Short, damaged, missing items…"
-                    maxLength={1000}
-                    accentColor={managerColors.royalBlue}
-                    labelStyle={styles.fieldLabel}
-                    style={styles.fieldInput}
-                  />
-                ) : null}
-                {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-                {reporting ? (
-                  <View style={styles.buttonRow}>
-                    <View style={styles.buttonHalf}>
-                      <ManagerActionButton
-                        label="Cancel"
-                        variant="secondary"
-                        disabled={busy}
-                        onPress={cancelReport}
-                      />
-                    </View>
-                    <View style={styles.buttonHalf}>
-                      <ManagerActionButton
-                        label="Confirm issue"
-                        icon="alert-circle-outline"
-                        loading={issue.isPending && issue.variables?.transferId === item.id}
-                        disabled={!countsReady || !hasDifference || !notesReady || otherBusy}
-                        onPress={() => confirmIssue(item)}
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.buttonRow}>
-                    <View style={styles.buttonHalf}>
-                      <ManagerActionButton
-                        label="Report issue"
-                        variant="secondary"
-                        disabled={busy || otherBusy || reportingId != null}
-                        onPress={() => beginReport(item)}
-                      />
-                    </View>
-                    <View style={styles.buttonHalf}>
-                      <ManagerActionButton
-                        label="Arrived"
-                        icon="checkmark-circle-outline"
-                        loading={arrival.isPending && arrival.variables?.transferId === item.id}
-                        disabled={otherBusy || reportingId != null}
-                        onPress={() => confirmArrival(item)}
-                      />
-                    </View>
-                  </View>
-                )}
-              </View>
-            );
-          }}
+          renderItem={({ item }) => renderTransfer(item, stickyFooter && footerTransfer?.id === item.id)}
         />
+        {stickyFooter && footerTransfer ? (
+          <View style={styles.footer}>{renderActions(footerTransfer)}</View>
+        ) : null}
       </View>
     </Screen>
   );
@@ -303,23 +425,26 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   layout: { flex: 1, minHeight: 0 },
   list: { flex: 1, minHeight: 0 },
-  listContent: { paddingHorizontal: 20, paddingVertical: 16, flexGrow: 1 },
-  separator: { height: 12 },
-  card: {
+  listContent: { paddingHorizontal: 20, paddingVertical: 16, flexGrow: 1, gap: 0 },
+  separator: { height: 20 },
+  transferBlock: { gap: 14 },
+  headerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
     padding: 16,
-    gap: 14,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  cardReporting: { borderColor: managerColors.royalBlue, backgroundColor: '#F8FAFE' },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerCardReporting: { borderColor: managerColors.royalBlue, backgroundColor: '#F8FAFE' },
+  pressed: { opacity: 0.75 },
   cardTopIconChip: {
     width: 36,
     height: 36,
@@ -331,20 +456,8 @@ const styles = StyleSheet.create({
   cardTopCopy: { flex: 1, minWidth: 0, gap: 2 },
   transferNumber: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: managerColors.cardBorder,
-    paddingTop: 12,
-    paddingBottom: 2,
-  },
-  itemName: { flex: 1, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
-  itemQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14 },
-  buttonRow: { flexDirection: 'row', gap: 10 },
-  buttonHalf: { flex: 1 },
+  itemCount: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  itemQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
   qtyInput: {
     width: 64,
     height: 40,
@@ -361,4 +474,21 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
+  buttonRow: { flexDirection: 'row', gap: 10 },
+  buttonHalf: { flex: 1 },
+  inlineActions: { paddingTop: 4 },
+  footer: {
+    marginHorizontal: 0,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
+  },
 });

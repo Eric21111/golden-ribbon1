@@ -15,6 +15,8 @@ import { colors, radius, spacing } from '@/constants/theme';
 
 interface FormFieldProps extends TextInputProps {
   label: string;
+  /** Secondary line under the label (e.g. expected amount). */
+  hint?: string;
   error?: string;
   appearance?: 'default' | 'dark';
   leftIcon?: IoniconsIconName;
@@ -23,13 +25,18 @@ interface FormFieldProps extends TextInputProps {
   rightIconAccessibilityLabel?: string;
   accentColor?: string;
   labelStyle?: StyleProp<TextStyle>;
+  hintStyle?: StyleProp<TextStyle>;
   errorStyle?: StyleProp<TextStyle>;
   iconSize?: number;
+  required?: boolean;
+  /** Keep accessibility label on the input but hide the visible label row. */
+  hideLabel?: boolean;
 }
 
 export const FormField = forwardRef<TextInput, FormFieldProps>(function FormField(
   {
     label,
+    hint,
     error,
     appearance = 'default',
     leftIcon,
@@ -38,8 +45,11 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
     rightIconAccessibilityLabel,
     accentColor = colors.primary,
     labelStyle,
+    hintStyle,
     errorStyle,
     iconSize = 20,
+    required = false,
+    hideLabel = false,
     style,
     onFocus,
     onBlur,
@@ -49,12 +59,18 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
 ) {
   const isDark = appearance === 'dark';
   const [isFocused, setIsFocused] = useState(false);
-  const iconColor = isFocused ? accentColor : isDark ? '#78716C' : colors.muted;
+  const iconColor = isFocused ? accentColor : isDark ? '#E7ECFA' : colors.muted;
   const leftIconOffset = (48 - iconSize) / 2;
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, isDark && styles.labelDark, labelStyle]}>{label}</Text>
+      {!hideLabel ? (
+        <Text style={[styles.label, isDark && styles.labelDark, labelStyle]}>
+          {label}
+          {required ? <Text style={styles.required}> *</Text> : null}
+        </Text>
+      ) : null}
+      {hint ? <Text style={[styles.hint, isDark && styles.hintDark, hintStyle]}>{hint}</Text> : null}
       <View style={styles.inputWrapper}>
         {leftIcon ? (
           <Ionicons
@@ -67,7 +83,7 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
         <TextInput
           ref={ref}
           accessibilityLabel={label}
-          placeholderTextColor={isDark ? '#A8A29E' : colors.muted}
+          placeholderTextColor={isDark ? '#93A0B8' : colors.muted}
           style={[
             styles.input,
             isDark && styles.inputDark,
@@ -96,7 +112,7 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
             onPress={onRightIconPress}
             style={styles.rightIcon}
           >
-            <Ionicons name={rightIcon} size={iconSize} color={isDark ? '#78716C' : colors.muted} />
+            <Ionicons name={rightIcon} size={iconSize} color={isDark ? '#E7ECFA' : colors.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -106,11 +122,16 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
 });
 
 const styles = StyleSheet.create({
-  container: { gap: spacing.xs },
-  label: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  labelDark: { color: '#D6D3D1' },
-  inputWrapper: { justifyContent: 'center' },
+  container: { gap: spacing.xs, width: '100%', maxWidth: '100%', alignSelf: 'stretch' },
+  label: { color: colors.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  labelDark: { color: '#F3F6FF', fontSize: 14, letterSpacing: 0.2 },
+  required: { color: '#F87171', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  hint: { color: colors.muted, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  hintDark: { color: '#93A0B8' },
+  inputWrapper: { justifyContent: 'center', width: '100%', maxWidth: '100%' },
   input: {
+    width: '100%',
+    maxWidth: '100%',
     minHeight: 48,
     borderWidth: 1,
     borderColor: colors.border,
@@ -120,11 +141,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: colors.text,
     fontSize: 16,
+    fontFamily: 'Inter_400Regular',
   },
   inputDark: {
-    borderColor: '#3F3F46',
-    backgroundColor: '#171717',
-    color: '#FAFAF9',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198, 210, 232, 0.78)',
+    backgroundColor: 'rgba(10, 18, 36, 0.5)',
+    color: '#FFFFFF',
   },
   inputWithLeftIcon: { paddingLeft: 44 },
   inputWithRightIcon: { paddingRight: 44 },
@@ -132,6 +155,6 @@ const styles = StyleSheet.create({
   rightIcon: { position: 'absolute', right: 6, top: 6, padding: 8 },
   inputError: { borderColor: colors.danger },
   inputErrorDark: { borderColor: '#F87171' },
-  error: { color: colors.danger, fontSize: 13 },
+  error: { color: colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium' },
   errorDark: { color: '#FCA5A5' },
 });

@@ -5,7 +5,7 @@ import { BranchListScreen } from '@/features/branches/BranchListScreen';
 export default function ManagerBranchListScreen() {
   return (
     <MainBranchGuard>
-      <BranchListScreen canCreate={false} canEdit={false} />
+      <BranchListScreen canCreate={false} canEdit={false} openCatalog />
     </MainBranchGuard>
   );
 }

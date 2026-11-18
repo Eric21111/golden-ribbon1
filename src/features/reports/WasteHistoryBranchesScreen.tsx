@@ -67,10 +67,6 @@ export function WasteHistoryBranchesScreen() {
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
-        <Text style={styles.hint}>
-          Choose a branch to review recorded waste. Selling branches include shift and cashier waste; Main includes
-          inventory write-offs only.
-        </Text>
 
         {customIncomplete ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
@@ -128,13 +124,6 @@ export function WasteHistoryBranchesScreen() {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12 },
-  hint: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12.5,
-    lineHeight: 18,
-    marginTop: -4,
-  },
   section: { gap: 10, marginTop: 4 },
   sectionTitle: {
     color: managerColors.subtext,

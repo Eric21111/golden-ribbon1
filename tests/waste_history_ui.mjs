@@ -116,18 +116,19 @@ const text = flat(html);
 assert.match(text, /RANGE\|/, 'the date-range pills are first, as on every report');
 assert.match(
   text,
-  /Nov 8, 2026\|Total waste\|19 stock units \(mixed items\)\|3 occurrences\|3 products\|/,
+  /Nov 8, 2026\|Total waste\|19 stock units\|3 occurrences\|3 products\|/,
   'date, summary card: total waste, then the two tags',
 );
-assert.match(text, /Nov 6, 2026\|Total waste\|160 stock units \(mixed items\)\|1 occurrence\|1 product\|/, 'singular');
+assert.match(text, /Nov 6, 2026\|Total waste\|160 stock units\|1 occurrence\|1 product\|/, 'singular');
 assert.equal((html.match(/data-icon="trash-outline"/g) ?? []).length, 2, 'one icon chip per summary card');
 assert.doesNotMatch(text, /Occurrences\|Products\|Total waste\|/, 'the old three-box strip is gone');
+assert.doesNotMatch(text, /mixed items/, 'no mixed-items suffix');
 
-assert.match(text, /SM 1\|[^|]*\|Cashier 1\|9 stock units \(mixed items\)\|1 product\|/, 'branch, time, cashier, total');
-assert.match(text, /SM 1\|[^|]*\|Cashier 1\|10 stock units \(mixed items\)\|2 products\|/);
+assert.match(text, /Cashier 1\|9\|1 product\|/, 'time title, cashier, short qty');
+assert.match(text, /Cashier 1\|10\|2 products\|/);
 assert.doesNotMatch(text, /Coke Mismo|Beef Curry|Beef kulma|Rice/, 'products stay in the sheet');
 assert.equal((html.match(/data-icon="chevron-forward"/g) ?? []).length, 3, 'chevron on each waste row');
-assert.equal((html.match(/aria-label="Waste details for SM 1"/g) ?? []).length, 3, 'those rows are buttons');
+assert.equal((html.match(/aria-label="Waste details for /g) ?? []).length, 3, 'those rows are buttons');
 assert.doesNotMatch(text, /Waste recorded/, 'no redundant Waste recorded badge on quantified rows');
 assert.match(text, /No waste\|/);
 assert.match(text, /Pending\|/);
@@ -141,10 +142,10 @@ assert.equal((text.match(/Total waste/g) ?? []).length, 2, 'summary cards only f
   const body = renderToStaticMarkup(React.createElement(screen.WasteDetailsBody, { shift: days[1].shifts[1] }));
   assert.match(flat(body), /SM 1\|[^|]*\|Cashier 1\|Beef Curry\|/);
   assert.match(flat(body), /9 pcs\|Beef kulma\|/);
-  assert.match(flat(body), /Reason: dropped\|1 pcs\|Total\|10 stock units \(mixed items\)\|$/);
+  assert.match(flat(body), /Reason: dropped\|1 pcs\|Total\|10 stock units\|$/);
   const one = flat(renderToStaticMarkup(React.createElement(screen.WasteDetailsBody, { shift: days[2].shifts[0] })));
   assert.match(one, /Rice\|/);
-  assert.match(one, /160 pcs\|Total\|160 stock units \(mixed items\)\|$/);
+  assert.match(one, /160 pcs\|Total\|160 stock units\|$/);
 
   const mainShift = shift(null, '2026-11-08', '2026-11-08T02:00:00Z', '2026-11-08T02:05:00Z', 'waste_recorded', [
     { ...occ('ch', 'Chicken', 3, 'Spoiled'), recorded_by_name: 'Main Manager' },

@@ -18,7 +18,10 @@ export default function RootLayout() {
             <StatusBar style="dark" />
             <Stack screenOptions={{ contentStyle: { backgroundColor: '#FFFFFF' }, animation: 'default' }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="(auth)"
+                options={{ headerShown: false, contentStyle: { backgroundColor: '#0A1224' } }}
+              />
               <Stack.Screen name="(owner)" options={{ headerShown: false }} />
               <Stack.Screen name="(manager)" options={{ headerShown: false }} />
               <Stack.Screen name="(cashier)" options={{ headerShown: false }} />

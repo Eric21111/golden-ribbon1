@@ -1,9 +1,10 @@
-import { StockUnitHint } from '@/components/StockUnitHint';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -20,9 +21,21 @@ import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
+import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { useReceiveReturn, useReturn } from '@/hooks/useReturns';
+import { alertNotice } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
+import {
+  formatDate,
+  formatSnapshottedQuantity,
+  makeIdempotencyKey,
+  PIECE_QUANTITY_MAX_LENGTH,
+  quantityBoxWidth,
+} from '@/lib/format';
+import { listCashierProductCategories } from '@/services/inventoryService';
+
+const RECEIVE_HELP =
+  'Physically count every product. Counted leftover is waste and does not restock Main sellable inventory.';
 
 const schema = z.object({
   items: z
@@ -46,6 +59,11 @@ export function ReceiveReturnScreen() {
   const id = typeof params.id === 'string' ? params.id : '';
   const query = useReturn(id);
   const mutation = useReceiveReturn();
+  const categories = useQuery({
+    queryKey: ['cashier-product-categories'],
+    staleTime: 5 * 60 * 1000,
+    queryFn: listCashierProductCategories,
+  });
   const requestKey = useRef(makeIdempotencyKey('return-receive'));
   const formInitialized = useRef(false);
   const [review, setReview] = useState<Values | null>(null);
@@ -182,12 +200,14 @@ export function ReceiveReturnScreen() {
                     <ManagerBadge
                       label={
                         difference === 0
-                          ? 'Complete'
+                          ? 'Exact'
                           : difference > 0
                             ? `${difference} missing`
                             : `${Math.abs(difference)} excess`
                       }
-                      tone={difference === 0 ? 'success' : 'warning'}
+                      tone={
+                        difference === 0 ? 'success' : difference > 0 ? 'danger' : 'warning'
+                      }
                     />
                   )
                 }
@@ -201,74 +221,115 @@ export function ReceiveReturnScreen() {
 
   if (review) {
     return (
-      <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+      <Screen
+        backgroundColor="#FFFFFF"
+        edges={['top']}
+        scroll={false}
+        contentContainerStyle={styles.screenFill}
+      >
         <ManagerScreenHeader title="Review receipt" subtitle={stockReturn.return_number} showBack />
-        <ConstrainedWidth style={styles.column}>
-          {reviewItems.map((item) => (
-            <ListRowCard
-              key={item.id}
-              title={item.product_name}
-              subtitle={`Expected ${item.quantity_returned} · Received ${item.received}`}
-              trailing={
-                <ManagerBadge
-                  label={
-                    item.difference === 0
-                      ? 'Complete'
-                      : item.difference > 0
-                        ? `${item.difference} missing`
-                        : `${Math.abs(item.difference)} excess`
-                  }
-                  tone={item.difference === 0 ? 'success' : 'warning'}
+        <ConstrainedWidth fill style={styles.body}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.column}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.sectionHeading}>
+              <Text style={styles.sheetLead}>Confirm counts</Text>
+              <Text style={styles.sectionCount}>{reviewItems.length}</Text>
+            </View>
+            <View style={styles.list}>
+              {reviewItems.map((item) => {
+                const category = categories.data?.get(item.product_id) ?? null;
+                const expectedLabel = formatSnapshottedQuantity(
+                  item.quantity_returned,
+                  item.inventory_mode,
+                  item.stock_unit_code,
+                );
+                const receivedLabel = formatSnapshottedQuantity(
+                  item.received,
+                  item.inventory_mode,
+                  item.stock_unit_code,
+                );
+                return (
+                  <View key={item.id} style={styles.reviewRow}>
+                    <CategoryIcon category={category} size={40} />
+                    <View style={styles.productCardBody}>
+                      <Text style={styles.name} numberOfLines={2}>
+                        {item.product_name}
+                      </Text>
+                      <Text style={styles.productMeta}>
+                        Expected {expectedLabel} · Received {receivedLabel}
+                      </Text>
+                    </View>
+                    <ManagerBadge
+                      label={
+                        item.difference === 0
+                          ? 'Exact'
+                          : item.difference > 0
+                            ? `${item.difference} missing`
+                            : `${Math.abs(item.difference)} excess`
+                      }
+                      tone={
+                        item.difference === 0
+                          ? 'success'
+                          : item.difference > 0
+                            ? 'danger'
+                            : 'warning'
+                      }
+                      size="md"
+                    />
+                  </View>
+                );
+              })}
+            </View>
+            {review.notes ? <Text style={styles.meta}>Notes: {review.notes}</Text> : null}
+            {mutation.error ? (
+              <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
+            ) : null}
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <View style={styles.footerRow}>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Back to counts"
+                  variant="secondary"
+                  disabled={mutation.isPending}
+                  onPress={() => setReview(null)}
                 />
-              }
-            />
-          ))}
-          {review.notes ? <Text style={styles.meta}>Notes: {review.notes}</Text> : null}
-          {mutation.error ? (
-            <Text style={styles.error}>{getInventoryErrorMessage(mutation.error)}</Text>
-          ) : null}
-          <View style={styles.actions}>
-            <ManagerActionButton
-              label="Confirm receipt"
-              loading={mutation.isPending}
-              onPress={() =>
-                mutation.mutate(
-                  {
-                    returnId: stockReturn.id,
-                    items: reviewItems.map((item) => ({
-                      stock_return_item_id: item.id,
-                      quantity_received: item.received,
-                    })),
-                    notes: review.notes?.trim() || null,
-                    idempotencyKey: requestKey.current,
-                  },
-                  {
-                    onSuccess: (finalStatus) => {
-                      setReview(null);
-                      Alert.alert(
-                        'Return received',
-                        `Leftover is waste and does not restock Main. Status: ${finalStatus.replaceAll('_', ' ')}.`,
-                        [
-                          {
-                            text: 'View details',
-                            onPress: () => {
-                              router.replace(`/manager/returns/${stockReturn.id}` as never);
-                            },
-                          },
-                        ],
-                      );
-                      void query.refetch();
-                    },
-                  },
-                )
-              }
-            />
-            <ManagerActionButton
-              label="Back to counts"
-              variant="secondary"
-              disabled={mutation.isPending}
-              onPress={() => setReview(null)}
-            />
+              </View>
+              <View style={styles.footerButton}>
+                <ManagerActionButton
+                  label="Confirm receipt"
+                  loading={mutation.isPending}
+                  onPress={() =>
+                    mutation.mutate(
+                      {
+                        returnId: stockReturn.id,
+                        items: reviewItems.map((item) => ({
+                          stock_return_item_id: item.id,
+                          quantity_received: item.received,
+                        })),
+                        notes: review.notes?.trim() || null,
+                        idempotencyKey: requestKey.current,
+                      },
+                      {
+                        onSuccess: (finalStatus) => {
+                          setReview(null);
+                          router.replace('/manager/returns' as never);
+                          Alert.alert(
+                            'Return received',
+                            `Leftover is waste and does not restock Main. Status: ${finalStatus.replaceAll('_', ' ')}.`,
+                          );
+                        },
+                      },
+                    )
+                  }
+                />
+              </View>
+            </View>
           </View>
         </ConstrainedWidth>
       </Screen>
@@ -276,155 +337,192 @@ export function ReceiveReturnScreen() {
   }
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      scroll={false}
+      contentContainerStyle={styles.screenFill}
+    >
       <ManagerScreenHeader
         title="Receive return"
         subtitle={`${stockReturn.return_number} · ${stockReturn.from_branch_name} → ${stockReturn.to_branch_name}`}
         showBack
       />
-      <ConstrainedWidth style={styles.column}>
-        <Text style={styles.instructions}>
-          Physically count every product. Counted leftover is waste and does not restock Main
-          sellable inventory.
-        </Text>
+      <ConstrainedWidth fill style={styles.body}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.column}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sheetLead}>Physical count</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Receive return help"
+              hitSlop={10}
+              onPress={() => alertNotice('Receive return', RECEIVE_HELP)}
+              style={({ pressed }) => [styles.infoHit, pressed && styles.pressed]}
+            >
+              <Ionicons name="information-circle-outline" size={20} color={managerColors.royalBlue} />
+            </Pressable>
+          </View>
 
-        {fields.map((field, index) => {
-          const item = stockReturn.items[index];
-          if (!item) return null;
-          return (
-            <Controller
-              key={field.id}
-              control={control}
-              name={`items.${index}.quantity_received`}
-              render={({ field: quantity, fieldState }) => {
-                const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
-                const isFocused = focusedIndex === index;
-                const atMin = currentQty <= 0;
-                const matchesExpected = currentQty === item.quantity_returned;
-                const step = (delta: number) => {
-                  const next = Math.min(999999, Math.max(0, currentQty + delta));
-                  quantity.onChange(String(next));
-                };
-                const atMax = currentQty >= 999999;
+          <View style={styles.list}>
+            {fields.map((field, index) => {
+              const item = stockReturn.items[index];
+              if (!item) return null;
+              const category = categories.data?.get(item.product_id) ?? null;
+              const expectedLabel = formatSnapshottedQuantity(
+                item.quantity_returned,
+                item.inventory_mode,
+                item.stock_unit_code,
+              );
+              return (
+                <Controller
+                  key={field.id}
+                  control={control}
+                  name={`items.${index}.quantity_received`}
+                  render={({ field: quantity, fieldState }) => {
+                    const hasInput = quantity.value.trim() !== '';
+                    const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
+                    const atMin = !hasInput || currentQty <= 0;
+                    const matchesExpected = hasInput && currentQty === item.quantity_returned;
+                    const atMax = currentQty >= 999999;
+                    const diff = hasInput ? item.quantity_returned - currentQty : null;
+                    const step = (delta: number) => {
+                      const next = Math.min(999999, Math.max(0, currentQty + delta));
+                      quantity.onChange(String(next));
+                    };
 
-                return (
-                  <View style={styles.card}>
-                    <View style={styles.cardTop}>
-                      <View style={styles.cardInfo}>
-                        <Text style={styles.name} numberOfLines={2}>
-                          {item.product_name}
-                        </Text>
-          <StockUnitHint code={item.stock_unit_code} />
-                        <Text style={styles.sku}>{item.product_sku}</Text>
-                      </View>
-                      <View style={styles.expectedPill}>
-                        <Text style={styles.expectedText} numberOfLines={1}>
-                          <Text style={styles.expectedValue}>{item.quantity_returned}</Text>
-                          <Text style={styles.expectedLabel}> expected</Text>
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.qtyRow}>
-                      <Text style={styles.qtyCaption}>Actual received</Text>
-                      <View style={styles.qtyControls}>
-                        <View style={[styles.stepperPill, isFocused && styles.stepperPillFocused]}>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Decrease received quantity for ${item.product_name}`}
-                            hitSlop={6}
-                            disabled={atMin}
-                            onPress={() => step(-1)}
-                            style={({ pressed }) => [
-                              styles.stepperButton,
-                              pressed && !atMin && styles.stepperButtonPressed,
-                            ]}
-                          >
-                            <Text style={[styles.stepperSymbol, atMin && styles.stepperSymbolDisabled]}>
-                              −
+                    return (
+                      <View style={[styles.countBlock, hasInput && styles.countBlockEntered]}>
+                        <View style={styles.productCard}>
+                          <CategoryIcon category={category} size={40} />
+                          <View style={styles.productCardBody}>
+                            <Text style={styles.name} numberOfLines={2}>
+                              {item.product_name}
                             </Text>
-                          </Pressable>
-                          <TextInput
-                            accessibilityLabel={`Actual received quantity for ${item.product_name}`}
-                            keyboardType="number-pad"
-                            value={quantity.value}
-                            placeholder="0"
-                            placeholderTextColor={managerColors.subtext}
-                            maxLength={PIECE_QUANTITY_MAX_LENGTH}
-                            selectTextOnFocus
-                            underlineColorAndroid="transparent"
-                            onFocus={() => setFocusedIndex(index)}
-                            onBlur={() =>
-                              setFocusedIndex((current) => (current === index ? null : current))
-                            }
-                            onChangeText={(value) => {
-                              if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
-                            }}
-                            style={[styles.stepperInput, { width: quantityBoxWidth(quantity.value, { min: 40, fontSize: 15 }) }]}
-                          />
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Increase received quantity for ${item.product_name}`}
-                            hitSlop={6}
-                            disabled={atMax}
-                            onPress={() => step(1)}
-                            style={({ pressed }) => [
-                              styles.stepperButton,
-                              pressed && !atMax && styles.stepperButtonPressed,
-                            ]}
-                          >
-                            <Text style={[styles.stepperSymbol, atMax && styles.stepperSymbolDisabled]}>
-                              +
-                            </Text>
-                          </Pressable>
+                            <Text style={styles.productMeta}>Expected {expectedLabel}</Text>
+                          </View>
+                          {diff !== null ? (
+                            <ManagerBadge
+                              label={
+                                diff === 0
+                                  ? 'Exact'
+                                  : diff > 0
+                                    ? `${diff} missing`
+                                    : `${Math.abs(diff)} excess`
+                              }
+                              tone={diff === 0 ? 'success' : diff > 0 ? 'danger' : 'warning'}
+                              size="md"
+                            />
+                          ) : null}
                         </View>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Match expected quantity of ${item.quantity_returned}`}
-                          disabled={matchesExpected}
-                          onPress={() => quantity.onChange(String(item.quantity_returned))}
-                          style={({ pressed }) => [
-                            styles.matchButton,
-                            matchesExpected && styles.matchButtonDisabled,
-                            pressed && !matchesExpected && styles.matchButtonPressed,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.matchButtonText,
-                              matchesExpected && styles.matchButtonTextDisabled,
-                            ]}
-                          >
-                            Match
-                          </Text>
-                        </Pressable>
+
+                        <View style={styles.fieldBlock}>
+                          <Text style={styles.qtyCaption}>Actual received</Text>
+                          <View style={styles.stepper}>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Decrease received quantity for ${item.product_name}`}
+                              hitSlop={8}
+                              disabled={atMin}
+                              onPress={() => step(-1)}
+                              style={({ pressed }) => [
+                                styles.stepBtn,
+                                pressed && !atMin && styles.pressed,
+                                atMin && styles.stepDisabled,
+                              ]}
+                            >
+                              <Text style={styles.stepText}>−</Text>
+                            </Pressable>
+                            <TextInput
+                              accessibilityLabel={`Actual received quantity for ${item.product_name}`}
+                              keyboardType="number-pad"
+                              value={quantity.value}
+                              placeholder="0"
+                              placeholderTextColor={managerColors.subtext}
+                              maxLength={PIECE_QUANTITY_MAX_LENGTH}
+                              selectTextOnFocus
+                              underlineColorAndroid="transparent"
+                              onFocus={() => setFocusedIndex(index)}
+                              onBlur={() =>
+                                setFocusedIndex((current) => (current === index ? null : current))
+                              }
+                              onChangeText={(value) => {
+                                if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
+                              }}
+                              style={[
+                                styles.qtyInput,
+                                focusedIndex === index && styles.qtyInputFocused,
+                                {
+                                  minWidth: quantityBoxWidth(quantity.value, { min: 40, fontSize: 15 }),
+                                },
+                              ]}
+                            />
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Increase received quantity for ${item.product_name}`}
+                              hitSlop={8}
+                              disabled={atMax}
+                              onPress={() => step(1)}
+                              style={({ pressed }) => [
+                                styles.stepBtn,
+                                pressed && !atMax && styles.pressed,
+                                atMax && styles.stepDisabled,
+                              ]}
+                            >
+                              <Text style={styles.stepText}>+</Text>
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Match expected quantity of ${item.quantity_returned}`}
+                              disabled={matchesExpected}
+                              hitSlop={8}
+                              onPress={() => quantity.onChange(String(item.quantity_returned))}
+                              style={({ pressed }) => [
+                                styles.matchBtn,
+                                pressed && !matchesExpected && styles.pressed,
+                                matchesExpected && styles.stepDisabled,
+                              ]}
+                            >
+                              <Text style={styles.matchBtnText}>Match</Text>
+                            </Pressable>
+                          </View>
+                          {fieldState.error ? (
+                            <Text style={styles.error}>{fieldState.error.message}</Text>
+                          ) : null}
+                        </View>
                       </View>
-                    </View>
-                    {fieldState.error ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
-                  </View>
-                );
-              }}
-            />
-          );
-        })}
+                    );
+                  }}
+                />
+              );
+            })}
+          </View>
 
-        <Controller
-          control={control}
-          name="notes"
-          render={({ field }) => (
-            <FormField
-              label="Receipt notes (optional)"
-              value={field.value ?? ''}
-              onChangeText={field.onChange}
-              multiline
-              accentColor={managerColors.royalBlue}
-              labelStyle={styles.fieldLabel}
-              style={styles.fieldInput}
-            />
-          )}
-        />
+          <Controller
+            control={control}
+            name="notes"
+            render={({ field }) => (
+              <FormField
+                label="Receipt notes (optional)"
+                value={field.value ?? ''}
+                onChangeText={field.onChange}
+                multiline
+                accentColor={managerColors.royalBlue}
+                labelStyle={styles.fieldLabel}
+                style={styles.fieldInput}
+              />
+            )}
+          />
+        </ScrollView>
 
-        <ManagerActionButton label="Review receipt" onPress={handleSubmit(setReview)} />
+        <View style={styles.footer}>
+          <ManagerActionButton label="Review receipt" onPress={handleSubmit(setReview)} />
+        </View>
       </ConstrainedWidth>
     </Screen>
   );
@@ -432,95 +530,139 @@ export function ReceiveReturnScreen() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, gap: 12 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderColor: managerColors.cardBorder,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
-    shadowColor: '#0A1224',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  cardInfo: { flex: 1, minWidth: 0, gap: 2 },
-  name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  sku: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
-  expectedPill: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: managerColors.cardSurface,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  expectedText: { fontSize: 13 },
-  expectedValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  expectedLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: managerColors.cardBorder,
-    paddingTop: 12,
-    gap: 12,
-  },
-  qtyCaption: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  stepperPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderWidth: 1.5,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 10,
-    backgroundColor: managerColors.cardSurface,
-    overflow: 'hidden',
-  },
-  stepperPillFocused: {
-    borderColor: managerColors.royalBlue,
-    backgroundColor: '#FFFFFF',
-  },
-  stepperButton: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
-  stepperButtonPressed: { backgroundColor: '#E4E9F2' },
-  stepperSymbol: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 20 },
-  stepperSymbolDisabled: { color: managerColors.cardBorder },
-  stepperInput: {
-    width: 40,
-    height: 40,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: managerColors.cardBorder,
-    backgroundColor: 'transparent',
+  screenFill: { flex: 1, flexGrow: 1, padding: 0, gap: 0 },
+  body: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
+  column: { padding: 20, gap: 12, paddingBottom: 24 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sheetLead: {
     color: managerColors.ink,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    textAlign: 'center',
-    paddingVertical: 0,
+    fontSize: 14,
   },
-  matchButton: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#EAF0FB',
+  infoHit: {
+    minWidth: 32,
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  matchButtonPressed: { opacity: 0.7 },
-  matchButtonDisabled: { backgroundColor: managerColors.cardSurface },
-  matchButtonText: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  matchButtonTextDisabled: { color: managerColors.cardBorder },
+  pressed: { opacity: 0.7 },
+  list: { gap: 14 },
+  sectionCount: {
+    marginLeft: 'auto',
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+  },
+  countBlock: {
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  countBlockEntered: {
+    borderColor: managerColors.royalBlue,
+    backgroundColor: '#F5F8FF',
+  },
+  productCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: managerColors.cardSurface,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    padding: 12,
+  },
+  reviewRow: {
+    minHeight: 64,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  productCardBody: { flex: 1, minWidth: 0, gap: 2 },
+  name: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  productMeta: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+  },
+  fieldBlock: { gap: 8 },
+  qtyCaption: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+  },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' },
+  stepBtn: {
+    width: 42,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF0FB',
+    flexShrink: 0,
+  },
+  stepDisabled: { opacity: 0.45 },
+  stepText: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 26 },
+  qtyInput: {
+    flex: 1,
+    minWidth: 56,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  qtyInputFocused: { borderColor: managerColors.royalBlue },
+  matchBtn: {
+    minWidth: 64,
+    height: 48,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF0FB',
+    flexShrink: 0,
+  },
+  matchBtnText: {
+    color: managerColors.royalBlue,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+  },
+  meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
-  instructions: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21 },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },
   fieldInput: { fontFamily: 'Inter_400Regular' },
-  actions: { gap: 10 },
+  footer: {
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+  },
+  footerRow: { flexDirection: 'row', gap: 10 },
+  footerButton: { flex: 1 },
   sectionTitle: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',

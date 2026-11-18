@@ -111,6 +111,7 @@ export default function CashierAccountScreen() {
 
       <BottomSheet visible={passwordOpen} title="Change PIN" scroll onClose={() => setPasswordOpen(false)}>
         <ChangePasswordForm
+          key={passwordOpen ? 'change-pin-open' : 'change-pin-closed'}
           onCancel={() => setPasswordOpen(false)}
           onSuccess={() => setPasswordOpen(false)}
           hintStyle={styles.formHint}
@@ -119,11 +120,11 @@ export default function CashierAccountScreen() {
           errorStyle={styles.formError}
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
-          renderSubmitButton={({ loading, disabled, onPress }) => (
-            <ManagerActionButton label="Update" loading={loading} disabled={disabled} onPress={onPress} />
+          renderSubmitButton={({ loading, disabled, onPress, label }) => (
+            <ManagerActionButton label={label} loading={loading} disabled={disabled} onPress={onPress} />
           )}
-          renderCancelButton={({ disabled, onPress }) => (
-            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          renderCancelButton={({ disabled, onPress, label }) => (
+            <ManagerActionButton label={label} variant="secondary" disabled={disabled} onPress={onPress} />
           )}
         />
       </BottomSheet>

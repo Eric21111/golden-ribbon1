@@ -42,7 +42,7 @@ assert.ok(issues({
   current_password: '',
   new_password: '012345',
   confirm_password: '012345',
-}).some((message) => message.includes('Current password is required.')));
+}).some((message) => message.includes('Current PIN is required.')));
 
 assert.ok(issues({
   current_password: 'Current#1',

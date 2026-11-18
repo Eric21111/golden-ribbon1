@@ -5,13 +5,28 @@ import ts from 'typescript';
 import {loadTs} from './_load_ts.mjs';
 
 const refs={current:[]};
+let stateCursor=0;
+const stateBag=[];
 const {PinField}=loadTs('src/components/PinField.tsx',{
-  react:{useRef:()=>refs,useState:v=>[v,()=>{}]},
-  'react-native':{View:'View',Text:'Text',TextInput:'Input',Pressable:'Pressable'},
-  './FormField':{FormField:'Field'}
+  react:{
+    useRef:()=>refs,
+    useState(v){
+      const i=stateCursor++;
+      if(!(i in stateBag)) stateBag[i]=v;
+      return [stateBag[i], next=>{stateBag[i]=typeof next==='function'?next(stateBag[i]):next;}];
+    },
+  },
+  'react-native':{
+    View:'View',Text:'Text',TextInput:'Input',Pressable:'Pressable',
+    StyleSheet:{create:x=>x},
+  },
+  '@react-native-vector-icons/ionicons':{default:'Icon'},
+  '@/components/FormField':{FormField:'Field'},
+  '@/components/dashboard/theme':{managerColors:{ink:'#111',subtext:'#667',royalBlue:'#1E3A8A'}},
 });
 let value='',focus=-1;
 function inputs(){
+  stateCursor=0;
   const tree=PinField({label:'PIN',value,onChangeText:next=>{value=next;}});
   const result=[];
   function walk(node){if(!node)return;if(Array.isArray(node))return node.forEach(walk);

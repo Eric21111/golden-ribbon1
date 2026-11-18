@@ -1,61 +1,50 @@
-// The "Shift closed for today" card on the cashier home: a centred "done" layout (big green check, title, one line), Reopen POS as a
-// quiet "Need to sell more today? Reopen POS" link, the caveat only once Reopen is chosen, Cancel | Confirm in the form, and no
-// Incoming shipments tile inside the card (the Incoming tab opens it). Source checks (the dashboard needs the router, stores and
-// queries to mount); what reopening does is untouched.
+// The "Shift closed for today" state on the cashier home: a centred empty/done layout (big green check, title, one line),
+// Reopen POS as a secondary button that opens a bottom sheet with required Reason *, Cancel | Confirm.
+// Incoming / leftover stay off the closed empty state. What reopening does is untouched.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const src = readFileSync('app/(cashier)/cashier/dashboard.tsx', 'utf8').replace(/\r\n/g, '\n');
 const start = src.indexOf('<Text style={styles.closedTitle}>Shift closed for today</Text>');
-const end = src.indexOf('<Text style={styles.noticeTitle}>No Active Shift</Text>');
+const end = src.indexOf('<Text style={styles.closedTitle}>No Active Shift</Text>');
 assert.ok(start > 0 && end > start);
-const card = src.slice(src.lastIndexOf('<>', start), end);
+const card = src.slice(src.lastIndexOf('{sameDayClosedHint ? (', start - 200), end);
 
 // the head: a big green check, centred title and one line
-assert.match(card, /<View style=\{styles\.closedHead\}>\n\s+<View style=\{styles\.closedBadge\}>\n\s+<Ionicons name="checkmark" size=\{30\} color="#15803D" \/>/);
+assert.match(
+  card,
+  /<View style=\{styles\.closedHead\}>\n\s+<View style=\{styles\.closedBadge\}>\n\s+<Ionicons name="checkmark" size=\{32\} color="#15803D" \/>/,
+);
 assert.ok(card.includes('End Shift is complete. Start again next business day.'));
-assert.ok(src.includes("closedHead: { alignItems: 'center', gap: 8, paddingTop: 4 },") && src.includes("closedTitle:") && src.includes("textAlign: 'center'"));
-assert.doesNotMatch(card, /Reopen POS only if you still need to sell today|The server decides|Today&apos;s End Shift is complete/, 'the old paragraph is gone');
+assert.ok(src.includes('closedEmpty:') && src.includes('closedTitle:') && src.includes("textAlign: 'center'"));
 
-// reopen: a quiet link under a divider, not a button
-const closedBranch = card.slice(card.indexOf(': ('), card.length);
-assert.match(card, /<Text style=\{styles\.reopenQuestion\}>Need to sell more today\?<\/Text>\n\s+<Pressable\n\s+accessibilityRole="button"[^]*?<Text style=\{styles\.reopenLink\}>Reopen POS<\/Text>/);
-assert.doesNotMatch(card, /label="Reopen POS"/, 'no full-width button for an exception');
-assert.ok(src.includes('reopenRow: {') && src.includes("borderTopWidth: 1,"), 'separated by a divider');
-
-// the caveat is only in the reopen form, never on the card by default
-const form = card.slice(card.indexOf('{reopenOpen ? ('), card.indexOf(') : ('));
-assert.ok(form.includes('The system decides whether a new shift can start.'), 'shown once Reopen is chosen (still no promise that POS can reopen)');
-const idleCard = card.slice(card.indexOf(') : ('));
-assert.doesNotMatch(idleCard, /remittance stays as recorded|decides whether/, 'not on the idle card');
-assert.doesNotMatch(card, /remittance stays as recorded/);
-
-// the form: Reason, then Cancel | Confirm side by side
-assert.match(card, /label="Reason"/);
-assert.match(card, /<View style=\{styles\.closedActions\}>\n\s+<View style=\{styles\.closedAction\}>\n\s+<ManagerActionButton\n\s+label="Cancel"\n\s+variant="secondary"/);
-assert.match(card, /<ManagerActionButton label="Confirm" loading=\{reopenBusy\} disabled=\{reopenBusy\} onPress=\{submitReopen\} \/>/);
+// reopen CTA stays on the empty state; the form lives in a sheet
+assert.match(card, /<Text style=\{styles\.reopenQuestion\}>Need to sell more today\?<\/Text>/);
+assert.match(card, /label="Reopen POS"/);
+assert.doesNotMatch(card, /label="Reason"/, 'reason field is not inline on the closed empty state');
+assert.ok(src.includes('ManagerBottomSheet'), 'reopen uses a bottom sheet');
+assert.match(src, /title="Reopen POS"/);
+assert.match(src, /label="Reason"/);
+assert.match(src, /\brequired\b/);
+assert.ok(src.includes("The system decides whether a new shift can start."));
+assert.ok(src.includes("Reason is required.") && src.includes('Enter a reason of at least 8 characters.'));
+assert.match(src, /label="Cancel"/);
+assert.match(src, /label="Confirm"/);
 assert.ok(src.includes("closedActions: { flexDirection: 'row', gap: 10 },") && src.includes('closedAction: { flex: 1 },'));
 
-// Incoming shipments is not repeated inside the closed card; the "No Active Shift" card is as it was
-assert.ok(src.includes('{showIncomingTile && !sameDayClosedHint ? ('), 'the tile stays on No Active Shift, and not on the closed card');
-assert.ok(src.includes("import { Pressable, StyleSheet, Text, View } from 'react-native';"));
+// Incoming / Branch inventory / leftover sit off both no-shift empty states
+assert.doesNotMatch(card, /Branch inventory|incomingTile|leftoverReturnTile/, 'closed empty state stays action-free');
+const noShift = src.slice(end, src.indexOf('>Active Shift</Text>'));
+assert.doesNotMatch(noShift, /label="Branch inventory"|Incoming shipments/, 'pre-shift empty state matches closed: Start shift only');
+assert.ok(src.includes('title="Branch inventory"'), 'Branch inventory remains on the active-shift home');
 
-// The existing Leftover return tile, unchanged, also sits under a completed close. Not on No Active Shift, and not on the pending remittance form.
 assert.equal((src.match(/title="Leftover return"/g) || []).length, 1);
-assert.match(src, /icon="return-down-back-outline"[\s\S]{0,80}title="Leftover return"[\s\S]{0,80}router\.push\('\/cashier\/returns\/create'\)/);
-assert.match(src, /\{sameDayClosedHint \? <Row>\{leftoverReturnTile\}<\/Row> : null\}/);
-const noShiftBranch = src.slice(
-  src.indexOf('<Text style={styles.noticeTitle}>No Active Shift</Text>'),
-  src.indexOf('{showIncomingTile && !sameDayClosedHint ? ('),
+assert.match(
+  src,
+  /icon="return-down-back-outline"[\s\S]{0,80}title="Leftover return"[\s\S]{0,80}router\.push\('\/cashier\/returns\/create'\)/,
 );
-assert.doesNotMatch(noShiftBranch, /leftoverReturnTile/);
-const pendingStart = src.indexOf('if (pendingPreview &&');
-const pendingEnd = src.indexOf('Checking active shift');
-assert.ok(pendingStart > 0 && pendingEnd > pendingStart);
-assert.doesNotMatch(src.slice(pendingStart, pendingEnd), /leftoverReturnTile/);
 const activeShift = src.slice(src.indexOf('>Active Shift</Text>'));
 assert.equal((activeShift.match(/leftoverReturnTile/g) || []).length, 1);
 
-// what reopening does is unchanged
-assert.ok(src.includes('const submitReopen = () => {') && card.includes("setReopenError('');") && card.includes('setReopenOpen(true);'));
+assert.ok(src.includes('const submitReopen = () => {') && src.includes('const closeReopenSheet = () => {'));
 console.log('shift_closed_card: ALL PASS');

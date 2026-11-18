@@ -144,11 +144,11 @@ export function posLines(row: CatalogRow, branchName: string): string[] {
   return lines;
 }
 
-/** Empty-state copy. A listing is a branch row, not availability, so the words say what is actually missing. */
+/** Empty-state copy for the branch inventory + catalog list. */
 export function catalogEmptyState(branchName: string, hasSearch: boolean): { title: string; message: string } {
   if (hasSearch) return { title: 'No matches', message: 'Try another name or SKU.' };
   return {
     title: `Nothing at ${branchName}`,
-    message: 'Set a price in Products to list it here.',
+    message: 'Stock at this branch, and products listed in its catalog, will show up here.',
   };
 }

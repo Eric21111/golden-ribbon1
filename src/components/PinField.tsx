@@ -1,43 +1,300 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { FormField } from './FormField';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from 'react-native';
 
-type Props = {label: string; value: string; onChangeText: (value: string) => void; error?: string; allowPassword?: boolean; onLegacyChange?: (legacy: boolean) => void};
-export function PinField({label, value, onChangeText, error, allowPassword, onLegacyChange}: Props) {
+import { FormField } from '@/components/FormField';
+import { managerColors } from '@/components/dashboard/theme';
+import Ionicons from '@react-native-vector-icons/ionicons';
+
+const BOX_GAP = 8;
+const BOX_COUNT = 6;
+
+type Props = {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  error?: string;
+  allowPassword?: boolean;
+  onLegacyChange?: (legacy: boolean) => void;
+  accentColor?: string;
+  labelStyle?: StyleProp<TextStyle>;
+  errorStyle?: StyleProp<TextStyle>;
+  hint?: string;
+  required?: boolean;
+  autoFocus?: boolean;
+  appearance?: 'default' | 'dark';
+};
+
+export function PinField({
+  label,
+  value,
+  onChangeText,
+  error,
+  allowPassword,
+  onLegacyChange,
+  accentColor = managerColors.royalBlue,
+  labelStyle,
+  errorStyle,
+  hint,
+  required = false,
+  autoFocus = false,
+  appearance = 'default',
+}: Props) {
+  const isDark = appearance === 'dark';
   const refs = useRef<Array<TextInput | null>>([]);
   const [legacy, setLegacy] = useState(false);
   const [focused, setFocused] = useState(-1);
-  return <View style={{gap: 8}}>
-    {legacy ? <FormField label="Current beta password" value={value} onChangeText={onChangeText} secureTextEntry autoCapitalize="none" autoCorrect={false} /> : <>
-      <Text style={{fontWeight:'600'}}>{label}</Text>
-      <View style={{flexDirection:'row', gap:6}}>
-        {Array.from({length:6}, (_, index) => <TextInput key={index}
-          ref={el => {refs.current[index] = el;}}
-          accessibilityLabel={label + ', digit ' + (index + 1) + ' of 6'}
-          style={{flex:1,minWidth:0,height:46,textAlign:'center',fontSize:19,borderWidth:1,borderRadius:8,borderColor:focused===index?'#68429A':'#8991A2'}}
-          value={value[index] ?? ''} secureTextEntry keyboardType="number-pad" selectTextOnFocus autoComplete="off"
-          onFocus={() => {setFocused(index); if(index>value.length) refs.current[value.length]?.focus();}}
-          onBlur={() => setFocused(-1)}
-          onKeyPress={({nativeEvent}) => {
-            if(nativeEvent.key==='Backspace' && !value[index] && index>0) {
-              onChangeText(value.slice(0,index-1)); refs.current[index-1]?.focus();
-            }
-          }}
-          onChangeText={digits => {
-            if (!/^[0-9]*$/.test(digits)) return;
-            if (!digits) {
-              onChangeText(value.slice(0,index) + value.slice(index+1));
-              refs.current[Math.max(0,index-1)]?.focus(); return;
-            }
-            const part=digits.slice(0,6-index);
-            onChangeText((value.slice(0,index)+part+value.slice(index+part.length)).slice(0,6));
-            refs.current[Math.min(5,index+part.length)]?.focus();
-          }} />)}
+  const [revealed, setRevealed] = useState(false);
+
+  if (legacy) {
+    return (
+      <View style={styles.wrap}>
+        <FormField
+          label="Password"
+          required={required}
+          appearance={appearance}
+          value={value}
+          onChangeText={onChangeText}
+          error={error}
+          secureTextEntry={!revealed}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accentColor={accentColor}
+          labelStyle={labelStyle}
+          errorStyle={errorStyle}
+          rightIcon={revealed ? 'eye-outline' : 'eye-off-outline'}
+          rightIconAccessibilityLabel={revealed ? 'Hide password' : 'Show password'}
+          onRightIconPress={() => setRevealed((prev) => !prev)}
+          importantForAutofill="no"
+          textContentType="none"
+          autoComplete="off"
+        />
+        {allowPassword ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Use six-digit PIN instead"
+            hitSlop={10}
+            onPress={() => {
+              onChangeText('');
+              setRevealed(false);
+              setLegacy(false);
+              onLegacyChange?.(false);
+            }}
+            style={({ pressed }) => [styles.switchHit, pressed && styles.pressed]}
+          >
+            <Text style={[styles.switchText, { color: accentColor }]}>Use six-digit PIN instead</Text>
+          </Pressable>
+        ) : null}
       </View>
-    </>}
-    {allowPassword && <Pressable accessibilityRole="button" onPress={() => {onChangeText('');setLegacy(!legacy);onLegacyChange?.(!legacy);}}>
-      <Text style={{color:'#364D82',paddingVertical:5}}>{legacy?'Use six-digit PIN':'Still using a beta password?'}</Text>
-    </Pressable>}
-    {!!error && <Text accessibilityRole="alert" style={{color:'#A11B28'}}>{error}</Text>}
-  </View>;
+    );
+  }
+
+  const meta = error ? (
+    <Text accessibilityRole="alert" style={[styles.metaText, styles.error, isDark && styles.errorDark, errorStyle]}>
+      {error}
+    </Text>
+  ) : hint ? (
+    <Text style={[styles.metaText, styles.hint, isDark && styles.hintDark]}>{hint}</Text>
+  ) : allowPassword ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Use password instead"
+      hitSlop={10}
+      onPress={() => {
+        onChangeText('');
+        setRevealed(false);
+        setLegacy(true);
+        onLegacyChange?.(true);
+      }}
+      style={({ pressed }) => [styles.switchHit, pressed && styles.pressed]}
+    >
+      <Text style={[styles.switchText, { color: accentColor }]}>Use password instead</Text>
+    </Pressable>
+  ) : (
+    <Text style={[styles.metaText, styles.metaSpacer]}> </Text>
+  );
+
+  return (
+    <View style={styles.wrap}>
+      <View style={styles.labelRow}>
+        <Text style={[styles.label, isDark && styles.labelDark, labelStyle]}>
+          {label}
+          {required ? <Text style={[styles.required, isDark && styles.requiredDark]}> *</Text> : null}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={revealed ? 'Hide PIN' : 'Show PIN'}
+          hitSlop={10}
+          onPress={() => setRevealed((prev) => !prev)}
+          style={({ pressed }) => [styles.eyeHit, pressed && styles.pressed]}
+        >
+          <Ionicons
+            name={revealed ? 'eye-outline' : 'eye-off-outline'}
+            size={20}
+            color={isDark ? '#E7ECFA' : managerColors.subtext}
+          />
+        </Pressable>
+      </View>
+      <View style={styles.boxes}>
+        {Array.from({ length: BOX_COUNT }, (_, index) => {
+          const isFocused = focused === index;
+          const hasError = Boolean(error);
+          return (
+            <View key={index} style={styles.boxSlot}>
+              <TextInput
+                ref={(el) => {
+                  refs.current[index] = el;
+                }}
+                accessibilityLabel={`${label}, digit ${index + 1} of 6`}
+                style={[
+                  styles.box,
+                  isDark && styles.boxDark,
+                  isFocused && !hasError && { borderColor: accentColor },
+                  hasError && styles.boxError,
+                ]}
+                value={value[index] ?? ''}
+                secureTextEntry={!revealed}
+                keyboardType="number-pad"
+                selectTextOnFocus
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+                autoFocus={autoFocus && index === 0}
+                onFocus={() => {
+                  setFocused(index);
+                  if (index > value.length) refs.current[value.length]?.focus();
+                }}
+                onBlur={() => setFocused(-1)}
+                onKeyPress={({ nativeEvent }) => {
+                  if (nativeEvent.key === 'Backspace' && !value[index] && index > 0) {
+                    onChangeText(value.slice(0, index - 1));
+                    refs.current[index - 1]?.focus();
+                  }
+                }}
+                onChangeText={(digits) => {
+                  if (!/^[0-9]*$/.test(digits)) return;
+                  if (!digits) {
+                    onChangeText(value.slice(0, index) + value.slice(index + 1));
+                    refs.current[Math.max(0, index - 1)]?.focus();
+                    return;
+                  }
+                  const part = digits.slice(0, BOX_COUNT - index);
+                  onChangeText((value.slice(0, index) + part + value.slice(index + part.length)).slice(0, BOX_COUNT));
+                  refs.current[Math.min(BOX_COUNT - 1, index + part.length)]?.focus();
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.meta}>{meta}</View>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  wrap: { gap: 8, width: '100%', maxWidth: '100%', alignSelf: 'stretch' },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minHeight: 20,
+    width: '100%',
+  },
+  label: {
+    color: managerColors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+    flex: 1,
+  },
+  labelDark: { color: '#F3F6FF', letterSpacing: 0.2 },
+  required: {
+    color: '#B91C1C',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  requiredDark: { color: '#F87171' },
+  eyeHit: {
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxes: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    gap: BOX_GAP,
+  },
+  boxSlot: {
+    flex: 1,
+    minWidth: 0,
+    aspectRatio: 1,
+  },
+  box: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minWidth: 0,
+    textAlign: 'center',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
+    color: managerColors.ink,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    borderColor: '#D0D5DD',
+    backgroundColor: '#FFFFFF',
+    padding: 0,
+  },
+  boxDark: {
+    color: '#FFFFFF',
+    borderColor: 'rgba(198, 210, 232, 0.78)',
+    backgroundColor: 'rgba(10, 18, 36, 0.5)',
+  },
+  boxError: { borderColor: '#F87171' },
+  meta: {
+    minHeight: 28,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  metaText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  metaSpacer: { color: 'transparent' },
+  hint: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontWeight: '400',
+  },
+  hintDark: { color: '#C5D0E6' },
+  error: {
+    color: '#B91C1C',
+  },
+  errorDark: { color: '#FCA5A5' },
+  switchHit: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  switchText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+  },
+  pressed: { opacity: 0.7 },
+});

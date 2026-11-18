@@ -44,7 +44,10 @@ assert.ok(width('1000', { min: 40, fontSize: 17 }) > 40);
 for (const { file, min, fontSize, value } of screens) {
   const src = read(file);
   assert.match(src, /quantityBoxWidth/, `${file} imports the helper`);
-  assert.ok(src.includes(`width: quantityBoxWidth(${value}, { min: ${min}, fontSize: ${fontSize} })`), `${file} sizes the number box from what is typed`);
+  const sized =
+    src.includes(`width: quantityBoxWidth(${value}, { min: ${min}, fontSize: ${fontSize} })`) ||
+    src.includes(`minWidth: quantityBoxWidth(${value}, { min: ${min}, fontSize: ${fontSize} })`);
+  assert.ok(sized, `${file} sizes the number box from what is typed`);
 }
 // the shift-close count box already fills its field (flex: 1), so it needs nothing
 assert.match(read('src/features/shifts/CashierShiftCloseForm.tsx'), /stepperInput: \{\n\s+flex: 1,/);
