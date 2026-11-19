@@ -1,5 +1,5 @@
-import { ShiftRemittanceScreen } from '@/features/reports/ShiftRemittanceScreen';
+import { ShiftRemittanceBranchesScreen } from '@/features/reports/ShiftRemittanceBranchesScreen';
 
 export default function OwnerShiftRemittances() {
-  return <ShiftRemittanceScreen />;
+  return <ShiftRemittanceBranchesScreen />;
 }

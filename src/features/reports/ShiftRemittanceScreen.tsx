@@ -1,38 +1,41 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
-import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { formatShiftTimeRange } from '@/features/reports/reportDisplay';
-import { useAuth } from '@/features/auth/AuthProvider';
+import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftRemittances } from '@/hooks/useShifts';
-import { isReportRangeReady } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errors';
-import { formatManilaDate, formatMoney } from '@/lib/format';
-import { accentForName } from '@/lib/nameAccent';
-import type { CashReconciliationResult } from '@/types/models';
+import { formatManilaDate, formatMoney, isReportRangeReady } from '@/lib/format';
+import type { CashReconciliationResult, ShiftRemittanceDay, ShiftRemittanceRow } from '@/types/models';
 
-/** Each day block is a full hero card plus its shift rows, so a few per page is already dense —
- * unlike the usual 8-item pagination default used for flat lists. */
-const DAYS_PER_PAGE = 3;
+const DAYS_PER_PAGE = 5;
+
+const DATE_FILTERS = new Set<DateFilterType>(['today', 'this_week', 'this_month', 'custom', 'all_time']);
+
+function paramValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+function parseRangeParam(value: string): DateFilterType {
+  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'today';
+}
 
 function formatKnownMoney(value: number | null | undefined) {
   if (value == null) return '—';
   return formatMoney(value);
 }
 
-/** Single badge carrying both the direction and the amount, so a shift row never has to say
- * the same thing twice (a separate "Shortage" chip plus a repeated "₱x shortage" caption). */
 function remittanceRowBadge(
   status: 'pending' | 'reconciled',
   result: CashReconciliationResult | null,
@@ -44,29 +47,294 @@ function remittanceRowBadge(
   return { label: 'Exact', tone: 'info' };
 }
 
-export function ShiftRemittanceScreen() {
+const badgeToneStyles = {
+  danger: { bg: '#FEE2E2', text: '#B91C1C' },
+  success: { bg: '#DCFCE7', text: managerColors.green },
+  warning: { bg: '#FEF3C7', text: managerColors.goldMuted },
+  info: { bg: '#E8EEF9', text: managerColors.royalBlue },
+} as const;
+
+function dayTotalAmount(day: ShiftRemittanceDay) {
+  const cash = day.actual_remitted == null ? null : Number(day.actual_remitted);
+  const gcash = day.actual_gcash == null ? null : Number(day.actual_gcash);
+  if (cash == null && gcash == null) return null;
+  return Number(cash ?? 0) + Number(gcash ?? 0);
+}
+
+function dayDifferenceLabel(day: ShiftRemittanceDay) {
+  const shortage = Number(day.total_shortage);
+  const excess = Number(day.total_excess);
+  if (shortage > 0) return formatMoney(shortage);
+  if (excess > 0) return formatMoney(excess);
+  return formatMoney(0);
+}
+
+function MetricChipRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: 'cash-outline' | 'checkmark-circle-outline' | 'phone-portrait-outline' | 'swap-vertical-outline';
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.metricRow}>
+      <View style={styles.metricLeft}>
+        <Ionicons name={icon} size={16} color={managerColors.subtext} />
+        <Text style={styles.metricLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <View style={styles.valueChip}>
+        <Text style={styles.valueChipText} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function RemittanceDayCard({
+  day,
+  expanded,
+  onToggle,
+}: {
+  day: ShiftRemittanceDay;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const shortage = Number(day.total_shortage);
+  const excess = Number(day.total_excess);
+  const hasGcash = day.expected_gcash != null;
+  const total = dayTotalAmount(day);
+  const dateLabel = formatManilaDate(day.business_date);
+
+  return (
+    <View style={styles.dayCard}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${dateLabel}, ${expanded ? 'collapse' : 'expand'}`}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.dayHeader, pressed && styles.pressed]}
+      >
+        <View style={styles.calendarChip}>
+          <Ionicons name="calendar-outline" size={18} color={managerColors.royalBlue} />
+        </View>
+        <View style={styles.dayHeaderCopy}>
+          <Text style={styles.section}>{dateLabel}</Text>
+          <Text style={styles.dayMeta} numberOfLines={1}>
+            {`Total Amount: ${total == null ? '—' : formatMoney(total)}`}
+          </Text>
+        </View>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={managerColors.subtext}
+        />
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.dayBody}>
+          <MetricChipRow
+            icon="cash-outline"
+            label="Expected Cash:"
+            value={formatMoney(Number(day.expected_cash))}
+          />
+          <MetricChipRow
+            icon="checkmark-circle-outline"
+            label="Cash remitted:"
+            value={formatKnownMoney(day.actual_remitted == null ? null : Number(day.actual_remitted))}
+          />
+
+          {hasGcash ? (
+            <>
+              <MetricChipRow
+                icon="phone-portrait-outline"
+                label="Expected GCash:"
+                value={formatMoney(Number(day.expected_gcash))}
+              />
+              <MetricChipRow
+                icon="phone-portrait-outline"
+                label="GCash remitted:"
+                value={formatKnownMoney(day.actual_gcash == null ? null : Number(day.actual_gcash))}
+              />
+              {Number(day.pending_gcash ?? 0) > 0 ? (
+                <View style={styles.pendingNote}>
+                  <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+                  <Text style={styles.pendingNoteText}>
+                    {`${formatMoney(Number(day.pending_gcash))} GCash pending`}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <MetricChipRow icon="swap-vertical-outline" label="Difference:" value={dayDifferenceLabel(day)} />
+          )}
+
+          <View style={styles.footerRow}>
+            <View style={[styles.footerCell, styles.shortageCell]}>
+              <Ionicons name="arrow-down" size={13} color="#B91C1C" />
+              <Text style={styles.shortageText} numberOfLines={1}>
+                {`Shortage: ${formatMoney(shortage)}`}
+              </Text>
+            </View>
+            <View style={styles.footerDivider} />
+            <View style={[styles.footerCell, styles.excessCell]}>
+              <Ionicons name="arrow-up" size={13} color={managerColors.green} />
+              <Text style={styles.excessText} numberOfLines={1}>
+                {`Excess: ${formatMoney(excess)}`}
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ShiftRemittanceRowCard({
+  row,
+  branchName,
+  detailBase,
+}: {
+  row: ShiftRemittanceRow;
+  branchName: string;
+  detailBase: string;
+}) {
+  const badge = remittanceRowBadge(row.status, row.result, row.difference);
+  const tone = badgeToneStyles[badge.tone];
+  const timeLabel = formatShiftTimeRange(row.started_at, row.ended_at);
+  const cashierLabel =
+    row.cashier_name && row.cashier_name !== row.branch_name && row.cashier_name !== branchName
+      ? row.cashier_name
+      : null;
+  const amount =
+    row.status === 'pending'
+      ? formatMoney(Number(row.expected_cash))
+      : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash));
+  const tenderMeta =
+    row.expected_gcash == null
+      ? row.status === 'pending'
+        ? 'Remittance expected'
+        : 'Remitted'
+      : row.status === 'pending'
+        ? 'Cash expected'
+        : 'Cash remitted';
+  const badgeLabel = `${row.expected_gcash != null ? 'Cash: ' : ''}${badge.label}`;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Remittance details for ${timeLabel}`}
+      onPress={() => router.push(`${detailBase}/${row.shift_id}` as never)}
+      style={({ pressed }) => [styles.shiftCard, pressed && styles.pressed]}
+    >
+      <View style={styles.shiftTop}>
+        <Text style={styles.shiftTitle} numberOfLines={2}>
+          {timeLabel}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
+      </View>
+
+      {cashierLabel ? (
+        <View style={styles.metaItem}>
+          <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
+          <Text style={styles.metaItemText} numberOfLines={2}>
+            {cashierLabel}
+          </Text>
+        </View>
+      ) : null}
+
+      <Text style={styles.tenderMeta} numberOfLines={1}>
+        {tenderMeta}
+      </Text>
+
+      {row.expected_gcash != null ? (
+        <Text style={styles.gcashLine} numberOfLines={2}>
+          {`GCash remitted ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} · expected ${formatMoney(Number(row.expected_gcash))}`}
+        </Text>
+      ) : null}
+
+      <View style={styles.shiftBottom}>
+        <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+          {amount}
+        </Text>
+        <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
+          <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
+            {badgeLabel}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+export function ShiftRemittanceScreen({
+  branchId: branchIdProp,
+  branchName: branchNameProp,
+}: {
+  branchId?: string;
+  branchName?: string;
+} = {}) {
   const { profile } = useAuth();
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const branchId = branchIdProp || paramValue(params.branchId);
+  const initialRange = parseRangeParam(paramValue(params.range));
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange || 'today');
+  const [customStart, setCustomStart] = useState(paramValue(params.start));
+  const [customEnd, setCustomEnd] = useState(paramValue(params.end));
+  // undefined = follow default (open the only day on the page); null/string = user choice
+  const [manualExpanded, setManualExpanded] = useState<string | null | undefined>(undefined);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
-  const query = useShiftRemittances(rpcRangeType, startIso, endIso);
   const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
+  const query = useShiftRemittances(rpcRangeType, startIso, endIso, branchId || null);
+  const branches = useBranches();
   const refresh = query.refetch;
-  useFocusEffect(useCallback(() => {
-    if (ready) void refresh();
-  }, [ready, refresh]));
+  useFocusEffect(
+    useCallback(() => {
+      if (ready && branchId) void refresh();
+    }, [ready, branchId, refresh]),
+  );
   const days = query.data?.days ?? [];
-  const pagination = useClientPagination(days, rangeType, DAYS_PER_PAGE);
+  const pagination = useClientPagination(days, `${branchId}|${rangeType}`, DAYS_PER_PAGE);
+  const pageDays = branchId ? pagination.pageItems : [];
   const isManager = profile?.role === 'manager';
   const detailBase = isManager ? '/manager/reports/shift-remittances' : '/owner/reports/shift-remittances';
 
+  const pageKey = pageDays.map((day) => day.business_date).join('|');
+  useEffect(() => {
+    setManualExpanded(undefined);
+  }, [branchId, rangeType, pagination.page, pageKey]);
+
+  const defaultExpanded = pageDays.length === 1 ? pageDays[0].business_date : null;
+  const expandedDate = manualExpanded === undefined ? defaultExpanded : manualExpanded;
+
+  const branchName = useMemo(() => {
+    if (branchNameProp) return branchNameProp;
+    const fromTable = branches.data?.find((branch) => branch.id === branchId)?.name;
+    if (fromTable) return fromTable;
+    const fromDays = days.flatMap((day) => day.shifts).find((shift) => shift.branch_id === branchId)?.branch_name;
+    return fromDays ?? 'Branch';
+  }, [branchNameProp, branches.data, branchId, days]);
+
+  const title = branchId ? `Remittance · ${branchName}` : 'Shift remittances';
+
   return (
-    <Screen refreshing={query.isRefetching} onRefresh={ready ? () => void refresh() : undefined} backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
-      {/* Manager reaches this screen from a dedicated sidebar entry (same as Home/Products) —
-          hamburger, not back. Owner only reaches it by drilling into the Reports hub, so it
-          keeps the back button there. */}
-      <ManagerScreenHeader title="Shift remittances" showBack={!isManager} />
+    <Screen
+      refreshing={query.isRefetching}
+      onRefresh={ready && branchId ? () => void refresh() : undefined}
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      contentContainerStyle={styles.screen}
+    >
+      <ManagerScreenHeader title={title} showBack />
       <ConstrainedWidth style={styles.column}>
         <DateRangeFilter
           value={rangeType}
@@ -76,206 +344,59 @@ export function ShiftRemittanceScreen() {
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
-        {query.isLoading ? <LoadingState label="Loading remittances…" /> : null}
-        {query.error ? <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : null}
-        {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
-          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+
+        {!branchId ? (
+          <EmptyState
+            title="Choose a branch"
+            message="Open Shift remittances and select a branch to view closed shifts."
+          />
         ) : null}
-        {!query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
-          <EmptyState title="No remittances" message="No closed shifts in this date range. Try another date." />
+
+        {branchId && query.isLoading ? <LoadingState label="Loading remittances…" /> : null}
+        {branchId && query.error ? (
+          <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : null}
-        {pagination.pageItems.map((day) => {
-          const shortage = Number(day.total_shortage);
-          const excess = Number(day.total_excess);
-          const pendingCash = Number(day.pending_expected_cash);
-          const pendingCount = day.pending_shift_count;
+        {branchId && rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
+          <EmptyState
+            title="Select a date range"
+            message="Enter both a start date and an end date to run this report."
+          />
+        ) : null}
+        {branchId && !query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
+          <EmptyState
+            title="No remittances"
+            message="No closed shifts for this branch in this date range. Try another date."
+          />
+        ) : null}
+
+        {pageDays.map((day) => {
+          const expanded = expandedDate === day.business_date;
           return (
             <View key={day.business_date} style={styles.dayBlock}>
-              <Text style={styles.section}>{formatManilaDate(day.business_date)}</Text>
-
-              <View style={styles.heroCard}>
-                <Text style={styles.tenderTitle}>{day.expected_gcash == null ? 'Collections' : 'Cash'}</Text>
-                <View style={styles.heroStack}>
-                  <View style={styles.heroRowFull}>
-                    <View style={styles.heroLeft}>
-                      <View style={styles.heroIconChip}>
-                        <Ionicons name="cash-outline" size={18} color={managerColors.royalBlue} />
-                      </View>
-                      <Text style={styles.heroLabel}>Expected Cash</Text>
-                    </View>
-                    <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatMoney(Number(day.expected_cash))}
-                    </Text>
-                  </View>
-                  <View style={styles.heroRowFull}>
-                    <View style={styles.heroLeft}>
-                      <View style={styles.heroIconChip}>
-                        <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-                      </View>
-                      <Text style={styles.heroLabel}>Cash remitted</Text>
-                    </View>
-                    <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                      {formatKnownMoney(day.actual_remitted == null ? null : Number(day.actual_remitted))}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.pillRow}>
-                  <View style={[styles.pill, { backgroundColor: shortage > 0 ? '#FEE2E2' : managerColors.cardSurface }]}>
-                    <Ionicons
-                      name="trending-down-outline"
-                      size={13}
-                      color={shortage > 0 ? '#B91C1C' : managerColors.subtext}
+              <RemittanceDayCard
+                day={day}
+                expanded={expanded}
+                onToggle={() =>
+                  setManualExpanded((current) => {
+                    const open = current === undefined ? defaultExpanded : current;
+                    return open === day.business_date ? null : day.business_date;
+                  })
+                }
+              />
+              {expanded
+                ? day.shifts.map((row) => (
+                    <ShiftRemittanceRowCard
+                      key={row.shift_id}
+                      row={row}
+                      branchName={branchName}
+                      detailBase={detailBase}
                     />
-                    <Text
-                      style={[styles.pillText, { color: shortage > 0 ? '#B91C1C' : managerColors.subtext }]}
-                      numberOfLines={2}
-                    >
-                      {formatMoney(shortage)} shortage
-                    </Text>
-                  </View>
-                  <View style={[styles.pill, { backgroundColor: excess > 0 ? '#DCFCE7' : managerColors.cardSurface }]}>
-                    <Ionicons
-                      name="trending-up-outline"
-                      size={13}
-                      color={excess > 0 ? managerColors.green : managerColors.subtext}
-                    />
-                    <Text
-                      style={[styles.pillText, { color: excess > 0 ? managerColors.green : managerColors.subtext }]}
-                      numberOfLines={2}
-                    >
-                      {formatMoney(excess)} excess
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.footerRow}>
-                  <View style={styles.footerStat}>
-                    <View style={styles.footerStatTop}>
-                      <Ionicons name="checkmark-done-outline" size={13} color={managerColors.green} />
-                      <Text style={styles.footerStatValue}>{day.reconciled_shift_count}</Text>
-                    </View>
-                    <Text style={styles.footerStatLabel}>Reconciled</Text>
-                  </View>
-                  <View style={styles.footerDivider} />
-                  <View style={styles.footerStat}>
-                    <View style={styles.footerStatTop}>
-                      <Ionicons
-                        name="time-outline"
-                        size={13}
-                        color={pendingCount > 0 ? managerColors.goldMuted : managerColors.subtext}
-                      />
-                      <Text style={[styles.footerStatValue, pendingCount > 0 && styles.footerStatWarning]}>
-                        {pendingCount}
-                      </Text>
-                    </View>
-                    <Text style={styles.footerStatLabel}>Pending shifts</Text>
-                  </View>
-                  <View style={styles.footerDivider} />
-                  <View style={styles.footerStat}>
-                    <View style={styles.footerStatTop}>
-                      <Ionicons
-                        name="hourglass-outline"
-                        size={13}
-                        color={pendingCash > 0 ? managerColors.goldMuted : managerColors.subtext}
-                      />
-                      <Text
-                        style={[styles.footerStatValue, pendingCash > 0 && styles.footerStatWarning]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                      >
-                        {formatMoney(pendingCash)}
-                      </Text>
-                    </View>
-                    <Text style={styles.footerStatLabel}>Pending cash</Text>
-                  </View>
-                </View>
-              </View>
-
-              {day.expected_gcash != null ? (
-                <View style={styles.heroCard}>
-                  <Text style={styles.tenderTitle}>GCash</Text>
-                  <View style={styles.heroStack}>
-                    <View style={styles.heroRowFull}>
-                      <View style={styles.heroLeft}>
-                        <View style={styles.heroIconChip}>
-                          <Ionicons name="phone-portrait-outline" size={18} color={managerColors.royalBlue} />
-                        </View>
-                        <Text style={styles.heroLabel}>Expected GCash</Text>
-                      </View>
-                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                        {formatMoney(Number(day.expected_gcash))}
-                      </Text>
-                    </View>
-                    <View style={styles.heroRowFull}>
-                      <View style={styles.heroLeft}>
-                        <View style={styles.heroIconChip}>
-                          <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-                        </View>
-                        <Text style={styles.heroLabel}>GCash remitted</Text>
-                      </View>
-                      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                        {formatKnownMoney(day.actual_gcash == null ? null : Number(day.actual_gcash))}
-                      </Text>
-                    </View>
-                  </View>
-                  {Number(day.pending_gcash ?? 0) > 0 ? (
-                    <View style={styles.pendingNote}>
-                      <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
-                      <Text style={styles.pendingNoteText}>{`${formatMoney(Number(day.pending_gcash))} GCash pending`}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {day.shifts.map((row) => {
-                const badge = remittanceRowBadge(row.status, row.result, row.difference);
-                return (
-                  <ListRowCard
-                    key={row.shift_id}
-                    icon="storefront-outline"
-                    iconColor={accentForName(row.branch_name)}
-                    title={row.branch_name}
-                    metaRow={
-                      <>
-                        <View style={styles.metaItem}>
-                          <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
-                          <Text style={styles.metaItemText}>{formatShiftTimeRange(row.started_at, row.ended_at)}</Text>
-                        </View>
-                        {row.branch_name !== row.cashier_name ? (
-                          <View style={styles.metaItem}>
-                            <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
-                            <Text style={styles.metaItemText}>{row.cashier_name}</Text>
-                          </View>
-                        ) : null}
-                      </>
-                    }
-                    onPress={() => router.push(`${detailBase}/${row.shift_id}` as never)}
-                    trailing={
-                      <View style={styles.trailingCol}>
-                        <Text style={styles.amount} numberOfLines={2}>
-                          {row.expected_gcash == null ? 'Collections' : 'Cash'}{' '}
-                          {row.status === 'pending' ? 'expected' : 'submitted'}{' '}
-                          {row.status === 'pending'
-                            ? formatMoney(Number(row.expected_cash))
-                            : formatKnownMoney(row.actual_cash == null ? null : Number(row.actual_cash))}
-                        </Text>
-                        {row.expected_gcash != null ? (
-                          <Text style={styles.gcashLine} numberOfLines={2}>
-                            {`GCash submitted ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} · expected ${formatMoney(Number(row.expected_gcash))}`}
-                          </Text>
-                        ) : null}
-                        <ManagerBadge
-                          label={`${row.expected_gcash != null ? 'Cash: ' : ''}${badge.label}`}
-                          tone={badge.tone}
-                        />
-                      </View>
-                    }
-                  />
-                );
-              })}
+                  ))
+                : null}
             </View>
           );
         })}
-        {pagination.showPagination ? (
+        {branchId && pagination.showPagination ? (
           <View style={styles.pager}>
             <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
           </View>
@@ -287,36 +408,28 @@ export function ShiftRemittanceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
-  dayBlock: { gap: 12 },
-  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  tenderTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
-  amount: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14, textAlign: 'right' },
-  gcashLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12, textAlign: 'right' },
-  pendingNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12 },
-  pendingNoteText: { flex: 1, color: managerColors.goldMuted, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
-  heroCard: {
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
+  dayBlock: { gap: 10 },
+  dayCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
-    padding: 20,
-    gap: 18,
+    overflow: 'hidden',
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  heroStack: { gap: 12 },
-  heroRowFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  heroIconChip: {
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  calendarChip: {
     width: 34,
     height: 34,
     borderRadius: 10,
@@ -324,45 +437,147 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#DCE8FC',
   },
-  heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13, flexShrink: 1 },
-  heroValue: {
+  dayHeaderCopy: { flex: 1, minWidth: 0, gap: 2 },
+  section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  dayMeta: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  pressed: { opacity: 0.75 },
+  dayBody: {
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: managerColors.cardBorder,
+    paddingTop: 12,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  metricLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  metricLabel: {
+    flexShrink: 1,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+  },
+  valueChip: {
+    flexShrink: 0,
+    maxWidth: '48%',
+    backgroundColor: managerColors.cardSurface,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  valueChipText: {
     color: managerColors.ink,
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
-    flexShrink: 1,
-    minWidth: 0,
-    maxWidth: '55%',
-    textAlign: 'right',
+    fontSize: 14,
+    textAlign: 'center',
   },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: {
-    flexGrow: 1,
-    flexBasis: 140,
+  pendingNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  pendingNoteText: {
+    flex: 1,
+    minWidth: 0,
+    color: managerColors.goldMuted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginTop: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+  },
+  footerCell: {
+    flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    borderRadius: 16,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
-  pillText: { flexShrink: 1, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontSize: 11.5, lineHeight: 14 },
-  footerRow: {
+  footerDivider: { width: 1, backgroundColor: managerColors.cardBorder },
+  shortageCell: { backgroundColor: '#FEE2E2' },
+  excessCell: { backgroundColor: '#DCFCE7' },
+  shortageText: { flexShrink: 1, color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  excessText: { flexShrink: 1, color: managerColors.green, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  shiftCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
+    shadowColor: '#0A1224',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
+  },
+  shiftTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  shiftTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  metaItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  metaItemText: {
+    flex: 1,
+    minWidth: 0,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  tenderMeta: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  gcashLine: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    lineHeight: 15,
+  },
+  shiftBottom: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 2,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
-    paddingTop: 14,
   },
-  footerStat: { flex: 1, alignItems: 'center', gap: 4, minWidth: 0 },
-  footerStatTop: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
-  footerStatValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15, flexShrink: 1 },
-  footerStatWarning: { color: managerColors.goldMuted },
-  footerStatLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, textAlign: 'center' },
-  footerDivider: { width: 1, height: 30, backgroundColor: managerColors.cardBorder },
-  trailingCol: { alignItems: 'flex-end', gap: 6, flexShrink: 1, maxWidth: 180 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' },
-  metaItemText: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, flexShrink: 1 },
+  amount: {
+    flexShrink: 1,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+  },
+  rowBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, flexShrink: 0 },
+  rowBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 12 },
   pager: { paddingVertical: 8 },
 });

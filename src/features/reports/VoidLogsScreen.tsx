@@ -123,7 +123,14 @@ function rangeBounds(
   return { start: Date.parse(resolved.startIso), end: Date.parse(resolved.endIso) };
 }
 
-export default function VoidLogsScreen() {
+export default function VoidLogsScreen({
+  branchId,
+  branchName,
+}: {
+  /** Owner branch-first drill-in: only show voids for this selling branch. */
+  branchId?: string;
+  branchName?: string;
+} = {}) {
   const { profile } = useAuth();
   const [search, setSearch] = useState('');
   const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
@@ -137,7 +144,7 @@ export default function VoidLogsScreen() {
   const [selected, setSelected] = useState<VoidLogRow | null>(null);
 
   const { data, error, isPending, isRefetching, refetch } = useQuery({
-    queryKey: ['void-logs', profile?.id, profile?.branch_id, profile?.role],
+    queryKey: ['void-logs', profile?.id, profile?.branch_id, profile?.role, branchId ?? 'all'],
     enabled: !!profile,
     queryFn: listAllVoidLogs,
   });
@@ -170,19 +177,24 @@ export default function VoidLogsScreen() {
     return row.product_category ?? categoriesByName.data?.get(productName) ?? null;
   }
 
+  const scopedData = useMemo(() => {
+    if (!branchName) return data ?? [];
+    return (data ?? []).filter((row) => row.branch_name === branchName);
+  }, [data, branchName]);
+
   const cashierRow = useMemo<ExtraListFilter>(
     () => ({
       title: 'Cashier',
       options: [
         { label: 'All cashiers', value: 'all' },
-        ...[...new Set((data ?? []).map((row) => row.cashier_name).filter(Boolean))]
+        ...[...new Set(scopedData.map((row) => row.cashier_name).filter(Boolean))]
           .sort((a, b) => a.localeCompare(b))
           .map((name) => ({ label: name, value: name })),
       ],
       value: cashierFilter,
       onChange: setCashierFilter,
     }),
-    [data, cashierFilter],
+    [scopedData, cashierFilter],
   );
 
   const reasonRow = useMemo<ExtraListFilter>(
@@ -192,9 +204,7 @@ export default function VoidLogsScreen() {
         { label: 'All reasons', value: 'all' },
         ...[
           ...new Set(
-            (data ?? [])
-              .map((row) => row.reason?.trim())
-              .filter((name): name is string => !!name),
+            scopedData.map((row) => row.reason?.trim()).filter((name): name is string => !!name),
           ),
         ]
           .sort((a, b) => a.localeCompare(b))
@@ -203,7 +213,7 @@ export default function VoidLogsScreen() {
       value: reasonFilter,
       onChange: setReasonFilter,
     }),
-    [data, reasonFilter],
+    [scopedData, reasonFilter],
   );
 
   const filterRows = useMemo(() => [cashierRow, reasonRow], [cashierRow, reasonRow]);
@@ -211,7 +221,7 @@ export default function VoidLogsScreen() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     const bounds = rangeBounds(rangeType, customStart, customEnd);
-    const rows = (data ?? []).filter((row) => {
+    const rows = scopedData.filter((row) => {
       if (cashierFilter !== 'all' && row.cashier_name !== cashierFilter) return false;
       if (reasonFilter !== 'all' && (row.reason?.trim() ?? '') !== reasonFilter) return false;
       if (bounds.start != null && bounds.end != null) {
@@ -245,11 +255,11 @@ export default function VoidLogsScreen() {
           return Date.parse(b.recorded_at) - Date.parse(a.recorded_at);
       }
     });
-  }, [data, search, rangeType, customStart, customEnd, cashierFilter, reasonFilter, sort]);
+  }, [scopedData, search, rangeType, customStart, customEnd, cashierFilter, reasonFilter, sort]);
 
   const pagination = useClientPagination(
     filtered,
-    `${search}|${rangeType}|${customStart}|${customEnd}|${cashierFilter}|${reasonFilter}|${sort}`,
+    `${branchId ?? 'all'}|${search}|${rangeType}|${customStart}|${customEnd}|${cashierFilter}|${reasonFilter}|${sort}`,
     10,
   );
 
@@ -258,6 +268,7 @@ export default function VoidLogsScreen() {
   const centered = !isPending && !error && filtered.length === 0;
   const hasActiveQuery =
     !!search.trim() || rangeType !== 'all_time' || cashierFilter !== 'all' || reasonFilter !== 'all';
+  const title = branchName ? `Void logs · ${branchName}` : 'Void logs';
 
   return (
     <Screen
@@ -267,7 +278,7 @@ export default function VoidLogsScreen() {
       onRefresh={() => void refetch()}
       contentContainerStyle={styles.screen}
     >
-      <ManagerScreenHeader title="Void logs" showBack />
+      <ManagerScreenHeader title={title} showBack />
       <ConstrainedWidth fill={centered} style={[styles.column, centered && styles.centered]}>
         <View style={styles.filters}>
           <View style={styles.searchRow}>
@@ -294,7 +305,7 @@ export default function VoidLogsScreen() {
             onCustomEndChange={setCustomEnd}
           />
           <ListFilterSummary
-            countText={`${filtered.length} of ${data?.length ?? 0} ${(data?.length ?? 0) === 1 ? 'void' : 'voids'}`}
+            countText={`${filtered.length} of ${scopedData.length} ${scopedData.length === 1 ? 'void' : 'voids'}`}
             filters={DEFAULT_LIST_FILTERS}
             keys={NO_LIST_FILTERS}
             extra={filterRows}

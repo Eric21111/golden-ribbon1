@@ -1,4 +1,3 @@
-import { StockUnitHint } from '@/components/StockUnitHint';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -10,26 +9,31 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
+import { StockUnitHint } from '@/components/StockUnitHint';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/ManagerBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
-import { closingDispositionLabel, formatPcsQty, gcashResult } from '@/features/reports/reportDisplay';
-import {
-  PRICING_PROGRAM_LABELS,
-  shiftPaymentBreakdown,
-  type PricingProgramKey,
-  type ShiftPaymentRow,
-} from '@/features/sales/paymentMethods';
+import { formatPcsQty, gcashResult } from '@/features/reports/reportDisplay';
 import { useClientPagination } from '@/hooks/useClientPagination';
-import { useManagerShiftPayments, useShiftCloseReportDetail } from '@/hooks/useShifts';
+import { useShiftCloseReportDetail } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import type { ShiftCloseReportProduct, ShiftProductReconResult } from '@/types/models';
 
+/** Display-only: soften ALL-CAPS cashier labels without changing stored names. */
+function readablePersonName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed !== trimmed.toUpperCase() || trimmed.length < 4) return trimmed;
+  return trimmed
+    .toLowerCase()
+    .replace(/(^|[\s\-_/])([a-z])/g, (_, edge: string, letter: string) => `${edge}${letter.toUpperCase()}`);
+}
+
 const timeFormatter = new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' });
 const dateFormatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
+const COLUMN_PAD = 20;
 
 function formatWhen(value: string | null) {
   if (!value) return null;
@@ -57,7 +61,6 @@ const inventoryResultBadge: Record<ShiftProductReconResult, { label: string; ton
   excess: { label: 'Excess', tone: 'success' },
 };
 
-/** "Exact match" / "₱x shortage" / "₱x excess": the same pill for the cash card and the GCash card. */
 function ResultPill({ shortage, excess }: { shortage: number; excess: number }) {
   const color = shortage > 0 ? '#B91C1C' : excess > 0 ? managerColors.green : managerColors.subtext;
   return (
@@ -79,9 +82,30 @@ function ResultPill({ shortage, excess }: { shortage: number; excess: number }) 
   );
 }
 
-const PROGRAM_ORDER: PricingProgramKey[] = ['standard', 'pwd', 'back_office_guard', 'employee_meal'];
+function MetricRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: 'cash-outline' | 'phone-portrait-outline' | 'wallet-outline';
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.metricRow}>
+      <View style={styles.metricLeft}>
+        <View style={styles.heroIconChip}>
+          <Ionicons name={icon} size={16} color={managerColors.royalBlue} />
+        </View>
+        <Text style={styles.heroLabel}>{label}</Text>
+      </View>
+      <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
-/** Remittance expected/actual stay above; expand shows completed-sale composition for that tender. */
 function TenderRemittanceCard({
   title,
   expectedLabel,
@@ -92,105 +116,35 @@ function TenderRemittanceCard({
   pending,
   pendingMessage,
   result,
-  expanded,
-  onToggle,
-  salesBreakdown,
-  salesLoading,
-  salesError,
 }: {
   title: string;
   expectedLabel: string;
   actualLabel: string;
   expected: number;
   actual: number | null;
-  icon: 'cash-outline' | 'phone-portrait-outline' | 'wallet-outline';
+  icon: 'cash-outline' | 'phone-portrait-outline';
   pending: boolean;
   pendingMessage: string;
   result: { shortage: number; excess: number } | null;
-  expanded: boolean;
-  onToggle: () => void;
-  salesBreakdown: ReturnType<typeof shiftPaymentBreakdown> | null;
-  salesLoading: boolean;
-  salesError: string | null;
 }) {
   return (
-    <>
-      <Text style={styles.section}>{title}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${title} remittance${expanded ? ', hide sales breakdown' : ', show sales breakdown'}`}
-        onPress={onToggle}
-        style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
-      >
-        <View style={styles.heroStack}>
-          <View style={styles.heroRowFull}>
-            <View style={styles.heroLeft}>
-              <View style={styles.heroIconChip}>
-                <Ionicons name={icon} size={18} color={managerColors.royalBlue} />
-              </View>
-              <Text style={styles.heroLabel}>{expectedLabel}</Text>
-            </View>
-            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(expected)}
-            </Text>
-          </View>
-          <View style={styles.heroRowFull}>
-            <View style={styles.heroLeft}>
-              <View style={styles.heroIconChip}>
-                <Ionicons name="wallet-outline" size={18} color={managerColors.royalBlue} />
-              </View>
-              <Text style={styles.heroLabel}>{actualLabel}</Text>
-            </View>
-            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-              {actual == null ? '—' : formatMoney(actual)}
-            </Text>
-          </View>
+    <View style={styles.heroCard}>
+      <Text style={styles.cardEyebrow}>{title}</Text>
+      <MetricRow icon={icon} label={expectedLabel} value={formatMoney(expected)} />
+      <MetricRow
+        icon="wallet-outline"
+        label={actualLabel}
+        value={actual == null ? '—' : formatMoney(actual)}
+      />
+      {pending ? (
+        <View style={styles.pendingNote}>
+          <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
+          <Text style={styles.pendingNoteText}>{pendingMessage}</Text>
         </View>
-
-        {pending ? (
-          <View style={styles.pendingNote}>
-            <Ionicons name="hourglass-outline" size={14} color={managerColors.goldMuted} />
-            <Text style={styles.pendingNoteText}>{pendingMessage}</Text>
-          </View>
-        ) : result ? (
-          <ResultPill shortage={result.shortage} excess={result.excess} />
-        ) : null}
-
-        <View style={styles.expandHint}>
-          <Text style={styles.expandHintText}>
-            {expanded ? 'Hide sales breakdown' : 'Show standard / PWD / back office / meals'}
-          </Text>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={managerColors.subtext} />
-        </View>
-
-        {expanded ? (
-          <View style={styles.breakdownBox}>
-            <Text style={styles.breakdownCaption}>
-              Completed sales by pricing (not remitted cash). Sales revenue and remittance are different.
-            </Text>
-            {salesLoading ? <Text style={styles.breakdownLine}>Loading sales…</Text> : null}
-            {salesError ? <Text style={styles.breakdownDanger}>{salesError}</Text> : null}
-            {!salesLoading && !salesError && salesBreakdown ? (
-              <>
-                {PROGRAM_ORDER.map((key) =>
-                  key === 'employee_meal' ? (
-                    <Text key={key} style={styles.breakdownLine}>
-                      {PRICING_PROGRAM_LABELS[key]}: {salesBreakdown.employeeMeals} orders ·{' '}
-                      {formatMoney(salesBreakdown.groups.employee_meal)}
-                    </Text>
-                  ) : (
-                    <Text key={key} style={styles.breakdownLine}>
-                      {PRICING_PROGRAM_LABELS[key]}: {formatMoney(salesBreakdown.groups[key])}
-                    </Text>
-                  ),
-                )}
-                <Text style={styles.breakdownTotal}>Sales total: {formatMoney(salesBreakdown.total)}</Text>
-              </>
-            ) : null}
-          </View>
-        ) : null}
-      </Pressable>
-    </>
+      ) : result ? (
+        <ResultPill shortage={result.shortage} excess={result.excess} />
+      ) : null}
+    </View>
   );
 }
 
@@ -209,9 +163,7 @@ export function ShiftRemittanceDetailScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const query = useShiftCloseReportDetail(id ?? '');
   const detail = query.data;
-  const paymentsQuery = useManagerShiftPayments(id ?? '', Boolean(id));
-  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
-  const [openTender, setOpenTender] = useState<'cash' | 'gcash' | null>(null);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('shortage');
 
   const counts = useMemo(() => {
     const products = detail?.products ?? [];
@@ -230,9 +182,8 @@ export function ShiftRemittanceDetailScreen() {
   }, [detail?.products, detail?.selected_return_close, resultFilter]);
 
   const pagination = useClientPagination(filteredProducts, resultFilter);
-  const paymentRows = (paymentsQuery.data ?? []) as ShiftPaymentRow[];
-  const cashSales = useMemo(() => shiftPaymentBreakdown(paymentRows, 'cash'), [paymentRows]);
-  const gcashSales = useMemo(() => shiftPaymentBreakdown(paymentRows, 'gcash'), [paymentRows]);
+  // No separate GCash remittance → single remittance card (cash-only split is unavailable).
+  const combinedCollections = detail?.expected_gcash == null;
 
   const shortage = detail?.cash_result === 'shortage' ? Math.abs(Number(detail.difference ?? 0)) : 0;
   const excess = detail?.cash_result === 'excess' ? Math.abs(Number(detail.difference ?? 0)) : 0;
@@ -240,10 +191,10 @@ export function ShiftRemittanceDetailScreen() {
   const gcash = detail ? gcashResult(detail.expected_gcash, detail.actual_gcash) : null;
 
   const filterOptions: { label: string; value: ResultFilter }[] = [
-    { label: `All (${counts.total})`, value: 'all' },
     { label: `Shortage (${counts.shortage})`, value: 'shortage' },
     { label: `Excess (${counts.excess})`, value: 'excess' },
     { label: `Exact (${counts.exact})`, value: 'exact' },
+    { label: `All (${counts.total})`, value: 'all' },
   ];
 
   return (
@@ -263,19 +214,18 @@ export function ShiftRemittanceDetailScreen() {
             <View style={styles.identityCard}>
               <View style={styles.identityHeader}>
                 <View style={styles.identityIconChip}>
-                  <Ionicons name="storefront-outline" size={20} color={managerColors.royalBlue} />
+                  <Ionicons name="storefront-outline" size={18} color={managerColors.royalBlue} />
                 </View>
-                <View style={styles.identityHeaderText}>
-                  <Text style={styles.branchName}>{detail.branch_name}</Text>
-                  <View style={styles.identityRow}>
-                    <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
-                    <Text style={styles.identityText}>{detail.cashier_name}</Text>
-                  </View>
-                </View>
+                <Text style={styles.branchName} numberOfLines={2}>
+                  {detail.branch_name}
+                </Text>
               </View>
-
-              <View style={styles.identityDivider} />
-
+              <View style={styles.identityRow}>
+                <Ionicons name="person-circle-outline" size={13} color={managerColors.subtext} />
+                <Text style={styles.identityText} numberOfLines={3}>
+                  {readablePersonName(detail.cashier_name)}
+                </Text>
+              </View>
               <View style={styles.identityRow}>
                 <Ionicons name="time-outline" size={13} color={managerColors.subtext} />
                 <Text style={styles.identityText}>{formatShiftWindow(detail.started_at, detail.ended_at)}</Text>
@@ -288,79 +238,93 @@ export function ShiftRemittanceDetailScreen() {
               ) : null}
             </View>
 
-            <TenderRemittanceCard
-              title={detail.expected_gcash == null ? 'Collections' : 'Cash'}
-              expectedLabel="Expected Cash"
-              actualLabel="Actual Cash"
-              expected={Number(detail.expected_cash)}
-              actual={detail.actual_cash == null ? null : Number(detail.actual_cash)}
-              icon="cash-outline"
-              pending={detail.cash_status === 'pending'}
-              pendingMessage="Remittance is still pending. Actual cash and inventory results are not available yet."
-              result={detail.cash_status === 'pending' ? null : { shortage, excess }}
-              expanded={openTender === 'cash'}
-              onToggle={() => setOpenTender((current) => (current === 'cash' ? null : 'cash'))}
-              salesBreakdown={cashSales}
-              salesLoading={paymentsQuery.isLoading}
-              salesError={paymentsQuery.error ? getErrorMessage(paymentsQuery.error) : null}
-            />
-
-            {detail.expected_gcash != null ? (
+            <View style={styles.sectionBlock}>
               <TenderRemittanceCard
-                title="GCash"
-                expectedLabel="Expected GCash"
-                actualLabel="Actual GCash"
-                expected={Number(detail.expected_gcash)}
-                actual={detail.actual_gcash == null ? null : Number(detail.actual_gcash)}
-                icon="phone-portrait-outline"
-                pending={gcash == null}
-                pendingMessage="GCash is still pending."
-                result={gcash}
-                expanded={openTender === 'gcash'}
-                onToggle={() => setOpenTender((current) => (current === 'gcash' ? null : 'gcash'))}
-                salesBreakdown={gcashSales}
-                salesLoading={paymentsQuery.isLoading}
-                salesError={paymentsQuery.error ? getErrorMessage(paymentsQuery.error) : null}
+                title={combinedCollections ? 'Remittance' : 'Cash'}
+                expectedLabel={combinedCollections ? 'Expected remittance' : 'Expected cash'}
+                actualLabel={combinedCollections ? 'Remitted' : 'Cash remitted'}
+                expected={Number(detail.expected_cash)}
+                actual={detail.actual_cash == null ? null : Number(detail.actual_cash)}
+                icon="cash-outline"
+                pending={detail.cash_status === 'pending'}
+                pendingMessage="Remittance is still pending. Remitted amounts and inventory results are not available yet."
+                result={detail.cash_status === 'pending' ? null : { shortage, excess }}
               />
-            ) : null}
+              {detail.expected_gcash != null ? (
+                <TenderRemittanceCard
+                  title="GCash"
+                  expectedLabel="Expected GCash"
+                  actualLabel="GCash remitted"
+                  expected={Number(detail.expected_gcash)}
+                  actual={detail.actual_gcash == null ? null : Number(detail.actual_gcash)}
+                  icon="phone-portrait-outline"
+                  pending={gcash == null}
+                  pendingMessage="GCash is still pending."
+                  result={gcash}
+                />
+              ) : null}
+            </View>
 
-            <Text style={styles.section}>{detail.selected_return_close ? 'End shift stock' : 'Inventory close'}</Text>
-            {detail.selected_return_close && (detail.return_number && profile?.role === 'manager' ? (
-              <Pressable accessibilityRole="link" onPress={() => void openReturn(detail.return_number!)}>
-                <Text style={{color: managerColors.royalBlue}}>View return {detail.return_number} ›</Text>
-              </Pressable>
-            ) : <Text>{detail.return_number ? 'Return ' + detail.return_number : 'All remaining stock was kept at the branch.'}</Text>)}
-            {detail.cash_status === 'pending' ? (
-              <EmptyState
-                title="Not available yet"
-                message="Finish remittance before inventory results appear."
-              />
-            ) : detail.products.length === 0 ? (
-              <EmptyState
-                title="No inventory data"
-                message={
-                  detail.inventory_reconciliation_required
-                    ? 'No product reconciliation rows were stored for this shift.'
-                    : 'Cash reconciliation only — inventory close was not required for this historical shift.'
-                }
-              />
-            ) : (
-              <>
-                {!detail.selected_return_close && <FilterChipRow options={filterOptions} value={resultFilter} onChange={setResultFilter} />}
-                {filteredProducts.length === 0 ? (
-                  <EmptyState title="No matching products" message="Try a different filter." />
+            <View style={styles.sectionBlock}>
+              <Text style={styles.section}>{detail.selected_return_close ? 'End shift stock' : 'Inventory close'}</Text>
+              {detail.selected_return_close ? (
+                detail.return_number && profile?.role === 'manager' ? (
+                  <Pressable accessibilityRole="link" onPress={() => void openReturn(detail.return_number!)}>
+                    <Text style={styles.returnLink}>View return {detail.return_number} ›</Text>
+                  </Pressable>
                 ) : (
-                  pagination.pageItems.map((product) => (
-                    <ProductCard key={product.id} product={product} systemClose={detail.selected_return_close} />
-                  ))
-                )}
-                {pagination.showPagination ? (
-                  <View style={styles.pager}>
-                    <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
-                  </View>
-                ) : null}
-              </>
-            )}
+                  <Text style={styles.returnNote}>
+                    {detail.return_number
+                      ? `Return ${detail.return_number}`
+                      : 'All remaining stock was kept at the branch.'}
+                  </Text>
+                )
+              ) : null}
+
+              {detail.cash_status === 'pending' ? (
+                <EmptyState
+                  title="Not available yet"
+                  message="Finish remittance before inventory results appear."
+                />
+              ) : detail.products.length === 0 ? (
+                <EmptyState
+                  title="No inventory data"
+                  message={
+                    detail.inventory_reconciliation_required
+                      ? 'No product reconciliation rows were stored for this shift.'
+                      : 'Cash reconciliation only — inventory close was not required for this historical shift.'
+                  }
+                />
+              ) : (
+                <>
+                  {!detail.selected_return_close ? (
+                    <FilterChipRow
+                      options={filterOptions}
+                      value={resultFilter}
+                      onChange={setResultFilter}
+                      bleed={COLUMN_PAD}
+                      keepSelectedVisible
+                    />
+                  ) : null}
+                  {filteredProducts.length === 0 ? (
+                    <EmptyState title="No matching products" message="Try a different filter." />
+                  ) : (
+                    pagination.pageItems.map((product) => (
+                      <ProductCard key={product.id} product={product} systemClose={detail.selected_return_close} />
+                    ))
+                  )}
+                  {pagination.showPagination ? (
+                    <View style={styles.pager}>
+                      <Pagination
+                        page={pagination.page}
+                        totalPages={pagination.totalPages}
+                        onPageChange={pagination.setPage}
+                      />
+                    </View>
+                  ) : null}
+                </>
+              )}
+            </View>
           </>
         ) : null}
       </ConstrainedWidth>
@@ -368,10 +332,26 @@ export function ShiftRemittanceDetailScreen() {
   );
 }
 
+function hasQty(value: number) {
+  return Number(value) !== 0;
+}
+
 function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduct; systemClose?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const badge = inventoryResultBadge[product.result];
   const isIssue = product.result !== 'exact';
+  const unit = product.stock_unit_code;
+  // Collapse noise: only non-zero movement lines; disposition covers unsold/carried outcome.
+  const movementRows = (
+    [
+      { label: 'Opening', value: Number(product.opening_quantity) },
+      { label: 'Received', value: Number(product.received_quantity) },
+      { label: 'Outgoing', value: Number(product.outgoing_quantity) },
+      { label: 'Sold', value: Number(product.sold_quantity) },
+      { label: 'Adjustments', value: Number(product.adjustment_quantity) },
+      { label: 'Waste', value: Number(product.waste_quantity) },
+    ] as const
+  ).filter((row) => hasQty(row.value));
 
   return (
     <Pressable
@@ -389,8 +369,12 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
         <Text style={styles.productName} numberOfLines={2}>
           {product.product_name_snapshot}
         </Text>
-          <StockUnitHint code={product.stock_unit_code} />
-        {systemClose ? <ManagerBadge label={product.unsold_quantity ? 'Sent back' : 'Kept at branch'} tone="info" /> : <ManagerBadge label={badge.label} tone={badge.tone} />}
+        <StockUnitHint code={unit} />
+        {systemClose ? (
+          <ManagerBadge label={product.unsold_quantity ? 'Sent back' : 'Kept at branch'} tone="info" />
+        ) : (
+          <ManagerBadge label={badge.label} tone={badge.tone} />
+        )}
       </View>
 
       <View style={styles.subRow}>
@@ -406,25 +390,46 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={managerColors.subtext} />
       </View>
 
-      {systemClose ? <Text>System quantity after waste · {formatPcsQty(product.expected_remaining, product.stock_unit_code)}</Text> : <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel} numberOfLines={1}>Expected</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.expected_remaining, product.stock_unit_code)}</Text>
+      {systemClose ? (
+        <Text style={styles.systemQty}>
+          System quantity after waste · {formatPcsQty(product.expected_remaining, unit)}
+        </Text>
+      ) : (
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel} numberOfLines={1}>
+              Expected
+            </Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+              {formatPcsQty(product.expected_remaining, unit)}
+            </Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel} numberOfLines={1}>
+              Actual
+            </Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+              {formatPcsQty(product.actual_remaining, unit)}
+            </Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel} numberOfLines={1}>
+              Discrepancy
+            </Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                isIssue && (product.result === 'shortage' ? styles.varianceDanger : styles.varianceSuccess),
+              ]}
+              numberOfLines={1}
+            >
+              {product.discrepancy > 0
+                ? `+${formatPcsQty(product.discrepancy, unit)}`
+                : formatPcsQty(product.discrepancy, unit)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel} numberOfLines={1}>Actual</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{formatPcsQty(product.actual_remaining, product.stock_unit_code)}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel} numberOfLines={1}>Discrepancy</Text>
-          <Text
-            style={[styles.summaryValue, isIssue && (product.result === 'shortage' ? styles.varianceDanger : styles.varianceSuccess)]}
-            numberOfLines={1}
-          >
-            {product.discrepancy > 0 ? `+${formatPcsQty(product.discrepancy, product.stock_unit_code)}` : formatPcsQty(product.discrepancy, product.stock_unit_code)}
-          </Text>
-        </View>
-      </View>}
+      )}
 
       {product.discrepancy_note ? (
         <Text style={styles.noteLine} accessibilityLabel="Discrepancy note">
@@ -434,41 +439,28 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
 
       {expanded ? (
         <View style={styles.ledger}>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Opening</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.opening_quantity, product.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Received</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.received_quantity, product.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Outgoing</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.outgoing_quantity, product.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Sold</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.sold_quantity, product.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Adjustments (includes count corrections)</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.adjustment_quantity, product.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>Waste</Text>
-            <Text style={styles.ledgerValue}>{formatPcsQty(product.waste_quantity, product.stock_unit_code)}</Text>
-          </View>
-
-          <View style={styles.dispositionBlock}>
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>Unsold</Text>
-              <Text style={styles.ledgerValue}>{formatPcsQty(product.unsold_quantity, product.stock_unit_code)}</Text>
-            </View>
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>Carried</Text>
-              <Text style={styles.ledgerValue}>{formatPcsQty(product.carried_quantity, product.stock_unit_code)}</Text>
-            </View>
-            <Text style={styles.disposition}>{closingDispositionLabel(product)}</Text>
+          {movementRows.length === 0 ? (
+            <Text style={styles.ledgerEmpty}>No stock movement this shift</Text>
+          ) : (
+            movementRows.map((row, index) => (
+              <View key={row.label} style={[styles.ledgerRow, index > 0 && styles.ledgerRowGap]}>
+                <Text style={styles.ledgerLabel}>{row.label}</Text>
+                <Text style={styles.ledgerValue}>{formatPcsQty(row.value, unit)}</Text>
+              </View>
+            ))
+          )}
+          <View style={styles.ledgerCloseRow}>
+            <Text style={styles.ledgerCloseLabel}>
+              {product.closing_stock_behavior === 'record_as_unsold' ? 'Unsold at close' : 'Carried to next day'}
+            </Text>
+            <Text style={styles.ledgerCloseValue}>
+              {formatPcsQty(
+                product.closing_stock_behavior === 'record_as_unsold'
+                  ? product.unsold_quantity
+                  : product.carried_quantity,
+                unit,
+              )}
+            </Text>
           </View>
         </View>
       ) : null}
@@ -478,21 +470,27 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 12 },
+  column: { flexGrow: 1, paddingHorizontal: COLUMN_PAD, paddingTop: 16, paddingBottom: 28, gap: 16 },
+  sectionBlock: { gap: 10 },
   section: {
     color: managerColors.subtext,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     letterSpacing: 0.6,
-    marginTop: 4,
+  },
+  cardEyebrow: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
   identityCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
-    padding: 18,
-    gap: 12,
+    padding: 14,
+    gap: 10,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
@@ -501,45 +499,62 @@ const styles = StyleSheet.create({
   },
   identityHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   identityIconChip: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#DCE8FC',
   },
-  identityHeaderText: { flex: 1, gap: 4, minWidth: 0 },
-  identityDivider: { height: 1, backgroundColor: managerColors.cardBorder },
-  branchName: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 18 },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  identityText: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-
+  branchName: {
+    flex: 1,
+    minWidth: 0,
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  identityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  identityText: {
+    flex: 1,
+    minWidth: 0,
+    color: managerColors.subtext,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   heroCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
     borderRadius: 16,
-    padding: 20,
-    gap: 16,
+    padding: 14,
+    gap: 10,
     shadowColor: '#0A1224',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  heroStack: { gap: 12 },
-  heroRowFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  metricRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  metricLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minWidth: 0 },
   heroIconChip: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#DCE8FC',
   },
-  heroLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-  heroValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 20 },
+  heroLabel: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  heroValue: {
+    flexShrink: 0,
+    maxWidth: '48%',
+    color: managerColors.ink,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    textAlign: 'right',
+  },
   resultPill: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
@@ -547,7 +562,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   resultPillText: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   pendingNote: {
@@ -558,22 +573,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
-  pendingNoteText: { flex: 1, color: managerColors.goldMuted, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 17 },
-  expandHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: managerColors.cardBorder,
-    paddingTop: 12,
+  pendingNoteText: {
+    flex: 1,
+    color: managerColors.goldMuted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+    lineHeight: 17,
   },
-  expandHintText: { flex: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5 },
-  breakdownBox: { gap: 8, paddingTop: 4 },
-  breakdownCaption: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
-  breakdownLine: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13.5 },
-  breakdownTotal: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14, marginTop: 2 },
-  breakdownDanger: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  returnLink: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  returnNote: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
 
   pager: { paddingVertical: 8 },
   card: {
@@ -603,6 +611,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   skuTagLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, letterSpacing: 0.3 },
+  systemQty: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
   summaryRow: { flexDirection: 'row', gap: 10 },
   summaryItem: { flex: 1, gap: 2 },
   summaryLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
@@ -617,20 +626,41 @@ const styles = StyleSheet.create({
   varianceDanger: { color: '#B91C1C' },
   varianceSuccess: { color: managerColors.green },
   ledger: {
-    backgroundColor: managerColors.cardSurface,
-    borderRadius: 12,
-    padding: 10,
-    gap: 4,
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: managerColors.cardBorder,
+    gap: 0,
   },
-  ledgerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ledgerLabel: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  ledgerValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 12.5 },
-  dispositionBlock: {
+  ledgerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 7,
+  },
+  ledgerRowGap: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#EEF1F6',
+  },
+  ledgerLabel: { flex: 1, minWidth: 0, color: '#667085', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  ledgerValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  ledgerEmpty: {
+    color: managerColors.subtext,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  ledgerCloseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
-    paddingTop: 8,
-    marginTop: 4,
-    gap: 4,
   },
-  disposition: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 12.5, marginTop: 2 },
+  ledgerCloseLabel: { flex: 1, minWidth: 0, color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  ledgerCloseValue: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 14 },
 });

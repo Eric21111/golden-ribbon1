@@ -40,9 +40,11 @@ const Detail = loadTs('src/features/reports/ShiftRemittanceDetailScreen.tsx', {
   '@/components/dashboard/FilterChipRow': { FilterChipRow: () => null },
   '@/components/dashboard/ManagerBadge': { ManagerBadge: () => null },
   '@/components/dashboard/ManagerFeedback': { EmptyState: () => null, ErrorState: () => null, LoadingState: () => null },
+  '@/components/dashboard/ManagerBottomSheet': { ManagerBottomSheet: Pass },
   '@/components/dashboard/ManagerScreenHeader': { ManagerScreenHeader: () => null },
   '@/components/dashboard/theme': { managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' } },
   '@/hooks/useClientPagination': { useClientPagination: () => ({ pageItems: [], showPagination: false, page: 0, totalPages: 1, setPage: () => {} }) },
+  '@/hooks/useSales': { useShiftSales: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }) },
   '@/hooks/useShifts': {
     useShiftCloseReportDetail: () => ({ data: detail, isLoading: false, error: null, refetch: () => {} }),
     useManagerShiftPayments: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }),
@@ -59,28 +61,28 @@ const money = (n) => `₱\\s?${n.toFixed(2).replace('.', '\\.')}`;
 
 // exact: Cash card, then a GCash card built the same way
 let text = flat(renderDetail({ expected_gcash: 100, actual_gcash: 100 }));
-assert.match(text, new RegExp(`Cash\\|Expected Cash\\|${money(48)}\\|Actual Cash\\|${money(48)}\\|Exact match`));
-assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`));
-assert.ok(text.indexOf('Expected Cash') < text.indexOf('Expected GCash'), 'Cash first, like the list screen');
-assert.match(text, /Show standard \/ PWD \/ back office \/ meals/, 'Cash/GCash cards open a sales breakdown');
+assert.match(text, new RegExp(`Cash\\|Expected cash\\|${money(48)}\\|Cash remitted\\|${money(48)}\\|Exact match`));
+assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}\\|Exact match`));
+assert.ok(text.indexOf('Expected cash') < text.indexOf('Expected GCash'), 'Cash first, like the list screen');
+assert.doesNotMatch(text, /Sales Breakdown/, 'sales breakdown removed from detail');
 assert.doesNotMatch(text, /Expected:|Received:|Exact ·/, 'no plain-text lines');
 assert.match(renderDetail({ expected_gcash: 100, actual_gcash: 100 }), /data-icon="phone-portrait-outline"/, 'a GCash icon chip');
 
 // shortage / excess on GCash use the same pill as cash
-assert.match(flat(renderDetail({ expected_gcash: 100, actual_gcash: 80 })), new RegExp(`Actual GCash\\|${money(80)}\\|${money(20)} shortage`));
+assert.match(flat(renderDetail({ expected_gcash: 100, actual_gcash: 80 })), new RegExp(`GCash remitted\\|${money(80)}\\|${money(20)} shortage`));
 assert.match(flat(renderDetail({ expected_gcash: 100, actual_gcash: 125.5 })), new RegExp(`${money(25.5)} excess`));
 // the two cards are independent: cash short, GCash exact
 text = flat(renderDetail({ cash_result: 'shortage', difference: -5, actual_cash: 43, expected_gcash: 100, actual_gcash: 100 }));
 assert.match(text, new RegExp(`${money(5)} shortage`));
-assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|Actual GCash\\|${money(100)}\\|Exact match`));
+assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}\\|Exact match`));
 
 // GCash not remitted yet
 text = flat(renderDetail({ expected_gcash: 100, actual_gcash: null }));
-assert.match(text, /Actual GCash\|—\|GCash is still pending\./);
+assert.match(text, /GCash remitted\|—\|GCash is still pending\./);
 
 // no GCash on this shift (older shifts): exactly as before
 text = flat(renderDetail({ expected_gcash: null, actual_gcash: null }));
-assert.match(text, /Collections\|Expected Cash/);
+assert.match(text, /Remittance\|Expected remittance/);
 assert.doesNotMatch(text, /GCash/);
 
 // ---- 3. the list screen
@@ -88,47 +90,57 @@ let days;
 const List = loadTs('src/features/reports/ShiftRemittanceScreen.tsx', {
   'react-native': rnw,
   '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
-  'expo-router': { router: { push() {} }, useFocusEffect: callback => callback() },
+  'expo-router': {
+    router: { push() {} },
+    useFocusEffect: (callback) => callback(),
+    useLocalSearchParams: () => ({ branchId: 'b1', range: 'today' }),
+  },
   '@/components/ConstrainedWidth': { ConstrainedWidth: Pass },
   '@/components/Pagination': { Pagination: () => null },
   '@/components/Screen': { Screen: Pass },
-  '@/components/dashboard/ListRowCard': { ListRowCard: (p) => React.createElement('div', null, p.title, p.metaRow, p.trailing) },
-  '@/components/dashboard/ManagerBadge': { ManagerBadge: ({ label }) => React.createElement('span', null, label) },
   '@/components/dashboard/ManagerFeedback': { EmptyState: () => null, ErrorState: () => null, LoadingState: () => null },
   '@/components/dashboard/ManagerScreenHeader': { ManagerScreenHeader: () => null },
-  '@/components/dashboard/theme': { managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' } },
+  '@/components/dashboard/theme': {
+    managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' },
+  },
   '@/features/reports/DateRangeFilter': { DateRangeFilter: () => null, resolveReportRange: () => ({ rpcRangeType: 'today', startIso: null, endIso: null }) },
   '@/features/auth/AuthProvider': { useAuth: () => ({ profile: { role: 'manager' } }) },
+  '@/hooks/useBranches': { useBranches: () => ({ data: [{ id: 'b1', name: 'SM1' }], isLoading: false, error: null, refetch: () => {} }) },
   '@/hooks/useClientPagination': { useClientPagination: (items) => ({ pageItems: items, showPagination: false, page: 0, totalPages: 1, setPage: () => {} }) },
-  '@/hooks/useShifts': { useShiftRemittances: () => ({ data: { days }, isLoading: false, error: null, refetch: () => {} }) },
+  '@/hooks/useShifts': { useShiftRemittances: () => ({ data: { days }, isLoading: false, error: null, isFetched: true, refetch: () => {} }) },
   '@/lib/errors': { getErrorMessage: (e) => String(e) },
-  '@/lib/nameAccent': { accentForName: () => 'blue' },
 }).ShiftRemittanceScreen;
-const shift = { shift_id: 's1', branch_name: 'SM1', cashier_name: 'SM1-Cashier', started_at: '2026-11-12T07:32:00+08:00', ended_at: '2026-11-12T08:34:00+08:00', status: 'reconciled', result: 'exact', difference: 0, expected_cash: 48, actual_cash: 48 };
+const shift = { shift_id: 's1', branch_id: 'b1', branch_name: 'SM1', cashier_name: 'SM1-Cashier', started_at: '2026-11-12T07:32:00+08:00', ended_at: '2026-11-12T08:34:00+08:00', status: 'reconciled', result: 'exact', difference: 0, expected_cash: 48, actual_cash: 48 };
 const day = (over = {}, shiftOver = {}) => ({
   business_date: '2026-11-12', total_shortage: 0, total_excess: 0, pending_expected_cash: 0, pending_shift_count: 0, reconciled_shift_count: 1,
   expected_cash: 48, actual_remitted: 48, shifts: [{ ...shift, ...shiftOver }], ...over,
 });
-const renderList = (d) => { days = [d]; return renderToStaticMarkup(React.createElement(List)); };
+const renderList = (d) => {
+  days = [d];
+  return renderToStaticMarkup(React.createElement(List, { branchId: 'b1', branchName: 'SM1' }));
+};
 
 text = flat(renderList(day({ expected_gcash: 100, actual_gcash: 100, pending_gcash: 0 }, { expected_gcash: 100, actual_gcash: 100 })));
-assert.match(text, new RegExp(`Cash\\|Expected Cash\\|${money(48)}\\|Cash remitted\\|${money(48)}`));
-assert.match(text, new RegExp(`GCash\\|Expected GCash\\|${money(100)}\\|GCash remitted\\|${money(100)}`), 'GCash is its own card like Cash');
+assert.match(text, new RegExp(`Expected Cash:\\|${money(48)}\\|Cash remitted:\\|${money(48)}`));
+assert.match(text, new RegExp(`Expected GCash:\\|${money(100)}\\|GCash remitted:\\|${money(100)}`), 'GCash rows live in the day card');
+assert.match(text, new RegExp(`Shortage: ${money(0)}`), 'shortage footer always shown');
+assert.match(text, new RegExp(`Excess: ${money(0)}`), 'excess footer always shown');
 assert.doesNotMatch(text, /GCash expected|Remitted ₱|Pending ₱/, 'the plain sentence is gone');
 assert.doesNotMatch(text, /GCash pending/, 'no pending note when nothing is pending');
-assert.match(text, new RegExp(`GCash submitted ${money(100)} · expected ${money(100)}`), 'each shift keeps its GCash received / expected');
+assert.match(text, new RegExp(`GCash remitted ${money(100)} · expected ${money(100)}`), 'each shift keeps its GCash remitted / expected');
 assert.match(renderList(day({ expected_gcash: 100, actual_gcash: 100, pending_gcash: 0 })), /data-icon="phone-portrait-outline"/);
 
 // pending GCash is called out like pending cash
 text = flat(renderList(day({ expected_gcash: 100, actual_gcash: null, pending_gcash: 100 }, { expected_gcash: 100, actual_gcash: null })));
-assert.match(text, new RegExp(`GCash remitted\\|—`));
+assert.match(text, new RegExp(`GCash remitted:\\|—`));
 assert.match(text, new RegExp(`${money(100)} GCash pending`));
-assert.match(text, new RegExp(`GCash submitted — · expected ${money(100)}`));
+assert.match(text, new RegExp(`GCash remitted — · expected ${money(100)}`));
 
-// shifts without GCash: no GCash anywhere
+// shifts without GCash: no GCash anywhere; Difference row instead
 text = flat(renderList(day({ expected_gcash: null })));
 assert.doesNotMatch(text, /GCash/);
-assert.match(text, /Expected Cash/);
+assert.match(text, /Expected Cash:/);
+assert.match(text, /Difference:/);
 
 // ---- 4. source: no unstyled text left for GCash on either screen
 for (const file of ['src/features/reports/ShiftRemittanceDetailScreen.tsx', 'src/features/reports/ShiftRemittanceScreen.tsx']) {

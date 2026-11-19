@@ -6,7 +6,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
@@ -270,16 +269,26 @@ export function SalesByBranchScreen() {
   );
 }
 
-export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' }) {
+export function ProductSalesSummaryScreen({
+  role,
+  branchId: branchIdProp,
+}: {
+  role: 'owner' | 'manager';
+  /** Owner branch-first drill-in: lock the report to this selling branch. */
+  branchId?: string;
+}) {
   const [rangeType, setRangeType] = useState<DateFilterType>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [selectedBranchId, setSelectedBranchId] = useState('');
 
   const branches = useBranches();
+  const lockedBranch = useMemo(
+    () => (branchIdProp ? (branches.data ?? []).find((branch) => branch.id === branchIdProp) : null),
+    [branchIdProp, branches.data],
+  );
 
-  // For manager, branch is automatically locked on server-side
-  const branchId = role === 'owner' ? (selectedBranchId || undefined) : undefined;
+  // Manager is locked server-side; owner hub passes a selling branch id.
+  const branchId = role === 'owner' ? branchIdProp || undefined : undefined;
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useProductSales(rpcRangeType, branchId, startIso, endIso);
@@ -292,14 +301,11 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
     [products]
   );
 
-  const branchOptions = [
-    { label: 'All branches', value: '' },
-    ...(branches.data?.filter((b) => !b.is_main_branch).map((b) => ({ label: b.name, value: b.id })) ?? []),
-  ];
+  const title = lockedBranch ? `Product Sales · ${lockedBranch.name}` : 'Product Sales';
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Product Sales" showBack />
+      <ManagerScreenHeader title={title} showBack />
       <ConstrainedWidth style={styles.column}>
         <DateRangeFilter
           value={rangeType}
@@ -309,13 +315,6 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
-
-        {role === 'owner' ? (
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Branch</Text>
-            <FilterChipRow options={branchOptions} value={selectedBranchId} onChange={setSelectedBranchId} />
-          </View>
-        ) : null}
 
         <View style={styles.statsRow}>
           <StatTile style={styles.statHalf} icon="cube-outline" label="Total items sold" value={totalUnitsSold} />
@@ -360,13 +359,6 @@ export function ProductSalesSummaryScreen({ role }: { role: 'owner' | 'manager' 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flexGrow: 1, padding: 20, gap: 14 },
-  filterGroup: { gap: 6 },
-  filterLabel: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
-    letterSpacing: 0.4,
-  },
   statsRow: { flexDirection: 'row', gap: 10 },
   statHalf: { flex: 1 },
   section: { gap: 8 },

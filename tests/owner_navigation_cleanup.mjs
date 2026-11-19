@@ -147,28 +147,23 @@ const routesOf = (rendered) =>
 {
   const { html, tiles: rendered } = renderTiles(OwnerDashboard);
   assert.deepEqual(routesOf(rendered), [
-    ['Sales by Branch', '/owner/reports/sales-by-branch'],
-    ['Product Sales', '/owner/reports/product-sales'],
-    ['Branch Performance', '/owner/reports/branch-performance'],
-    ['Discrepancies Reconciliation', '/owner/reports/inventory-reconciliation'],
-    ['Discrepancy Analytics', '/owner/reports/discrepancies'],
     ['Employees', '/owner/employees'],
     ['Branches', '/owner/branches'],
     ['Data Archive', '/owner/data-archive'],
   ]);
   assert.ok(rendered.every((tile) => tile.layout === 'tile'), 'dashboard keeps the compact tile layout');
   assert.doesNotMatch(html, /Inventory Summary/);
+  assert.doesNotMatch(html, /REPORTS|Sales by Branch|Product Sales|Discrepancy Analytics/);
   assert.doesNotMatch(html, /\[tile:Reconciliation\]/, 'old short label gone');
 
-  // Tiles share rows in pairs; the lone tile in the last REPORTS row keeps half width via a spacer.
+  // Admin tiles share rows in pairs; the lone Data Archive tile keeps half width via a spacer.
   const source = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
-  const reports = source.slice(source.indexOf('<Section title="REPORTS">'), source.indexOf('<Section title="ADMINISTRATION">'));
-  const rows = reports.split('<Row>').slice(1).map((row) => ({
+  const admin = source.slice(source.indexOf('<Section title="ADMINISTRATION">'));
+  const rows = admin.split('<Row>').slice(1).map((row) => ({
     tiles: (row.match(/<NavTile/g) ?? []).length,
     spacers: (row.match(/<View style=\{styles\.half\} \/>/g) ?? []).length,
   }));
   assert.deepEqual(rows, [
-    { tiles: 2, spacers: 0 },
     { tiles: 2, spacers: 0 },
     { tiles: 1, spacers: 1 },
   ]);
@@ -179,6 +174,7 @@ const routesOf = (rendered) =>
 {
   const { html, tiles: rendered } = renderTiles(OwnerReportsHub);
   assert.deepEqual(routesOf(rendered), [
+    ['Void logs', '/owner/reports/stock-corrections'],
     ['Sales by Branch', '/owner/reports/sales-by-branch'],
     ['Shift remittances', '/owner/reports/shift-remittances'],
     ['Waste History', '/owner/reports/waste-history'],
@@ -194,6 +190,18 @@ const routesOf = (rendered) =>
   );
 }
 
+// Owner Product Sales + Void logs use branch-first hubs (Waste / remittance pattern).
+{
+  assert.ok(existsSync('app/(owner)/owner/reports/product-sales/index.tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/product-sales/[branchId].tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/stock-corrections/index.tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/stock-corrections/[branchId].tsx'));
+  assert.match(readFileSync('app/(owner)/owner/reports/product-sales/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
+  assert.match(readFileSync('app/(owner)/owner/reports/stock-corrections/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
+  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/product-sales\/\[branchId\]/);
+  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/stock-corrections\/\[branchId\]/);
+}
+
 // Inventory Summary is only de-duplicated from these screens: route, screen and sidebar entry remain.
 {
   assert.ok(existsSync('app/(owner)/owner/inventory-by-branch.tsx'), 'inventory summary screen still exists');
@@ -206,5 +214,5 @@ const routesOf = (rendered) =>
 }
 
 console.log(
-  'Owner navigation cleanup tests passed: Inventory Summary tiles removed, Discrepancies Reconciliation label, protected destinations unchanged, dashboard rows paired.',
+  'Owner navigation cleanup tests passed: REPORTS tiles removed from home, Discrepancies Reconciliation label on hub, protected destinations unchanged, admin rows paired.',
 );

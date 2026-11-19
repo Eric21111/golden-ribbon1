@@ -299,51 +299,6 @@ export default function OwnerDashboard() {
               )}
             </Section>
 
-            <Section title="REPORTS">
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="stats-chart-outline"
-                  accent="blue"
-                  title="Sales by Branch"
-                  onPress={() => router.push('/owner/reports/sales-by-branch')}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="pricetag-outline"
-                  accent="gold"
-                  title="Product Sales"
-                  onPress={() => router.push('/owner/reports/product-sales')}
-                />
-              </Row>
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="git-branch-outline"
-                  accent="teal"
-                  title="Branch Performance"
-                  onPress={() => router.push('/owner/reports/branch-performance' as never)}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="checkmark-done-outline"
-                  accent="green"
-                  title="Discrepancies Reconciliation"
-                  onPress={() => router.push('/owner/reports/inventory-reconciliation')}
-                />
-              </Row>
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="alert-circle-outline"
-                  accent="red"
-                  title="Discrepancy Analytics"
-                  onPress={() => router.push('/owner/reports/discrepancies' as never)}
-                />
-                <View style={styles.half} />
-              </Row>
-            </Section>
-
             <Section title="ADMINISTRATION">
               <Row>
                 <NavTile

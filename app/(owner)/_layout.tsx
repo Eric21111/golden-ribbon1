@@ -19,10 +19,14 @@ function OwnerStack() {
         <Stack.Screen name="owner/reports/total-sales" />
         <Stack.Screen name="owner/reports/sales-by-branch" />
         <Stack.Screen name="owner/reports/shift-remittances/index" />
+        <Stack.Screen name="owner/reports/shift-remittances/branch/[branchId]" />
         <Stack.Screen name="owner/reports/shift-remittances/[id]" />
         <Stack.Screen name="owner/reports/waste-history/index" />
         <Stack.Screen name="owner/reports/waste-history/[branchId]" />
-        <Stack.Screen name="owner/reports/product-sales" />
+        <Stack.Screen name="owner/reports/product-sales/index" />
+        <Stack.Screen name="owner/reports/product-sales/[branchId]" />
+        <Stack.Screen name="owner/reports/stock-corrections/index" />
+        <Stack.Screen name="owner/reports/stock-corrections/[branchId]" />
         <Stack.Screen name="owner/reports/branch-performance/index" />
         <Stack.Screen name="owner/reports/branch-performance/[id]" />
         <Stack.Screen name="owner/reports/discrepancies/index" />

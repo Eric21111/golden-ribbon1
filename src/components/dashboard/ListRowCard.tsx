@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { flex: 1, gap: 6 },
+  body: { flex: 1, minWidth: 0, gap: 6 },
   title: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20 },
   titleLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4 },
   titleInline: { flexShrink: 1 },

@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors, statChipColors } from '@/components/dashboard/theme';
-import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { formatPcsQty, formatShiftTimeRange } from '@/features/reports/reportDisplay';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftWaste } from '@/hooks/useShifts';
@@ -90,7 +90,7 @@ function paramValue(value: string | string[] | undefined): string {
 const DATE_FILTERS = new Set<DateFilterType>(['today', 'this_week', 'this_month', 'custom', 'all_time']);
 
 function parseRangeParam(value: string): DateFilterType {
-  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'today';
+  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'all_time';
 }
 
 /** What one shift / Main inventory day wrote off, product by product (shown in the details sheet). */
@@ -145,11 +145,9 @@ export function WasteHistoryScreen({
 } = {}) {
   const params = useLocalSearchParams<{ branchId?: string; range?: string; start?: string; end?: string }>();
   const branchId = branchIdProp || paramValue(params.branchId);
-  const initialRange = parseRangeParam(paramValue(params.range));
-  // Default matches other reports when the hub did not pass a range query param.
-  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange || 'today');
-  const [customStart, setCustomStart] = useState(paramValue(params.start));
-  const [customEnd, setCustomEnd] = useState(paramValue(params.end));
+  const rangeType = parseRangeParam(paramValue(params.range));
+  const customStart = paramValue(params.start);
+  const customEnd = paramValue(params.end);
   const [selected, setSelected] = useState<ShiftWasteShiftRow | null>(null);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftWaste(rpcRangeType, startIso, endIso, branchId || null);
@@ -168,23 +166,12 @@ export function WasteHistoryScreen({
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
       <ManagerScreenHeader title={title} showBack />
       <ConstrainedWidth style={styles.column}>
-        <DateRangeFilter
-          value={rangeType}
-          onChange={setRangeType}
-          customStart={customStart}
-          customEnd={customEnd}
-          onCustomStartChange={setCustomStart}
-          onCustomEndChange={setCustomEnd}
-        />
         {!branchId ? (
           <EmptyState title="Choose a branch" message="Open Waste History and select a branch to view recorded waste." />
         ) : null}
         {branchId && query.isLoading ? <LoadingState label="Loading waste history…" /> : null}
         {branchId && query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
-        ) : null}
-        {branchId && rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
-          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
         {branchId && !query.isLoading && !query.error && query.isFetched && days.length === 0 ? (
           <EmptyState title="No waste history" message="No recorded waste for this branch in this range." />

@@ -20,6 +20,7 @@ export const queryKeys = {
   return: (id: string) => ['stock-returns', id] as const,
   returnDiscrepancies: ['return-discrepancies'] as const,
   sale: (id: string) => ['sales', id] as const,
+  shiftSales: (shiftId: string) => ['sales', 'shift', shiftId] as const,
   shiftSummary: (id: string) => ['shifts', 'summary', id] as const,
   salesByBranch: (rangeType = 'today', startDate = '', endDate = '', mode: 'active' | 'owner' = 'active') =>
     ['reports', 'sales-by-branch', { rangeType, startDate, endDate, mode }] as const,

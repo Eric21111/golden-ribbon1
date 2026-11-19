@@ -11,6 +11,7 @@ import {
   getOwnerTodayBranchSales,
   getSale,
   listBranchSalesLog,
+  listShiftSales,
   reportBranchDailySales,
   reportOwnerSalesByBranch,
   reportProductSales,
@@ -22,6 +23,15 @@ export function useSale(id: string) {
     queryKey: queryKeys.sale(id),
     queryFn: () => getSale(id),
     enabled: isSaleId(id),
+  });
+}
+
+/** Completed + voided receipts on one shift (RLS may hide other-branch rows for non-owners). */
+export function useShiftSales(shiftId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.shiftSales(shiftId),
+    queryFn: () => listShiftSales(shiftId),
+    enabled: Boolean(shiftId) && enabled,
   });
 }
 

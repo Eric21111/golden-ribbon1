@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import {
   buildWasteHistoryBranchRows,
   wasteHistoryBranchHref,
@@ -21,14 +21,13 @@ import { getErrorMessage } from '@/lib/errors';
 import { isReportRangeReady } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
 
+const RANGE_TYPE: DateFilterType = 'all_time';
+
 export function WasteHistoryBranchesScreen() {
   const { profile } = useAuth();
   const isManager = profile?.role === 'manager';
   const role = isManager ? 'manager' : 'owner';
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
+  const { rpcRangeType, startIso, endIso } = resolveReportRange(RANGE_TYPE, '', '');
   const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
 
   const branchesQuery = useBranches();
@@ -40,7 +39,6 @@ export function WasteHistoryBranchesScreen() {
   );
 
   const loading = (ready && wasteQuery.isLoading) || branchesQuery.isLoading;
-  const customIncomplete = rangeType === 'custom' && !ready;
 
   return (
     <Screen
@@ -59,18 +57,6 @@ export function WasteHistoryBranchesScreen() {
     >
       <ManagerScreenHeader title="Waste History" showBack={!isManager} />
       <ConstrainedWidth style={styles.column}>
-        <DateRangeFilter
-          value={rangeType}
-          onChange={setRangeType}
-          customStart={customStart}
-          customEnd={customEnd}
-          onCustomStartChange={setCustomStart}
-          onCustomEndChange={setCustomEnd}
-        />
-
-        {customIncomplete ? (
-          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
-        ) : null}
         {ready && (wasteQuery.error || branchesQuery.error) ? (
           <ErrorState
             message={getErrorMessage(wasteQuery.error ?? branchesQuery.error)}
@@ -103,9 +89,7 @@ export function WasteHistoryBranchesScreen() {
                       wasteHistoryBranchHref({
                         role,
                         branchId: row.branchId,
-                        rangeType,
-                        customStart,
-                        customEnd,
+                        rangeType: RANGE_TYPE,
                       }) as never,
                     )
                   }

@@ -165,11 +165,8 @@ const assertUnrelatedSections = (t) => {
   assert.match(t, /\[button:Export &amp; review\]|\[button:Export & review\]/);
   assert.doesNotMatch(t, /TODAY'S PRODUCT PERFORMANCE/);
   assert.doesNotMatch(t, /Chicken/);
-  assert.match(t, /Sales by Branch/);
-  assert.match(t, /Product Sales/);
-  assert.match(t, /Branch Performance/);
-  assert.match(t, /Reconciliation/);
-  assert.match(t, /Discrepancy Analytics/);
+  assert.doesNotMatch(t, /REPORTS/);
+  assert.doesNotMatch(t, /Sales by Branch|Product Sales|Discrepancy Analytics/);
   assert.match(t, /ADMINISTRATION/);
   assert.match(t, /Employees/);
   assert.match(t, /Data Archive/);
@@ -287,7 +284,7 @@ sales.state.metrics = query({ data: metricsData });
 
 // 9. Today Log: loading, error + retry, empty, rows (newest first, Manila time), preview cap, truncation note.
 {
-  const logSlice = (t) => t.slice(t.indexOf('Today Log'), t.indexOf('REPORTS'));
+  const logSlice = (t) => t.slice(t.indexOf('Today Log'), t.indexOf('ADMINISTRATION'));
   const logData = (activities, extra = {}) => ({
     business_date: '2026-11-08',
     total_count: activities.length,

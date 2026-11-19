@@ -60,7 +60,21 @@ assert.deepEqual(
   ],
 );
 
-assert.match(helpers.wasteHistoryBranchHref({ role: 'manager', branchId: 'sm1', rangeType: 'today' }), /\/manager\/reports\/waste-history\/sm1\?range=today/);
+assert.deepEqual(
+  helpers
+    .buildWasteHistoryBranchRows(
+      [
+        { id: 'main', name: 'Main', is_main_branch: true, is_active: true },
+        { id: 'sm1', name: 'SM 1', is_main_branch: false, is_active: true },
+      ],
+      { days: [] },
+    )
+    .map((row) => row.branchId),
+  ['sm1', 'main'],
+  'active branches with no waste still appear on the hub',
+);
+
+assert.match(helpers.wasteHistoryBranchHref({ role: 'manager', branchId: 'sm1', rangeType: 'all_time' }), /\/manager\/reports\/waste-history\/sm1\?range=all_time/);
 assert.match(
   readFileSync('app/(manager)/manager/reports/waste-history/index.tsx', 'utf8'),
   /WasteHistoryBranchesScreen/,

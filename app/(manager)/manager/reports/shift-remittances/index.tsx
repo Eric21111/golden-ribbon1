@@ -1,10 +1,10 @@
-import { ShiftRemittanceScreen } from '@/features/reports/ShiftRemittanceScreen';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
+import { ShiftRemittanceBranchesScreen } from '@/features/reports/ShiftRemittanceBranchesScreen';
 
 export default function ManagerShiftRemittances() {
   return (
     <MainBranchGuard>
-      <ShiftRemittanceScreen />
+      <ShiftRemittanceBranchesScreen />
     </MainBranchGuard>
   );
 }

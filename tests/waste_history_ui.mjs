@@ -113,7 +113,7 @@ const screen = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
 const html = renderToStaticMarkup(React.createElement(screen.WasteHistoryScreen, { branchId: 'b' }));
 const text = flat(html);
 
-assert.match(text, /RANGE\|/, 'the date-range pills are first, as on every report');
+assert.doesNotMatch(text, /RANGE\|/, 'date-range pills removed from waste history');
 assert.match(
   text,
   /Nov 8, 2026\|Total waste\|19 stock units\|3 occurrences\|3 products\|/,
@@ -159,7 +159,8 @@ assert.equal((text.match(/Total waste/g) ?? []).length, 2, 'summary cards only f
 const src = read('src/features/reports/WasteHistoryScreen.tsx');
 assert.ok(src.includes('<ManagerBottomSheet visible={selected != null} title="Waste details" scroll onClose={() => setSelected(null)}>'));
 assert.ok(src.includes('onPress={() => setSelected(shift)}'), 'tapping a row opens it');
-assert.ok(src.includes('metaItemText: { flexShrink: 1,') && src.includes("shiftTrail: { alignItems: 'flex-end', gap: 2, flexShrink: 0 },"));
+assert.ok(src.includes('metaItemText: { flexShrink: 1,'));
+assert.ok(src.includes("shiftTrail: { alignItems: 'flex-end', gap: 2, flexShrink: 0"));
 assert.doesNotMatch(src, /ListRowCard|statStrip|statIconChip|shiftBlock/, 'old stacked cards stay gone');
 assert.ok(src.includes('formatPcsQty('), 'quantities use stock units');
 assert.ok(src.includes('useShiftWaste(rpcRangeType, startIso, endIso, branchId'), 'detail is branch-scoped');
@@ -168,6 +169,9 @@ const hub = read('src/features/reports/WasteHistoryBranchesScreen.tsx');
 assert.match(hub, /WasteHistoryBranchesScreen/);
 assert.match(hub, /buildWasteHistoryBranchRows/);
 assert.match(hub, /BRANCHES/);
+assert.doesNotMatch(hub, /<DateRangeFilter/);
 assert.match(read('src/features/reports/wasteHistoryBranches.ts'), /wasteHistoryBranchHref/);
+assert.match(read('src/features/reports/WasteHistoryScreen.tsx'), /all_time/);
+assert.doesNotMatch(read('src/features/reports/WasteHistoryScreen.tsx'), /<DateRangeFilter/);
 
 console.log('waste_history_ui: ALL PASS');
