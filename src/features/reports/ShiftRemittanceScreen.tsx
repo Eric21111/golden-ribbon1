@@ -11,13 +11,21 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
-import { formatShiftTimeRange } from '@/features/reports/reportDisplay';
+import { remittanceSummary } from '@/features/reports/branchPerformanceCards';
+import { RemittanceSummaryCards } from '@/features/reports/RemittanceSummaryCards';
+import { formatShiftTimeRange, remittanceSummaryAmountLabel, remittanceTenderTotals } from '@/features/reports/reportDisplay';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftRemittances } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatManilaDate, formatMoney, isReportRangeReady } from '@/lib/format';
-import type { CashReconciliationResult, ShiftRemittanceDay, ShiftRemittanceRow } from '@/types/models';
+import type {
+  CashReconciliationResult,
+  ShiftRemittanceDay,
+  ShiftRemittanceReport,
+  ShiftRemittanceRow,
+} from '@/types/models';
 
 const DAYS_PER_PAGE = 5;
 
@@ -67,6 +75,22 @@ function dayDifferenceLabel(day: ShiftRemittanceDay) {
   if (shortage > 0) return formatMoney(shortage);
   if (excess > 0) return formatMoney(excess);
   return formatMoney(0);
+}
+
+function RemittanceCollectionsSummary({ report }: { report: ShiftRemittanceReport | undefined }) {
+  const summary = remittanceSummary(report);
+  const tenders = remittanceTenderTotals(report);
+
+  return (
+    <RemittanceSummaryCards
+      combined={remittanceSummaryAmountLabel(summary.remitted)}
+      pending={summary.pendingShifts}
+      reconciled={summary.reconciledShifts}
+      cash={remittanceSummaryAmountLabel(tenders.cash)}
+      gcash={remittanceSummaryAmountLabel(tenders.gcash)}
+      hasGcash={tenders.hasGcash}
+    />
+  );
 }
 
 function MetricChipRow({
@@ -251,12 +275,6 @@ function ShiftRemittanceRowCard({
         {tenderMeta}
       </Text>
 
-      {row.expected_gcash != null ? (
-        <Text style={styles.gcashLine} numberOfLines={2}>
-          {`GCash remitted ${formatKnownMoney(row.actual_gcash == null ? null : Number(row.actual_gcash))} · expected ${formatMoney(Number(row.expected_gcash))}`}
-        </Text>
-      ) : null}
-
       <View style={styles.shiftBottom}>
         <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
           {amount}
@@ -324,7 +342,8 @@ export function ShiftRemittanceScreen({
     return fromDays ?? 'Branch';
   }, [branchNameProp, branches.data, branchId, days]);
 
-  const title = branchId ? `Remittance · ${branchName}` : 'Shift remittances';
+  const title = 'Shift Remittances';
+  const subtitle = branchId ? branchName : undefined;
 
   return (
     <Screen
@@ -334,7 +353,7 @@ export function ShiftRemittanceScreen({
       edges={['top']}
       contentContainerStyle={styles.screen}
     >
-      <ManagerScreenHeader title={title} showBack />
+      <ManagerScreenHeader title={title} subtitle={subtitle} showBack />
       <ConstrainedWidth style={styles.column}>
         <DateRangeFilter
           value={rangeType}
@@ -344,6 +363,10 @@ export function ShiftRemittanceScreen({
           onCustomStartChange={setCustomStart}
           onCustomEndChange={setCustomEnd}
         />
+
+        {branchId && query.isFetched && !query.error ? (
+          <RemittanceCollectionsSummary report={query.data} />
+        ) : null}
 
         {!branchId ? (
           <EmptyState
@@ -369,6 +392,7 @@ export function ShiftRemittanceScreen({
           />
         ) : null}
 
+        {pageDays.length > 0 ? <ReportSectionHeading title="SHIFT COLLECTIONS" /> : null}
         {pageDays.map((day) => {
           const expanded = expandedDate === day.business_date;
           return (
@@ -408,7 +432,7 @@ export function ShiftRemittanceScreen({
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   dayBlock: { gap: 10 },
   dayCard: {
     backgroundColor: '#FFFFFF',
@@ -554,12 +578,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     lineHeight: 16,
-  },
-  gcashLine: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11.5,
-    lineHeight: 15,
   },
   shiftBottom: {
     flexDirection: 'row',

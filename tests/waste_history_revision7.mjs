@@ -74,6 +74,31 @@ assert.deepEqual(
   'active branches with no waste still appear on the hub',
 );
 
+assert.deepEqual(
+  helpers.summarizeWasteHistory({
+    days: [
+      {
+        business_date: '2026-11-08',
+        occurrence_count: 4,
+        distinct_product_count: 4,
+        shifts: [
+          { branch_id: 'sm1', waste_status: 'waste_recorded', occurrences: [{}, {}] },
+          { branch_id: 'main', waste_status: 'waste_recorded', occurrences: [{}] },
+          { branch_id: 'sm1', waste_status: 'no_waste', occurrences: [] },
+        ],
+      },
+      {
+        business_date: '2026-11-09',
+        occurrence_count: 1,
+        distinct_product_count: 1,
+        shifts: [{ branch_id: 'sm1', waste_status: 'waste_recorded', occurrences: [{}] }],
+      },
+    ],
+  }),
+  { occurrences: 4, daysWithWaste: 2, branchesWithWaste: 2 },
+  'company totals count unique days, not per-branch day sums, and skip mixed quantity',
+);
+
 assert.match(helpers.wasteHistoryBranchHref({ role: 'manager', branchId: 'sm1', rangeType: 'all_time' }), /\/manager\/reports\/waste-history\/sm1\?range=all_time/);
 assert.match(
   readFileSync('app/(manager)/manager/reports/waste-history/index.tsx', 'utf8'),

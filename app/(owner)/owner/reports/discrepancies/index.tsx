@@ -1,319 +1,461 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
+import { SearchInput } from '@/components/dashboard/SearchInput';
 import { StatTile } from '@/components/dashboard/StatTile';
+import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
+import {
+  ListFilterSummary,
+  ListFiltersSheet,
+  type ExtraListFilter,
+} from '@/features/products/ProductFilterControls';
+import { DEFAULT_LIST_FILTERS, type ListFilterKey } from '@/features/products/listFilters';
+import { firstSearchParam, parseReportDateFilter, transferReturnIssuesHref } from '@/features/reports/branchHub';
+import { DateRangeFilter, DATE_RANGE_OPTIONS, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import {
+  buildIssueBranchRows,
+  issueBranchBadge,
+  issueBranchMeta,
+  summarizeIssueRecords,
+} from '@/features/reports/discrepancyOverview';
+import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
+import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useReturnDiscrepanciesReport, useTransferDiscrepanciesReport } from '@/hooks/useReconciliation';
-import { useShiftRemittances } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
-import { formatMoney } from '@/lib/format';
+import { isReportRangeReady } from '@/lib/format';
+import { accentForName } from '@/lib/nameAccent';
 import { stockUnit } from '@/lib/stockUnits';
-import type { DiscrepancyResolutionReason } from '@/types/models';
+import type { ReturnDiscrepancyReportItem, TransferDiscrepancyReportItem } from '@/types/models';
 
-type Section = 'transfer' | 'return' | 'remittance';
+type KindFilter = 'all' | 'transfer' | 'return';
+type TypeFilter = 'all' | 'missing' | 'excess';
 type StatusFilter = 'all' | 'open' | 'resolved';
+type SortOption = 'newest' | 'oldest' | 'units-desc';
 
-const SECTION_OPTIONS: Array<{ label: string; value: Section }> = [
-  { value: 'transfer', label: 'Transfers' },
-  { value: 'return', label: 'Returns' },
-  { value: 'remittance', label: 'Remittance' },
+const NO_LIST_FILTERS: ListFilterKey[] = [];
+const ignoreListFilters = () => {};
+
+const KIND_OPTIONS: Array<{ label: string; value: KindFilter }> = [
+  { label: 'All', value: 'all' },
+  { label: 'Transfers', value: 'transfer' },
+  { label: 'Returns', value: 'return' },
+];
+
+const TYPE_OPTIONS: Array<{ label: string; value: TypeFilter }> = [
+  { label: 'All', value: 'all' },
+  { label: 'Missing', value: 'missing' },
+  { label: 'Excess', value: 'excess' },
 ];
 
 const STATUS_OPTIONS: Array<{ label: string; value: StatusFilter }> = [
-  { value: 'all', label: 'All' },
-  { value: 'open', label: 'Open' },
-  { value: 'resolved', label: 'Resolved' },
+  { label: 'All', value: 'all' },
+  { label: 'Open', value: 'open' },
+  { label: 'Resolved', value: 'resolved' },
 ];
 
-const RESOLUTION_REASON_LABELS: Record<DiscrepancyResolutionReason, string> = {
-  confirmed_shortage: 'Confirmed shortage',
-  confirmed_excess: 'Confirmed excess',
-  counting_error: 'Counting error',
-  encoding_error: 'Encoding error',
-  transfer_handling_issue: 'Transfer handling issue',
-  return_handling_issue: 'Return handling issue',
-  other: 'Other',
-};
+const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
+  { label: 'Newest first', value: 'newest' },
+  { label: 'Oldest first', value: 'oldest' },
+  { label: 'Largest units', value: 'units-desc' },
+];
 
-function resolutionLabel(reason: string | null | undefined, note: string | null | undefined): string {
-  const reasonText = reason
-    ? RESOLUTION_REASON_LABELS[reason as DiscrepancyResolutionReason] ?? reason.replace(/_/g, ' ')
-    : null;
-  const parts = [reasonText, note?.trim()].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'No resolution recorded';
+function rangeLabel(rangeType: DateFilterType): string {
+  if (rangeType === 'custom') return 'Custom range';
+  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
 }
 
-type AnalyticsRow = {
-  id: string;
-  product: string;
-  branch: string;
-  expected: string;
-  actual: string;
-  difference: string;
-  missing: boolean;
-  reason: string;
-  resolution: string;
-  status: StatusFilter | 'n/a';
-  link: string;
-  icon: 'swap-horizontal-outline' | 'return-up-back-outline' | 'cash-outline';
-};
+function matchesSearch(
+  item: TransferDiscrepancyReportItem | ReturnDiscrepancyReportItem,
+  term: string,
+  kind: 'transfer' | 'return',
+): boolean {
+  if (!term) return true;
+  const number = kind === 'transfer'
+    ? (item as TransferDiscrepancyReportItem).transfer_number
+    : (item as ReturnDiscrepancyReportItem).return_number;
+  return `${number} ${item.product_name} ${item.product_sku} ${item.branch_name}`.toLowerCase().includes(term);
+}
 
 export default function OwnerDiscrepancyAnalytics() {
-  const [section, setSection] = useState<Section>('transfer');
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const selectedBranchId = firstSearchParam(params.branchId);
+  const initialRange = parseReportDateFilter(firstSearchParam(params.range) || 'all_time');
+  const initialStart = firstSearchParam(params.start);
+  const initialEnd = firstSearchParam(params.end);
+
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const transfers = useTransferDiscrepanciesReport(undefined, 'all', 'all_time');
-  const returns = useReturnDiscrepanciesReport(undefined, 'all', 'all_time');
-  const remittance = useShiftRemittances('all_time');
-  const query = section === 'transfer' ? transfers : section === 'return' ? returns : remittance;
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortOption>('newest');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
 
-  const rows = useMemo((): AnalyticsRow[] => {
-    if (section === 'remittance') {
-      return (remittance.data?.days ?? []).flatMap((day) =>
-        day.shifts.flatMap((shift) =>
-          (
-            [
-              [shift.expected_gcash == null ? 'Collections' : 'Cash', shift.expected_cash, shift.actual_cash],
-              ['GCash', shift.expected_gcash, shift.actual_gcash],
-            ] as const
-          ).flatMap(([label, expected, actual]) => {
-            if (expected == null || actual == null || Number(actual) === Number(expected)) return [];
-            return [
-              {
-                id: `${shift.shift_id}-${label}`,
-                product: label,
-                branch: shift.branch_name,
-                expected: formatMoney(expected),
-                actual: formatMoney(actual),
-                difference: formatMoney(Math.abs(actual - expected)),
-                missing: expected > actual,
-                reason: 'No reason recorded',
-                resolution: 'No resolution recorded',
-                status: 'n/a' as const,
-                link: `/owner/reports/shift-remittances/${shift.shift_id}`,
-                icon: 'cash-outline' as const,
-              },
-            ];
-          }),
-        ),
-      );
+  const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
+  const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
+  const branches = useBranches();
+  const transferQuery = useTransferDiscrepanciesReport(
+    selectedBranchId || undefined,
+    'all',
+    rpcRangeType,
+    startIso,
+    endIso,
+  );
+  const returnQuery = useReturnDiscrepanciesReport(
+    selectedBranchId || undefined,
+    'all',
+    rpcRangeType,
+    startIso,
+    endIso,
+  );
+
+  const transferRows = transferQuery.data ?? [];
+  const returnRows = returnQuery.data ?? [];
+  const showHub = !selectedBranchId;
+  const loading = transferQuery.isLoading || returnQuery.isLoading || branches.isLoading;
+  const error = transferQuery.error ?? returnQuery.error;
+  const customIncomplete = rangeType === 'custom' && !ready;
+
+  const branchRows = useMemo(
+    () => (showHub && ready && !error ? buildIssueBranchRows(transferRows, returnRows, branches.data) : []),
+    [showHub, ready, error, transferRows, returnRows, branches.data],
+  );
+
+  const term = search.trim().toLowerCase();
+  const scopedTransfers = useMemo(
+    () =>
+      transferRows.filter((row) => {
+        if (typeFilter !== 'all' && row.discrepancy_type !== typeFilter) return false;
+        return matchesSearch(row, term, 'transfer');
+      }),
+    [transferRows, typeFilter, term],
+  );
+  const scopedReturns = useMemo(
+    () =>
+      returnRows.filter((row) => {
+        if (typeFilter !== 'all' && row.discrepancy_type !== typeFilter) return false;
+        return matchesSearch(row, term, 'return');
+      }),
+    [returnRows, typeFilter, term],
+  );
+
+  const kpiTransfers = kindFilter === 'return' ? [] : scopedTransfers;
+  const kpiReturns = kindFilter === 'transfer' ? [] : scopedReturns;
+  const kpiTotals = summarizeIssueRecords(kpiTransfers, kpiReturns);
+
+  type ListRow =
+    | { kind: 'transfer'; item: TransferDiscrepancyReportItem }
+    | { kind: 'return'; item: ReturnDiscrepancyReportItem };
+
+  const listRows = useMemo(() => {
+    const rows: ListRow[] = [];
+    if (kindFilter !== 'return') {
+      for (const item of scopedTransfers) {
+        if (statusFilter !== 'all' && (item.status ?? 'open') !== statusFilter) continue;
+        rows.push({ kind: 'transfer', item });
+      }
     }
-
-    return (section === 'transfer' ? transfers.data ?? [] : returns.data ?? []).map((item) => {
-      const unit = ` ${stockUnit(item.stock_unit_code)?.plural ?? 'pcs'}`;
-      const expected = 'quantity_sent' in item ? item.quantity_sent : item.quantity_returned;
-      const status = (item.status ?? 'open') as StatusFilter;
-      return {
-        id: item.id,
-        product: item.product_name,
-        branch: item.branch_name,
-        expected: `${expected}${unit}`,
-        actual: `${item.quantity_received}${unit}`,
-        difference: `${Math.abs(Number(item.difference))}${unit}`,
-        missing: item.discrepancy_type === 'missing',
-        reason: item.notes?.trim() || 'No reason recorded',
-        resolution: resolutionLabel(item.resolution_reason, item.resolution_note),
-        status,
-        link: `/owner/reports/discrepancies/${section}/${item.id}`,
-        icon: section === 'transfer' ? ('swap-horizontal-outline' as const) : ('return-up-back-outline' as const),
-      };
+    if (kindFilter !== 'transfer') {
+      for (const item of scopedReturns) {
+        if (statusFilter !== 'all' && (item.status ?? 'open') !== statusFilter) continue;
+        rows.push({ kind: 'return', item });
+      }
+    }
+    return rows.sort((a, b) => {
+      if (sort === 'oldest') return Date.parse(a.item.created_at) - Date.parse(b.item.created_at);
+      if (sort === 'units-desc') {
+        return Math.abs(Number(b.item.difference) || 0) - Math.abs(Number(a.item.difference) || 0);
+      }
+      return Date.parse(b.item.created_at) - Date.parse(a.item.created_at);
     });
-  }, [section, transfers.data, returns.data, remittance.data]);
+  }, [kindFilter, scopedTransfers, scopedReturns, statusFilter, sort]);
 
-  const filteredRows = useMemo(() => {
-    if (section === 'remittance' || statusFilter === 'all') return rows;
-    return rows.filter((row) => row.status === statusFilter);
-  }, [rows, section, statusFilter]);
+  const pagination = useClientPagination(
+    listRows,
+    `${selectedBranchId}|${kindFilter}|${typeFilter}|${statusFilter}|${rangeType}|${customStart}|${customEnd}|${search}|${sort}`,
+    10,
+  );
 
-  const page = useClientPagination(filteredRows, `${section}|${statusFilter}`, 20);
-  const openCount = rows.filter((row) => row.status === 'open').length;
-  const resolvedCount = rows.filter((row) => row.status === 'resolved').length;
-  const actualLabel = section === 'remittance' ? 'Remitted' : 'Received';
+  const filterRows = useMemo<ExtraListFilter[]>(
+    () => [
+      { title: 'Kind', options: KIND_OPTIONS, value: kindFilter, onChange: (value) => setKindFilter(value as KindFilter) },
+      { title: 'Type', options: TYPE_OPTIONS, value: typeFilter, onChange: (value) => setTypeFilter(value as TypeFilter) },
+      { title: 'Status', options: STATUS_OPTIONS, value: statusFilter, onChange: (value) => setStatusFilter(value as StatusFilter) },
+    ],
+    [kindFilter, typeFilter, statusFilter],
+  );
+  const filterCount =
+    (kindFilter !== 'all' ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
+  const recordTotal = transferRows.length + returnRows.length;
+
+  const rangeArgs = { rangeType, customStart, customEnd };
+
+  const kpiValue = (value: number) => (loading || error || customIncomplete ? '—' : value);
+  const selectedBranchName =
+    (branches.data ?? []).find((branch) => branch.id === selectedBranchId)?.name ??
+    transferRows.find((row) => row.branch_id === selectedBranchId)?.branch_name ??
+    returnRows.find((row) => row.branch_id === selectedBranchId)?.branch_name;
+  const title = 'Transfer & Return Issues';
+  const subtitle = selectedBranchId ? selectedBranchName ?? 'Branch' : undefined;
 
   return (
-    <Screen
-      refreshing={query.isRefetching}
-      onRefresh={() => void query.refetch()}
-      backgroundColor="#FFFFFF"
-      edges={['top']}
-      contentContainerStyle={styles.screenContent}
-    >
-      <ManagerScreenHeader title="Discrepancy Analytics" showBack />
+    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
+      <ManagerScreenHeader title={title} subtitle={subtitle} showBack />
       <ConstrainedWidth style={styles.column}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="View stock count changes and reasons"
-          onPress={() => router.push('/owner/reports/stock-count-changes' as never)}
-          style={({ pressed }) => [styles.linkCard, pressed && styles.pressed]}
-        >
-          <View style={styles.linkIcon}>
-            <Ionicons name="create-outline" size={18} color={managerColors.royalBlue} />
-          </View>
-          <View style={styles.linkBody}>
-            <Text style={styles.linkTitle}>Stock count changes</Text>
-            <Text style={styles.linkMeta}>View count corrections and reasons</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
-        </Pressable>
-
-        <FilterChipRow value={section} onChange={setSection} options={SECTION_OPTIONS} />
-        {section !== 'remittance' ? (
-          <FilterChipRow value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} />
-        ) : null}
+        <View style={styles.filterBleed}>
+          <DateRangeFilter
+            value={rangeType}
+            onChange={setRangeType}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStartChange={setCustomStart}
+            onCustomEndChange={setCustomEnd}
+          />
+        </View>
 
         <StatTile
           layout="wide"
           emphasis
-          icon="alert-circle-outline"
-          label={`${SECTION_OPTIONS.find((option) => option.value === section)?.label ?? 'Discrepancy'} records`}
-          value={filteredRows.length}
+          icon="swap-horizontal-outline"
+          label="Total discrepancy units"
+          value={kpiValue(kpiTotals.totalUnits)}
         />
-        {section !== 'remittance' ? (
-          <View style={styles.statsRow}>
-            <StatTile style={styles.statHalf} compact icon="time-outline" label="Open" value={openCount} />
-            <StatTile style={styles.statHalf} compact icon="checkmark-circle-outline" label="Resolved" value={resolvedCount} />
+        <OwnerSummaryKpiPair
+          left={{
+            icon: 'arrow-forward-outline',
+            label: 'Transfer units',
+            value: kpiValue(kpiTotals.transferUnits),
+          }}
+          right={{
+            icon: 'return-up-back-outline',
+            label: 'Return units',
+            value: kpiValue(kpiTotals.returnUnits),
+          }}
+        />
+
+        {!showHub ? (
+          <OwnerSummaryKpiPair
+            left={{
+              icon: 'alert-circle-outline',
+              label: 'Open',
+              value: kpiValue(kpiTotals.openCount),
+            }}
+            right={{
+              icon: 'checkmark-circle-outline',
+              label: 'Resolved',
+              value: kpiValue(kpiTotals.resolvedCount),
+            }}
+          />
+        ) : null}
+
+        {customIncomplete ? (
+          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+        ) : null}
+        {ready && error ? (
+          <ErrorState
+            message={getErrorMessage(error)}
+            onRetry={() => {
+              void transferQuery.refetch();
+              void returnQuery.refetch();
+            }}
+          />
+        ) : null}
+        {ready && loading ? <LoadingState label="Loading transfer and return issues…" /> : null}
+
+        {showHub && ready && !loading && !error ? (
+          <View style={styles.section}>
+            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            {branchRows.length === 0 ? (
+              <EmptyState title="No branches" message="No branches are available for transfer and return issues." />
+            ) : (
+              branchRows.map((row) => {
+                const title = row.isActive ? row.branchName : `Inactive · ${row.branchName}`;
+                const meta = issueBranchMeta(row);
+                const badge = issueBranchBadge(row);
+                return (
+                  <ListRowCard
+                    key={row.branchId}
+                    icon={row.isMain ? 'home-outline' : 'storefront-outline'}
+                    iconColor={accentForName(row.branchName)}
+                    title={title}
+                    subtitle={meta}
+                    trailing={<ManagerBadge label={badge.label} tone={badge.tone} />}
+                    onPress={() =>
+                      router.push(transferReturnIssuesHref({ ...rangeArgs, branchId: row.branchId }) as never)
+                    }
+                    accessibilityLabel={`${title} ${meta}, ${badge.label}`}
+                    accessibilityHint="Opens transfer and return issues for this branch"
+                  />
+                );
+              })
+            )}
           </View>
         ) : null}
 
-        {query.error ? (
-          <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
-        ) : query.isPending ? (
-          <LoadingState label="Loading differences…" />
-        ) : !filteredRows.length ? (
-          <EmptyState title="No differences" message="No differences recorded for this category." />
-        ) : (
-          <>
-            {page.pageItems.map((row) => (
-              <Pressable
-                key={row.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${row.product}, ${row.branch}`}
-                onPress={() => router.push(row.link as never)}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              >
-                <View style={styles.cardTop}>
-                  <View style={styles.iconChip}>
-                    <Ionicons name={row.icon} size={18} color={managerColors.royalBlue} />
-                  </View>
-                  <View style={styles.titleCol}>
-                    <Text style={styles.product} numberOfLines={2}>
-                      {row.product}
-                    </Text>
-                    <Text style={styles.branch} numberOfLines={1}>
-                      {row.branch}
-                    </Text>
-                  </View>
-                  <View style={styles.badges}>
-                    {row.status === 'open' || row.status === 'resolved' ? (
-                      <ManagerBadge
-                        label={row.status === 'resolved' ? 'Resolved' : 'Open'}
-                        tone={row.status === 'resolved' ? 'success' : 'warning'}
-                      />
-                    ) : null}
-                    <ManagerBadge
-                      label={row.missing ? `${row.difference} missing` : `${row.difference} excess`}
-                      tone={row.missing ? 'danger' : 'warning'}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.qtyRow}>
-                  <View style={styles.qtyItem}>
-                    <Text style={styles.qtyLabel}>Expected</Text>
-                    <Text style={styles.qtyValue}>{row.expected}</Text>
-                  </View>
-                  <View style={styles.qtyItem}>
-                    <Text style={styles.qtyLabel}>{actualLabel}</Text>
-                    <Text style={styles.qtyValue}>{row.actual}</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.detailLine} numberOfLines={2}>
-                  Discrepancy reason: {row.reason}
-                </Text>
-                <Text style={styles.detailLine} numberOfLines={2}>
-                  Resolution: {row.resolution}
-                </Text>
-              </Pressable>
-            ))}
-            {page.totalPages > 1 ? (
-              <View style={styles.pager}>
-                <Pagination page={page.page} totalPages={page.totalPages} onPageChange={page.setPage} />
+        {!showHub ? (
+          <View style={styles.filters}>
+            <View style={styles.searchRow}>
+              <View style={styles.searchField}>
+                <SearchInput value={search} onChangeText={setSearch} placeholder="Search transfer # or product" />
               </View>
-            ) : null}
-          </>
-        )}
+              <FilterIconButton count={filterCount} onPress={() => setFiltersOpen(true)} />
+              <SortIconButton
+                currentLabel={SORT_OPTIONS.find((option) => option.value === sort)?.label}
+                active={sort !== 'newest'}
+                onPress={() => setSortOpen(true)}
+              />
+            </View>
+            <ListFilterSummary
+              countText={`${listRows.length} of ${recordTotal} ${recordTotal === 1 ? 'record' : 'records'}`}
+              filters={DEFAULT_LIST_FILTERS}
+              keys={NO_LIST_FILTERS}
+              extra={filterRows}
+              onChange={ignoreListFilters}
+            />
+          </View>
+        ) : null}
+
+        {!showHub && ready && !loading && !error && listRows.length === 0 ? (
+          <EmptyState
+            title="No transfer or return issues"
+            message="No missing or excess counts in this range for the selected branch."
+          />
+        ) : null}
+
+        {!showHub
+          ? pagination.pageItems.map((row) => {
+              const isTransfer = row.kind === 'transfer';
+              const item = row.item;
+              const number = isTransfer
+                ? (item as TransferDiscrepancyReportItem).transfer_number
+                : (item as ReturnDiscrepancyReportItem).return_number;
+              const sent = isTransfer
+                ? (item as TransferDiscrepancyReportItem).quantity_sent
+                : (item as ReturnDiscrepancyReportItem).quantity_returned;
+              const isMissing = item.discrepancy_type === 'missing';
+              const status = item.status ?? 'open';
+              const unit = stockUnit(item.stock_unit_code)?.plural ?? 'pcs';
+              return (
+                <ListRowCard
+                  key={`${row.kind}-${item.id}`}
+                  title={number}
+                  subtitle={item.product_name}
+                  meta={`${item.branch_name} · ${unit} · ${isTransfer ? 'Sent' : 'Returned'} ${sent} → Received ${item.quantity_received}`}
+                  trailing={
+                    <View style={styles.trailing}>
+                      <ManagerBadge
+                        label={status === 'resolved' ? 'Resolved' : 'Open'}
+                        tone={status === 'resolved' ? 'success' : 'warning'}
+                      />
+                      <ManagerBadge
+                        label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
+                        tone={isMissing ? 'danger' : 'warning'}
+                      />
+                    </View>
+                  }
+                  onPress={() =>
+                    router.push(
+                      `/owner/reports/discrepancies/${row.kind}/${item.id}` as never,
+                    )
+                  }
+                />
+              );
+            })
+          : null}
+
+        {!showHub && pagination.showPagination ? (
+          <View style={styles.pager}>
+            <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
+          </View>
+        ) : null}
       </ConstrainedWidth>
+
+      <ListFiltersSheet
+        visible={filtersOpen}
+        filters={DEFAULT_LIST_FILTERS}
+        keys={NO_LIST_FILTERS}
+        extra={filterRows}
+        onChange={ignoreListFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
+      <ManagerBottomSheet visible={sortOpen} title="Sort" onClose={() => setSortOpen(false)}>
+        <View style={styles.sortList}>
+          {SORT_OPTIONS.map((option) => {
+            const selectedOption = option.value === sort;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedOption }}
+                onPress={() => {
+                  setSort(option.value);
+                  setSortOpen(false);
+                }}
+                style={({ pressed }) => [
+                  styles.optionRow,
+                  selectedOption && styles.optionRowSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.optionLabel, selectedOption && styles.optionLabelSelected]}>
+                  {option.label}
+                </Text>
+                {selectedOption ? <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </ManagerBottomSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12 },
-  linkCard: {
+  column: { flexGrow: 1, padding: 20, gap: 16 },
+  filterBleed: { marginHorizontal: -20 },
+  filters: { gap: 12 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchField: { flex: 1, minWidth: 0 },
+  section: { gap: 10, marginTop: 4 },
+  trailing: { alignItems: 'flex-end', gap: 6 },
+  pager: { paddingVertical: 8 },
+  sortList: { gap: 8, paddingBottom: 8 },
+  optionRow: {
+    minHeight: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    padding: 14,
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  linkIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E3EBFA',
-  },
-  linkBody: { flex: 1, gap: 2, minWidth: 0 },
-  linkTitle: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  linkMeta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statHalf: { flex: 1 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-    shadowColor: '#0A1224',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  pressed: { opacity: 0.85 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  iconChip: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E3EBFA',
-  },
-  titleCol: { flex: 1, minWidth: 0, gap: 2 },
-  product: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15, lineHeight: 20 },
-  branch: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
-  badges: { alignItems: 'flex-end', gap: 6, maxWidth: '42%' },
-  qtyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  qtyItem: { gap: 2, minWidth: 110, flexGrow: 1 },
-  qtyLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
-  qtyValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  detailLine: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, lineHeight: 17 },
-  pager: { paddingVertical: 8 },
+  optionRowSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#EAF0FB' },
+  optionLabel: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 15, flex: 1 },
+  optionLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
+  pressed: { opacity: 0.75 },
 });

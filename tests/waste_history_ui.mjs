@@ -79,7 +79,11 @@ const days = [
 
 const screen = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
   'react-native': rnw,
-  'expo-router': { useLocalSearchParams: () => ({ branchId: 'b' }) },
+  'expo-router': { useLocalSearchParams: () => ({ branchId: 'b' }), router: { push() {}, replace() {} } },
+  '@/features/auth/AuthProvider': { useAuth: () => ({ profile: { role: 'owner' } }) },
+  '@/hooks/useBranches': {
+    useBranches: () => ({ data: [{ id: 'b', name: 'SM 1', is_main_branch: false, is_active: true }], isLoading: false, error: null }),
+  },
   '@react-native-vector-icons/ionicons': {
     __esModule: true,
     default: (p) => React.createElement('i', { 'data-icon': p.name }),
@@ -97,7 +101,8 @@ const screen = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
     ManagerBottomSheet: (p) => React.createElement('section', { 'data-sheet': p.title }, p.children),
   },
   '@/components/dashboard/ManagerScreenHeader': {
-    ManagerScreenHeader: (p) => React.createElement('header', null, p.title),
+    ManagerScreenHeader: (p) =>
+      React.createElement('header', null, p.subtitle ? `${p.title}|${p.subtitle}` : p.title),
   },
   '@/features/reports/DateRangeFilter': {
     DateRangeFilter: () => React.createElement('div', null, 'RANGE'),
@@ -113,7 +118,8 @@ const screen = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
 const html = renderToStaticMarkup(React.createElement(screen.WasteHistoryScreen, { branchId: 'b' }));
 const text = flat(html);
 
-assert.doesNotMatch(text, /RANGE\|/, 'date-range pills removed from waste history');
+assert.match(text, /Waste History\|SM 1/, 'header names the branch tapped from the hub');
+assert.match(text, /RANGE/, 'date filter stays on the branch detail');
 assert.match(
   text,
   /Nov 8, 2026\|Total waste\|19 stock units\|3 occurrences\|3 products\|/,
@@ -169,9 +175,13 @@ const hub = read('src/features/reports/WasteHistoryBranchesScreen.tsx');
 assert.match(hub, /WasteHistoryBranchesScreen/);
 assert.match(hub, /buildWasteHistoryBranchRows/);
 assert.match(hub, /BRANCHES/);
-assert.doesNotMatch(hub, /<DateRangeFilter/);
+assert.match(hub, /<DateRangeFilter/);
+assert.match(hub, /summarizeWasteHistory/);
 assert.match(read('src/features/reports/wasteHistoryBranches.ts'), /wasteHistoryBranchHref/);
 assert.match(read('src/features/reports/WasteHistoryScreen.tsx'), /all_time/);
-assert.doesNotMatch(read('src/features/reports/WasteHistoryScreen.tsx'), /<DateRangeFilter/);
+assert.match(read('src/features/reports/WasteHistoryScreen.tsx'), /<DateRangeFilter/);
+assert.match(read('src/features/reports/WasteHistoryScreen.tsx'), /title="Waste History"/);
+assert.match(read('src/features/reports/WasteHistoryScreen.tsx'), /subtitle=\{branchId \? branchLabel/);
+assert.doesNotMatch(read('src/features/reports/WasteHistoryScreen.tsx'), /FilterDropdown/);
 
 console.log('waste_history_ui: ALL PASS');

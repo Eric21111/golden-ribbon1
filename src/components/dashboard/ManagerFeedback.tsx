@@ -41,8 +41,8 @@ export function ErrorState(props: ComponentProps<typeof BaseErrorState>) {
 }
 
 const styles = StyleSheet.create({
-  label: { fontFamily: 'Inter_500Medium' },
-  title: { fontFamily: 'Inter_700Bold' },
-  message: { fontFamily: 'Inter_400Regular' },
-  retryLabel: { fontFamily: 'Inter_700Bold' },
+  label: { fontFamily: 'Inter_500Medium', textAlign: 'center' },
+  title: { fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  message: { fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  retryLabel: { fontFamily: 'Inter_700Bold', textAlign: 'center' },
 });

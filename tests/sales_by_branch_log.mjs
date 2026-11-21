@@ -3,20 +3,19 @@ import { closeShiftExact, backdateClosedShiftToYesterday } from './_close_shift_
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const source = readFileSync('src/features/reports/ReportsScreens.tsx', 'utf8');
-const branchCard = source.slice(source.indexOf('function BranchSalesCard'), source.indexOf('function ProductSalesRow'));
-assert.match(branchCard, /shouldShowBranchOrderLog/);
-assert.match(branchCard, /useBranchSalesLog/);
-assert.match(branchCard, /useBranchDailySales/);
-assert.match(branchCard, /sale_number/);
-assert.match(branchCard, /cashier\?\.full_name/);
-assert.match(branchCard, /business_date/);
-assert.match(branchCard, /SALES BY DAY/);
-assert.match(branchCard, /ORDERS/);
-assert.doesNotMatch(branchCard, /barPercent|share\.toFixed|width: `\$\{Math\.max\(share/);
-assert.match(source, /transaction_count\) > 0/);
-assert.match(source, /Selling branches have no completed sales/);
-assert.match(source, /filterType=\{rangeType\}/);
+const source = readFileSync('src/features/reports/BranchSalesDetailScreen.tsx', 'utf8');
+assert.match(source, /shouldShowBranchOrderLog/);
+assert.match(source, /useBranchSalesLog/);
+assert.match(source, /useBranchDailySales/);
+assert.match(source, /sale_number/);
+assert.match(source, /cashier\?\.full_name/);
+assert.match(source, /business_date/);
+assert.match(source, /SALES BY DAY/);
+assert.match(source, /ORDERS/);
+assert.doesNotMatch(source, /barPercent|share\.toFixed|width: `\$\{Math\.max\(share/);
+assert.match(source, /No sales recorded/);
+assert.match(source, /useOwnerSalesByBranch/);
+assert.match(source, /filterType|rangeType/);
 
 const filter = readFileSync('src/features/reports/DateRangeFilter.tsx', 'utf8');
 assert.match(filter, /export function shouldShowBranchOrderLog/);

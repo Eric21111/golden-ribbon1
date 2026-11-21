@@ -25,7 +25,10 @@ const wasteDay = (date) => ({
 let state = { days: [], isFetched: true, error: null, isLoading: false };
 const { WasteHistoryScreen } = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
   'react-native': rnw,
-  'expo-router': { useLocalSearchParams: () => ({ branchId: 'b' }) },
+  'expo-router': { useLocalSearchParams: () => ({ branchId: 'b' }), router: { push() {}, replace() {} } },
+  '@/hooks/useBranches': {
+    useBranches: () => ({ data: [{ id: 'b', name: 'SM 1', is_main_branch: false, is_active: true }], isLoading: false, error: null }),
+  },
   '@react-native-vector-icons/ionicons': { __esModule: true, default: (p) => React.createElement('i', { 'data-icon': p.name }) },
   '@/components/GlyphIcon': { GlyphIcon: () => null },
   '@/components/ConstrainedWidth': { ConstrainedWidth: (p) => React.createElement('div', null, p.children) },
@@ -50,7 +53,7 @@ const waste = (next) => {
 
 // nothing wasted on any day: one centred message, not a list of identical lines (the screenshot)
 let text = waste({ days: [quietDay('2026-11-12'), quietDay('2026-11-11')] });
-assert.match(text, /RANGE\|EMPTY:No waste recorded\|No waste was recorded in this period\./, 'the date filter, then the shared empty state');
+assert.match(text, /EMPTY:No waste recorded\|No waste was recorded in this period\./, 'one shared empty state when nothing was wasted');
 assert.doesNotMatch(text, /Nov 12, 2026|Nov 11, 2026/, 'no per-day "No waste recorded" lines');
 assert.doesNotMatch(text, /PAGER/, 'no pager under an empty state');
 
@@ -84,7 +87,8 @@ const grow = [
   ['src/features/reports/BranchPerformanceScreens.tsx', /column: \{ flexGrow: 1,/],
   ['src/features/reports/DiscrepancyReportsScreens.tsx', /column: \{ flexGrow: 1,/],
   ['src/features/reports/InventoryReconciliationScreen.tsx', /column: \{ flexGrow: 1,/],
-  ['src/features/reports/TotalSalesDashboardScreen.tsx', /column: \{ flexGrow: 1,/],
+  ['src/features/reports/SalesOverviewScreen.tsx', /column: \{ flexGrow: 1,/],
+  ['src/features/reports/VoidLogsOverviewScreen.tsx', /column: \{ flexGrow: 1,/],
   ['app/(manager)/manager/reports/product-sales.tsx', /column: \{ flexGrow: 1,/],
 ];
 for (const [file, pattern] of grow) {
@@ -96,7 +100,7 @@ for (const [file, pattern] of grow) {
 // pushed the date pills to the middle of the screen with big gaps around them.
 const pills = read('src/features/reports/DateRangeFilter.tsx');
 assert.match(pills, /<ScrollView horizontal[^>]*style=\{styles\.rowScroll\}/, 'the date-range pills');
-assert.match(pills, /rowScroll: \{ flexGrow: 0 \}/);
+assert.match(pills, /rowScroll: \{ flexGrow: 0/);
 const chips = read('src/components/dashboard/FilterChipRow.tsx');
 assert.match(chips, /style=\{\[styles\.scroll, bleed > 0/, 'every chip row');
 assert.match(chips, /scroll: \{ flexGrow: 0 \}/);
@@ -109,6 +113,9 @@ for (const [file] of grow) {
 // the shared state itself centres within whatever room it is given
 const feedback = read('src/components/Feedback.tsx');
 assert.match(feedback, /center: \{ flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center'/);
+assert.match(read('src/components/dashboard/ManagerFeedback.tsx'), /textAlign: 'center'/);
+assert.match(read('src/features/reports/BranchHubScreen.tsx'), /quietNote:[\s\S]*textAlign: 'center'/);
+assert.match(read('src/features/reports/BranchSalesDetailScreen.tsx'), /logEmpty:[\s\S]*textAlign: 'center'/);
 
 // ---- 3. cashier screens that used loose text now use the shared states
 for (const file of ['app/(cashier)/cashier/inventory.tsx', 'app/(cashier)/cashier/payment-totals.tsx']) {

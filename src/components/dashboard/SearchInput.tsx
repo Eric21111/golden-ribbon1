@@ -42,9 +42,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 46,
+    width: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   input: {
     flex: 1,
+    minWidth: 0,
     color: managerColors.ink,
     fontFamily: 'Inter_400Regular',
     fontSize: 15,

@@ -146,60 +146,95 @@ const routesOf = (rendered) =>
 // Owner Dashboard
 {
   const { html, tiles: rendered } = renderTiles(OwnerDashboard);
-  assert.deepEqual(routesOf(rendered), [
-    ['Employees', '/owner/employees'],
-    ['Branches', '/owner/branches'],
-    ['Data Archive', '/owner/data-archive'],
-  ]);
-  assert.ok(rendered.every((tile) => tile.layout === 'tile'), 'dashboard keeps the compact tile layout');
+  assert.deepEqual(routesOf(rendered), []);
   assert.doesNotMatch(html, /Inventory Summary/);
-  assert.doesNotMatch(html, /REPORTS|Sales by Branch|Product Sales|Discrepancy Analytics/);
+  assert.doesNotMatch(html, /REPORTS|Sales Overview|Sales by Branch|Product Sales|Discrepancy Analytics/);
   assert.doesNotMatch(html, /\[tile:Reconciliation\]/, 'old short label gone');
+  assert.doesNotMatch(html, /ADMINISTRATION|\[tile:Data Archive\]|\[tile:Employees\]|\[tile:Branches\]/);
 
-  // Admin tiles share rows in pairs; the lone Data Archive tile keeps half width via a spacer.
   const source = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
-  const admin = source.slice(source.indexOf('<Section title="ADMINISTRATION">'));
-  const rows = admin.split('<Row>').slice(1).map((row) => ({
-    tiles: (row.match(/<NavTile/g) ?? []).length,
-    spacers: (row.match(/<View style=\{styles\.half\} \/>/g) ?? []).length,
-  }));
-  assert.deepEqual(rows, [
-    { tiles: 2, spacers: 0 },
-    { tiles: 1, spacers: 1 },
-  ]);
+  assert.doesNotMatch(source, /ADMINISTRATION|NavTile/);
   assert.match(source, /half: \{ flex: 1 \}/);
 }
 
 // Owner Reports hub
 {
   const { html, tiles: rendered } = renderTiles(OwnerReportsHub);
+  assert.match(html, /Sales &amp; Finance|Sales & Finance/);
+  assert.match(html, /Inventory &amp; Operations|Inventory & Operations/);
+  assert.match(html, /Audit &amp; Performance|Audit & Performance/);
   assert.deepEqual(routesOf(rendered), [
-    ['Void logs', '/owner/reports/stock-corrections'],
-    ['Sales by Branch', '/owner/reports/sales-by-branch'],
-    ['Shift remittances', '/owner/reports/shift-remittances'],
+    ['Sales Overview', '/owner/reports/sales-overview'],
+    ['Product Sales', '/owner/reports/product-sales'],
+    ['Shift Remittances', '/owner/reports/shift-remittances'],
+    ['Inventory Reconciliation', '/owner/reports/inventory-reconciliation'],
+    ['Transfer & Return Issues', '/owner/reports/discrepancies'],
     ['Waste History', '/owner/reports/waste-history'],
-    ['Product Sales Performance', '/owner/reports/product-sales'],
-    ['Branch Performance', '/owner/reports/branch-performance'],
-    ['Discrepancies Reconciliation', '/owner/reports/inventory-reconciliation'],
-    ['Discrepancy Analytics', '/owner/reports/discrepancies'],
+    ['Void logs', '/owner/reports/void-logs'],
+    ['Branch Operations', '/owner/reports/branch-performance'],
   ]);
-  assert.doesNotMatch(html, /Inventory Summary|Inventory Reconciliation/);
+  assert.doesNotMatch(html, /Inventory Summary|Discrepancies Reconciliation|Discrepancy Analytics|Product Sales Performance/);
   assert.equal(
-    rendered.find((tile) => tile.title === 'Discrepancies Reconciliation').description,
-    'Physical stock versus the movement ledger',
+    rendered.find((tile) => tile.title === 'Inventory Reconciliation').description,
+    undefined,
+  );
+  assert.ok(
+    rendered.every((tile) => !tile.description),
+    'report tiles are title-only',
   );
 }
 
-// Owner Product Sales + Void logs use branch-first hubs (Waste / remittance pattern).
+// Owner Product Sales and Void logs use company overviews; branch history stays on [branchId].
 {
   assert.ok(existsSync('app/(owner)/owner/reports/product-sales/index.tsx'));
   assert.ok(existsSync('app/(owner)/owner/reports/product-sales/[branchId].tsx'));
-  assert.ok(existsSync('app/(owner)/owner/reports/stock-corrections/index.tsx'));
-  assert.ok(existsSync('app/(owner)/owner/reports/stock-corrections/[branchId].tsx'));
-  assert.match(readFileSync('app/(owner)/owner/reports/product-sales/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
-  assert.match(readFileSync('app/(owner)/owner/reports/stock-corrections/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
+  assert.ok(existsSync('app/(owner)/owner/reports/void-logs/index.tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/void-logs/[branchId].tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/stock-corrections/index.tsx'), 'compat redirect kept');
+  assert.match(readFileSync('app/(owner)/owner/reports/product-sales/index.tsx', 'utf8'), /ProductSalesOverviewScreen/);
+  assert.doesNotMatch(readFileSync('app/(owner)/owner/reports/product-sales/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
+  assert.match(readFileSync('app/(owner)/owner/reports/void-logs/index.tsx', 'utf8'), /VoidLogsOverviewScreen/);
+  assert.doesNotMatch(readFileSync('app/(owner)/owner/reports/void-logs/index.tsx', 'utf8'), /SellingBranchesHubScreen/);
+  assert.match(readFileSync('app/(owner)/owner/reports/stock-corrections/index.tsx', 'utf8'), /Redirect|void-logs/);
   assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/product-sales\/\[branchId\]/);
-  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/stock-corrections\/\[branchId\]/);
+  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/void-logs\/\[branchId\]/);
+}
+
+// Sales Overview consolidates Total Sales + Sales by Branch.
+{
+  assert.ok(existsSync('app/(owner)/owner/reports/sales-overview/index.tsx'));
+  assert.ok(existsSync('app/(owner)/owner/reports/sales-overview/[branchId].tsx'));
+  assert.match(readFileSync('app/(owner)/owner/reports/total-sales.tsx', 'utf8'), /Redirect|sales-overview/);
+  assert.match(readFileSync('app/(owner)/owner/reports/sales-by-branch.tsx', 'utf8'), /Redirect|sales-overview/);
+  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/sales-overview\/\[branchId\]/);
+}
+
+// Branch Hub sits between Sales Overview and per-branch reports.
+{
+  assert.ok(existsSync('app/(owner)/owner/reports/branch/[branchId].tsx'));
+  assert.match(readFileSync('app/(owner)/_layout.tsx', 'utf8'), /owner\/reports\/branch\/\[branchId\]/);
+  assert.match(readFileSync('src/features/reports/SalesOverviewScreen.tsx', 'utf8'), /branchHubHref/);
+}
+
+// Owner transfer/return list routes redirect into the unified issues report.
+{
+  assert.match(readFileSync('app/(owner)/owner/reports/transfer-discrepancies.tsx', 'utf8'), /Redirect|discrepancies/);
+  assert.match(readFileSync('app/(owner)/owner/reports/return-discrepancies.tsx', 'utf8'), /Redirect|discrepancies/);
+}
+
+// Sidebar no longer duplicates transfer/return as separate Reports children.
+{
+  const sidebar = readFileSync('src/components/dashboard/ManagerSidebar.tsx', 'utf8');
+  const ownerBlock = sidebar.slice(sidebar.indexOf('function getOwnerGroups'), sidebar.indexOf('interface ManagerSidebarProps'));
+  assert.match(ownerBlock, /Transfer & return issues/);
+  assert.match(ownerBlock, /href: '\/owner\/reports\/discrepancies'/);
+  assert.match(ownerBlock, /href: '\/owner\/reports\/void-logs'/);
+  assert.match(ownerBlock, /Sales overview/);
+  assert.match(ownerBlock, /href: '\/owner\/reports\/sales-overview'/);
+  assert.doesNotMatch(ownerBlock, /href: '\/owner\/reports\/sales-by-branch'/);
+  assert.doesNotMatch(ownerBlock, /href: '\/owner\/reports\/transfer-discrepancies'/);
+  assert.doesNotMatch(ownerBlock, /href: '\/owner\/reports\/return-discrepancies'/);
+  assert.doesNotMatch(ownerBlock, /href: '\/owner\/reports\/stock-corrections'/);
 }
 
 // Inventory Summary is only de-duplicated from these screens: route, screen and sidebar entry remain.
@@ -214,5 +249,5 @@ const routesOf = (rendered) =>
 }
 
 console.log(
-  'Owner navigation cleanup tests passed: REPORTS tiles removed from home, Discrepancies Reconciliation label on hub, protected destinations unchanged, admin rows paired.',
+  'Owner navigation cleanup tests passed: Reports hub sections + renames, void-logs route, transfer/return sidebar dedupe, protected destinations unchanged.',
 );

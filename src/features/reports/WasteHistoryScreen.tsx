@@ -11,8 +11,9 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors, statChipColors } from '@/components/dashboard/theme';
-import { resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { formatPcsQty, formatShiftTimeRange } from '@/features/reports/reportDisplay';
+import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftWaste } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
@@ -145,27 +146,44 @@ export function WasteHistoryScreen({
 } = {}) {
   const params = useLocalSearchParams<{ branchId?: string; range?: string; start?: string; end?: string }>();
   const branchId = branchIdProp || paramValue(params.branchId);
-  const rangeType = parseRangeParam(paramValue(params.range));
-  const customStart = paramValue(params.start);
-  const customEnd = paramValue(params.end);
+  const initialRange = parseRangeParam(paramValue(params.range));
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? paramValue(params.start) : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? paramValue(params.end) : '');
   const [selected, setSelected] = useState<ShiftWasteShiftRow | null>(null);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftWaste(rpcRangeType, startIso, endIso, branchId || null);
+  const branches = useBranches();
   const days = query.data?.days ?? [];
-  const pagination = useClientPagination(days, rangeType, DAYS_PER_PAGE);
-  const title = useMemo(() => {
-    if (branchNameProp) return `Waste · ${branchNameProp}`;
-    const fromDays = days.flatMap((day) => day.shifts).find((shift) => shift.branch_id === branchId)?.branch_name;
-    return fromDays ? `Waste · ${fromDays}` : 'Waste History';
-  }, [branchNameProp, days, branchId]);
+  const pagination = useClientPagination(days, `${rangeType}|${customStart}|${customEnd}|${branchId}`, DAYS_PER_PAGE);
+  const branchLabel = useMemo(() => {
+    if (branchNameProp) return branchNameProp;
+    const catalog = branches.data?.find((branch) => branch.id === branchId)?.name;
+    if (catalog) return catalog;
+    return days.flatMap((day) => day.shifts).find((shift) => shift.branch_id === branchId)?.branch_name;
+  }, [branchNameProp, branches.data, days, branchId]);
 
   // Nothing wasted on any day (and no shift still pending): one centred "No waste recorded".
   const noWaste = query.isFetched && !query.error && days.length > 0 && days.every((day) => isQuietDay(day));
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
-      <ManagerScreenHeader title={title} showBack />
+      <ManagerScreenHeader
+        title="Waste History"
+        subtitle={branchId ? branchLabel ?? 'Branch' : undefined}
+        showBack
+      />
       <ConstrainedWidth style={styles.column}>
+        <View style={styles.filterBleed}>
+          <DateRangeFilter
+            value={rangeType}
+            onChange={setRangeType}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStartChange={setCustomStart}
+            onCustomEndChange={setCustomEnd}
+          />
+        </View>
         {!branchId ? (
           <EmptyState title="Choose a branch" message="Open Waste History and select a branch to view recorded waste." />
         ) : null}
@@ -306,6 +324,7 @@ export function WasteHistoryScreen({
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 20 },
+  filterBleed: { marginHorizontal: -20 },
   dayBlock: { gap: 10 },
   section: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   quietDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 2 },

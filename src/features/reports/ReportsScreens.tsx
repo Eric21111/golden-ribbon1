@@ -1,272 +1,33 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
+import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
-import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
+import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
 import {
-  DateRangeFilter,
-  resolveReportRange,
-  shouldShowBranchOrderLog,
-  type DateFilterType,
-} from '@/features/reports/DateRangeFilter';
-import { accentForRank } from '@/features/reports/reportAccents';
+  firstSearchParam,
+  parseReportDateFilter,
+} from '@/features/reports/branchHub';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { RankProgressRow } from '@/features/reports/RankProgressRow';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import { useBranches } from '@/hooks/useBranches';
-import {
-  useBranchDailySales,
-  useBranchSalesLog,
-  useOwnerSalesByBranch,
-  useProductSales,
-  useSalesByBranch,
-} from '@/hooks/useSales';
+import { useClientPagination } from '@/hooks/useClientPagination';
+import { useProductSales } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatManilaDate, formatMoney, isReportRangeReady } from '@/lib/format';
-import type { BranchSalesReportItem, ProductSalesReportItem } from '@/types/models';
+import { formatMoney, isReportRangeReady } from '@/lib/format';
+import type { ProductSalesReportItem } from '@/types/models';
 
-const DATE_FILTERS = new Set<DateFilterType>(['all_time', 'today', 'this_week', 'this_month', 'custom']);
+const PRODUCTS_PAGE_SIZE = 10;
 
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
-
-function parseDateFilter(value: string): DateFilterType {
-  return DATE_FILTERS.has(value as DateFilterType) ? (value as DateFilterType) : 'today';
-}
-
-function BranchSalesCard({
-  rank,
-  item,
-  expanded,
-  onToggle,
-  filterType,
-  rangeType,
-  startIso,
-  endIso,
-}: {
-  rank: number;
-  item: BranchSalesReportItem;
-  expanded: boolean;
-  onToggle: () => void;
-  filterType: DateFilterType;
-  rangeType: 'today' | 'custom' | 'all_time';
-  startIso?: string;
-  endIso?: string;
-}) {
-  const accent = accentForRank(rank);
-  const showOrders = shouldShowBranchOrderLog(filterType, startIso, endIso);
-  const log = useBranchSalesLog(expanded && showOrders ? item.branch_id : '', rangeType, startIso, endIso);
-  const days = useBranchDailySales(expanded && !showOrders ? item.branch_id : '', rangeType, startIso, endIso);
-  const detail = showOrders ? log : days;
-
-  return (
-    <View style={styles.rankRowCard}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} ${showOrders ? 'orders' : 'daily totals'} for ${item.branch_name}`}
-        onPress={onToggle}
-      >
-        <View style={styles.rankRowTop}>
-          <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
-            <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
-          </View>
-          <LinearGradient
-            colors={accent.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconChip}
-          >
-            <Ionicons name="storefront-outline" size={18} color={accent.icon} />
-          </LinearGradient>
-          <Text style={styles.rankRowTitle} numberOfLines={1}>
-            {item.is_active === false ? `Inactive · ${item.branch_name}` : item.branch_name}
-          </Text>
-          <Text style={styles.rankRowAmount}>{formatMoney(item.total_sales)}</Text>
-        </View>
-        <Text style={styles.rankRowMeta}>
-          Transactions: {item.transaction_count}
-          {expanded ? ' · Hide' : showOrders ? ' · Orders' : ' · Sales by day'}
-        </Text>
-      </Pressable>
-      {expanded ? (
-        <View style={styles.logBlock}>
-          <Text style={styles.logTitle}>{showOrders ? 'ORDERS' : 'SALES BY DAY'}</Text>
-          {detail.isLoading ? <LoadingState label={showOrders ? 'Loading sales…' : 'Loading daily totals…'} /> : null}
-          {detail.error ? (
-            <ErrorState message={getErrorMessage(detail.error)} onRetry={() => void detail.refetch()} />
-          ) : null}
-          {detail.data?.length === 0 ? (
-            <Text style={styles.logEmpty}>
-              {showOrders
-                ? 'No completed sales in this range. Older detailed sales may have been archived.'
-                : 'No completed sales in this range.'}
-            </Text>
-          ) : null}
-          {showOrders
-            ? log.data?.map((sale) => (
-                <ListRowCard
-                  key={sale.id}
-                  title={sale.sale_number}
-                  meta={`${formatDate(sale.sold_at)} · ${sale.cashier?.full_name ?? 'Cashier'}`}
-                  trailing={<Text style={styles.rankRowAmount}>{formatMoney(sale.total_amount)}</Text>}
-                />
-              ))
-            : days.data?.map((row) => (
-                <ListRowCard
-                  key={row.business_date}
-                  title={formatManilaDate(row.business_date)}
-                  meta={`${row.transaction_count} ${Number(row.transaction_count) === 1 ? 'sale' : 'sales'}`}
-                  trailing={<Text style={styles.rankRowAmount}>{formatMoney(row.total_sales)}</Text>}
-                />
-              ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function ProductSalesRow({ rank, item, share }: { rank: number; item: ProductSalesReportItem; share: number }) {
-  const accent = accentForRank(rank);
-  const barColors = [accent.icon, accent.gradient[0]] as const;
-
-  return (
-    <View style={styles.rankRowCard}>
-      <View style={styles.rankRowTop}>
-        <View style={[styles.rankBadge, { backgroundColor: accent.gradient[0] }]}>
-          <Text style={[styles.rankBadgeLabel, { color: accent.icon }]}>#{rank}</Text>
-        </View>
-        <View style={styles.rankRowTitleBlock}>
-          <Text style={styles.rankRowTitle} numberOfLines={1}>
-            {item.product_name}
-          </Text>
-          <View style={styles.skuTag}>
-            <Text style={styles.skuTagLabel} numberOfLines={1}>
-              {item.product_sku}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.rankRowAmount}>{formatMoney(item.total_revenue)}</Text>
-      </View>
-      <Text style={styles.rankRowMeta}>Items sold: {item.quantity_sold} pcs</Text>
-      <View style={styles.barRow}>
-        <View style={styles.barTrack}>
-          <LinearGradient
-            colors={barColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.barFill, { width: `${Math.max(share, 0)}%` }]}
-          />
-        </View>
-        <Text style={[styles.barPercent, { color: accent.icon }]}>{share.toFixed(0)}%</Text>
-      </View>
-    </View>
-  );
-}
-
-export function SalesByBranchScreen() {
-  const params = useLocalSearchParams<{
-    branchId?: string | string[];
-    range?: string | string[];
-    start?: string | string[];
-    end?: string | string[];
-  }>();
-  const focusBranchId = firstParam(params.branchId);
-  const initialRange = parseDateFilter(firstParam(params.range));
-  const initialStart = firstParam(params.start);
-  const initialEnd = firstParam(params.end);
-
-  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
-  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
-  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
-  const [openBranchId, setOpenBranchId] = useState<string | null>(focusBranchId || null);
-
-  const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
-  const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
-  // Focused drill-in from Total Sales uses the owner RPC so inactive branches with sales stay visible.
-  // Normal Sales by Branch (no focus) keeps the active-only report unchanged.
-  const focused = Boolean(focusBranchId);
-  const activeQuery = useSalesByBranch(rpcRangeType, startIso, endIso, !focused);
-  const ownerQuery = useOwnerSalesByBranch(rpcRangeType, startIso, endIso, focused && ready);
-  const query = focused ? ownerQuery : activeQuery;
-
-  const reportReady = ready && !query.isError && query.data !== undefined;
-  const report = reportReady ? (query.data ?? []) : [];
-  const listedBranches = report.filter((item) => Number(item.transaction_count) > 0 || item.branch_id === focusBranchId);
-  const totalCompletedTx = listedBranches.reduce((acc, r) => acc + Number(r.transaction_count), 0);
-  const totalCompletedSales = listedBranches.reduce((acc, r) => acc + Number(r.total_sales), 0);
-  const rankedBranches = useMemo(
-    () => [...listedBranches].sort((a, b) => Number(b.total_sales) - Number(a.total_sales)),
-    [listedBranches],
-  );
-  const totalsValue = !ready || query.isLoading || query.isError ? '—' : undefined;
-
-  return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Sales by Branch" showBack />
-      <ConstrainedWidth style={styles.column}>
-        <DateRangeFilter
-          value={rangeType}
-          onChange={setRangeType}
-          customStart={customStart}
-          customEnd={customEnd}
-          onCustomStartChange={setCustomStart}
-          onCustomEndChange={setCustomEnd}
-        />
-
-        <View style={styles.statsRow}>
-          <StatTile
-            style={styles.statHalf}
-            icon="receipt-outline"
-            label="Transactions"
-            value={totalsValue ?? totalCompletedTx}
-          />
-          <StatTile
-            style={styles.statHalf}
-            emphasis
-            icon="cash-outline"
-            label="Total sales"
-            value={totalsValue ?? formatMoney(totalCompletedSales)}
-          />
-        </View>
-
-        {query.isLoading ? <LoadingState label="Aggregating sales by branch…" /> : null}
-        {query.error ? (
-          <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
-        ) : null}
-        {rangeType === 'custom' && !ready ? (
-          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
-        ) : null}
-        {reportReady && !query.isLoading && rankedBranches.length === 0 ? (
-          <EmptyState title="No sales recorded" message="Selling branches have no completed sales for this range." />
-        ) : null}
-
-        {rankedBranches.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>BRANCHES</Text>
-            {rankedBranches.map((item, index) => (
-              <BranchSalesCard
-                key={item.branch_id}
-                rank={index + 1}
-                item={item}
-                expanded={openBranchId === item.branch_id}
-                onToggle={() => setOpenBranchId((current) => (current === item.branch_id ? null : item.branch_id))}
-                filterType={rangeType}
-                rangeType={rpcRangeType}
-                startIso={startIso}
-                endIso={endIso}
-              />
-            ))}
-          </View>
-        ) : null}
-      </ConstrainedWidth>
-    </Screen>
-  );
+function unitLabel(item: ProductSalesReportItem): string {
+  const code = item.stock_unit_code?.trim();
+  return code || 'pcs';
 }
 
 export function ProductSalesSummaryScreen({
@@ -277,9 +38,18 @@ export function ProductSalesSummaryScreen({
   /** Owner branch-first drill-in: lock the report to this selling branch. */
   branchId?: string;
 }) {
-  const [rangeType, setRangeType] = useState<DateFilterType>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const params = useLocalSearchParams<{
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const initialRange = parseReportDateFilter(firstSearchParam(params.range));
+  const initialStart = firstSearchParam(params.start);
+  const initialEnd = firstSearchParam(params.end);
+
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
 
   const branches = useBranches();
   const lockedBranch = useMemo(
@@ -291,6 +61,7 @@ export function ProductSalesSummaryScreen({
   const branchId = role === 'owner' ? branchIdProp || undefined : undefined;
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
+  const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
   const query = useProductSales(rpcRangeType, branchId, startIso, endIso);
 
   const products = query.data ?? [];
@@ -298,57 +69,98 @@ export function ProductSalesSummaryScreen({
   const totalProductRevenue = products.reduce((acc, p) => acc + Number(p.total_revenue), 0);
   const rankedProducts = useMemo(
     () => [...products].sort((a, b) => Number(b.total_revenue) - Number(a.total_revenue)),
-    [products]
+    [products],
+  );
+  const pagination = useClientPagination(
+    rankedProducts,
+    `${branchId ?? 'all'}|${rangeType}|${customStart}|${customEnd}`,
+    PRODUCTS_PAGE_SIZE,
   );
 
-  const title = lockedBranch ? `Product Sales · ${lockedBranch.name}` : 'Product Sales';
+  const title = 'Product Sales';
+  const subtitle = lockedBranch?.name;
+
+  const loading = ready && query.isLoading;
+  const itemsValue = !ready || loading || query.isError ? '—' : totalUnitsSold;
+  const revenueValue = !ready || loading || query.isError ? '—' : formatMoney(totalProductRevenue);
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title={title} showBack />
+    <Screen
+      refreshing={query.isRefetching}
+      onRefresh={ready ? () => void query.refetch() : undefined}
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      contentContainerStyle={styles.screenContent}
+    >
+      <ManagerScreenHeader title={title} subtitle={subtitle} showBack />
       <ConstrainedWidth style={styles.column}>
-        <DateRangeFilter
-          value={rangeType}
-          onChange={setRangeType}
-          customStart={customStart}
-          customEnd={customEnd}
-          onCustomStartChange={setCustomStart}
-          onCustomEndChange={setCustomEnd}
-        />
-
-        <View style={styles.statsRow}>
-          <StatTile style={styles.statHalf} icon="cube-outline" label="Total items sold" value={totalUnitsSold} />
-          <StatTile
-            style={styles.statHalf}
-            emphasis
-            icon="cash-outline"
-            label="Total revenue"
-            value={formatMoney(totalProductRevenue)}
+        <View style={styles.filterBleed}>
+          <DateRangeFilter
+            value={rangeType}
+            onChange={setRangeType}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStartChange={setCustomStart}
+            onCustomEndChange={setCustomEnd}
           />
         </View>
 
-        {query.isLoading ? <LoadingState label="Calculating product sales…" /> : null}
+        <OwnerSummaryKpiPair
+          left={{
+            icon: 'cube-outline',
+            label: 'Items sold',
+            value: itemsValue,
+            emphasis: true,
+          }}
+          right={{
+            icon: 'cash-outline',
+            label: 'Product revenue',
+            value: revenueValue,
+          }}
+        />
+
+        {loading ? <LoadingState label="Calculating product sales…" /> : null}
         {query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : null}
-        {rangeType === 'custom' && !query.isFetched && !query.isLoading ? (
+        {rangeType === 'custom' && !ready ? (
           <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
         ) : null}
-        {products.length === 0 && !query.isLoading && query.isFetched ? (
+        {products.length === 0 && !loading && query.isFetched ? (
           <EmptyState title="No product sales" message="No completed product sales for this range." />
         ) : null}
 
         {rankedProducts.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PRODUCTS</Text>
-            {rankedProducts.map((item, index) => (
-              <ProductSalesRow
+            <ReportSectionHeading title="PRODUCTS" />
+            {pagination.pageItems.map((item, index) => (
+              <RankProgressRow
                 key={item.product_id}
-                rank={index + 1}
-                item={item}
+                rank={pagination.page * PRODUCTS_PAGE_SIZE + index + 1}
+                title={item.product_name}
+                amount={formatMoney(item.total_revenue)}
                 share={totalProductRevenue > 0 ? (Number(item.total_revenue) / totalProductRevenue) * 100 : 0}
+                meta={`Items sold: ${item.quantity_sold} ${unitLabel(item)}`}
+                metaNode={
+                  item.product_sku ? (
+                    <View style={styles.skuTag}>
+                      <Text style={styles.skuTagLabel} numberOfLines={1}>
+                        {item.product_sku}
+                      </Text>
+                    </View>
+                  ) : null
+                }
               />
             ))}
+            {pagination.showPagination && pagination.totalPages > 1 ? (
+              <View style={styles.pager}>
+                <Pagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.setPage}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </ConstrainedWidth>
@@ -358,50 +170,10 @@ export function ProductSalesSummaryScreen({
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { flexGrow: 1, padding: 20, gap: 14 },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statHalf: { flex: 1 },
-  section: { gap: 8 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-  },
-  rankRowCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    borderRadius: 16,
-    padding: 14,
-    gap: 8,
-    shadowColor: '#0A1224',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  rankRowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rankBadge: {
-    minWidth: 26,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeLabel: { fontFamily: 'Inter_700Bold', fontSize: 11 },
-  iconChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankRowTitleBlock: { flex: 1, minWidth: 0, gap: 4 },
-  rankRowTitle: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  rankRowAmount: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  rankRowMeta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
+  column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 12 },
+  filterBleed: { marginHorizontal: -20 },
+  section: { gap: 10, marginTop: 4 },
+  pager: { marginTop: 4 },
   skuTag: {
     alignSelf: 'flex-start',
     backgroundColor: managerColors.cardSurface,
@@ -410,24 +182,4 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   skuTagLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5, letterSpacing: 0.3 },
-  logBlock: { gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: managerColors.cardBorder },
-  logTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
-    letterSpacing: 0.6,
-  },
-  logEmpty: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  barTrack: {
-    flex: 1,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#EDEFF5',
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 5, minWidth: 4 },
-  barPercent: { fontFamily: 'Inter_700Bold', fontSize: 12.5, minWidth: 34, textAlign: 'right' },
 });

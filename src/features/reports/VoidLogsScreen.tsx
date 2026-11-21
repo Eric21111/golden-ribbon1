@@ -28,29 +28,20 @@ import {
   resolveReportRange,
   type DateFilterType,
 } from '@/features/reports/DateRangeFilter';
+import { listAllVoidLogs } from '@/features/reports/voidLogData';
+import {
+  scopeVoidLogRows,
+  voidLogTimeBounds,
+  voidLogsInRange,
+  type VoidLogRow,
+} from '@/features/reports/voidLogs';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney, getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
-const SERVER_PAGE = 50;
 const NO_LIST_FILTERS: ListFilterKey[] = [];
 const ignoreListFilters = () => {};
-
-type VoidLogRow = {
-  event_id: string;
-  recorded_at: string;
-  sale_number: string;
-  product_name: string;
-  variant_name: string | null;
-  product_category: string | null;
-  branch_name: string;
-  cashier_name: string;
-  quantity: number;
-  amount: number | string;
-  reason: string | null;
-  note: string | null;
-};
 
 type SortOption = 'newest' | 'oldest' | 'amount-desc' | 'qty-desc';
 
@@ -62,22 +53,6 @@ const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
 ];
 
 const DEFAULT_SORT: SortOption = 'newest';
-
-async function listAllVoidLogs(): Promise<VoidLogRow[]> {
-  const all: VoidLogRow[] = [];
-  let offset = 0;
-  for (;;) {
-    const result = await supabase.rpc('list_sale_void_logs', { p_offset: offset });
-    if (result.error) throw result.error;
-    const batch = (result.data ?? []) as VoidLogRow[];
-    if (batch.length === 0) break;
-    const chunk = batch.length > SERVER_PAGE ? batch.slice(0, SERVER_PAGE) : batch;
-    all.push(...chunk);
-    if (batch.length <= SERVER_PAGE) break;
-    offset += SERVER_PAGE;
-  }
-  return all;
-}
 
 function formatVoidRecordedAt(value: string): string {
   return new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
@@ -114,28 +89,33 @@ function rangeBounds(
   customStart: string,
   customEnd: string,
 ): { start?: number; end?: number } {
-  if (rangeType === 'today') {
-    const today = getTodayRangeManila();
-    return { start: Date.parse(today.start), end: Date.parse(today.end) };
-  }
+  if (rangeType === 'today') return voidLogTimeBounds(getTodayRangeManila());
   const resolved = resolveReportRange(rangeType, customStart, customEnd);
-  if (resolved.rpcRangeType === 'all_time' || !resolved.startIso || !resolved.endIso) return {};
-  return { start: Date.parse(resolved.startIso), end: Date.parse(resolved.endIso) };
+  return voidLogTimeBounds({ start: resolved.startIso, end: resolved.endIso });
 }
 
 export default function VoidLogsScreen({
   branchId,
   branchName,
+  branchLookupPending = false,
+  initialRangeType = 'all_time',
+  initialCustomStart = '',
+  initialCustomEnd = '',
 }: {
   /** Owner branch-first drill-in: only show voids for this selling branch. */
   branchId?: string;
   branchName?: string;
+  /** True while the branch catalog is still loading for a branch-scoped Owner view. */
+  branchLookupPending?: boolean;
+  initialRangeType?: DateFilterType;
+  initialCustomStart?: string;
+  initialCustomEnd?: string;
 } = {}) {
   const { profile } = useAuth();
   const [search, setSearch] = useState('');
-  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRangeType);
+  const [customStart, setCustomStart] = useState(initialCustomStart);
+  const [customEnd, setCustomEnd] = useState(initialCustomEnd);
   const [cashierFilter, setCashierFilter] = useState('all');
   const [reasonFilter, setReasonFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>(DEFAULT_SORT);
@@ -177,10 +157,13 @@ export default function VoidLogsScreen({
     return row.product_category ?? categoriesByName.data?.get(productName) ?? null;
   }
 
-  const scopedData = useMemo(() => {
-    if (!branchName) return data ?? [];
-    return (data ?? []).filter((row) => row.branch_name === branchName);
-  }, [data, branchName]);
+  const scoped = useMemo(
+    () => scopeVoidLogRows(data, { branchId, branchName, branchLookupPending }),
+    [data, branchId, branchName, branchLookupPending],
+  );
+  const scopedData = scoped.rows;
+  const waitingForBranch = scoped.waitingForBranch;
+  const branchMissing = scoped.branchMissing;
 
   const cashierRow = useMemo<ExtraListFilter>(
     () => ({
@@ -221,13 +204,10 @@ export default function VoidLogsScreen({
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     const bounds = rangeBounds(rangeType, customStart, customEnd);
-    const rows = scopedData.filter((row) => {
+    const inRange = voidLogsInRange(scopedData, bounds);
+    const rows = inRange.filter((row) => {
       if (cashierFilter !== 'all' && row.cashier_name !== cashierFilter) return false;
       if (reasonFilter !== 'all' && (row.reason?.trim() ?? '') !== reasonFilter) return false;
-      if (bounds.start != null && bounds.end != null) {
-        const at = Date.parse(row.recorded_at);
-        if (!Number.isFinite(at) || at < bounds.start || at >= bounds.end) return false;
-      }
       if (!term) return true;
       const haystack = [
         row.product_name,
@@ -265,10 +245,13 @@ export default function VoidLogsScreen({
 
   const filterCount = (cashierFilter !== 'all' ? 1 : 0) + (reasonFilter !== 'all' ? 1 : 0);
   const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label;
-  const centered = !isPending && !error && filtered.length === 0;
+  const listPending = waitingForBranch || isPending;
+  const centered = !listPending && !error && (branchMissing || filtered.length === 0);
   const hasActiveQuery =
     !!search.trim() || rangeType !== 'all_time' || cashierFilter !== 'all' || reasonFilter !== 'all';
-  const title = branchName ? `Void logs · ${branchName}` : 'Void logs';
+  const title = 'Void logs';
+  const subtitle = branchName || undefined;
+  const showRows = !listPending && !error && !branchMissing;
 
   return (
     <Screen
@@ -278,7 +261,7 @@ export default function VoidLogsScreen({
       onRefresh={() => void refetch()}
       contentContainerStyle={styles.screen}
     >
-      <ManagerScreenHeader title={title} showBack />
+      <ManagerScreenHeader title={title} subtitle={subtitle} showBack />
       <ConstrainedWidth fill={centered} style={[styles.column, centered && styles.centered]}>
         <View style={styles.filters}>
           <View style={styles.searchRow}>
@@ -304,18 +287,23 @@ export default function VoidLogsScreen({
             onCustomStartChange={setCustomStart}
             onCustomEndChange={setCustomEnd}
           />
-          <ListFilterSummary
-            countText={`${filtered.length} of ${scopedData.length} ${scopedData.length === 1 ? 'void' : 'voids'}`}
-            filters={DEFAULT_LIST_FILTERS}
-            keys={NO_LIST_FILTERS}
-            extra={filterRows}
-            onChange={ignoreListFilters}
-          />
+          {showRows ? (
+            <ListFilterSummary
+              countText={`${filtered.length} of ${scopedData.length} ${scopedData.length === 1 ? 'void' : 'voids'}`}
+              filters={DEFAULT_LIST_FILTERS}
+              keys={NO_LIST_FILTERS}
+              extra={filterRows}
+              onChange={ignoreListFilters}
+            />
+          ) : null}
         </View>
 
         {error ? <ErrorState message={getErrorMessage(error)} onRetry={() => void refetch()} /> : null}
-        {isPending ? <LoadingState label="Loading void logs…" /> : null}
-        {!isPending && !error && filtered.length === 0 ? (
+        {listPending ? <LoadingState label="Loading void logs…" /> : null}
+        {branchMissing && !listPending && !error ? (
+          <EmptyState title="Branch not found" message="Open Void logs and choose a selling branch." />
+        ) : null}
+        {showRows && filtered.length === 0 ? (
           <EmptyState
             title={hasActiveQuery ? 'No matching voids' : 'No voids'}
             message={
@@ -326,23 +314,27 @@ export default function VoidLogsScreen({
           />
         ) : null}
 
-        {pagination.pageItems.map((row) => {
-          const product = productDisplay(row);
-          return (
-            <ListRowCard
-              key={row.event_id}
-              {...categoryRowProps(categoryFor(row, product.name))}
-              title={product.name}
-              titleTag={product.variant || undefined}
-              meta={formatVoidTime(row.recorded_at)}
-              trailing={<ManagerBadge label={`- ${formatMoney(Number(row.amount))}`} tone="danger" />}
-              onPress={() => setSelected(row)}
-              accessibilityLabel={`${product.name}${product.variant ? `, ${product.variant}` : ''}, - ${formatMoney(Number(row.amount))}`}
-            />
-          );
-        })}
+        {showRows
+          ? pagination.pageItems.map((row) => {
+              const product = productDisplay(row);
+              const reason = reasonText(row);
+              return (
+                <ListRowCard
+                  key={row.event_id}
+                  {...categoryRowProps(categoryFor(row, product.name))}
+                  title={product.name}
+                  titleTag={product.variant || undefined}
+                  subtitle={`${row.quantity} voided · ${row.cashier_name}`}
+                  meta={`${formatVoidTime(row.recorded_at)} · ${reason}`}
+                  trailing={<ManagerBadge label={`- ${formatMoney(Number(row.amount))}`} tone="danger" />}
+                  onPress={() => setSelected(row)}
+                  accessibilityLabel={`${product.name}${product.variant ? `, ${product.variant}` : ''}, ${row.quantity} voided, ${row.cashier_name}, ${reason}, - ${formatMoney(Number(row.amount))}`}
+                />
+              );
+            })
+          : null}
 
-        {pagination.showPagination ? (
+        {showRows && pagination.showPagination ? (
           <View style={styles.pager}>
             <Pagination
               page={pagination.page}

@@ -3,6 +3,7 @@ import type {
   CashReconciliationResult,
   ShiftCloseReportProduct,
   ShiftProductReconResult,
+  ShiftRemittanceReport,
 } from '@/types/models';
 
 const timeFormatter = new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' });
@@ -67,9 +68,79 @@ export function formatPcsQty(quantity: number | null | undefined, code?: import(
   return formatLiveStock(quantity, undefined, code);
 }
 
+export function closesAsUnsold(product: ShiftCloseReportProduct): boolean {
+  return product.closing_stock_behavior === 'record_as_unsold';
+}
+
 export function closingDispositionLabel(product: ShiftCloseReportProduct): string {
-  if (product.closing_stock_behavior === 'record_as_unsold') {
+  if (closesAsUnsold(product)) {
     return `Unsold at close: ${formatPcsQty(product.unsold_quantity, product.stock_unit_code)}`;
   }
   return `Carried to next day: ${formatPcsQty(product.carried_quantity, product.stock_unit_code)}`;
 }
+
+export function closingDispositionQty(product: ShiftCloseReportProduct): number {
+  return closesAsUnsold(product) ? Number(product.unsold_quantity) : Number(product.carried_quantity);
+}
+
+/** Display-only Cash/GCash totals from already-loaded remittance days. Null means nothing recorded. */
+export function remittanceTenderTotals(report: ShiftRemittanceReport | undefined) {
+  let cash: number | null = null;
+  let gcash: number | null = null;
+  let hasGcash = false;
+  for (const day of report?.days ?? []) {
+    if (day.expected_gcash != null) hasGcash = true;
+    if (day.actual_remitted != null) cash = (cash ?? 0) + Number(day.actual_remitted);
+    if (day.actual_gcash != null) gcash = (gcash ?? 0) + Number(day.actual_gcash);
+  }
+  return { cash, gcash, hasGcash };
+}
+
+export const NO_REMITTANCE_RECORDED = 'No remittance recorded';
+
+/** Display label for a remitted amount. Null is a data gap — never shown as ₱0.00. */
+export function remittanceAmountLabel(
+  amount: number | null | undefined,
+  state: 'ready' | 'loading' | 'error' = 'ready',
+): string {
+  if (state !== 'ready') return '—';
+  if (amount == null) return NO_REMITTANCE_RECORDED;
+  return formatMoney(amount);
+}
+
+/**
+ * Summary KPI display only. Missing amounts render as ₱0.00; null vs 0 stays
+ * distinct in remittanceTenderTotals and other callers.
+ */
+export function remittanceSummaryAmountLabel(
+  amount: number | null | undefined,
+  state: 'ready' | 'loading' | 'error' = 'ready',
+): string {
+  if (state !== 'ready') return '—';
+  return formatMoney(amount ?? 0);
+}
+
+const KPI_COL_GAP = 10;
+const COMPACT_H_PAD = 28;
+/** Inter 700 at 26px is ~0.62em per glyph. Do not rely on Android font shrinking. */
+const MIN_AMOUNT_CHAR_PX = 16;
+
+/**
+ * Compact 2-column KPIs only when both values stay fully readable on this width
+ * at the full 26px figure size — no ellipsis, no aggressive shrink.
+ */
+export function shouldStackSummaryKpis(
+  left: string,
+  right: string,
+  width: number,
+  fontScale = 1,
+): boolean {
+  const usable = Math.max(0, width) / Math.max(fontScale, 1);
+  const halfText = (usable - KPI_COL_GAP) / 2 - COMPACT_H_PAD;
+  if (halfText < 48) return true;
+  const maxChars = Math.floor(halfText / MIN_AMOUNT_CHAR_PX);
+  return left.length > maxChars || right.length > maxChars;
+}
+
+/** @deprecated Use shouldStackSummaryKpis — same layout rule for remittance KPIs. */
+export const shouldStackRemittanceKpis = shouldStackSummaryKpis;

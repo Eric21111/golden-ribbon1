@@ -79,6 +79,7 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
       await Promise.all([
         query.refetch(),
         client.invalidateQueries({ queryKey: ['reports'] }),
+        client.invalidateQueries({ queryKey: ['reports', 'inventory-reconciliation'] }),
         client.invalidateQueries({ queryKey: ['return-discrepancies'] }),
         client.invalidateQueries({ queryKey: queryKeys.ownerDashboard }),
         client.invalidateQueries({ queryKey: queryKeys.managerDashboard }),

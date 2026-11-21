@@ -894,6 +894,7 @@ export type InventoryReconciliationResolvedDiscrepancy = {
   resolution_reason: DiscrepancyResolutionReason | null;
   resolution_note: string | null;
   resolved_at: string | null;
+  resolved_by_name?: string | null;
 };
 
 export type InventoryReconciliationItem = {
@@ -909,6 +910,7 @@ export type InventoryReconciliationItem = {
   transfer_in: number;
   sale: number;
   return_out: number;
+  return_in?: number;
   adjustment: number;
   calculated_stock: number;
   current_stock: number;

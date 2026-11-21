@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -6,64 +7,78 @@ import { Screen } from '@/components/Screen';
 import { NavTile } from '@/components/dashboard/NavTile';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { spacing } from '@/constants/theme';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
+
+function ReportSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <ReportSectionHeading title={title} />
+      <View style={styles.list}>{children}</View>
+    </View>
+  );
+}
 
 export default function OwnerReportsHub() {
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Reports" subtitle="Company-wide read-only performance" />
+      <ManagerScreenHeader title="Reports" />
       <ConstrainedWidth style={styles.column}>
-        <View style={styles.list}>
-          <NavTile icon="create-outline" accent="blue" title="Void logs" description="Voided sale items, amounts, and reasons" onPress={() => router.push('/owner/reports/stock-corrections' as never)} />
+        <ReportSection title="Sales & Finance">
           <NavTile
             icon="stats-chart-outline"
             accent="blue"
-            title="Sales by Branch"
-            description="Revenue and completed transactions by selling branch"
-            onPress={() => router.push('/owner/reports/sales-by-branch')}
-          />
-          <NavTile
-            icon="cash-outline"
-            accent="gold"
-            title="Shift remittances"
-            description="Pending reconciliation versus completed actual cash"
-            onPress={() => router.push('/owner/reports/shift-remittances' as never)}
-          />
-          <NavTile
-            icon="leaf-outline"
-            accent="green"
-            title="Waste History"
-            description="Quantified PCS waste by selling-shift business date"
-            onPress={() => router.push('/owner/reports/waste-history' as never)}
+            title="Sales Overview"
+            onPress={() => router.push('/owner/reports/sales-overview' as never)}
           />
           <NavTile
             icon="pricetag-outline"
             accent="gold"
-            title="Product Sales Performance"
-            description="Items sold and historical revenue by product"
+            title="Product Sales"
             onPress={() => router.push('/owner/reports/product-sales')}
           />
           <NavTile
-            icon="git-branch-outline"
-            accent="teal"
-            title="Branch Performance"
-            description="Sales, volume, and discrepancy comparison"
-            onPress={() => router.push('/owner/reports/branch-performance' as never)}
+            icon="cash-outline"
+            accent="gold"
+            title="Shift Remittances"
+            onPress={() => router.push('/owner/reports/shift-remittances' as never)}
           />
+        </ReportSection>
+
+        <ReportSection title="Inventory & Operations">
           <NavTile
             icon="checkmark-done-outline"
             accent="green"
-            title="Discrepancies Reconciliation"
-            description="Physical stock versus the movement ledger"
+            title="Inventory Reconciliation"
             onPress={() => router.push('/owner/reports/inventory-reconciliation')}
           />
           <NavTile
             icon="alert-circle-outline"
             accent="red"
-            title="Discrepancy Analytics"
-            description="Transfer and return missing or excess quantities"
+            title="Transfer & Return Issues"
             onPress={() => router.push('/owner/reports/discrepancies' as never)}
           />
-        </View>
+          <NavTile
+            icon="leaf-outline"
+            accent="green"
+            title="Waste History"
+            onPress={() => router.push('/owner/reports/waste-history' as never)}
+          />
+        </ReportSection>
+
+        <ReportSection title="Audit & Performance">
+          <NavTile
+            icon="create-outline"
+            accent="blue"
+            title="Void logs"
+            onPress={() => router.push('/owner/reports/void-logs' as never)}
+          />
+          <NavTile
+            icon="git-branch-outline"
+            accent="teal"
+            title="Branch Operations"
+            onPress={() => router.push('/owner/reports/branch-performance' as never)}
+          />
+        </ReportSection>
       </ConstrainedWidth>
     </Screen>
   );
@@ -71,6 +86,7 @@ export default function OwnerReportsHub() {
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  column: { padding: 20, paddingBottom: 40 },
+  column: { padding: 20, paddingBottom: 40, gap: spacing.lg },
+  section: { gap: spacing.sm },
   list: { gap: spacing.sm },
 });

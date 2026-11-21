@@ -1,6 +1,6 @@
 import { stockUnit } from '@/lib/stockUnits';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -17,6 +17,7 @@ import { SearchInput } from '@/components/dashboard/SearchInput';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
+import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
 import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
@@ -54,13 +55,24 @@ export function TransferDiscrepanciesReportScreen({
 }: {
   detailHref: (id: string) => string;
 }) {
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const initialBranchId = firstSearchParam(params.branchId);
+  const initialRange = parseReportDateFilter(firstSearchParam(params.range) || 'all_time');
+  const initialStart = firstSearchParam(params.start);
+  const initialEnd = firstSearchParam(params.end);
+
   const branches = useBranches();
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState(initialBranchId);
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
   const [search, setSearch] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
@@ -247,13 +259,24 @@ export function ReturnDiscrepanciesReportScreen({
 }: {
   detailHref: (id: string) => string;
 }) {
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const initialBranchId = firstSearchParam(params.branchId);
+  const initialRange = parseReportDateFilter(firstSearchParam(params.range) || 'all_time');
+  const initialStart = firstSearchParam(params.start);
+  const initialEnd = firstSearchParam(params.end);
+
   const branches = useBranches();
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState(initialBranchId);
   const [discrepancyType, setDiscrepancyType] = useState<DiscrepancyFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [rangeType, setRangeType] = useState<DateFilterType>('all_time');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
   const [search, setSearch] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);

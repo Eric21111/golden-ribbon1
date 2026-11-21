@@ -18,11 +18,11 @@ const {
 
 assert.equal(
   salesByBranchHref({ branchId: 'b1', rangeType: 'this_week' }),
-  '/owner/reports/sales-by-branch?branchId=b1&range=this_week',
+  '/owner/reports/sales-overview/b1?range=this_week',
 );
 assert.equal(
   salesByBranchHref({ branchId: 'b1', rangeType: 'custom', customStart: '2026-11-01', customEnd: '2026-11-10' }),
-  '/owner/reports/sales-by-branch?branchId=b1&range=custom&start=2026-11-01&end=2026-11-10',
+  '/owner/reports/sales-overview/b1?range=custom&start=2026-11-01&end=2026-11-10',
 );
 
 assert.deepEqual(totalRemittance(undefined), {
@@ -96,31 +96,46 @@ assert.equal(rows[0].branchId, 'b1');
 assert.equal(rows.find((row) => row.branchId === 'b-inactive').isActive, false);
 
 const dashboard = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
-assert.match(dashboard, /\/owner\/reports\/total-sales/);
+assert.match(dashboard, /\/owner\/reports\/sales-overview/);
+assert.match(dashboard, /\/owner\/reports\/branch\/\$\{branch\.branchId\}/);
 assert.doesNotMatch(dashboard, /ManagerBottomSheet/);
+assert.match(readFileSync('app/(owner)/owner/reports/total-sales.tsx', 'utf8'), /Redirect|sales-overview/);
+assert.match(readFileSync('app/(owner)/owner/reports/sales-by-branch.tsx', 'utf8'), /Redirect|sales-overview/);
 
-const screenSrc = readFileSync('src/features/reports/TotalSalesDashboardScreen.tsx', 'utf8');
+const screenSrc = readFileSync('src/features/reports/SalesOverviewScreen.tsx', 'utf8');
 assert.match(screenSrc, /useOwnerSalesByBranch/);
-assert.match(screenSrc, /salesByBranchHref/);
+assert.match(screenSrc, /branchHubHref/);
+assert.doesNotMatch(screenSrc, /salesByBranchHref/);
 assert.match(screenSrc, /Inactive ·/);
+assert.match(screenSrc, /Sales Overview/);
+assert.match(screenSrc, /Completed transactions/);
+assert.doesNotMatch(screenSrc, /Remittance \(shift close\)/);
+assert.doesNotMatch(screenSrc, /OwnerSummaryKpiPair/);
+assert.doesNotMatch(screenSrc, /No remittance recorded/);
+assert.doesNotMatch(screenSrc, /shift-remittances/);
+assert.doesNotMatch(screenSrc, /useShiftRemittances/);
+assert.doesNotMatch(screenSrc, /awaiting remittance/);
 assert.doesNotMatch(screenSrc, /useSalesByBranch\(/);
 
-const salesByBranchSrc = readFileSync('src/features/reports/ReportsScreens.tsx', 'utf8');
-assert.match(salesByBranchSrc, /useLocalSearchParams/);
-assert.match(salesByBranchSrc, /useOwnerSalesByBranch/);
-assert.match(salesByBranchSrc, /focusBranchId/);
-assert.match(salesByBranchSrc, /Inactive · \$\{item\.branch_name\}/);
+const branchDetailSrc = readFileSync('src/features/reports/BranchSalesDetailScreen.tsx', 'utf8');
+assert.match(branchDetailSrc, /useLocalSearchParams/);
+assert.match(branchDetailSrc, /useOwnerSalesByBranch/);
+assert.match(branchDetailSrc, /shouldShowBranchOrderLog/);
+assert.match(branchDetailSrc, /Inactive ·/);
 
 let salesState = { data: undefined, isLoading: true, isFetched: false, isError: false, error: null, isRefetching: false, refetch: () => {} };
-let remittanceState = { data: undefined, isLoading: true, isFetched: false, isError: false, error: null, isRefetching: false, refetch: () => {} };
 const Pass = (props) => React.createElement('div', null, props.children);
-const Screen = loadTs('src/features/reports/TotalSalesDashboardScreen.tsx', {
+const Screen = loadTs('src/features/reports/SalesOverviewScreen.tsx', {
   'react-native': rnw,
-  'expo-router': { router: { push() {} } },
+  'expo-router': { router: { push() {} }, useLocalSearchParams: () => ({}) },
+  'expo-linear-gradient': {
+    LinearGradient: (p) => React.createElement('div', null, p.children),
+  },
+  '@react-native-vector-icons/ionicons': { __esModule: true, default: () => null },
   '@/components/ConstrainedWidth': { ConstrainedWidth: Pass },
   '@/components/Screen': { Screen: Pass },
-  '@/components/dashboard/ListRowCard': {
-    ListRowCard: (p) => React.createElement('div', null, p.title, p.meta, p.trailing),
+  '@/components/dashboard/CurrencyText': {
+    CurrencyText: (p) => React.createElement('span', null, p.value),
   },
   '@/components/dashboard/ManagerFeedback': {
     EmptyState: (p) => React.createElement('div', null, `EMPTY:${p.title}`),
@@ -132,17 +147,26 @@ const Screen = loadTs('src/features/reports/TotalSalesDashboardScreen.tsx', {
     StatTile: (p) => React.createElement('div', null, `${p.label}:${p.value}`),
   },
   '@/components/dashboard/theme': {
-    managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa' },
+    managerColors: { ink: '#111', subtext: '#667', royalBlue: '#13c', green: '#0a0', goldMuted: '#a80', cardBorder: '#ddd', cardSurface: '#f4f6fa', pageCanvas: '#f4f6fb' },
+    statChipColors: { blue: { chip: '#def', icon: '#13c' } },
+  },
+  '@/features/reports/RankProgressRow': {
+    RankProgressRow: (p) => React.createElement('div', null, `${p.title}:${p.amount}:${p.meta ?? ''}:${p.share}%`),
+  },
+  '@/features/reports/ReportSectionHeading': {
+    ReportSectionHeading: (p) => React.createElement('div', null, p.title),
   },
   '@/features/reports/DateRangeFilter': {
     DateRangeFilter: () => null,
     resolveReportRange: () => ({ rpcRangeType: 'today', startIso: null, endIso: null }),
   },
+  '@/features/reports/reportAccents': {
+    accentForRank: () => ({ icon: '#13c', gradient: ['#def', '#fff'] }),
+  },
   '@/hooks/useSales': { useOwnerSalesByBranch: () => salesState },
-  '@/hooks/useShifts': { useShiftRemittances: () => remittanceState },
   '@/lib/errors': { getErrorMessage: (e) => String(e.message || e) },
   '@/lib/nameAccent': { accentForName: () => 'blue' },
-}).TotalSalesDashboardScreen;
+}).SalesOverviewScreen;
 
 const flat = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
 assert.match(flat(renderToStaticMarkup(React.createElement(Screen))), /LOADING:Loading company sales…/);
@@ -159,20 +183,15 @@ salesState = {
   isRefetching: false,
   refetch: () => {},
 };
-remittanceState = {
-  data: remittance,
-  isLoading: false,
-  isFetched: true,
-  isError: false,
-  error: null,
-  isRefetching: false,
-  refetch: () => {},
-};
 let text = flat(renderToStaticMarkup(React.createElement(Screen)));
 assert.match(text, /Total sales revenue:₱1,000\.00/);
-assert.match(text, /Total remittance:₱580\.00/);
+assert.match(text, /Completed transactions:5/);
+assert.doesNotMatch(text, /Remittance \(shift close\)/);
+assert.doesNotMatch(text, /Total remittance:/);
 assert.match(text, /Inactive · SM2/);
-assert.match(text, /Remitted none yet/);
+assert.match(text, /4 sales|1 sale/);
+assert.match(text, /90%|10%/);
+assert.doesNotMatch(text, /Remitted none yet/);
 
 salesState = {
   data: undefined,
@@ -187,29 +206,7 @@ text = flat(renderToStaticMarkup(React.createElement(Screen)));
 assert.match(text, /Total sales revenue:—/);
 assert.match(text, /ERROR:sales down/);
 assert.doesNotMatch(text, /Total sales revenue:₱0\.00/);
-
-remittanceState = {
-  data: undefined,
-  isLoading: false,
-  isFetched: true,
-  isError: true,
-  error: new Error('remit down'),
-  isRefetching: false,
-  refetch: () => {},
-};
-salesState = {
-  data: [{ branch_id: 'b1', branch_name: 'SM1', total_sales: 900, transaction_count: 4, is_active: true }],
-  isLoading: false,
-  isFetched: true,
-  isError: false,
-  error: null,
-  isRefetching: false,
-  refetch: () => {},
-};
-text = flat(renderToStaticMarkup(React.createElement(Screen)));
-assert.match(text, /Total remittance:—/);
-assert.doesNotMatch(text, /Total remittance:None yet/);
-assert.match(text, /Remitted —/);
+assert.doesNotMatch(text, /Remittance \(shift close\)/);
 
 // --- SQL: owner sales includes inactive-with-sales; active-only report does not ----------------
 const db = new PGlite();

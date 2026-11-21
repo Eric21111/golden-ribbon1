@@ -104,3 +104,46 @@ export function wasteHistoryBranchMeta(row: WasteHistoryBranchRow): string {
   const days = `${row.daysWithWaste} ${row.daysWithWaste === 1 ? 'day' : 'days'}`;
   return `${occ} · ${days}`;
 }
+
+export type WasteHistoryCompanyTotals = {
+  occurrences: number;
+  daysWithWaste: number;
+  branchesWithWaste: number;
+};
+
+/** Company occurrence/day counts from the existing waste report (no mixed-unit quantity total). */
+export function summarizeWasteHistory(
+  report: ShiftWasteReport | undefined,
+): WasteHistoryCompanyTotals {
+  let occurrences = 0;
+  const days = new Set<string>();
+  const branches = new Set<string>();
+  for (const day of report?.days ?? []) {
+    const dateKey = String(day.business_date).slice(0, 10);
+    for (const shift of day.shifts ?? []) {
+      if (shift.waste_status !== 'waste_recorded') continue;
+      const count = shift.occurrences?.length ?? 0;
+      if (count === 0) continue;
+      occurrences += count;
+      days.add(dateKey);
+      if (shift.branch_id) branches.add(shift.branch_id);
+    }
+  }
+  return { occurrences, daysWithWaste: days.size, branchesWithWaste: branches.size };
+}
+
+export function wasteHistoryOverviewHref(args: {
+  role: 'owner' | 'manager';
+  rangeType: DateFilterType;
+  customStart?: string;
+  customEnd?: string;
+}): string {
+  const params = new URLSearchParams();
+  params.set('range', args.rangeType);
+  if (args.rangeType === 'custom') {
+    if (args.customStart) params.set('start', args.customStart);
+    if (args.customEnd) params.set('end', args.customEnd);
+  }
+  const base = args.role === 'owner' ? '/owner/reports/waste-history' : '/manager/reports/waste-history';
+  return `${base}?${params.toString()}`;
+}

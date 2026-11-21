@@ -1,11 +1,6 @@
-import { SellingBranchesHubScreen } from '@/features/reports/SellingBranchesHubScreen';
+import { Redirect } from 'expo-router';
 
-export default function OwnerVoidLogsBranches() {
-  return (
-    <SellingBranchesHubScreen
-      title="Void logs"
-      hrefForBranch={(branchId) => `/owner/reports/stock-corrections/${branchId}`}
-      accessibilityHint="Opens void logs for this branch"
-    />
-  );
+/** Compat: Void logs moved to /owner/reports/void-logs. */
+export default function OwnerVoidLogsBranchesRedirect() {
+  return <Redirect href={'/owner/reports/void-logs' as never} />;
 }

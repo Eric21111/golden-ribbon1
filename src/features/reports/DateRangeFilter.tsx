@@ -159,15 +159,16 @@ export function DateRangeFilter({
 
 const styles = StyleSheet.create({
   // a horizontal ScrollView grows to fill spare height by default; the pill row must stay one pill tall
-  rowScroll: { flexGrow: 0 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 16 },
+  rowScroll: { flexGrow: 0, width: '100%' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingRight: 28 },
   chip: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
     backgroundColor: managerColors.cardSurface,
     borderWidth: 1,
     borderColor: managerColors.cardBorder,
+    flexShrink: 0,
   },
   chipSelected: { backgroundColor: '#EAF0FB', borderColor: '#EAF0FB' },
   pressed: { opacity: 0.7 },

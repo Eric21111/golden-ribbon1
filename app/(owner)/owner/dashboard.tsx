@@ -8,7 +8,6 @@ import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
-import { NavTile } from '@/components/dashboard/NavTile';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors, type StatChipColor } from '@/components/dashboard/theme';
 import type { GlyphName } from '@/components/GlyphIcon';
@@ -178,15 +177,7 @@ export default function OwnerDashboard() {
                 <ManagerActionButton
                   label="Review discrepancies"
                   icon="alert-circle-outline"
-                  onPress={() =>
-                    router.push(
-                      (metrics.transfer_discrepancies_count > 0 && metrics.return_discrepancies_count > 0
-                        ? '/owner/reports/discrepancies'
-                        : metrics.transfer_discrepancies_count > 0
-                          ? '/owner/reports/transfer-discrepancies'
-                          : '/owner/reports/return-discrepancies') as never,
-                    )
-                  }
+                  onPress={() => router.push('/owner/reports/discrepancies' as never)}
                 />
               </View>
             ) : null}
@@ -221,7 +212,7 @@ export default function OwnerDashboard() {
                 icon="cash-outline"
                 label="Total · selling branches"
                 value={quickviewReady ? formatMoney(quickview.totalRevenue) : '—'}
-                onPress={() => router.push('/owner/reports/total-sales' as never)}
+                onPress={() => router.push('/owner/reports/sales-overview' as never)}
               />
               {quickviewStatus === 'loading' ? (
                 <LoadingState label="Loading branch revenue…" />
@@ -242,7 +233,9 @@ export default function OwnerDashboard() {
                         icon="storefront-outline"
                         label={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
                         value={formatMoney(branch.revenue)}
-                        onPress={() => router.push('/owner/reports/sales-by-branch')}
+                        onPress={() =>
+                          router.push(`/owner/reports/branch/${branch.branchId}?range=today` as never)
+                        }
                       />
                     ))}
                     {pair.length === 1 ? <View style={styles.half} /> : null}
@@ -297,35 +290,6 @@ export default function OwnerDashboard() {
                   ) : null}
                 </>
               )}
-            </Section>
-
-            <Section title="ADMINISTRATION">
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="people-outline"
-                  accent="blue"
-                  title="Employees"
-                  onPress={() => router.push('/owner/employees' as never)}
-                />
-                <NavTile
-                  layout="tile"
-                  icon="git-branch-outline"
-                  accent="blue"
-                  title="Branches"
-                  onPress={() => router.push('/owner/branches' as never)}
-                />
-              </Row>
-              <Row>
-                <NavTile
-                  layout="tile"
-                  icon="archive-outline"
-                  accent="gray"
-                  title="Data Archive"
-                  onPress={() => router.push('/owner/data-archive' as never)}
-                />
-                <View style={styles.half} />
-              </Row>
             </Section>
           </View>
         )}

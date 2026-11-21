@@ -167,9 +167,8 @@ const assertUnrelatedSections = (t) => {
   assert.doesNotMatch(t, /Chicken/);
   assert.doesNotMatch(t, /REPORTS/);
   assert.doesNotMatch(t, /Sales by Branch|Product Sales|Discrepancy Analytics/);
-  assert.match(t, /ADMINISTRATION/);
-  assert.match(t, /Employees/);
-  assert.match(t, /Data Archive/);
+  assert.doesNotMatch(t, /ADMINISTRATION/);
+  assert.doesNotMatch(t, /\bEmployees\b/);
 };
 
 archive.state.archive = { reminder_visible: true, retention_days: 90 };
@@ -252,7 +251,7 @@ sales.state.metrics = query({ data: metricsData });
 {
   const source = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
   assert.doesNotMatch(source, /ManagerBottomSheet/);
-  assert.match(source, /\/owner\/reports\/total-sales/);
+  assert.match(source, /\/owner\/reports\/sales-overview/);
   assert.match(source, /\{metricsQuery\.error \? \(/, 'branch query not in the global gate');
 }
 
@@ -284,7 +283,7 @@ sales.state.metrics = query({ data: metricsData });
 
 // 9. Today Log: loading, error + retry, empty, rows (newest first, Manila time), preview cap, truncation note.
 {
-  const logSlice = (t) => t.slice(t.indexOf('Today Log'), t.indexOf('ADMINISTRATION'));
+  const logSlice = (t) => t.slice(t.indexOf('Today Log'));
   const logData = (activities, extra = {}) => ({
     business_date: '2026-11-08',
     total_count: activities.length,

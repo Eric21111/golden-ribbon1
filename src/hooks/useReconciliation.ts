@@ -81,5 +81,6 @@ export function useInventoryReconciliation(branchId?: string) {
   return useQuery({
     queryKey: queryKeys.inventoryReconciliation(branchId),
     queryFn: () => reportInventoryReconciliation(branchId),
+    staleTime: 0,
   });
 }

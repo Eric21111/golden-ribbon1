@@ -8,6 +8,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { transformSync } from '@babel/core';
 
 import {
+  branchOperationsIssueQty,
+  branchOperationsMeta,
   inventoryPreview,
   remittanceSummary,
   toggleExpandedBranch,
@@ -65,6 +67,21 @@ import {
   assert.deepEqual(preview.shown.map((i) => i.product_id), ['p1', 'p3']);
   assert.equal(preview.moreStocked, 1);
   assert.equal(preview.zeroCount, 1);
+
+  assert.deepEqual(
+    branchOperationsIssueQty({
+      transfer_missing_qty: 2, transfer_excess_qty: 1, return_missing_qty: 1, return_excess_qty: 3,
+    }),
+    { missing: 3, excess: 4 },
+  );
+  assert.equal(branchOperationsMeta(1, 1), '1 item · 1 sale');
+  assert.equal(branchOperationsMeta(498, 28), '498 items · 28 sales');
+  assert.deepEqual(
+    branchOperationsIssueQty({
+      transfer_missing_qty: 0, transfer_excess_qty: 0, return_missing_qty: 0, return_excess_qty: 0,
+    }),
+    { missing: 0, excess: 0 },
+  );
 }
 
 // --- Rendering the real screen ----------------------------------------------------------------
@@ -215,6 +232,13 @@ const { BranchPerformanceReportScreen, BranchPerformanceDetailScreen } = await i
   '../src/features/reports/BranchPerformanceScreens.tsx'
 );
 const { getThisMonthRangeManila, getThisWeekRangeManila } = await import('../src/lib/format.ts');
+const { shouldStackSummaryKpis } = await import('../src/features/reports/reportDisplay.ts');
+{
+  // 360px Android, 20px page padding → 320px KPI row. Short ops figures stay 2-col.
+  assert.equal(shouldStackSummaryKpis('47', '21', 320), false, 'typical ops KPIs stay side-by-side on 360px');
+  assert.equal(shouldStackSummaryKpis('794', '47', 320), false);
+  assert.equal(shouldStackSummaryKpis('355397.00', '21', 320), true, 'long figures still stack instead of clipping');
+}
 const rn = await import('react-native');
 const routing = await import('expo-router');
 const recon = await import('@/hooks/useReconciliation');
@@ -252,8 +276,15 @@ const resetScreen = () => {
   shifts.state.calls.length = 0;
 };
 const header = (branchName) => {
-  const found = rn.presses.find((p) => p.accessibilityHint && p.accessibilityLabel?.startsWith(`${branchName},`));
+  const found = rn.presses.find((p) => p.accessibilityHint?.includes('Branch Hub') && p.accessibilityLabel?.startsWith(`${branchName},`));
   assert.ok(found, `${branchName} card header is a button`);
+  return found;
+};
+const issuesBadge = (branchName) => {
+  const found = rn.presses.find(
+    (p) => p.accessibilityHint?.includes('Transfer and Return Issues') && p.accessibilityLabel?.startsWith(branchName),
+  );
+  assert.ok(found, `${branchName} issues badge is a button`);
   return found;
 };
 const tap = (pressable) => {
@@ -266,10 +297,10 @@ const chip = (label) => {
   return found;
 };
 const cardSlice = (t, branchName) => {
-  const start = t.indexOf(`${branchName} ₱`);
+  const start = t.indexOf(branchName);
   assert.ok(start >= 0, `${branchName} card rendered`);
   const rest = t.slice(start + 1);
-  const nextCard = rest.search(/#\d /);
+  const nextCard = rest.search(/\bSM[123]\b/);
   return nextCard >= 0 ? t.slice(start, start + 1 + nextCard) : t.slice(start);
 };
 
@@ -319,184 +350,119 @@ recon.state.details[SM2] = query({ data: detailsFor(SM2, 'SM2') });
 shifts.state.remit[SM1] = query({ data: remitFor(430) });
 shifts.state.remit[SM2] = query({ data: remitFor(515.5) });
 
-// 1. All Time by default; every card collapsed; no detail or remittance queries run.
+// 1. All Time by default: company comparison, compact cards — no unlabeled share bar or dumps.
 {
   const t = render();
   assert.deepEqual(recon.state.calls.list.at(-1), ['all_time', undefined, undefined]);
-  assert.match(t, /COMPANY TOTALS ₱\s*1,000\.00 Total sales 7 Completed orders 16 Total items sold/);
-  assert.ok(t.indexOf('#1 SM2') < t.indexOf('#2 SM1'), 'ranked by sales');
-  assert.match(cardSlice(t, 'SM2'), /52%.*4 Transactions 9 Items sold/);
-  assert.match(cardSlice(t, 'SM1'), /48%.*3 Transactions 7 Items sold/);
-  assert.equal(header('SM1').accessibilityState.expanded, false);
-  assert.equal(header('SM2').accessibilityState.expanded, false);
-  assert.match(cardSlice(t, 'SM1'), /Items sold Transfer discrepancies 2 missing Return discrepancies None/, 'summary badges while collapsed');
-  assert.match(cardSlice(t, 'SM2'), /Items sold Transfer discrepancies None Return discrepancies 1 excess/);
-  assert.doesNotMatch(t, /None in this range/, 'older-return hint only outside All Time');
+  assert.match(t, /\[header:Branch Operations\]/);
+  assert.match(t, /COMPANY OPERATIONS 16 Total items sold 7 Completed sales 3 Discrepancy units/);
+  assert.doesNotMatch(t, /Transfer & return, including resolved/);
+  assert.doesNotMatch(t, /Live receipts for archived days|Issue qty counts missing|After archive cleanup|Completed orders|Open issue|Completed transactions/);
+  assert.ok(t.indexOf('SM2') < t.indexOf('SM1'), 'ranked by sales');
+  assert.match(cardSlice(t, 'SM2'), /9 items · 4 sales/);
+  assert.match(cardSlice(t, 'SM1'), /7 items · 3 sales/);
+  assert.doesNotMatch(t, /52%|48%|Share of/);
+  assert.match(cardSlice(t, 'SM1'), /2 missing/);
+  assert.match(cardSlice(t, 'SM2'), /1 excess/);
+  assert.doesNotMatch(t, /Transfer discrepancies|Return discrepancies|None in this range/);
+  assert.doesNotMatch(cardSlice(t, 'SM1'), /Product Sales|Issues >/);
+  assert.doesNotMatch(cardSlice(t, 'SM2'), /Product Sales/);
   assert.doesNotMatch(
     t,
-    /CASH REMITTANCE|CURRENT INVENTORY|RECENT STOCK TRANSFERS|DISCREPANCY DETAILS|TR-SM1-9|SM1 Cake|Open full branch report/,
-    'detailed lists hidden while collapsed',
+    /CASH REMITTANCE|STOCK SNAPSHOT|RECENT STOCK TRANSFERS|DISCREPANCY DETAILS|TR-SM1-9|SM1 Cake|Open full branch report|CURRENT INVENTORY|\[button:Product Sales\]/,
+    'duplicate dumps and oversized action buttons stay off the scorecard',
   );
-  assert.equal(recon.state.calls.details.length, 0, 'no detail fetch while collapsed');
-  assert.equal(shifts.state.calls.length, 0, 'no remittance fetch while collapsed');
+  assert.equal(recon.state.calls.details.length, 0, 'list does not fetch branch-performance details');
+  assert.equal(shifts.state.calls.length, 0, 'remittance not loaded from Branch Operations');
   assert.equal(routing.pushed.length, 0);
 }
 
-// 2. Tap SM1: only SM1 expands, with SM1's data for the selected range.
+// 2. Card header and issue badges keep branch + All Time on the destination.
 {
-  const t = tap(header('SM1'));
-  assert.equal(header('SM1').accessibilityState.expanded, true);
-  assert.equal(header('SM2').accessibilityState.expanded, false);
-  assert.deepEqual(recon.state.calls.details.at(-1), [SM1, 'all_time', undefined, undefined]);
-  assert.ok(recon.state.calls.details.every(([id]) => id === SM1), 'SM2 details not fetched');
-  assert.deepEqual(shifts.state.calls.at(-1), ['all_time', undefined, undefined, SM1]);
-  const sm1 = cardSlice(t, 'SM1');
-  assert.match(sm1, /CASH REMITTANCE Cash remitted ₱\s*430\.00/);
-  assert.match(sm1, /Counted at shift close for 1 shift that ended in this period\. Not the same as sales\./);
-  assert.match(sm1, /1 awaiting remittance \(₱\s*75\.00 expected\)/);
-  assert.match(sm1, /Transfer discrepancies 2 missing Return discrepancies None/, 'summary badges stay on the card');
-  assert.equal(sm1.split('Transfer discrepancies').length - 1, 1, 'transfer badge not duplicated in details');
-  assert.equal(sm1.split('Return discrepancies').length - 1, 1, 'return badge not duplicated in details');
-  assert.match(sm1, /DISCREPANCY DETAILS TR-SM1-9 · SM1 Cake Sent 10 · Received 8/);
-  assert.match(sm1, /CURRENT INVENTORY \(NOW\) SM1 Cake 12/);
-  assert.match(sm1, /1 at zero\. See the full branch report\./);
-  assert.match(sm1, /RECENT STOCK TRANSFERS TR-SM1-NEW Received · 2 products/);
-  assert.match(sm1, /TR-SM1-OLD Pending Receipt · 1 products/, 'All Time lists every recent transfer');
-  assert.match(sm1, /\[button:Open full branch report\]/);
-  assert.doesNotMatch(t, /SM2 Cake|TR-SM2/, "no other branch's details");
-  assert.doesNotMatch(sm1, /Cash remitted ₱\s*480/, 'remittance is not the sales figure');
-
-  rn.presses.find((p) => p.accessibilityLabel === 'TR-SM1-9 · SM1 Cake, 2 missing').onPress();
-  assert.equal(routing.pushed.at(-1), '/owner/reports/discrepancies/transfer/td-SM1');
-  actions.buttons.find((b) => b.label === 'Open full branch report').onPress();
-  assert.equal(routing.pushed.at(-1), `/owner/reports/branch-performance/${SM1}`);
+  tap(header('SM1'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/branch/${SM1}?range=all_time`);
+  assert.equal(recon.state.calls.details.length, 0, 'opening Branch Hub does not fetch performance details');
+  tap(issuesBadge('SM1'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/discrepancies?branchId=${SM1}&range=all_time`);
+  tap(issuesBadge('SM2'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/discrepancies?branchId=${SM2}&range=all_time`);
 }
 
-// 3. Cards are independent; tapping an open card collapses it.
+// 3. Today: list refetches; outbound links keep Today.
 {
-  let t = tap(header('SM2'));
-  assert.match(cardSlice(t, 'SM2'), /Cash remitted ₱\s*515\.50/);
-  assert.match(cardSlice(t, 'SM2'), /Return discrepancies 1 excess/);
-  assert.match(cardSlice(t, 'SM1'), /CASH REMITTANCE/, 'SM1 stays open');
-  t = tap(header('SM1'));
-  assert.equal(header('SM1').accessibilityState.expanded, false);
-  assert.doesNotMatch(cardSlice(t, 'SM1'), /CASH REMITTANCE|SM1 Cake/, 'second tap collapses');
-  assert.match(cardSlice(t, 'SM2'), /CASH REMITTANCE/);
-}
-
-// 4. Today: the list refetches for today, cards collapse again, details and transfers follow the range.
-{
-  let t = tap(chip('Today'));
+  tap(chip('Today'));
   assert.deepEqual(recon.state.calls.list.at(-1), ['today', undefined, undefined]);
-  assert.doesNotMatch(t, /CASH REMITTANCE|DISCREPANCY DETAILS/, 'changing the filter collapses every card');
-  assert.match(cardSlice(t, 'SM1'), /Return discrepancies None None in this range\./, 'older-return hint on the collapsed card');
-  assert.doesNotMatch(cardSlice(t, 'SM2'), /None in this range/, 'no hint when the branch has a return issue');
-  t = tap(header('SM1'));
-  assert.deepEqual(recon.state.calls.details.at(-1), [SM1, 'today', undefined, undefined]);
-  assert.deepEqual(shifts.state.calls.at(-1), ['today', undefined, undefined, SM1]);
-  const sm1 = cardSlice(t, 'SM1');
-  assert.match(sm1, /TR-SM1-NEW/);
-  assert.doesNotMatch(sm1, /TR-SM1-OLD/, 'transfer sent 40 days ago is outside Today');
-  assert.doesNotMatch(sm1, /5 latest transfers/, 'no completeness note for a range that runs to now');
+  const t = render();
+  assert.match(t, /BRANCHES Today/);
+  assert.doesNotMatch(t, /None in this range|Open the branch|Product Sales/);
+  tap(header('SM1'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/branch/${SM1}?range=today`);
+  tap(issuesBadge('SM1'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/discrepancies?branchId=${SM1}&range=today`);
+  assert.equal(shifts.state.calls.length, 0, 'Today still skips remittance');
 }
 
-// 5. This Week and This Month send the shared Manila ranges to every query.
+// 4. This Week and This Month send the shared Manila ranges to the list and preserve the UI range on links.
 for (const [label, range] of [
   ['This Week', getThisWeekRangeManila()],
   ['This Month', getThisMonthRangeManila()],
 ]) {
   tap(chip(label));
   assert.deepEqual(recon.state.calls.list.at(-1), ['custom', range.start, range.end], `${label} list range`);
-  const t = tap(header('SM1'));
-  assert.deepEqual(recon.state.calls.details.at(-1), [SM1, 'custom', range.start, range.end], `${label} details range`);
-  assert.deepEqual(shifts.state.calls.at(-1), ['custom', range.start, range.end, SM1], `${label} remittance range`);
-  assert.match(cardSlice(t, 'SM1'), /TR-SM1-NEW/);
-  assert.doesNotMatch(cardSlice(t, 'SM1'), /TR-SM1-OLD/, `${label} excludes a transfer from 40 days ago`);
+  const key = label === 'This Week' ? 'this_week' : 'this_month';
+  assert.match(render(), new RegExp(`BRANCHES ${label}`));
+  tap(issuesBadge('SM1'));
+  assert.equal(routing.pushed.at(-1), `/owner/reports/discrepancies?branchId=${SM1}&range=${key}`, `${label} issues`);
+  assert.equal(shifts.state.calls.length, 0, `${label} skips remittance`);
+  assert.equal(recon.state.calls.details.length, 0, `${label} does not open details RPC`);
 }
 
-// 6. Loading states (list, then the expanded card's details and remittance).
+// 5. Loading and error/empty states stay on the company list.
 resetScreen();
 recon.state.list = query({ isLoading: true, isFetched: false });
-assert.match(render(), /Calculating branch performance…/);
-recon.state.list = query({ data: listData });
-recon.state.details[SM1] = query({ isLoading: true, isFetched: false });
-shifts.state.remit[SM1] = query({ isLoading: true, isFetched: false });
-render();
-{
-  const t = tap(header('SM1'));
-  const sm1 = cardSlice(t, 'SM1');
-  assert.match(sm1, /Loading remittance…/);
-  assert.match(sm1, /Loading branch details…/);
-  assert.match(sm1, /Transfer discrepancies 2 missing/, 'summary badges come from the list row while details load');
-  assert.doesNotMatch(sm1, /Cash remitted|CURRENT INVENTORY|DISCREPANCY DETAILS/);
-}
+assert.match(render(), /Calculating branch operations…/);
 
-// 7. Error states: list error, then per-card errors with Retry; no amounts shown in place of errors.
 resetScreen();
 recon.state.list = query({ error: new Error('Network request failed'), isFetched: true });
-{
-  const t = render();
-  assert.match(t, /Unable to connect/);
-}
-recon.state.list = query({ data: listData });
-let detailRetries = 0;
-let remitRetries = 0;
-recon.state.details[SM1] = query({ error: new Error('boom'), refetch: async () => void (detailRetries += 1) });
-shifts.state.remit[SM1] = query({ error: new Error('boom'), refetch: async () => void (remitRetries += 1) });
-render();
-{
-  const t = tap(header('SM1'));
-  const sm1 = cardSlice(t, 'SM1');
-  assert.match(sm1, /Couldn't load remittance\./);
-  assert.match(sm1, /Couldn't load branch details\./);
-  assert.doesNotMatch(sm1, /Cash remitted|None yet|CURRENT INVENTORY/, 'no figures while queries fail');
-  assert.match(cardSlice(t, 'SM2'), /SM2/, 'other cards unaffected');
-  const retries = rn.presses.filter((p) => p.children?.props?.children === 'Retry');
-  assert.equal(retries.length, 2);
-  retries.forEach((r) => r.onPress());
-  assert.deepEqual([remitRetries, detailRetries], [1, 1]);
-}
+assert.match(render(), /Unable to connect/);
 
-// 8. Empty states.
 resetScreen();
 recon.state.list = query({ data: [] });
 assert.match(render(), /No selling branches/);
-recon.state.list = query({ data: listData });
-recon.state.details[SM1] = query({
-  data: { ...detailsFor(SM1, 'SM1'), current_inventory: [], transfer_discrepancies: [], recent_transfers: [] },
-});
-shifts.state.remit[SM1] = query({ data: { days: [] } });
-render();
-{
-  const sm1 = cardSlice(tap(header('SM1')), 'SM1');
-  assert.match(sm1, /Cash remitted None yet/);
-  assert.match(sm1, /DISCREPANCY DETAILS No transfer or return discrepancies in this period\./);
-  assert.match(sm1, /No stock on hand at this branch\./);
-  assert.match(sm1, /No stock transfers sent to this branch in this period\./);
-}
+assert.doesNotMatch(render(), /STOCK SNAPSHOT|CURRENT INVENTORY|DISCREPANCY DETAILS/);
 
-// 9. Full branch report (existing detail page) still shows product sales, returns and the rest.
+// 6. Detail route is a summary + compact report rows, not a third inventory/transfer hub.
 resetScreen();
 routing.params.id = SM1;
 recon.state.details[SM1] = query({ data: detailsFor(SM1, 'SM1') });
 {
   const t = render(BranchPerformanceDetailScreen);
   assert.deepEqual(recon.state.calls.details.at(-1), [SM1, 'all_time', undefined, undefined]);
-  for (const section of [
-    'BRANCH SUMMARY',
-    'CURRENT INVENTORY (READ-ONLY)',
-    'PRODUCTS SOLD (SELECTED PERIOD)',
-    'TRANSFER DISCREPANCIES',
-    'RETURN DISCREPANCIES',
-    'RECENT STOCK TRANSFERS',
-    'RECENT STOCK RETURNS',
-  ]) {
-    assert.ok(t.includes(section), `detail page keeps ${section}`);
-  }
-  assert.match(t, /SM1 Cake CAKE Sold: 7 ₱\s*480\.00/);
-  assert.match(t, /RET-SM1-1/);
+  assert.match(t, /\[header:SM1\]|\[header:Branch Operations\]/);
+  assert.match(t, /Items sold/);
+  assert.match(t, /Completed sales/);
+  assert.match(t, /Discrepancy units/);
+  assert.doesNotMatch(t, /CURRENT INVENTORY|TRANSFER DISCREPANCIES|RETURN DISCREPANCIES|RECENT STOCK TRANSFERS|RECENT STOCK RETURNS|PRODUCTS SOLD|SM1 Cake|RET-SM1-1|\[button:/);
+  assert.match(t, /Branch Hub/);
+  assert.match(t, /Product Sales/);
+  assert.match(t, /Transfer & Return Issues/);
+  assert.match(t, /Inventory Reconciliation/);
+  const rows = rn.presses.filter((p) => typeof p.onPress === 'function' && p.accessibilityRole === 'button');
+  const byTitle = (title) => {
+    const found = rows.find((p) => p.accessibilityLabel === title);
+    assert.ok(found, `${title} row`);
+    return found;
+  };
+  byTitle('Branch Hub').onPress();
+  assert.equal(routing.pushed.at(-1), `/owner/reports/branch/${SM1}?range=all_time`);
+  byTitle('Product Sales').onPress();
+  assert.equal(routing.pushed.at(-1), `/owner/reports/product-sales/${SM1}?range=all_time`);
+  byTitle('Transfer & Return Issues').onPress();
+  assert.equal(routing.pushed.at(-1), `/owner/reports/discrepancies?branchId=${SM1}&range=all_time`);
+  byTitle('Inventory Reconciliation').onPress();
+  assert.equal(routing.pushed.at(-1), `/owner/reports/inventory-reconciliation?branchId=${SM1}`);
 }
 
 console.log(
-  'Branch Performance card tests passed: collapsed by default with summary discrepancy badges, independent expand/collapse, per-branch details, range-driven queries, loading/error/empty states, remittance kept apart from sales, navigation preserved.',
+  'Branch Operations card tests passed: compact KPIs, issue badges, text links with range, no remittance/product/inventory dumps.',
 );

@@ -97,7 +97,7 @@ export function SelectedReturnCloseForm({
     .filter((p) => Number(p.system_balance_before_waste) > 0)
     .map((p) => {
       const balance = Number(p.system_balance_before_waste);
-      const lost = Number(waste[p.product_id] || 0);
+    const lost = Number(waste[p.product_id] || 0);
       const available = balance - Number(p.previously_held ?? 0);
       return { ...p, lost, available, remaining: balance - lost };
     });
@@ -280,10 +280,10 @@ export function SelectedReturnCloseForm({
             </View>
           ) : null}
         </View>
-      </ScrollView>
+    </ScrollView>
 
-      <View style={styles.footer}>
-        {footerExtra}
+    <View style={styles.footer}>
+      {footerExtra}
         {!ready && blockReason ? <Text style={styles.footerHint}>{blockReason}</Text> : null}
         <ManagerActionButton
           label="Complete End Shift"
@@ -592,7 +592,7 @@ export function SelectedReturnCloseForm({
             </View>
           </View>
         ) : null}
-      </ManagerBottomSheet>
+    </ManagerBottomSheet>
     </View>
   );
 }

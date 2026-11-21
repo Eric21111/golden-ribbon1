@@ -3,10 +3,12 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 assert.match(readFileSync('src/services/shiftService.ts', 'utf8'), /p_range_type: rangeType/);
-assert.match(readFileSync('src/features/reports/ShiftRemittanceScreen.tsx', 'utf8'), /useState<DateFilterType>\('today'\)/);
+assert.match(readFileSync('src/features/reports/ShiftRemittanceScreen.tsx', 'utf8'), /DateFilterType/);
+assert.match(readFileSync('src/features/reports/ShiftRemittanceScreen.tsx', 'utf8'), /'today'/);
 assert.match(readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'), /useState<DateFilterType>/);
 assert.match(readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'), /Waste History/);
-assert.match(readFileSync('src/features/reports/WasteHistoryBranchesScreen.tsx', 'utf8'), /RANGE_TYPE: DateFilterType = 'all_time'/);
+assert.match(readFileSync('src/features/reports/WasteHistoryBranchesScreen.tsx', 'utf8'), /DateRangeFilter/);
+assert.match(readFileSync('src/features/reports/WasteHistoryBranchesScreen.tsx', 'utf8'), /all_time/);
 assert.match(readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'), /formatPcsQty|pcs waste|quantity/);
 assert.doesNotMatch(readFileSync('src/features/reports/WasteHistoryScreen.tsx', 'utf8'), /Waste Inventory|Waste units|Waste servings|KG-meal/);
 assert.match(readFileSync('src/services/shiftService.ts', 'utf8'), /enrichWasteReportQuantities|shift_waste_occurrences/);

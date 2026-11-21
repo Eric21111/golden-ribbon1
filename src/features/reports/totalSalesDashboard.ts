@@ -12,7 +12,7 @@ export type BranchSalesRemittanceRow = {
   isActive: boolean;
 };
 
-/** Preserve Total Sales date filter + expand the tapped branch in Sales by Branch. */
+/** Sales history drill-down for one branch (kept as Sales Overview deep link). */
 export function salesByBranchHref(args: {
   branchId: string;
   rangeType: DateFilterType;
@@ -20,13 +20,13 @@ export function salesByBranchHref(args: {
   customEnd?: string;
 }): string {
   const params = new URLSearchParams();
-  params.set('branchId', args.branchId);
   params.set('range', args.rangeType);
   if (args.rangeType === 'custom') {
     if (args.customStart) params.set('start', args.customStart);
     if (args.customEnd) params.set('end', args.customEnd);
   }
-  return `/owner/reports/sales-by-branch?${params.toString()}`;
+  const query = params.toString();
+  return `/owner/reports/sales-overview/${args.branchId}${query ? `?${query}` : ''}`;
 }
 
 const toCents = (value: unknown) => {

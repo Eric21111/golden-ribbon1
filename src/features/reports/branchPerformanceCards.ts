@@ -1,8 +1,27 @@
 import type {
   BranchPerformanceInventoryItem,
+  BranchPerformanceItem,
   BranchPerformanceRecentTransfer,
   ShiftRemittanceReport,
 } from '../../types/models';
+
+/** Combined transfer+return missing/excess for compact Branch Operations badges. */
+export function branchOperationsIssueQty(item: Pick<
+  BranchPerformanceItem,
+  'transfer_missing_qty' | 'transfer_excess_qty' | 'return_missing_qty' | 'return_excess_qty'
+>) {
+  return {
+    missing: Number(item.transfer_missing_qty) + Number(item.return_missing_qty),
+    excess: Number(item.transfer_excess_qty) + Number(item.return_excess_qty),
+  };
+}
+
+/** Items sold first, then completed sales — revenue stays off this line. */
+export function branchOperationsMeta(quantitySold: number, transactionCount: number): string {
+  const items = `${quantitySold} ${Number(quantitySold) === 1 ? 'item' : 'items'}`;
+  const sales = `${transactionCount} ${Number(transactionCount) === 1 ? 'sale' : 'sales'}`;
+  return `${items} · ${sales}`;
+}
 
 /** Expanded branch ids after tapping a card: opens a collapsed card, closes an open one. */
 export function toggleExpandedBranch(expanded: ReadonlySet<string>, branchId: string): Set<string> {

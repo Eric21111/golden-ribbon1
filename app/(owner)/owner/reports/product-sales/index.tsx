@@ -1,11 +1,5 @@
-import { SellingBranchesHubScreen } from '@/features/reports/SellingBranchesHubScreen';
+import { ProductSalesOverviewScreen } from '@/features/reports/ProductSalesOverviewScreen';
 
-export default function OwnerProductSalesBranches() {
-  return (
-    <SellingBranchesHubScreen
-      title="Product Sales"
-      hrefForBranch={(branchId) => `/owner/reports/product-sales/${branchId}`}
-      accessibilityHint="Opens product sales for this branch"
-    />
-  );
+export default function OwnerProductSales() {
+  return <ProductSalesOverviewScreen />;
 }

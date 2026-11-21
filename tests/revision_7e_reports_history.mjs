@@ -128,11 +128,10 @@ assert.match(shiftService, /shift_id:\$\{item\.product_id\}|\$\{shift\.shift_id\
 assert.match(wasteUi, /occurrence_id|pcs waste|formatPcsQty/);
 assert.doesNotMatch(ownerHub, /KG-meal waste/);
 assert.doesNotMatch(managerDash, /KG-meal waste/);
-assert.match(ownerHub, /Quantified PCS waste|PCS waste/);
+assert.match(ownerHub, /Waste History/);
 
 // Branch performance / product sales / inventory recon
-assert.match(branchPerf, /formatLiveStock/);
-assert.doesNotMatch(branchPerf, /Not tracked|Unmeasured/);
+assert.doesNotMatch(branchPerf, /formatLiveStock|CURRENT INVENTORY|Not tracked|Unmeasured/);
 assert.match(productSales, /Items sold|Total items sold/);
 assert.doesNotMatch(productSales, /\bKG\b|kilogram/i);
 assert.match(invRecon, /formatLiveStock/);

@@ -61,7 +61,13 @@ export function NavTile({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.tile, isAlert && styles.alertTile, style, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.tile,
+        !description && styles.tileSingle,
+        isAlert && styles.alertTile,
+        style,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={[styles.iconChip, isAlert ? styles.alertIconChip : { backgroundColor: chip.chip }]}>
         <Ionicons name={icon} size={18} color={isAlert ? managerColors.goldMuted : chip.icon} />
@@ -86,7 +92,12 @@ export function NavTile({
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={16} color={managerColors.subtext} style={styles.chevron} />
+      <Ionicons
+        name="chevron-forward"
+        size={16}
+        color={managerColors.subtext}
+        style={description ? styles.chevron : undefined}
+      />
     </Pressable>
   );
 }
@@ -107,6 +118,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
+  tileSingle: { alignItems: 'center' },
   alertTile: {
     backgroundColor: '#FFFBEF',
     borderColor: '#F1DFA8',

@@ -23,11 +23,11 @@ function menuHref(href: string): Href {
   return href as Href;
 }
 
-// Kept to 4 tabs — Performance/Reconcile/Discrepancies are already reachable as
-// cards inside the Reports hub, so they don't need their own top-level tab too.
+// Owner tabs: reports stay a hub; Branches is a top-level admin list like Employees.
 const ownerMenu: NavigationItem[] = [
   { label: 'Home', href: menuHref('/owner/dashboard'), icon: 'home-outline', selectedIcon: 'home' },
   { label: 'Reports', href: menuHref('/owner/reports'), icon: 'stats-chart-outline', selectedIcon: 'stats-chart' },
+  { label: 'Branches', href: menuHref('/owner/branches'), icon: 'storefront-outline', selectedIcon: 'storefront' },
   { label: 'Employees', href: menuHref('/owner/employees'), icon: 'people-outline', selectedIcon: 'people' },
   { label: 'Account', href: menuHref('/owner/profile'), icon: 'person-circle-outline', selectedIcon: 'person-circle' },
 ];

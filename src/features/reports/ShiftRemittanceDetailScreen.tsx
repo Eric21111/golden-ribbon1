@@ -15,7 +15,13 @@ import { ManagerBadge, type ManagerBadgeTone } from '@/components/dashboard/Mana
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
-import { formatPcsQty, gcashResult } from '@/features/reports/reportDisplay';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
+import {
+  closesAsUnsold,
+  closingDispositionQty,
+  formatPcsQty,
+  gcashResult,
+} from '@/features/reports/reportDisplay';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useShiftCloseReportDetail } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
@@ -239,6 +245,7 @@ export function ShiftRemittanceDetailScreen() {
             </View>
 
             <View style={styles.sectionBlock}>
+              <ReportSectionHeading title="COLLECTIONS" />
               <TenderRemittanceCard
                 title={combinedCollections ? 'Remittance' : 'Cash'}
                 expectedLabel={combinedCollections ? 'Expected remittance' : 'Expected cash'}
@@ -266,7 +273,7 @@ export function ShiftRemittanceDetailScreen() {
             </View>
 
             <View style={styles.sectionBlock}>
-              <Text style={styles.section}>{detail.selected_return_close ? 'End shift stock' : 'Inventory close'}</Text>
+              <ReportSectionHeading title={detail.selected_return_close ? 'END SHIFT STOCK' : 'INVENTORY CLOSE'} />
               {detail.selected_return_close ? (
                 detail.return_number && profile?.role === 'manager' ? (
                   <Pressable accessibilityRole="link" onPress={() => void openReturn(detail.return_number!)}>
@@ -451,16 +458,9 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
           )}
           <View style={styles.ledgerCloseRow}>
             <Text style={styles.ledgerCloseLabel}>
-              {product.closing_stock_behavior === 'record_as_unsold' ? 'Unsold at close' : 'Carried to next day'}
+              {closesAsUnsold(product) ? 'Unsold at close' : 'Carried to next day'}
             </Text>
-            <Text style={styles.ledgerCloseValue}>
-              {formatPcsQty(
-                product.closing_stock_behavior === 'record_as_unsold'
-                  ? product.unsold_quantity
-                  : product.carried_quantity,
-                unit,
-              )}
-            </Text>
+            <Text style={styles.ledgerCloseValue}>{formatPcsQty(closingDispositionQty(product), unit)}</Text>
           </View>
         </View>
       ) : null}

@@ -1,9 +1,6 @@
-import { TransferDiscrepanciesReportScreen } from '@/features/reports/DiscrepancyReportsScreens';
+import { Redirect } from 'expo-router';
 
-export default function TransferDiscrepanciesRoute() {
-  return (
-    <TransferDiscrepanciesReportScreen
-      detailHref={(id) => `/owner/reports/discrepancies/transfer/${id}`}
-    />
-  );
+/** Compat: unified under Transfer & Return Issues. */
+export default function OwnerTransferDiscrepanciesRedirect() {
+  return <Redirect href={'/owner/reports/discrepancies' as never} />;
 }

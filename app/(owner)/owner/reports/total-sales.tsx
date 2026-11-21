@@ -1,5 +1,6 @@
-import { TotalSalesDashboardScreen } from '@/features/reports/TotalSalesDashboardScreen';
+import { Redirect } from 'expo-router';
 
-export default function OwnerTotalSalesRoute() {
-  return <TotalSalesDashboardScreen />;
+/** Compat: Total Sales merged into Sales Overview. */
+export default function OwnerTotalSalesRedirect() {
+  return <Redirect href={'/owner/reports/sales-overview' as never} />;
 }

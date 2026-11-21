@@ -85,7 +85,7 @@ export function ListRowCard({
               </Text>
             </View>
           ) : (
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text style={styles.subtitle} numberOfLines={2}>
               {subtitle}
             </Text>
           )

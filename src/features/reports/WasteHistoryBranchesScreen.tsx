@@ -1,17 +1,21 @@
-import { router } from 'expo-router';
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
-import { managerColors } from '@/components/dashboard/theme';
+import { StatTile } from '@/components/dashboard/StatTile';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
+import { DATE_RANGE_OPTIONS, DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import {
   buildWasteHistoryBranchRows,
+  summarizeWasteHistory,
   wasteHistoryBranchHref,
   wasteHistoryBranchMeta,
 } from '@/features/reports/wasteHistoryBranches';
@@ -21,14 +25,45 @@ import { getErrorMessage } from '@/lib/errors';
 import { isReportRangeReady } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
 
-const RANGE_TYPE: DateFilterType = 'all_time';
+function initialRangeFromParams(
+  range: string,
+  start: string,
+  end: string,
+): { rangeType: DateFilterType; customStart: string; customEnd: string } {
+  const rangeType = range ? parseReportDateFilter(range) : 'all_time';
+  return {
+    rangeType,
+    customStart: rangeType === 'custom' ? start : '',
+    customEnd: rangeType === 'custom' ? end : '',
+  };
+}
+
+function rangeLabel(rangeType: DateFilterType): string {
+  if (rangeType === 'custom') return 'Custom range';
+  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
+}
 
 export function WasteHistoryBranchesScreen() {
   const { profile } = useAuth();
   const isManager = profile?.role === 'manager';
   const role = isManager ? 'manager' : 'owner';
-  const { rpcRangeType, startIso, endIso } = resolveReportRange(RANGE_TYPE, '', '');
+  const params = useLocalSearchParams<{
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const initial = initialRangeFromParams(
+    firstSearchParam(params.range),
+    firstSearchParam(params.start),
+    firstSearchParam(params.end),
+  );
+  const [rangeType, setRangeType] = useState<DateFilterType>(initial.rangeType);
+  const [customStart, setCustomStart] = useState(initial.customStart);
+  const [customEnd, setCustomEnd] = useState(initial.customEnd);
+
+  const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
+  const customIncomplete = rangeType === 'custom' && !ready;
 
   const branchesQuery = useBranches();
   const wasteQuery = useShiftWaste(rpcRangeType, startIso, endIso, null);
@@ -37,8 +72,10 @@ export function WasteHistoryBranchesScreen() {
     () => (ready && !wasteQuery.isError ? buildWasteHistoryBranchRows(branchesQuery.data, wasteQuery.data) : []),
     [ready, wasteQuery.isError, wasteQuery.data, branchesQuery.data],
   );
+  const totals = useMemo(() => summarizeWasteHistory(wasteQuery.data), [wasteQuery.data]);
 
   const loading = (ready && wasteQuery.isLoading) || branchesQuery.isLoading;
+  const kpiValue = (value: number) => (loading || wasteQuery.isError || customIncomplete ? '—' : value);
 
   return (
     <Screen
@@ -57,6 +94,41 @@ export function WasteHistoryBranchesScreen() {
     >
       <ManagerScreenHeader title="Waste History" showBack={!isManager} />
       <ConstrainedWidth style={styles.column}>
+        <View style={styles.filterBleed}>
+          <DateRangeFilter
+            value={rangeType}
+            onChange={setRangeType}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStartChange={setCustomStart}
+            onCustomEndChange={setCustomEnd}
+          />
+        </View>
+
+        <StatTile
+          layout="wide"
+          emphasis
+          icon="leaf-outline"
+          label="Waste occurrences"
+          value={kpiValue(totals.occurrences)}
+        />
+        <OwnerSummaryKpiPair
+          left={{
+            icon: 'calendar-outline',
+            label: 'Days with waste',
+            value: kpiValue(totals.daysWithWaste),
+          }}
+          right={{
+            icon: 'storefront-outline',
+            label: 'Branches with waste',
+            value: kpiValue(totals.branchesWithWaste),
+          }}
+        />
+
+        {customIncomplete ? (
+          <EmptyState title="Select a date range" message="Enter both a start date and an end date to run this report." />
+        ) : null}
+
         {ready && (wasteQuery.error || branchesQuery.error) ? (
           <ErrorState
             message={getErrorMessage(wasteQuery.error ?? branchesQuery.error)}
@@ -74,26 +146,29 @@ export function WasteHistoryBranchesScreen() {
 
         {ready && !loading && rows.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>BRANCHES</Text>
+            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
             {rows.map((row) => {
               const title = row.isActive ? row.branchName : `Inactive · ${row.branchName}`;
+              const meta = wasteHistoryBranchMeta(row);
               return (
                 <ListRowCard
                   key={row.branchId}
                   icon={row.isMain ? 'home-outline' : 'storefront-outline'}
                   iconColor={accentForName(row.branchName)}
                   title={title}
-                  meta={wasteHistoryBranchMeta(row)}
+                  subtitle={meta}
                   onPress={() =>
                     router.push(
                       wasteHistoryBranchHref({
                         role,
                         branchId: row.branchId,
-                        rangeType: RANGE_TYPE,
+                        rangeType,
+                        customStart,
+                        customEnd,
                       }) as never,
                     )
                   }
-                  accessibilityLabel={`${title} waste history`}
+                  accessibilityLabel={`${title} ${meta}`}
                   accessibilityHint="Opens recorded waste for this branch"
                 />
               );
@@ -108,11 +183,6 @@ export function WasteHistoryBranchesScreen() {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12 },
+  filterBleed: { marginHorizontal: -20 },
   section: { gap: 10, marginTop: 4 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    letterSpacing: 0.6,
-  },
 });

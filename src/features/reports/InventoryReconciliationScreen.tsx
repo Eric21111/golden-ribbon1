@@ -1,24 +1,47 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
+import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors, statChipColors } from '@/components/dashboard/theme';
+import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
+import { DATE_RANGE_OPTIONS, DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import {
+  buildInventoryReconBranchRows,
+  inventoryReconBranchHref,
+  inventoryReconBranchMeta,
+  inventoryReconIssueBadge,
+  reconCollapsedStatusLine,
+  reconHasOpenReturnIssue,
+  reconHasOpenTransferIssue,
+  reconHasResolvedDiscrepancy,
+  reconHasStockMismatch,
+  reconItemHasIssue,
+  reconNonZeroMovementLines,
+  reconResolutionReasonLabel,
+  reconResolvedRowDetail,
+  reconResolvedRows,
+  reconciliationItemBadge,
+  summarizeInventoryRecon,
+} from '@/features/reports/inventoryReconOverview';
+import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
+import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventoryReconciliation } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
-import { formatLiveStock } from '@/lib/format';
+import { formatDate, formatLiveStock } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
 import type {
-  DiscrepancyResolutionReason,
   InventoryReconciliationItem,
   InventoryReconciliationResolvedDiscrepancy,
 } from '@/types/models';
@@ -35,299 +58,362 @@ function qtyPart(missing: number, excess: number): string {
   return parts.join(' · ');
 }
 
-const RESOLUTION_REASON_LABELS: Record<DiscrepancyResolutionReason, string> = {
-  confirmed_shortage: 'Confirmed shortage',
-  confirmed_excess: 'Confirmed excess',
-  counting_error: 'Counting error',
-  encoding_error: 'Encoding error',
-  transfer_handling_issue: 'Transfer handling issue',
-  return_handling_issue: 'Return handling issue',
-  other: 'Other',
-};
-
 export function resolutionReasonLabel(reason: string | null | undefined): string {
-  if (!reason) return 'Resolved';
-  return RESOLUTION_REASON_LABELS[reason as DiscrepancyResolutionReason] ?? reason.replace(/_/g, ' ');
+  return reconResolutionReasonLabel(reason);
 }
 
-export function resolvedDiscrepancies(
+export function resolvedRows(
   item: InventoryReconciliationItem,
 ): InventoryReconciliationResolvedDiscrepancy[] {
-  return item.resolved_discrepancies ?? [];
+  return reconResolvedRows(item);
 }
 
 export function hasResolvedDiscrepancy(item: InventoryReconciliationItem): boolean {
-  return resolvedDiscrepancies(item).length > 0;
+  return reconHasResolvedDiscrepancy(item);
 }
 
 export function hasAuditDiscrepancy(item: InventoryReconciliationItem): boolean {
-  return (
-    Number(item.transfer_missing_qty) > 0 ||
-    Number(item.transfer_excess_qty) > 0 ||
-    Number(item.return_missing_qty) > 0 ||
-    Number(item.return_excess_qty) > 0
-  );
+  return reconHasOpenReturnIssue(item) || reconHasOpenTransferIssue(item);
 }
 
-/** Ledger variance or an open return/transfer difference — testers see this as an issue. */
 export function hasVisibleReconciliationIssue(item: InventoryReconciliationItem): boolean {
-  return Boolean(item.has_reconciliation_issue) || hasAuditDiscrepancy(item);
+  return reconItemHasIssue(item);
 }
 
 export function reconciliationIssueBadge(item: InventoryReconciliationItem): {
   label: string;
   tone: 'danger' | 'warning' | 'success';
 } {
-  const ledger = Boolean(item.has_reconciliation_issue);
-  const transfer = Number(item.transfer_missing_qty) > 0 || Number(item.transfer_excess_qty) > 0;
-  const returned = Number(item.return_missing_qty) > 0 || Number(item.return_excess_qty) > 0;
-  if (ledger) return { label: 'Issue', tone: 'danger' };
-  if (returned && transfer) return { label: 'Audit issue', tone: 'warning' };
-  if (returned) return { label: 'Return issue', tone: 'warning' };
-  if (transfer) return { label: 'Transfer issue', tone: 'warning' };
-  if (hasResolvedDiscrepancy(item)) return { label: 'Resolved', tone: 'success' };
-  return { label: 'Balanced', tone: 'success' };
+  return reconciliationItemBadge(item);
 }
 
 export function auditDiscrepancySummary(item: InventoryReconciliationItem): string | null {
-  const parts = [];
   const transfer = qtyPart(Number(item.transfer_missing_qty), Number(item.transfer_excess_qty));
-  const returned = qtyPart(Number(item.return_missing_qty), Number(item.return_excess_qty));
-  if (transfer) parts.push(`Transfer ${transfer}`);
-  if (returned) parts.push(`Return ${returned}`);
+  const ret = qtyPart(Number(item.return_missing_qty), Number(item.return_excess_qty));
+  const parts = [
+    transfer ? `Transfer ${transfer}` : '',
+    ret ? `Return ${ret}` : '',
+  ].filter(Boolean);
   return parts.length ? parts.join(' · ') : null;
 }
 
 export function resolvedDiscrepancySummary(item: InventoryReconciliationItem): string | null {
-  const rows = resolvedDiscrepancies(item);
-  if (!rows.length) return null;
+  const rows = reconResolvedRows(item);
+  if (rows.length === 0) return null;
   return rows
     .map((row) => {
-      const reason = resolutionReasonLabel(row.resolution_reason);
+      const reason = reconResolutionReasonLabel(row.resolution_reason);
       const note = row.resolution_note?.trim();
       return note ? `${reason} · ${note}` : reason;
     })
     .join(' · ');
 }
 
-export function InventoryReconciliationScreen() {
-  const branches = useBranches();
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+function signedQty(quantity: number, code?: InventoryReconciliationItem['stock_unit_code']): string {
+  const abs = formatReconQty(Math.abs(quantity), code);
+  if (quantity > 0) return `+${abs}`;
+  if (quantity < 0) return `−${abs}`;
+  return abs;
+}
 
+function rangeLabel(rangeType: DateFilterType): string {
+  if (rangeType === 'custom') return 'Custom range';
+  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
+}
+
+export function InventoryReconciliationScreen() {
+  const params = useLocalSearchParams<{
+    branchId?: string | string[];
+    range?: string | string[];
+    start?: string | string[];
+    end?: string | string[];
+  }>();
+  const selectedBranchId = firstSearchParam(params.branchId);
+  const initialRange = parseReportDateFilter(firstSearchParam(params.range) || 'all_time');
+  const initialStart = firstSearchParam(params.start);
+  const initialEnd = firstSearchParam(params.end);
+  const [rangeType, setRangeType] = useState<DateFilterType>(initialRange);
+  const [customStart, setCustomStart] = useState(initialRange === 'custom' ? initialStart : '');
+  const [customEnd, setCustomEnd] = useState(initialRange === 'custom' ? initialEnd : '');
+  const [selected, setSelected] = useState<InventoryReconciliationItem | null>(null);
+  const rangeArgs = { rangeType, customStart, customEnd };
+  const branches = useBranches();
   const query = useInventoryReconciliation(selectedBranchId || undefined);
+  const refresh = query.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
   const items = query.data ?? [];
+  const totals = summarizeInventoryRecon(items);
+  const branchRows = buildInventoryReconBranchRows(items, branches.data);
   const rankedItems = [...items].sort(
     (a, b) => Number(hasVisibleReconciliationIssue(b)) - Number(hasVisibleReconciliationIssue(a)),
   );
   const pagination = useClientPagination(rankedItems, selectedBranchId);
-
-  const totalProducts = items.length;
-  const issueCount = items.filter(hasVisibleReconciliationIssue).length;
-  const returnIssueCount = items.filter(
-    (item) => Number(item.return_missing_qty) > 0 || Number(item.return_excess_qty) > 0,
-  ).length;
-  const balancedCount = totalProducts - issueCount;
-
-  const branchOptions = [
-    { label: 'All selling branches', value: '' },
-    ...(branches.data?.filter((b) => !b.is_main_branch).map((b) => ({ label: b.name, value: b.id })) ?? []),
-  ];
+  const showHub = !selectedBranchId;
+  const loading = query.isLoading || branches.isLoading;
+  const selectedBranchName =
+    (branches.data ?? []).find((branch) => branch.id === selectedBranchId)?.name ??
+    items.find((item) => item.branch_id === selectedBranchId)?.branch_name;
+  const title = 'Inventory Reconciliation';
+  const subtitle = selectedBranchId ? selectedBranchName ?? 'Branch' : undefined;
 
   return (
-    <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screenContent}>
-      <ManagerScreenHeader title="Inventory Reconciliation" showBack />
+    <Screen
+      backgroundColor="#FFFFFF"
+      edges={['top']}
+      contentContainerStyle={styles.screenContent}
+      refreshing={query.isRefetching}
+      onRefresh={() => void refresh()}
+    >
+      <ManagerScreenHeader title={title} subtitle={subtitle} showBack />
       <ConstrainedWidth style={styles.column}>
-        <FilterChipRow options={branchOptions} value={selectedBranchId} onChange={setSelectedBranchId} />
-
-        <Text style={styles.sectionTitle}>RECONCILIATION OVERVIEW</Text>
-        <Text style={styles.hint}>
-          Count differences stay listed even when stock totals match.
-        </Text>
-        <StatTile layout="wide" emphasis icon="alert-circle-outline" label="Reconciliation issues" value={issueCount} />
-        <View style={styles.statsRow}>
-          <StatTile style={styles.statHalf} compact icon="cube-outline" label="Audited items" value={totalProducts} />
-          <StatTile style={styles.statHalf} compact icon="return-up-back-outline" label="Return issues" value={returnIssueCount} />
+        <View style={styles.filterBleed}>
+          <DateRangeFilter
+            value={rangeType}
+            onChange={setRangeType}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStartChange={setCustomStart}
+            onCustomEndChange={setCustomEnd}
+          />
         </View>
-        <StatTile compact icon="checkmark-circle-outline" label="Balanced items" value={balancedCount} />
 
-        {query.isLoading ? <LoadingState label="Reconciling inventory ledgers…" /> : null}
+        <StatTile
+          layout="wide"
+          emphasis
+          icon="cube-outline"
+          label="Items in report"
+          value={loading || query.error ? '—' : totals.itemCount}
+        />
+        <OwnerSummaryKpiPair
+          left={{
+            icon: 'checkmark-circle-outline',
+            label: 'Balanced',
+            value: loading || query.error ? '—' : totals.balancedCount,
+          }}
+          right={{
+            icon: 'alert-circle-outline',
+            label: 'With issues',
+            value: loading || query.error ? '—' : totals.issueCount,
+          }}
+        />
+
+        {loading ? <LoadingState label="Reconciling inventory ledgers…" /> : null}
         {query.error ? (
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : null}
-        {items.length === 0 && !query.isLoading ? (
-          <EmptyState title="No products to reconcile" message="No active inventory or movements found for the selected branch." />
+
+        {showHub && !loading && !query.error && branchRows.length === 0 ? (
+          <EmptyState title="No branches" message="No branches are available for inventory reconciliation." />
         ) : null}
 
-        {pagination.pageItems.map((item) => (
-          <ReconciliationItemCard key={`${item.branch_id}-${item.product_id}`} item={item} />
-        ))}
-        {pagination.showPagination ? (
+        {showHub && !loading && !query.error && branchRows.length > 0 ? (
+          <View style={styles.section}>
+            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            {branchRows.map((row) => {
+              const title = row.isActive ? row.branchName : `Inactive · ${row.branchName}`;
+              const meta = inventoryReconBranchMeta(row);
+              const badge = inventoryReconIssueBadge(row);
+              return (
+                <ListRowCard
+                  key={row.branchId}
+                  icon={row.isMain ? 'home-outline' : 'storefront-outline'}
+                  iconColor={accentForName(row.branchName)}
+                  title={title}
+                  subtitle={meta}
+                  trailing={<ManagerBadge label={badge.label} tone={badge.tone} />}
+                  onPress={() =>
+                    router.push(inventoryReconBranchHref({ branchId: row.branchId, ...rangeArgs }) as never)
+                  }
+                  accessibilityLabel={`${title} ${meta}, ${badge.label}`}
+                  accessibilityHint="Opens inventory reconciliation for this branch"
+                />
+              );
+            })}
+          </View>
+        ) : null}
+
+        {!showHub && items.length === 0 && !loading && !query.error ? (
+          <EmptyState
+            title="No products to reconcile"
+            message="No active inventory or movements found for the selected branch."
+          />
+        ) : null}
+
+        {!showHub
+          ? pagination.pageItems.map((item) => (
+              <ReconciliationItemCard
+                key={`${item.branch_id}-${item.product_id}`}
+                item={item}
+                onOpen={() => setSelected(item)}
+              />
+            ))
+          : null}
+        {!showHub && pagination.showPagination ? (
           <View style={styles.pager}>
             <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
           </View>
         ) : null}
       </ConstrainedWidth>
+      <ManagerBottomSheet
+        visible={selected != null}
+        title={selected?.product_name ?? 'Product'}
+        scroll
+        onClose={() => setSelected(null)}
+      >
+        {selected ? <ReconDetailsBody item={selected} /> : null}
+      </ManagerBottomSheet>
     </Screen>
   );
 }
 
-function ReconciliationItemCard({ item }: { item: InventoryReconciliationItem }) {
-  const [expanded, setExpanded] = useState(false);
-  const ledgerIssue = Boolean(item.has_reconciliation_issue);
-  const isIssue = hasVisibleReconciliationIssue(item);
+function LedgerLine({
+  label,
+  value,
+  strong,
+  tone,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  tone?: 'issue' | 'ok';
+}) {
+  return (
+    <View style={styles.ledgerRow}>
+      <Text style={[styles.ledgerLabel, strong && styles.ledgerStrong]}>{label}</Text>
+      <Text
+        style={[
+          styles.ledgerValue,
+          strong && styles.ledgerStrong,
+          tone === 'issue' && styles.varianceIssue,
+          tone === 'ok' && styles.varianceOk,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ReconciliationItemCard({
+  item,
+  onOpen,
+}: {
+  item: InventoryReconciliationItem;
+  onOpen: () => void;
+}) {
+  const mismatch = reconHasStockMismatch(item);
+  const openCountIssue = reconHasOpenReturnIssue(item) || reconHasOpenTransferIssue(item);
   const badge = reconciliationIssueBadge(item);
-  const auditSummary = auditDiscrepancySummary(item);
-  const resolutionSummary = resolvedDiscrepancySummary(item);
-  const resolvedRows = resolvedDiscrepancies(item);
-  const varianceTone = ledgerIssue ? styles.varianceIssue : styles.varianceOk;
-  const varianceLabel = item.variance > 0
-    ? `+${formatReconQty(item.variance, item.stock_unit_code)}`
-    : formatReconQty(item.variance, item.stock_unit_code);
-  const branchChip = statChipColors[accentForName(item.branch_name)];
+  const statusLine = reconCollapsedStatusLine(item);
+  const code = item.stock_unit_code;
 
   return (
     <Pressable
+      onPress={onOpen}
+      style={({ pressed }) => [styles.card, mismatch && styles.issueCard, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={expanded ? 'Hide movement ledger' : 'Show movement ledger'}
-      onPress={() => setExpanded((current) => !current)}
-      style={({ pressed }) => [styles.card, isIssue && styles.issueCard, pressed && styles.pressed]}
+      accessibilityLabel={`${item.product_name}, ${badge.label}${statusLine ? `, ${statusLine}` : ''}`}
+      accessibilityHint="Shows movement details"
     >
       <View style={styles.headerRow}>
-        <Text style={styles.productName} numberOfLines={2}>
-          {item.product_name}
-        </Text>
-        <ManagerBadge label={badge.label} tone={badge.tone} />
-      </View>
-
-      <View style={styles.subRow}>
-        <View style={styles.subRowLeft}>
-          <View style={[styles.branchTag, { backgroundColor: branchChip.chip }]}>
-            <Ionicons name="storefront-outline" size={11} color={branchChip.icon} />
-            <Text style={[styles.branchTagLabel, { color: branchChip.icon }]} numberOfLines={1}>
-              {item.branch_name}
-            </Text>
-          </View>
-          <Text style={styles.meta} numberOfLines={1}>
-            {item.product_sku}
-          </Text>
-        </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={managerColors.subtext} />
-      </View>
-
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Calculated</Text>
-          <Text style={styles.summaryValue}>{formatReconQty(item.calculated_stock, item.stock_unit_code)}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Current</Text>
-          <Text style={styles.summaryValue}>{formatReconQty(item.current_stock, item.stock_unit_code)}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Variance</Text>
-          <Text style={[styles.summaryValue, varianceTone]}>{varianceLabel}</Text>
+        <Text style={styles.productName}>{item.product_name}</Text>
+        <View style={styles.headerTrail}>
+          <ManagerBadge label={badge.label} tone={badge.tone} />
+          <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
         </View>
       </View>
-      {auditSummary ? <Text style={styles.auditSummary}>{auditSummary}</Text> : null}
-      {resolutionSummary ? <Text style={styles.resolutionSummary}>{resolutionSummary}</Text> : null}
-
-      {expanded ? (
-        <View style={styles.ledger}>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>+ Opening stock</Text>
-            <Text style={styles.ledgerValue}>{formatReconQty(item.opening_stock, item.stock_unit_code)}</Text>
-          </View>
-          {Number(item.transfer_out) !== 0 ? (
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>− Transfers out</Text>
-              <Text style={styles.ledgerValue}>{formatReconQty(item.transfer_out, item.stock_unit_code)}</Text>
-            </View>
-          ) : null}
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>+ Transfers in (received)</Text>
-            <Text style={styles.ledgerValue}>{formatReconQty(item.transfer_in, item.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>− Sales (deducted)</Text>
-            <Text style={styles.ledgerValue}>{formatReconQty(item.sale, item.stock_unit_code)}</Text>
-          </View>
-          <View style={styles.ledgerRow}>
-            <Text style={styles.ledgerLabel}>− Returns out (sent)</Text>
-            <Text style={styles.ledgerValue}>{formatReconQty(item.return_out, item.stock_unit_code)}</Text>
-          </View>
-          {Number(item.adjustment) !== 0 ? (
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>± Adjustments</Text>
-              <Text style={styles.ledgerValue}>
-                {item.adjustment > 0 ? `+${formatReconQty(item.adjustment, item.stock_unit_code)}` : formatReconQty(item.adjustment, item.stock_unit_code)}
-              </Text>
-            </View>
-          ) : null}
-
-          {auditSummary ? (
-            <View style={styles.auditRefSection}>
-              <View style={styles.auditRefHeader}>
-                <Ionicons name="information-circle-outline" size={13} color={managerColors.subtext} />
-                <Text style={styles.auditRefTitle}>Open audit discrepancies</Text>
-              </View>
-              {item.transfer_missing_qty > 0 || item.transfer_excess_qty > 0 ? (
-                <View style={styles.ledgerRow}>
-                  <Text style={styles.ledgerLabel}>Transfer discrepancy</Text>
-                  <Text style={styles.meta}>
-                    {item.transfer_missing_qty} missing{item.transfer_excess_qty > 0 ? ` · ${item.transfer_excess_qty} excess` : ''}
-                  </Text>
-                </View>
-              ) : null}
-              {item.return_missing_qty > 0 || item.return_excess_qty > 0 ? (
-                <View style={styles.ledgerRow}>
-                  <Text style={styles.ledgerLabel}>Return discrepancy</Text>
-                  <Text style={styles.meta}>
-                    {item.return_missing_qty} missing{item.return_excess_qty > 0 ? ` · ${item.return_excess_qty} excess` : ''}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {resolvedRows.length ? (
-            <View style={styles.auditRefSection}>
-              <View style={styles.auditRefHeader}>
-                <Ionicons name="checkmark-circle-outline" size={13} color={managerColors.subtext} />
-                <Text style={styles.auditRefTitle}>Resolved discrepancies</Text>
-              </View>
-              {resolvedRows.map((row) => {
-                const note = row.resolution_note?.trim();
-                return (
-                  <View key={`${row.kind}-${row.id}`} style={styles.resolutionRow}>
-                    <Text style={styles.ledgerLabel}>
-                      {row.kind === 'return' ? 'Return' : 'Transfer'} · {resolutionReasonLabel(row.resolution_reason)}
-                    </Text>
-                    {note ? <Text style={styles.meta}>{note}</Text> : null}
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
-        </View>
+      <Text style={styles.meta}>{item.product_sku}</Text>
+      {statusLine ? (
+        <Text style={[styles.statusLine, openCountIssue && styles.statusOpen]}>{statusLine}</Text>
       ) : null}
+
+      <View style={styles.ledger}>
+        <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), code)} strong />
+        <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), code)} strong />
+        <LedgerLine
+          label="Variance"
+          value={signedQty(Number(item.variance), code)}
+          strong
+          tone={mismatch ? 'issue' : 'ok'}
+        />
+      </View>
     </Pressable>
+  );
+}
+
+export function ReconDetailsBody({ item }: { item: InventoryReconciliationItem }) {
+  const mismatch = reconHasStockMismatch(item);
+  const openCountIssue = reconHasOpenReturnIssue(item) || reconHasOpenTransferIssue(item);
+  const badge = reconciliationIssueBadge(item);
+  const statusLine = reconCollapsedStatusLine(item);
+  const movements = reconNonZeroMovementLines(item);
+  const resolved = reconResolvedRows(item);
+  const code = item.stock_unit_code;
+
+  return (
+    <View style={styles.sheetBody}>
+      <View style={styles.sheetHead}>
+        <View style={styles.headerRow}>
+          <Text style={styles.meta}>{item.product_sku}</Text>
+          <ManagerBadge label={badge.label} tone={badge.tone} />
+        </View>
+        {statusLine ? (
+          <Text style={[styles.statusLine, openCountIssue && styles.statusOpen]}>{statusLine}</Text>
+        ) : null}
+      </View>
+      <View style={styles.sheetCard}>
+        {movements.length === 0 ? (
+          <View style={styles.itemRow}>
+            <Text style={styles.meta}>No stock movements</Text>
+          </View>
+        ) : (
+          movements.map((line, index) => (
+            <View
+              key={line.label}
+              style={[styles.itemRow, index < movements.length - 1 && styles.itemRowDivider]}
+            >
+              <Text style={styles.itemName}>{line.label}</Text>
+              <Text style={styles.itemQty}>{signedQty(line.quantity, code)}</Text>
+            </View>
+          ))
+        )}
+        <View style={styles.sheetTotals}>
+          <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), code)} strong />
+          <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), code)} strong />
+          <LedgerLine
+            label="Variance"
+            value={signedQty(Number(item.variance), code)}
+            strong
+            tone={mismatch ? 'issue' : 'ok'}
+          />
+        </View>
+      </View>
+      {resolved.length > 0
+        ? resolved.map((row) => {
+            const detail = reconResolvedRowDetail(row);
+            const when = row.resolved_at ? formatDate(row.resolved_at) : null;
+            return (
+              <View key={`${row.kind}-${row.id}`} style={styles.resolutionRow}>
+                <Text style={styles.itemName}>{detail.title}</Text>
+                {when ? <Text style={styles.meta}>{when}</Text> : null}
+                {detail.meta ? <Text style={styles.meta}>{detail.meta}</Text> : null}
+              </View>
+            );
+          })
+        : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flexGrow: 1, padding: 20, gap: 16 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-  },
-  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, lineHeight: 18, marginTop: -6 },
-  auditSummary: { color: '#92400E', fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18 },
-  resolutionSummary: { color: managerColors.green, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statHalf: { flex: 1 },
+  filterBleed: { marginHorizontal: -20 },
+  section: { gap: 10, marginTop: 4 },
   pager: { paddingVertical: 8 },
   card: {
     backgroundColor: '#FFFFFF',
@@ -345,23 +431,11 @@ const styles = StyleSheet.create({
   issueCard: { borderColor: '#F3C6C2', backgroundColor: '#FFFAF9' },
   pressed: { opacity: 0.85 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  headerTrail: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   productName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 21 },
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
-  subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  subRowLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
-  branchTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  branchTagLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 20 },
-  summaryItem: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  summaryLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-  summaryValue: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  statusLine: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
+  statusOpen: { color: '#92400E', fontFamily: 'Inter_600SemiBold' },
   varianceIssue: { color: '#B91C1C' },
   varianceOk: { color: managerColors.green },
   ledger: {
@@ -373,19 +447,31 @@ const styles = StyleSheet.create({
   ledgerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   ledgerLabel: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5 },
   ledgerValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 12.5 },
+  ledgerStrong: { fontFamily: 'Inter_700Bold', color: managerColors.ink },
   resolutionRow: { gap: 2 },
-  auditRefSection: {
+  sheetBody: { gap: 14, paddingBottom: 8 },
+  sheetHead: { gap: 6 },
+  sheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  itemRowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
+  itemName: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },
+  itemQty: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14.5 },
+  sheetTotals: {
     borderTopWidth: 1,
     borderTopColor: managerColors.cardBorder,
-    paddingTop: 8,
-    marginTop: 4,
-    gap: 4,
-  },
-  auditRefHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 },
-  auditRefTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 0.5,
+    paddingVertical: 12,
+    gap: 6,
   },
 });

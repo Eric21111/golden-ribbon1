@@ -16,6 +16,9 @@ function OwnerStack() {
       <Stack screenOptions={{ headerShown: false, animation: 'default', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="owner/dashboard" />
         <Stack.Screen name="owner/reports/index" />
+        <Stack.Screen name="owner/reports/sales-overview/index" />
+        <Stack.Screen name="owner/reports/sales-overview/[branchId]" />
+        <Stack.Screen name="owner/reports/branch/[branchId]" />
         <Stack.Screen name="owner/reports/total-sales" />
         <Stack.Screen name="owner/reports/sales-by-branch" />
         <Stack.Screen name="owner/reports/shift-remittances/index" />
@@ -25,6 +28,8 @@ function OwnerStack() {
         <Stack.Screen name="owner/reports/waste-history/[branchId]" />
         <Stack.Screen name="owner/reports/product-sales/index" />
         <Stack.Screen name="owner/reports/product-sales/[branchId]" />
+        <Stack.Screen name="owner/reports/void-logs/index" />
+        <Stack.Screen name="owner/reports/void-logs/[branchId]" />
         <Stack.Screen name="owner/reports/stock-corrections/index" />
         <Stack.Screen name="owner/reports/stock-corrections/[branchId]" />
         <Stack.Screen name="owner/reports/branch-performance/index" />
