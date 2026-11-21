@@ -94,6 +94,26 @@ assert.equal(
   'Return · Confirmed shortage',
 );
 assert.equal(
+  recon.reconOpenStatusLine({ ...cleared, return_missing_qty: 2 }),
+  'Return · 2 missing',
+);
+assert.equal(
+  recon.reconOpenStatusLine({ ...cleared, resolved_discrepancies: [resolvedReturn] }),
+  null,
+  'resolved-only products have no open status line',
+);
+assert.equal(
+  recon.reconResolvedStatusLine({ ...cleared, resolved_discrepancies: [resolvedReturn] }),
+  'Return · Confirmed shortage · confirmed missing',
+);
+assert.equal(
+  recon.reconResolvedStatusLine({
+    ...cleared,
+    resolved_discrepancies: [{ ...resolvedReturn, resolution_note: null }],
+  }),
+  'Return · Confirmed shortage',
+);
+assert.equal(
   recon.reconCollapsedStatusLine({ ...cleared, return_missing_qty: 2 }),
   'Return · 2 missing',
 );
@@ -109,6 +129,15 @@ assert.equal(
   }),
   'Return · 2 missing',
   'open count issue is the collapsed line, not the resolved reason',
+);
+assert.equal(
+  recon.reconResolvedStatusLine({
+    ...cleared,
+    return_missing_qty: 2,
+    resolved_discrepancies: [resolvedReturn],
+  }),
+  'Return · Confirmed shortage · confirmed missing',
+  'resolved reason stays available beside an open issue',
 );
 assert.deepEqual(
   recon.reconNonZeroMovementLines({
@@ -181,14 +210,16 @@ assert.doesNotMatch(reconSrc, /COMPANY TOTALS|BRANCH TOTALS/);
 assert.doesNotMatch(reconSrc, /Return issues/);
 assert.doesNotMatch(reconSrc, /setSelectedBranchId/);
 assert.match(reconSrc, /useFocusEffect/);
-assert.match(reconSrc, /statusLine/);
-assert.match(reconSrc, /reconCollapsedStatusLine/);
+assert.match(reconSrc, /reconOpenStatusLine/);
+assert.match(reconSrc, /resolvedDiscrepancySummary\(item\)/);
 assert.match(reconSrc, /ManagerBottomSheet/);
 assert.match(reconSrc, /reconNonZeroMovementLines/);
 assert.match(reconSrc, /label="Ledger"/);
 assert.doesNotMatch(reconSrc, /OPEN COUNT ISSUES/);
 assert.doesNotMatch(reconSrc, /chevron-down|chevron-up/);
 assert.match(reconSrc, /reconciliationItemBadge/);
+assert.match(reconSrc, /statusResolved/);
+assert.doesNotMatch(reconSrc, /Count differences stay listed even when stock totals match/);
 
 const issuesSrc = readFileSync('app/(owner)/owner/reports/discrepancies/index.tsx', 'utf8');
 assert.match(issuesSrc, /DateRangeFilter/);

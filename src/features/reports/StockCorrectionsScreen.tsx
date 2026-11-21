@@ -46,7 +46,7 @@ function CorrectionCard({ row }: { row: CorrectionHistory }) {
           <Text style={[styles.changeText, { color: tone.text }]}>{formatCorrectionChange(change)}</Text>
         </View>
       </View>
-      {row.details.action === 'add' && <Text style={styles.meta}>Added stock</Text>}
+      <Text style={styles.meta}>{row.details.action === 'add' ? 'Added stock' : 'Recount'}</Text>
       <Text style={styles.quantity}>{correctionQuantityLine(row.details, row.stock_unit_code)}</Text>
       <View style={styles.bottom}>
         <View style={styles.reasonPill}>
@@ -75,7 +75,7 @@ export default function StockCorrectionsScreen() {
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} contentContainerStyle={styles.screen}>
       {/* same header as Waste History / Shift remittances: the manager has this in the sidebar (menu icon); the owner drills in from Reports (back) */}
-      <ManagerScreenHeader title="Stock count changes" showBack={!isManager} />
+      <ManagerScreenHeader title="Stock correction" showBack={!isManager} />
       {/* nothing to list (loading, error, empty): the message sits in the middle of the screen instead of under the header */}
       <ConstrainedWidth fill={centered} style={[styles.column, centered && styles.centered]}>
         {query.isPending ? <LoadingState label="Loading stock corrections…" /> : null}
@@ -83,7 +83,7 @@ export default function StockCorrectionsScreen() {
         {!query.isPending && !query.error && rows.length === 0 ? (
           <EmptyState
             title="No corrections"
-            message={page === 0 ? 'No stock counts have been corrected yet.' : 'There are no more corrections.'}
+            message={page === 0 ? 'No stock corrections have been recorded yet.' : 'There are no more corrections.'}
           />
         ) : null}
 

@@ -19,11 +19,13 @@ assert.match(source, /With issues/);
 assert.doesNotMatch(source, /Count differences stay listed even when stock totals match/);
 assert.doesNotMatch(source, /RECONCILIATION OVERVIEW/);
 assert.match(source, /export function hasVisibleReconciliationIssue/);
-assert.match(source, /reconCollapsedStatusLine\(item\)/);
+assert.match(source, /reconOpenStatusLine\(item\)/);
+assert.match(source, /resolvedDiscrepancySummary\(item\)/);
 assert.match(source, /reconResolvedRowDetail\(row\)/);
 assert.match(source, /formatLiveStock/);
 assert.doesNotMatch(source, /formatSnapshottedQuantity/);
 assert.doesNotMatch(source, /has_reconciliation_issue\)\.length/);
+assert.match(overviewSrc, /reconResolvedStatusLine/);
 
 const db = new PGlite();
 await db.exec(`

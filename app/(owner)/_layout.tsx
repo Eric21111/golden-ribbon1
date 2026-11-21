@@ -30,6 +30,7 @@ function OwnerStack() {
         <Stack.Screen name="owner/reports/product-sales/[branchId]" />
         <Stack.Screen name="owner/reports/void-logs/index" />
         <Stack.Screen name="owner/reports/void-logs/[branchId]" />
+        <Stack.Screen name="owner/reports/stock-count-changes" />
         <Stack.Screen name="owner/reports/stock-corrections/index" />
         <Stack.Screen name="owner/reports/stock-corrections/[branchId]" />
         <Stack.Screen name="owner/reports/branch-performance/index" />

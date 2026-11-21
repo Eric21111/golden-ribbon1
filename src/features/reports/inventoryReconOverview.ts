@@ -92,14 +92,32 @@ function kindQtyLine(kind: 'Transfer' | 'Return', missing: number, excess: numbe
   return bits.length ? `${kind} · ${bits.join(' · ')}` : null;
 }
 
-/** Collapsed card line: open count issue first, else the latest resolution reason. */
-export function reconCollapsedStatusLine(item: InventoryReconciliationItem): string | null {
+/** Open transfer/return count issues only. Resolved history is separate. */
+export function reconOpenStatusLine(item: InventoryReconciliationItem): string | null {
   const open = [
     kindQtyLine('Transfer', Number(item.transfer_missing_qty), Number(item.transfer_excess_qty)),
     kindQtyLine('Return', Number(item.return_missing_qty), Number(item.return_excess_qty)),
   ].filter(Boolean);
-  if (open.length) return open.join(' · ');
-  return reconCompactReasonLine(item);
+  return open.length ? open.join(' · ') : null;
+}
+
+/** Reason (+ optional note) for every resolved discrepancy on this product card. */
+export function reconResolvedStatusLine(item: InventoryReconciliationItem): string | null {
+  const rows = reconResolvedRows(item);
+  if (rows.length === 0) return null;
+  return rows
+    .map((row) => {
+      const kind = row.kind === 'return' ? 'Return' : 'Transfer';
+      const reason = reconResolutionReasonLabel(row.resolution_reason);
+      const note = row.resolution_note?.trim();
+      return note ? `${kind} · ${reason} · ${note}` : `${kind} · ${reason}`;
+    })
+    .join(' · ');
+}
+
+/** Collapsed card line: open count issue first, else the latest resolution reason. */
+export function reconCollapsedStatusLine(item: InventoryReconciliationItem): string | null {
+  return reconOpenStatusLine(item) ?? reconCompactReasonLine(item);
 }
 
 export type ReconMovementLine = { label: string; quantity: number };

@@ -63,6 +63,12 @@ export default function OwnerReportsHub() {
             title="Waste History"
             onPress={() => router.push('/owner/reports/waste-history' as never)}
           />
+          <NavTile
+            icon="swap-vertical-outline"
+            accent="teal"
+            title="Stock correction"
+            onPress={() => router.push('/owner/reports/stock-count-changes' as never)}
+          />
         </ReportSection>
 
         <ReportSection title="Audit & Performance">

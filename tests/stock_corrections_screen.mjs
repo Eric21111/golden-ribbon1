@@ -70,7 +70,7 @@ const row = (n, over = {}) => ({
 
 // the same header as the other reports
 render({ data: [] });
-assert.equal(header.title, 'Stock count changes');
+assert.equal(header.title, 'Stock correction');
 assert.equal(header.subtitle, undefined, 'the same plain header as Waste History: title only');
 assert.equal(header.showBack, true, 'the owner drills in from Reports: back arrow');
 role = 'manager';
@@ -93,16 +93,24 @@ assert.equal(refetches, 1, 'Retry refetches');
 assert.doesNotMatch(html, /data-empty/, 'an error is not also "no corrections"');
 
 // empty
-assert.match(render({ data: [] }), /data-empty="No corrections"[^>]*>No stock counts have been corrected yet\./);
+assert.match(render({ data: [] }), /data-empty="No corrections"[^>]*>No stock corrections have been recorded yet\./);
 assert.equal(pager.visible, false, 'no pager when everything fits');
 assert.equal(column.fill, true, 'the empty message is centred in the screen, not left under the header');
 
-// rows: compact cards
-html = render({ data: [row(1), row(2, { product_name: 'Egg', stock_unit_code: 'half_egg', details: { before: 10, after: 8, reason: 'Incorrect kitchen count', shift_id: 's1' } })] });
+// rows: compact cards — recount vs added stock labeled separately
+html = render({
+  data: [
+    row(1),
+    row(2, { product_name: 'Egg', stock_unit_code: 'half_egg', details: { before: 10, after: 8, reason: 'Incorrect kitchen count', shift_id: 's1' } }),
+    row(3, { product_name: 'Rice', details: { action: 'add', before: 5, after: 8, reason: 'Wrong stock count: kitchen short', shift_id: 's1', quantity: 3 } }),
+  ],
+});
 const text = flat(html);
-assert.match(text, /Product 1\|SM 1 · Maria\|\+3\|5 → 8 pcs\|Physical recount\|Nov 11, 3:20\s?PM/, 'name, branch · cashier, +change, count line, reason, time');
-assert.match(text, /Egg\|SM 1 · Maria\|−2\|10 → 8 half-egg units\|Incorrect kitchen count/, 'a decrease, in the item\'s own unit');
+assert.match(text, /Product 1\|SM 1 · Maria\|\+3\|Recount\|5 → 8 pcs\|Physical recount\|Nov 11, 3:20\s?PM/, 'name, branch · cashier, +change, Recount, count line, reason, time');
+assert.match(text, /Egg\|SM 1 · Maria\|−2\|Recount\|10 → 8 half-egg units\|Incorrect kitchen count/, 'a decrease, in the item\'s own unit');
+assert.match(text, /Rice\|SM 1 · Maria\|\+3\|Added stock\|5 → 8 pcs\|Wrong stock count: kitchen short/, 'manual add keeps Added stock label and reason');
 assert.doesNotMatch(html, /Verified counts entered by cashiers|These adjustments are included in remittance/, 'no helper paragraph');
+assert.doesNotMatch(html, /Inventory Reconciliation|opening stock|transfer/, 'no reconciliation / transfer / opening mislabels');
 assert.doesNotMatch(html, />Refresh<|>Previous page<|>Next page</, 'no stray Refresh / Previous / Next buttons');
 assert.equal(column.fill, false, 'with cards the list starts under the header as usual');
 assert.equal(pager.visible, false);

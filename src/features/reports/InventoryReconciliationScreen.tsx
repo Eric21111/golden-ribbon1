@@ -20,16 +20,17 @@ import {
   inventoryReconBranchHref,
   inventoryReconBranchMeta,
   inventoryReconIssueBadge,
-  reconCollapsedStatusLine,
   reconHasOpenReturnIssue,
   reconHasOpenTransferIssue,
   reconHasResolvedDiscrepancy,
   reconHasStockMismatch,
   reconItemHasIssue,
   reconNonZeroMovementLines,
+  reconOpenStatusLine,
   reconResolutionReasonLabel,
   reconResolvedRowDetail,
   reconResolvedRows,
+  reconResolvedStatusLine,
   reconciliationItemBadge,
   summarizeInventoryRecon,
 } from '@/features/reports/inventoryReconOverview';
@@ -98,15 +99,7 @@ export function auditDiscrepancySummary(item: InventoryReconciliationItem): stri
 }
 
 export function resolvedDiscrepancySummary(item: InventoryReconciliationItem): string | null {
-  const rows = reconResolvedRows(item);
-  if (rows.length === 0) return null;
-  return rows
-    .map((row) => {
-      const reason = reconResolutionReasonLabel(row.resolution_reason);
-      const note = row.resolution_note?.trim();
-      return note ? `${reason} · ${note}` : reason;
-    })
-    .join(' · ');
+  return reconResolvedStatusLine(item);
 }
 
 function signedQty(quantity: number, code?: InventoryReconciliationItem['stock_unit_code']): string {
@@ -308,15 +301,17 @@ function ReconciliationItemCard({
   const mismatch = reconHasStockMismatch(item);
   const openCountIssue = reconHasOpenReturnIssue(item) || reconHasOpenTransferIssue(item);
   const badge = reconciliationIssueBadge(item);
-  const statusLine = reconCollapsedStatusLine(item);
+  const openLine = reconOpenStatusLine(item);
+  const resolvedLine = resolvedDiscrepancySummary(item);
   const code = item.stock_unit_code;
+  const a11yStatus = [openLine, resolvedLine].filter(Boolean).join(', ');
 
   return (
     <Pressable
       onPress={onOpen}
       style={({ pressed }) => [styles.card, mismatch && styles.issueCard, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${item.product_name}, ${badge.label}${statusLine ? `, ${statusLine}` : ''}`}
+      accessibilityLabel={`${item.product_name}, ${badge.label}${a11yStatus ? `, ${a11yStatus}` : ''}`}
       accessibilityHint="Shows movement details"
     >
       <View style={styles.headerRow}>
@@ -327,8 +322,11 @@ function ReconciliationItemCard({
         </View>
       </View>
       <Text style={styles.meta}>{item.product_sku}</Text>
-      {statusLine ? (
-        <Text style={[styles.statusLine, openCountIssue && styles.statusOpen]}>{statusLine}</Text>
+      {openLine ? <Text style={[styles.statusLine, styles.statusOpen]}>{openLine}</Text> : null}
+      {resolvedLine ? (
+        <Text style={[styles.statusLine, openCountIssue ? styles.resolutionLine : styles.statusResolved]}>
+          {resolvedLine}
+        </Text>
       ) : null}
 
       <View style={styles.ledger}>
@@ -349,7 +347,8 @@ export function ReconDetailsBody({ item }: { item: InventoryReconciliationItem }
   const mismatch = reconHasStockMismatch(item);
   const openCountIssue = reconHasOpenReturnIssue(item) || reconHasOpenTransferIssue(item);
   const badge = reconciliationIssueBadge(item);
-  const statusLine = reconCollapsedStatusLine(item);
+  const openLine = reconOpenStatusLine(item);
+  const resolvedLine = resolvedDiscrepancySummary(item);
   const movements = reconNonZeroMovementLines(item);
   const resolved = reconResolvedRows(item);
   const code = item.stock_unit_code;
@@ -361,8 +360,11 @@ export function ReconDetailsBody({ item }: { item: InventoryReconciliationItem }
           <Text style={styles.meta}>{item.product_sku}</Text>
           <ManagerBadge label={badge.label} tone={badge.tone} />
         </View>
-        {statusLine ? (
-          <Text style={[styles.statusLine, openCountIssue && styles.statusOpen]}>{statusLine}</Text>
+        {openLine ? <Text style={[styles.statusLine, styles.statusOpen]}>{openLine}</Text> : null}
+        {resolvedLine ? (
+          <Text style={[styles.statusLine, openCountIssue ? styles.resolutionLine : styles.statusResolved]}>
+            {resolvedLine}
+          </Text>
         ) : null}
       </View>
       <View style={styles.sheetCard}>
@@ -436,6 +438,8 @@ const styles = StyleSheet.create({
   meta: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   statusLine: { color: managerColors.ink, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   statusOpen: { color: '#92400E', fontFamily: 'Inter_600SemiBold' },
+  statusResolved: { color: managerColors.green, fontFamily: 'Inter_600SemiBold' },
+  resolutionLine: { color: managerColors.subtext, fontFamily: 'Inter_500Medium' },
   varianceIssue: { color: '#B91C1C' },
   varianceOk: { color: managerColors.green },
   ledger: {

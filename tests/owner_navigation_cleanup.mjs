@@ -170,6 +170,7 @@ const routesOf = (rendered) =>
     ['Inventory Reconciliation', '/owner/reports/inventory-reconciliation'],
     ['Transfer & Return Issues', '/owner/reports/discrepancies'],
     ['Waste History', '/owner/reports/waste-history'],
+    ['Stock correction', '/owner/reports/stock-count-changes'],
     ['Void logs', '/owner/reports/void-logs'],
     ['Branch Operations', '/owner/reports/branch-performance'],
   ]);
@@ -182,6 +183,8 @@ const routesOf = (rendered) =>
     rendered.every((tile) => !tile.description),
     'report tiles are title-only',
   );
+  assert.ok(existsSync('app/(owner)/owner/reports/stock-count-changes.tsx'), 'stock correction screen kept');
+  assert.ok(existsSync('app/(owner)/owner/reports/inventory-reconciliation.tsx'), 'inventory reconciliation stays separate');
 }
 
 // Owner Product Sales and Void logs use company overviews; branch history stays on [branchId].
@@ -229,6 +232,8 @@ const routesOf = (rendered) =>
   assert.match(ownerBlock, /Transfer & return issues/);
   assert.match(ownerBlock, /href: '\/owner\/reports\/discrepancies'/);
   assert.match(ownerBlock, /href: '\/owner\/reports\/void-logs'/);
+  assert.match(ownerBlock, /Stock correction/);
+  assert.match(ownerBlock, /href: '\/owner\/reports\/stock-count-changes'/);
   assert.match(ownerBlock, /Sales overview/);
   assert.match(ownerBlock, /href: '\/owner\/reports\/sales-overview'/);
   assert.doesNotMatch(ownerBlock, /href: '\/owner\/reports\/sales-by-branch'/);
