@@ -35,7 +35,9 @@ import {
   voidLogsInRange,
   type VoidLogRow,
 } from '@/features/reports/voidLogs';
+import { manilaBusinessDate } from '@/features/reports/todayQuickview';
 import { useClientPagination } from '@/hooks/useClientPagination';
+import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney, getTodayRangeManila } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
@@ -122,6 +124,9 @@ export default function VoidLogsScreen({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [selected, setSelected] = useState<VoidLogRow | null>(null);
+  // The Manila business date. It moves at Manila midnight (and when the app comes back to the foreground), which re-cuts "Today"
+  // (and this week / this month) even if the screen was left open overnight.
+  const [dayKey, setDayKey] = useState(() => manilaBusinessDate());
 
   const { data, error, isPending, isRefetching, refetch } = useQuery({
     queryKey: ['void-logs', profile?.id, profile?.branch_id, profile?.role, branchId ?? 'all'],
@@ -152,6 +157,10 @@ export default function VoidLogsScreen({
       if (profile) void refetch();
     }, [profile, refetch]),
   );
+  useManilaDayRefresh(() => {
+    setDayKey(manilaBusinessDate());
+    if (profile) void refetch();
+  });
 
   function categoryFor(row: VoidLogRow, productName: string): string | null {
     return row.product_category ?? categoriesByName.data?.get(productName) ?? null;
@@ -161,7 +170,11 @@ export default function VoidLogsScreen({
     () => scopeVoidLogRows(data, { branchId, branchName, branchLookupPending }),
     [data, branchId, branchName, branchLookupPending],
   );
-  const scopedData = scoped.rows;
+  // A cashier sees only today's voids (Manila day): the server already limits the rows to the sales they rang up themselves; the
+  // day limit is applied here, so yesterday's and older voids are never listed to them.
+  const isCashier = profile?.role === 'cashier';
+  const todayBounds = useMemo(() => voidLogTimeBounds(getTodayRangeManila()), [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const scopedData = useMemo(() => (isCashier ? voidLogsInRange(scoped.rows, todayBounds) : scoped.rows), [isCashier, scoped.rows, todayBounds]);
   const waitingForBranch = scoped.waitingForBranch;
   const branchMissing = scoped.branchMissing;
 
@@ -199,11 +212,12 @@ export default function VoidLogsScreen({
     [scopedData, reasonFilter],
   );
 
-  const filterRows = useMemo(() => [cashierRow, reasonRow], [cashierRow, reasonRow]);
+  // one cashier only (themselves): no Cashier row for a cashier
+  const filterRows = useMemo(() => (isCashier ? [reasonRow] : [cashierRow, reasonRow]), [isCashier, cashierRow, reasonRow]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const bounds = rangeBounds(rangeType, customStart, customEnd);
+    const bounds = isCashier ? todayBounds : rangeBounds(rangeType, customStart, customEnd);
     const inRange = voidLogsInRange(scopedData, bounds);
     const rows = inRange.filter((row) => {
       if (cashierFilter !== 'all' && row.cashier_name !== cashierFilter) return false;
@@ -235,7 +249,7 @@ export default function VoidLogsScreen({
           return Date.parse(b.recorded_at) - Date.parse(a.recorded_at);
       }
     });
-  }, [scopedData, search, rangeType, customStart, customEnd, cashierFilter, reasonFilter, sort]);
+  }, [scopedData, search, rangeType, customStart, customEnd, cashierFilter, reasonFilter, sort, isCashier, todayBounds, dayKey]);
 
   const pagination = useClientPagination(
     filtered,
@@ -243,14 +257,14 @@ export default function VoidLogsScreen({
     10,
   );
 
-  const filterCount = (cashierFilter !== 'all' ? 1 : 0) + (reasonFilter !== 'all' ? 1 : 0);
+  const filterCount = (!isCashier && cashierFilter !== 'all' ? 1 : 0) + (reasonFilter !== 'all' ? 1 : 0);
   const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label;
   const listPending = waitingForBranch || isPending;
   const centered = !listPending && !error && (branchMissing || filtered.length === 0);
   const hasActiveQuery =
-    !!search.trim() || rangeType !== 'all_time' || cashierFilter !== 'all' || reasonFilter !== 'all';
+    !!search.trim() || (!isCashier && rangeType !== 'all_time') || (!isCashier && cashierFilter !== 'all') || reasonFilter !== 'all';
   const title = 'Void logs';
-  const subtitle = branchName || undefined;
+  const subtitle = isCashier ? 'Today' : branchName || undefined;
   const showRows = !listPending && !error && !branchMissing;
 
   return (
@@ -279,14 +293,16 @@ export default function VoidLogsScreen({
               onPress={() => setSortOpen(true)}
             />
           </View>
-          <DateRangeFilter
-            value={rangeType}
-            onChange={setRangeType}
-            customStart={customStart}
-            customEnd={customEnd}
-            onCustomStartChange={setCustomStart}
-            onCustomEndChange={setCustomEnd}
-          />
+          {isCashier ? null : (
+            <DateRangeFilter
+              value={rangeType}
+              onChange={setRangeType}
+              customStart={customStart}
+              customEnd={customEnd}
+              onCustomStartChange={setCustomStart}
+              onCustomEndChange={setCustomEnd}
+            />
+          )}
           {showRows ? (
             <ListFilterSummary
               countText={`${filtered.length} of ${scopedData.length} ${scopedData.length === 1 ? 'void' : 'voids'}`}
@@ -305,11 +321,11 @@ export default function VoidLogsScreen({
         ) : null}
         {showRows && filtered.length === 0 ? (
           <EmptyState
-            title={hasActiveQuery ? 'No matching voids' : 'No voids'}
+            title={hasActiveQuery ? 'No matching voids' : isCashier ? 'No voids today' : 'No voids'}
             message={
               hasActiveQuery
-                ? 'Try another search, date range, or filter.'
-                : 'There are no voided items yet.'
+                ? isCashier ? 'Try another search or filter.' : 'Try another search, date range, or filter.'
+                : isCashier ? 'Items you void today appear here.' : 'There are no voided items yet.'
             }
           />
         ) : null}

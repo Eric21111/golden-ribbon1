@@ -64,7 +64,8 @@ export const useCheckoutStore = create<CheckoutState>((set, get) => ({
       const sale = await confirmSale(attempt);
       try { globalThis.localStorage.setItem(storageKey(userId), JSON.stringify({ ...journal, sale })); }
       catch { /* The original durable request remains sufficient to recover this committed sale. */ }
-      if (get().userId === userId) set({ sale, pending: false });
+      // a confirmed sale ends the retry state: clear the earlier "still unverified" message with it
+      if (get().userId === userId) set({ sale, pending: false, error: '' });
     } catch (error) {
       const failure = getCheckoutFailure(error);
       // A later refusal cannot disprove an earlier commit whose response was lost.

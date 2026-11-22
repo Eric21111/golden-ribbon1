@@ -1,10 +1,10 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
-import { formatMoney } from '@/lib/format';
+import { QUANTITY_BOX_MAX_FONT_SCALE, formatMoney, quantityBoxWidth } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { CartItem } from '@/types/models';
 
@@ -33,6 +33,7 @@ export function OrderLine({
   onRemove,
 }: OrderLineProps) {
   const [draft, setDraft] = useState(String(item.quantity));
+  const { fontScale } = useWindowDimensions();
 
   useEffect(() => {
     setDraft(String(item.quantity));
@@ -52,9 +53,7 @@ export function OrderLine({
     <View style={styles.line}>
       <CategoryIcon category={category} size={32} decorative />
       <View style={styles.leftCol}>
-        <Text style={styles.name} numberOfLines={2}>
-          {label}
-        </Text>
+        <Text style={styles.name}>{label}</Text>
         <Text style={styles.calc}>
           {item.quantity} × {formatMoney(item.unit_price)}
         </Text>
@@ -83,7 +82,8 @@ export function OrderLine({
             }
           }}
           onBlur={() => commit(draft)}
-          style={styles.qtyInput}
+          maxFontSizeMultiplier={QUANTITY_BOX_MAX_FONT_SCALE}
+          style={[styles.qtyInput, { width: quantityBoxWidth(draft, { min: 28, fontSize: 13, fontScale }) }]}
         />
         <Pressable
           accessibilityRole="button"

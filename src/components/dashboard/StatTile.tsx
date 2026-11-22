@@ -1,11 +1,17 @@
 import Ionicons, { type IoniconsIconName } from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+
+import { FIGURE_MAX_FONT_SCALE, figureFits } from '@/features/reports/reportDisplay';
 
 import { CurrencyText } from './CurrencyText';
 import { managerColors, managerGradients } from './theme';
 
-interface StatTileProps {
+/** A wide tile's room beside the figure: its padding (16 + 16), the icon (36) and the gap after it (14). */
+const WIDE_TEXT_INSET = 16 + 16 + 36 + 14;
+
+export interface StatTileProps {
   label: string;
   value: string | number;
   icon: IoniconsIconName;
@@ -41,11 +47,21 @@ export function StatTile({
   const statusWrap = valueNumberOfLines > 1 && /[A-Za-z]/.test(String(value));
   const valueLines = statusWrap ? valueNumberOfLines : 1;
   const growForCopy = statusWrap || Boolean(caption);
+  const { fontScale } = useWindowDimensions();
+  const [tileWidth, setTileWidth] = useState(0);
+  // A wide tile whose figure would not fit beside the icon (a seven-figure amount, a larger system font) puts the icon above
+  // the figure, so the figure gets the whole tile width instead of being shrunk hard.
+  const iconOnTop =
+    isWide && !statusWrap && tileWidth > 0 && !figureFits(String(value), tileWidth - WIDE_TEXT_INSET, fontScale);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       disabled={!onPress}
       onPress={onPress}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        if (next !== tileWidth) setTileWidth(next);
+      }}
       style={({ pressed }) => [
         styles.tile,
         growForCopy
@@ -74,7 +90,7 @@ export function StatTile({
       <View
         style={[
           styles.content,
-          isWide ? styles.contentWide : compact && styles.contentCompact,
+          isWide ? (iconOnTop ? styles.contentWideStacked : styles.contentWide) : compact && styles.contentCompact,
           growForCopy && !isWide && styles.contentWrap,
         ]}
       >
@@ -93,7 +109,7 @@ export function StatTile({
           </LinearGradient>
         )}
         {isWide ? (
-          <View style={styles.wideTextBlock}>
+          <View style={[styles.wideTextBlock, iconOnTop && styles.wideTextBlockStacked]}>
             <CurrencyText
               value={value}
               style={[
@@ -102,14 +118,15 @@ export function StatTile({
                 statusWrap && emphasis && styles.valueWrapEmphasis,
               ]}
               numberOfLines={valueLines}
-              adjustsFontSizeToFit={!statusWrap && !caption}
-              minimumFontScale={0.85}
+              adjustsFontSizeToFit={!statusWrap}
+              minimumFontScale={0.6}
+              maxFontSizeMultiplier={FIGURE_MAX_FONT_SCALE}
             />
-            <Text style={emphasis ? styles.labelEmphasis : styles.label} numberOfLines={2}>
+            <Text style={emphasis ? styles.labelEmphasis : styles.label}>
               {label}
             </Text>
             {caption ? (
-              <Text style={emphasis ? styles.captionEmphasis : styles.caption} numberOfLines={2}>
+              <Text style={emphasis ? styles.captionEmphasis : styles.caption}>
                 {caption}
               </Text>
             ) : null}
@@ -125,14 +142,15 @@ export function StatTile({
                 styles.valueFill,
               ]}
               numberOfLines={valueLines}
-              adjustsFontSizeToFit={!statusWrap && !caption}
-              minimumFontScale={0.85}
+              adjustsFontSizeToFit={!statusWrap}
+              minimumFontScale={0.6}
+              maxFontSizeMultiplier={FIGURE_MAX_FONT_SCALE}
             />
-            <Text style={emphasis ? styles.labelEmphasis : styles.label} numberOfLines={2}>
+            <Text style={emphasis ? styles.labelEmphasis : styles.label}>
               {label}
             </Text>
             {caption ? (
-              <Text style={emphasis ? styles.captionEmphasis : styles.caption} numberOfLines={2}>
+              <Text style={emphasis ? styles.captionEmphasis : styles.caption}>
                 {caption}
               </Text>
             ) : null}
@@ -153,11 +171,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
-  tileSquare: { height: 152 },
-  tileWide: { height: 92 },
+  // minimum heights, never fixed ones: a long label, a larger system font or a wrapped value makes the tile taller
+  // instead of clipping what is inside it
+  tileSquare: { minHeight: 152 },
+  tileWide: { minHeight: 92 },
   tileCompact: { minHeight: 140 },
   tileWrap: { minHeight: 140 },
-  tileWideWrap: { height: 118 },
+  tileWideWrap: { minHeight: 118 },
   tileDefault: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -165,6 +185,8 @@ const styles = StyleSheet.create({
   },
   content: { flex: 1, padding: 20, gap: 6, justifyContent: 'center' },
   contentWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 16, gap: 14 },
+  // icon above the figure: used when the figure does not fit beside the icon
+  contentWideStacked: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', padding: 16, gap: 10 },
   contentCompact: { padding: 14, gap: 4 },
   contentWrap: { flex: 0 },
   pressed: { opacity: 0.9 },
@@ -179,6 +201,7 @@ const styles = StyleSheet.create({
   iconChipEmphasis: { backgroundColor: 'rgba(255, 255, 255, 0.22)' },
   iconChipWide: { marginBottom: 0 },
   wideTextBlock: { flex: 1, minWidth: 0, gap: 2 },
+  wideTextBlockStacked: { flex: 0, alignSelf: 'stretch' },
   valueFill: { alignSelf: 'stretch', width: '100%' },
   value: { fontFamily: 'Inter_700Bold', fontSize: 26, lineHeight: 32, minHeight: 32, color: managerColors.ink },
   valueWrap: { fontSize: 17, lineHeight: 22, minHeight: 22 },

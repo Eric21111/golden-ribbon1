@@ -1,4 +1,3 @@
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { paymentLabel, type PaymentMethod } from '@/features/sales/paymentMethods';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Redirect, router } from 'expo-router';
@@ -17,6 +16,7 @@ import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { SignOutButton } from '@/components/SignOutButton';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
@@ -47,6 +47,11 @@ import { listSalePricingProgramSettings } from '@/services/saleService';
 import { useCartStore } from '@/stores/cartStore';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 
+const PAYMENT_CHOICES: Array<{ value: PaymentMethod; label: string; icon: 'cash-outline' | 'phone-portrait-outline' }> = [
+  { value: 'cash', label: 'Cash', icon: 'cash-outline' },
+  { value: 'gcash', label: 'GCash', icon: 'phone-portrait-outline' },
+];
+
 export default function PaymentScreen() {
   const { profile } = useAuth();
   const { paymentMaxWidth } = useLayout();
@@ -70,6 +75,9 @@ export default function PaymentScreen() {
   > | null>(null);
   const [pricingProgramsUnavailable, setPricingProgramsUnavailable] = useState(false);
   const savedProgram = checkout.request?.pricingProgram;
+  // The request stays in the store after a sale is confirmed (it is what Done clears), so "a saved checkout waiting for a retry" is
+  // request WITHOUT sale. Everything on the screen behind the confirmation uses this, never `checkout.request` alone.
+  const awaitingRetry = Boolean(checkout.request) && !checkout.sale;
   useEffect(() => {
     if (savedProgram) setPricingProgram(savedProgram);
   }, [savedProgram]);
@@ -170,7 +178,7 @@ export default function PaymentScreen() {
   }, [checkout.sale, client]);
 
   const runSubmit = () => {
-    if (checkout.pending || stockChecking) return;
+    if (checkout.pending || stockChecking || checkout.sale) return;
     if (checkout.request) {
       void checkout.submit(checkout.request);
       return;
@@ -205,7 +213,7 @@ export default function PaymentScreen() {
   };
 
   const submit = () => {
-    if (checkout.pending || stockChecking) return;
+    if (checkout.pending || stockChecking || checkout.sale) return;
     if (checkout.request) {
       runSubmit();
       return;
@@ -263,7 +271,9 @@ export default function PaymentScreen() {
     return <Redirect href="/cashier/pos" />;
   }
 
-  const canConfirm = Boolean(checkout.request) || (pricesReady && !priceError && !stockChecking);
+  // the program of the saved sale; if the record does not say, the one on the saved request (never today's screen choice)
+  const confirmedProgram = checkout.sale?.pricing_program ?? checkout.request?.pricingProgram ?? 'standard';
+  const canConfirm = !checkout.sale && (Boolean(checkout.request) || (pricesReady && !priceError && !stockChecking));
 
   return (
     <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screen}>
@@ -285,7 +295,7 @@ export default function PaymentScreen() {
                 onRetry={() => setPriceRefreshKey((key) => key + 1)}
               />
             ) : null}
-            {checkout.request ? (
+            {awaitingRetry && checkout.request ? (
               <View>
                 <Text style={styles.cardLine}>Saved checkout · {checkout.request.items.reduce((total, item) => total + item.quantity, 0)} items</Text>
                 <Text style={styles.cardLine}>Method: {paymentLabel(checkout.request.paymentMethod)}</Text>
@@ -299,13 +309,37 @@ export default function PaymentScreen() {
               </View>
             ) : <OrderSummary items={items} program={pricingProgram} settings={pricingSettings} categoryByProductId={categories.data} />}
             {!checkout.request && !checkout.sale ? <View style={{gap:8}}>
-              <Text style={styles.cardLine}>Payment method</Text>
-              <FilterChipRow options={[{value:'cash',label:'Cash'},{value:'gcash',label:'GCash'}]} value={paymentMethod} onChange={setPaymentMethod} />
+              <Text style={styles.sectionHeading}>PAYMENT METHOD</Text>
+              <View style={styles.methodRow}>
+                {PAYMENT_CHOICES.map((choice) => {
+                  const selected = choice.value === paymentMethod;
+                  return (
+                    <Pressable
+                      key={choice.value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={choice.label}
+                      onPress={() => setPaymentMethod(choice.value)}
+                      style={({ pressed }) => [styles.methodCard, selected && styles.methodCardSelected, pressed && styles.pressed]}
+                    >
+                      <View style={[styles.methodIcon, selected && styles.methodIconSelected]}>
+                        <Ionicons name={choice.icon} size={20} color={selected ? '#FFFFFF' : managerColors.royalBlue} />
+                      </View>
+                      <Text style={[styles.methodLabel, selected && styles.methodLabelSelected]}>{choice.label}</Text>
+                      {selected ? (
+                        <View style={styles.methodCheck}>
+                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View> : null}
 
             {!checkout.sale ? (
               <View style={styles.programBlock}>
-                <Text style={styles.programTitle}>Pricing</Text>
+                <Text style={styles.sectionHeading}>PRICING</Text>
                 <View style={styles.programList}>
                   {PRICING_PROGRAM_OPTIONS.map((option) => {
                     const selected = option.value === pricingProgram;
@@ -343,12 +377,12 @@ export default function PaymentScreen() {
                 {priceNotice}
               </Text>
             ) : null}
-            {validation || checkout.error ? (
+            {!checkout.sale && (validation || checkout.error) ? (
               <Text accessibilityRole="alert" style={styles.error}>
                 {validation || checkout.error}
               </Text>
             ) : null}
-            {checkout.request && checkout.error && !checkout.pending ? (
+            {awaitingRetry && checkout.error && !checkout.pending ? (
               <View>
                 <Text style={styles.cardLineMuted}>Signing out keeps this checkout saved for this account.</Text>
                 <SignOutButton />
@@ -362,13 +396,13 @@ export default function PaymentScreen() {
               <ManagerActionButton
                 label="Back"
                 variant="secondary"
-                disabled={checkout.pending || Boolean(checkout.request)}
+                disabled={checkout.pending || awaitingRetry}
                 onPress={() => router.replace('/cashier/pos')}
               />
             </View>
             <View style={styles.footerButton}>
               <ManagerActionButton
-                label={checkout.request ? 'Retry' : 'Checkout'}
+                label={awaitingRetry ? 'Retry' : 'Checkout'}
                 icon="card-outline"
                 loading={checkout.pending || stockChecking}
                 disabled={!canConfirm}
@@ -387,15 +421,24 @@ export default function PaymentScreen() {
             </View>
             <Text style={styles.title}>Order confirmed</Text>
             <Text style={styles.confirmedTotal}>{formatMoney(checkout.sale?.total_amount ?? 0)}</Text>
-            <Text style={styles.cardLine}>{checkout.sale?.sale_number}</Text>
-            <Text style={styles.cardLineMuted}>Payment: {paymentLabel(checkout.sale?.payment_method)}</Text>
-            {(checkout.sale?.pricing_program ?? pricingProgram) !== 'standard' ? (
-              <Text style={styles.cardLineMuted}>{pricingProgramLabel(checkout.sale?.pricing_program ?? pricingProgram)}</Text>
-            ) : null}
+            {/* what the saved sale record says: its number, its payment method and its pricing program */}
+            <View style={styles.confirmedDetails}>
+              <SummaryCard
+                rows={[
+                  { label: 'Sale', value: checkout.sale?.sale_number ?? '—', icon: 'receipt-outline' },
+                  { label: 'Payment', value: paymentLabel(checkout.sale?.payment_method), icon: 'wallet-outline' },
+                  { label: 'Pricing', value: pricingProgramLabel(confirmedProgram), icon: 'pricetag-outline' },
+                ]}
+              />
+            </View>
+            {checkout.error ? <Text style={styles.cardLine}>{checkout.error}</Text> : null}
             <View style={styles.confirmedAction}>
-              {checkout.error ? <Text style={styles.cardLine}>{checkout.error}</Text> : null}
-              <ManagerActionButton label="View sale" variant="secondary" onPress={() => done(true)} />
-              <ManagerActionButton label="Done" onPress={() => done()} />
+              <View style={styles.confirmedButton}>
+                <ManagerActionButton label="View sale" variant="secondary" onPress={() => done(true)} />
+              </View>
+              <View style={styles.confirmedButton}>
+                <ManagerActionButton label="Done" onPress={() => done()} />
+              </View>
             </View>
           </View>
         </View>
@@ -424,20 +467,55 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footerButton: { flex: 1 },
-  programBlock: { gap: 10 },
-  programTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  programList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  programPill: {
+  // Cash / GCash: two equal compact cards, the icon beside the name; the chosen one is outlined in blue with a check
+  methodRow: { flexDirection: 'row', gap: 10 },
+  methodCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 56,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1.5,
     borderColor: managerColors.cardBorder,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  methodCardSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F3F7FE' },
+  methodIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF0FB' },
+  methodIconSelected: { backgroundColor: managerColors.royalBlue },
+  methodLabel: { flex: 1, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  methodLabelSelected: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold' },
+  methodCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: managerColors.royalBlue,
+  },
+  programBlock: { gap: 10 },
+  // small gray capitals on the left, like the section headings of the report screens
+  sectionHeading: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 12, letterSpacing: 0.8 },
+  // pricing: two equal columns of selectable cards (like Cash / GCash above)
+  programList: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  programPill: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: managerColors.cardBorder,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
   },
   programPillSelected: { borderColor: managerColors.royalBlue, backgroundColor: '#F3F7FE' },
   programPillOff: { opacity: 0.5 },
-  programLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  programLabel: { textAlign: 'center', color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   programLabelSelected: { color: managerColors.royalBlue },
   programNote: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
@@ -474,5 +552,7 @@ const styles = StyleSheet.create({
   confirmedTotal: { fontFamily: 'Inter_700Bold', fontSize: 30, color: managerColors.royalBlue, textAlign: 'center' },
   cardLine: { fontFamily: 'Inter_500Medium', fontSize: 14, color: managerColors.subtext, textAlign: 'center' },
   cardLineMuted: { fontFamily: 'Inter_500Medium', fontSize: 13, color: managerColors.subtext, textAlign: 'center' },
-  confirmedAction: { alignSelf: 'stretch', marginTop: 6 },
+  confirmedDetails: { alignSelf: 'stretch', marginTop: 4 },
+  confirmedAction: { alignSelf: 'stretch', flexDirection: 'row', gap: 10, marginTop: 8 },
+  confirmedButton: { flex: 1, minWidth: 0 },
 });

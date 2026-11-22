@@ -20,6 +20,8 @@ type SidebarItem = {
   selectedIcon: IoniconsIconName;
   /** Sub-actions revealed by expanding this item — the row still navigates on press. */
   children?: SidebarItem[];
+  /** A heading that only opens and closes its sub-items (there is no screen behind it): the whole row toggles. */
+  toggleOnly?: boolean;
 };
 
 type SidebarGroup = {
@@ -85,28 +87,18 @@ function getGroups(isMain: boolean): SidebarGroup[] {
               ],
             },
             {
-              label: 'Shift remittances',
-              href: '/manager/reports/shift-remittances',
-              icon: 'cash-outline',
-              selectedIcon: 'cash',
-            },
-            {
-              label: 'Waste History',
-              href: '/manager/reports/waste-history',
-              icon: 'leaf-outline',
-              selectedIcon: 'leaf',
-            },
-            {
-              label: 'Stock corrections',
-              href: '/manager/reports/stock-count-changes',
-              icon: 'swap-vertical-outline',
-              selectedIcon: 'swap-vertical',
-            },
-            {
-              label: 'Void logs',
-              href: '/manager/reports/stock-corrections',
-              icon: 'create-outline',
-              selectedIcon: 'create',
+              label: 'Reports',
+              // not a screen: it only opens the list below
+              href: '/manager/reports',
+              icon: 'stats-chart-outline',
+              selectedIcon: 'stats-chart',
+              toggleOnly: true,
+              children: [
+                { label: 'Shift remittances', href: '/manager/reports/shift-remittances', icon: 'cash-outline', selectedIcon: 'cash' },
+                { label: 'Waste History', href: '/manager/reports/waste-history', icon: 'leaf-outline', selectedIcon: 'leaf' },
+                { label: 'Stock corrections', href: '/manager/reports/stock-count-changes', icon: 'swap-vertical-outline', selectedIcon: 'swap-vertical' },
+                { label: 'Void logs', href: '/manager/reports/void-logs', icon: 'create-outline', selectedIcon: 'create' },
+              ],
             },
           ]
         : [
@@ -230,7 +222,7 @@ export function ManagerSidebar({ onClose, onNavigate, role = 'manager' }: Manage
           <View key={group.title} style={styles.group}>
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.items.map((item) => {
-              const selected = item.href === pathname;
+              const selected = !item.toggleOnly && item.href === pathname;
               const hasChildren = Boolean(item.children?.length);
               const expanded = hasChildren && isExpanded(item);
               return (
@@ -240,7 +232,7 @@ export function ManagerSidebar({ onClose, onNavigate, role = 'manager' }: Manage
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      onPress={() => go(item.href)}
+                      onPress={() => (item.toggleOnly ? toggleExpanded(item) : go(item.href))}
                       style={({ pressed }) => [styles.itemMain, pressed && styles.itemPressed]}
                     >
                       <Ionicons

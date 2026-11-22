@@ -100,17 +100,25 @@ for (const file of [
 assert.ok(!existsSync('app/(owner)/owner/reports/stock-count-changes.tsx'), 'the old single-file route is now a folder (same URL)');
 assert.match(read('app/(manager)/_layout.tsx'), /manager\/reports\/stock-count-changes\/index/);
 const sidebar = read('src/components/dashboard/ManagerSidebar.tsx');
-assert.match(sidebar, /label: 'Stock corrections',\n\s+href: '\/manager\/reports\/stock-count-changes'/, 'the Main Manager sidebar');
+assert.match(sidebar, /label: 'Stock corrections', href: '\/manager\/reports\/stock-count-changes'/, 'the Main Manager sidebar (inside the Reports dropdown)');
+assert.match(sidebar, /label: 'Reports',[\s\S]*?toggleOnly: true,[\s\S]*?label: 'Shift remittances'[\s\S]*?label: 'Waste History'[\s\S]*?label: 'Stock corrections'[\s\S]*?label: 'Void logs'/, 'Reports is a toggle-only dropdown with the four reports');
 assert.match(sidebar, /label: 'Stock corrections', href: '\/owner\/reports\/stock-count-changes'/, 'the owner sidebar');
 assert.doesNotMatch(sidebar, /label: 'Stock correction'[^s]/, 'one name everywhere');
 // Void logs keep their routes and their screen
-assert.match(sidebar, /label: 'Void logs',\n\s+href: '\/manager\/reports\/stock-corrections'/, 'Void logs: same label, same route');
+assert.match(sidebar, /label: 'Void logs', href: '\/manager\/reports\/void-logs'/, 'Void logs: same label, now the Owner-style Overview route');
+for (const file of ['app/(manager)/manager/reports/void-logs/index.tsx', 'app/(manager)/manager/reports/void-logs/[branchId].tsx']) {
+  assert.match(read(file), /MainBranchGuard/, `${file}: Main Manager only`);
+}
+assert.match(read('app/(manager)/manager/reports/void-logs/index.tsx'), /VoidLogsOverviewScreen/, 'the same Overview as the Owner');
+assert.match(read('app/(manager)/manager/reports/void-logs/[branchId].tsx'), /VoidLogsBranchRoute/, 'the same per-branch list as the Owner');
+assert.match(read('src/features/reports/VoidLogsOverviewScreen.tsx'), /role: profile\?\.role === 'manager' \? 'manager' : 'owner'/, 'a branch opens inside the same role tree');
+assert.match(read('app/(manager)/_layout.tsx'), /manager\/reports\/void-logs\/index/);
 for (const file of ['app/(manager)/manager/reports/stock-corrections.tsx', 'app/(cashier)/cashier/stock-corrections.tsx']) {
   assert.match(read(file), /VoidLogsScreen/, `${file} still shows Void logs`);
 }
 assert.match(read('app/(owner)/owner/reports/stock-corrections/index.tsx'), /void-logs/, 'the old owner links still redirect to Void logs');
 assert.match(read('app/(owner)/owner/reports/stock-corrections/[branchId].tsx'), /void-logs/);
-assert.match(read('app/(manager)/manager/dashboard.tsx'), /title="Void logs"[\s\S]{0,120}\/manager\/reports\/stock-corrections/, 'the manager dashboard Void logs tile is untouched');
+assert.doesNotMatch(read('app/(manager)/manager/dashboard.tsx'), /title="Void logs"/, 'the Reports tiles left the manager dashboard (they are in the sidebar dropdown)');
 assert.match(read('app/(cashier)/cashier/inventory.tsx'), /label="Void logs"[\s\S]{0,120}\/cashier\/stock-corrections/, 'the cashier Void logs button is untouched');
 // frontend only
 assert.doesNotMatch(read('src/features/reports/stockCorrectionFilters.ts'), /supabase|\.rpc\(|from\('/, 'the filter rules touch no backend');

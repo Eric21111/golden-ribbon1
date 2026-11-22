@@ -1,6 +1,8 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { FIGURE_MAX_FONT_SCALE } from '@/features/reports/reportDisplay';
+
 import { CurrencyText } from './CurrencyText';
 import { managerColors, statChipColors } from './theme';
 
@@ -32,18 +34,12 @@ export function RecentSaleRow({ saleNumber, amount, cashierName, date, onPress }
       </View>
       <View style={styles.content}>
         <View style={styles.line}>
-          <Text style={styles.cashier} numberOfLines={1}>
-            {cashierName}
-          </Text>
-          <CurrencyText value={amount} style={styles.amount} numberOfLines={1} />
+          <Text style={styles.cashier}>{cashierName}</Text>
+          <CurrencyText value={amount} style={styles.amount} maxFontSizeMultiplier={FIGURE_MAX_FONT_SCALE} />
         </View>
         <View style={styles.line}>
-          <Text style={styles.date} numberOfLines={1}>
-            {date}
-          </Text>
-          <Text style={styles.tag} numberOfLines={1}>
-            {shortSaleTag(saleNumber)}
-          </Text>
+          <Text style={styles.date}>{date}</Text>
+          <Text style={styles.tag}>{shortSaleTag(saleNumber)}</Text>
         </View>
       </View>
     </Pressable>
@@ -74,10 +70,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: { flex: 1, gap: 4 },
-  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  cashier: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14, color: managerColors.ink },
-  amount: { fontFamily: 'Inter_700Bold', fontSize: 16, color: managerColors.green },
-  date: { flexShrink: 1, fontFamily: 'Inter_400Regular', fontSize: 12, color: managerColors.subtext },
-  tag: { fontFamily: 'Inter_500Medium', fontSize: 11, color: managerColors.subtext },
+  content: { flex: 1, minWidth: 0, gap: 4 },
+  // The name and the date wrap; the amount and the sale tag keep their own width (never cut, never broken). When they do not
+  // fit beside the name (a larger system font, a seven-figure amount) they drop to the next line, right-aligned.
+  line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 12, rowGap: 2 },
+  cashier: { flexGrow: 1, flexShrink: 1, flexBasis: 110, minWidth: 0, fontFamily: 'Inter_600SemiBold', fontSize: 14, color: managerColors.ink },
+  amount: { flexShrink: 0, marginLeft: 'auto', fontFamily: 'Inter_700Bold', fontSize: 16, color: managerColors.green },
+  date: { flexGrow: 1, flexShrink: 1, flexBasis: 110, minWidth: 0, fontFamily: 'Inter_400Regular', fontSize: 12, color: managerColors.subtext },
+  tag: { flexShrink: 0, marginLeft: 'auto', fontFamily: 'Inter_500Medium', fontSize: 11, color: managerColors.subtext },
 });

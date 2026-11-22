@@ -13,7 +13,7 @@ import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
-import { DATE_RANGE_OPTIONS, DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
 import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import { listAllVoidLogs } from '@/features/reports/voidLogData';
@@ -25,7 +25,9 @@ import {
   voidLogsInRange,
   summarizeVoidLogs,
 } from '@/features/reports/voidLogs';
+import { manilaBusinessDate } from '@/features/reports/todayQuickview';
 import { useBranches } from '@/hooks/useBranches';
+import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney, getTodayRangeManila, isReportRangeReady } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
@@ -34,18 +36,14 @@ function initialRangeFromParams(
   range: string,
   start: string,
   end: string,
+  fallback: DateFilterType,
 ): { rangeType: DateFilterType; customStart: string; customEnd: string } {
-  const rangeType = range ? parseReportDateFilter(range) : 'all_time';
+  const rangeType = range ? parseReportDateFilter(range) : fallback;
   return {
     rangeType,
     customStart: rangeType === 'custom' ? start : '',
     customEnd: rangeType === 'custom' ? end : '',
   };
-}
-
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
 }
 
 export function VoidLogsOverviewScreen() {
@@ -59,10 +57,14 @@ export function VoidLogsOverviewScreen() {
     firstSearchParam(params.range),
     firstSearchParam(params.start),
     firstSearchParam(params.end),
+    // the Main Manager opens on today; the Owner on all time
+    profile?.role === 'manager' ? 'today' : 'all_time',
   );
   const [rangeType, setRangeType] = useState<DateFilterType>(initial.rangeType);
   const [customStart, setCustomStart] = useState(initial.customStart);
   const [customEnd, setCustomEnd] = useState(initial.customEnd);
+  // the Manila business date: at Manila midnight (or when the app returns to the foreground) "Today", this week and this month are re-cut
+  const [dayKey, setDayKey] = useState(() => manilaBusinessDate());
 
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const ready = isReportRangeReady(rpcRangeType, startIso, endIso);
@@ -81,10 +83,15 @@ export function VoidLogsOverviewScreen() {
     }, [profile, voidsQuery.refetch]),
   );
 
+  useManilaDayRefresh(() => {
+    setDayKey(manilaBusinessDate());
+    if (profile) void voidsQuery.refetch();
+  });
+
   const bounds = useMemo(() => {
     if (rangeType === 'today') return voidLogTimeBounds(getTodayRangeManila());
     return voidLogTimeBounds({ start: startIso, end: endIso });
-  }, [rangeType, startIso, endIso]);
+  }, [rangeType, startIso, endIso, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rangedRows = useMemo(
     () => (customIncomplete ? [] : voidLogsInRange(voidsQuery.data ?? [], bounds)),
@@ -125,7 +132,7 @@ export function VoidLogsOverviewScreen() {
       }
       contentContainerStyle={styles.screen}
     >
-      <ManagerScreenHeader title="Void logs" showBack />
+      <ManagerScreenHeader title="Void logs" showBack={profile?.role !== 'manager'} />
       <ConstrainedWidth style={styles.column}>
         <View style={styles.filterBleed}>
           <DateRangeFilter
@@ -177,12 +184,13 @@ export function VoidLogsOverviewScreen() {
 
         {ready && !loading && !voidsQuery.error && !branchesQuery.error && branchRows.length > 0 ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="BRANCHES" />
             {branchRows.map((branch) => {
               const title = branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`;
               const meta = voidLogsBranchMeta(branch.items, branch.transactions);
               const href = branch.branchId
                 ? voidLogsBranchHref({
+                    role: profile?.role === 'manager' ? 'manager' : 'owner',
                     branchId: branch.branchId,
                     rangeType,
                     customStart,

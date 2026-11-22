@@ -42,9 +42,7 @@ export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProp
       </View>
       <View style={styles.body}>
         <View style={styles.line1}>
-          <Text style={[styles.name, outOfStock && styles.nameMuted]} numberOfLines={1}>
-            {item.product.name}
-          </Text>
+          <Text style={[styles.name, outOfStock && styles.nameMuted]}>{item.product.name}</Text>
           <View style={styles.priceGroup}>
             {cartQuantity > 0 ? (
               <View style={styles.badge}>
@@ -114,7 +112,8 @@ const styles = StyleSheet.create({
   iconChipOut: { backgroundColor: managerColors.cardBorder },
   body: { flex: 1, minWidth: 0, gap: 4 },
   line1: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  name: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15.5 },
+  // a long product name wraps to more lines; the price beside it keeps its own line
+  name: { flex: 1, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15.5 },
   nameMuted: { color: managerColors.subtext },
   priceGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   priceStack: { alignItems: 'flex-end' },

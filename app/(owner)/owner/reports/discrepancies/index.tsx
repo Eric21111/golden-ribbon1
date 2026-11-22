@@ -22,7 +22,7 @@ import {
 } from '@/features/products/ProductFilterControls';
 import { DEFAULT_LIST_FILTERS, type ListFilterKey } from '@/features/products/listFilters';
 import { firstSearchParam, parseReportDateFilter, transferReturnIssuesHref } from '@/features/reports/branchHub';
-import { DateRangeFilter, DATE_RANGE_OPTIONS, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import {
   buildIssueBranchRows,
   issueBranchBadge,
@@ -71,11 +71,6 @@ const SORT_OPTIONS: Array<{ label: string; value: SortOption }> = [
   { label: 'Oldest first', value: 'oldest' },
   { label: 'Largest units', value: 'units-desc' },
 ];
-
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
-}
 
 function matchesSearch(
   item: TransferDiscrepancyReportItem | ReturnDiscrepancyReportItem,
@@ -285,7 +280,7 @@ export default function OwnerDiscrepancyAnalytics() {
 
         {showHub && ready && !loading && !error ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="BRANCHES" />
             {branchRows.length === 0 ? (
               <EmptyState title="No branches" message="No branches are available for transfer and return issues." />
             ) : (

@@ -6,7 +6,7 @@ export type PaymentFilter = PaymentMethod | 'all' | 'unrecorded';
 export const paymentLabel = (method?: PaymentMethod | 'unrecorded' | null) => method === 'cash' ? 'Cash' : method === 'gcash' ? 'GCash' : 'Unrecorded';
 export const PAYMENT_FILTERS: { value: PaymentFilter; label: string }[] = [
   { value: 'all', label: 'All payments' }, { value: 'cash', label: 'Cash' },
-  { value: 'gcash', label: 'GCash' }, { value: 'unrecorded', label: 'Unrecorded' },
+  { value: 'gcash', label: 'GCash' },
 ];
 
 const emptyProgramGroups = { standard: 0, pwd: 0, back_office_guard: 0, employee_meal: 0 };

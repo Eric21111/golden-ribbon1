@@ -331,7 +331,7 @@ export function InventorySetupScreen() {
                       <Text style={styles.name} numberOfLines={2}>
                         {item.product.name}
                       </Text>
-                      <Text style={styles.meta} numberOfLines={1}>
+                      <Text style={styles.meta}>
                         {item.product.sku}
                       </Text>
                     </View>
@@ -472,12 +472,12 @@ export function InventorySetupScreen() {
                           </View>
                           <View style={styles.availablePill}>
                             {initialized ? (
-                              <Text style={styles.availableText} numberOfLines={1}>
+                              <Text style={styles.availableText}>
                                 <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                                 <Text style={styles.availableLabel}> current</Text>
                               </Text>
                             ) : (
-                              <Text style={styles.availableLabel} numberOfLines={1}>
+                              <Text style={styles.availableLabel}>
                                 No stock yet
                               </Text>
                             )}

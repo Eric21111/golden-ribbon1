@@ -32,7 +32,8 @@ export function ManagerSignOutButton() {
 
 const styles = StyleSheet.create({
   button: {
-    height: 52,
+    minHeight: 52,
+    paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: managerColors.cardBorder,

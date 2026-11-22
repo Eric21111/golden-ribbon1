@@ -101,7 +101,7 @@ const count = (src, re) => (src.match(re) ?? []).length;
 // ---------------------------------------------------------------- 3. wizard navigation
 {
   // Back / Next / Create / Save are full-size buttons
-  assert.match(buttonSrc, /primary: \{\n\s*height: 54,/);
+  assert.match(buttonSrc, /primary: \{\n\s*minHeight: 54,/);
   assert.ok(54 >= MIN_TOUCH_TARGET);
   for (const [name, src, save] of [['create', createSrc, 'Create product'], ['edit', editSrc, 'Save changes']]) {
     assert.equal(count(src, /<View style=\{styles\.buttonRow\}>/g), 1, `${name}: one button row`);

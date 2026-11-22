@@ -34,9 +34,7 @@ export function SummaryCard({ title, rows }: SummaryCardProps) {
         >
           <View style={styles.labelRow}>
             {row.icon ? <Ionicons name={row.icon} size={16} color={managerColors.subtext} /> : null}
-            <Text style={styles.label} numberOfLines={1}>
-              {row.label}
-            </Text>
+            <Text style={styles.label}>{row.label}</Text>
           </View>
           <Text
             style={[
@@ -44,7 +42,7 @@ export function SummaryCard({ title, rows }: SummaryCardProps) {
               row.emphasis && styles.valueEmphasis,
               row.tone && { color: toneColors[row.tone] },
             ]}
-            numberOfLines={1}
+            maxFontSizeMultiplier={1.5}
           >
             {row.value}
           </Text>
@@ -70,16 +68,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 6,
   },
+  // The label wraps; the value keeps its own width, so an amount is never cut or broken. When the label and the value do not fit
+  // on one line (a long label, a seven-figure amount, a larger system font) the value drops to its own line, right-aligned.
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 10,
-    gap: 12,
+    columnGap: 12,
+    rowGap: 4,
   },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: managerColors.cardBorder },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  label: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
-  value: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexGrow: 1, flexShrink: 1, flexBasis: 110, minWidth: 0 },
+  label: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  value: { flexShrink: 1, maxWidth: '100%', marginLeft: 'auto', textAlign: 'right', color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   valueEmphasis: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 17 },
 });

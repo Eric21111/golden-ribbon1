@@ -162,23 +162,17 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
           <View style={styles.hero}>
             <View style={styles.heroItem}>
               <Text style={styles.heroLabel}>{isReturn ? 'Expected' : 'Sent'}</Text>
-              <Text style={styles.heroValue} numberOfLines={1}>
-                {expectedLabel}
-              </Text>
+              <Text style={styles.heroValue}>{expectedLabel}</Text>
             </View>
             <View style={styles.heroDivider} />
             <View style={styles.heroItem}>
               <Text style={styles.heroLabel}>Received</Text>
-              <Text style={styles.heroValue} numberOfLines={1}>
-                {receivedLabel}
-              </Text>
+              <Text style={styles.heroValue}>{receivedLabel}</Text>
             </View>
             <View style={styles.heroDivider} />
             <View style={styles.heroItem}>
               <Text style={styles.heroLabel}>{isMissing ? 'Missing' : 'Excess'}</Text>
-              <Text style={[styles.heroValue, differenceTone]} numberOfLines={1}>
-                {differenceLabel}
-              </Text>
+              <Text style={[styles.heroValue, differenceTone]}>{differenceLabel}</Text>
             </View>
           </View>
           <StockUnitHint code={row.stock_unit_code} />
@@ -318,10 +312,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
   },
+  // a long quantity wraps ("1,200" / "pcs") instead of being cut off
   heroValue: {
     color: managerColors.ink,
     fontFamily: 'Inter_700Bold',
     fontSize: 18,
+    textAlign: 'center',
   },
   diffMissing: { color: '#B91C1C' },
   diffExcess: { color: '#92400E' },

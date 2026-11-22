@@ -24,7 +24,7 @@ import {
   branchOperationsIssueQty,
   branchOperationsMeta,
 } from '@/features/reports/branchPerformanceCards';
-import { DATE_RANGE_OPTIONS, DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import { productSalesBranchHref, productSalesOverviewHref } from '@/features/reports/productSalesDashboard';
 import { useBranchPerformance, useBranchPerformanceDetails } from '@/hooks/useReconciliation';
@@ -47,11 +47,6 @@ function initialRangeFromParams(
     customStart: rangeType === 'custom' ? start : '',
     customEnd: rangeType === 'custom' ? end : '',
   };
-}
-
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
 }
 
 export function BranchPerformanceReportScreen() {
@@ -100,7 +95,6 @@ export function BranchPerformanceReportScreen() {
             onCustomEndChange={setCustomEnd}
           />
         </View>
-        <ReportSectionHeading title="COMPANY OPERATIONS" />
         <StatTile
           layout="wide"
           emphasis
@@ -137,7 +131,7 @@ export function BranchPerformanceReportScreen() {
 
         {rankedBranches.length > 0 ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="BRANCHES" />
             {rankedBranches.map((branch) => (
               <BranchOperationsCard key={branch.branch_id} item={branch} navRange={navRange} />
             ))}
@@ -277,7 +271,7 @@ export function BranchPerformanceDetailScreen() {
               value={Number(data.metrics.total_missing_qty) + Number(data.metrics.total_excess_qty)}
             />
 
-            <ReportSectionHeading title="REPORTS" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="REPORTS" />
             <ListRowCard
               icon="storefront-outline"
               iconColor="blue"

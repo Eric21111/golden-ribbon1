@@ -94,6 +94,8 @@ export function voidLogsBranchMeta(items: number, transactions: number): string 
 }
 
 export function voidLogsBranchHref(args: {
+  /** Which role's route tree to open (the Main Manager has its own, same screens). Owner by default. */
+  role?: 'owner' | 'manager';
   branchId: string;
   rangeType: string;
   customStart?: string;
@@ -106,7 +108,8 @@ export function voidLogsBranchHref(args: {
     if (args.customEnd) params.set('end', args.customEnd);
   }
   const query = params.toString();
-  return query ? `/owner/reports/void-logs/${args.branchId}?${query}` : `/owner/reports/void-logs/${args.branchId}`;
+  const base = `/${args.role ?? 'owner'}/reports/void-logs/${args.branchId}`;
+  return query ? `${base}?${query}` : base;
 }
 
 /**

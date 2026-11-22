@@ -34,18 +34,14 @@ export function ReturnListItem({
       ]}
     >
       <View style={styles.row}>
-        <Text style={styles.number} numberOfLines={1}>
-          {stockReturn.return_number}
-        </Text>
+        <Text style={styles.number}>{stockReturn.return_number}</Text>
         <View style={styles.trailing}>
           <ReturnStatusBadge status={stockReturn.status} compact />
           <Ionicons color={colors.muted} name="chevron-forward" size={18} />
         </View>
       </View>
-      <Text style={styles.route} numberOfLines={1}>
-        {route}
-      </Text>
-      <Text style={styles.meta} numberOfLines={1}>
+      <Text style={styles.route}>{route}</Text>
+      <Text style={styles.meta}>
         {productCount} {productCount === 1 ? 'item' : 'items'} · {formatDate(stockReturn.returned_at)}
       </Text>
     </Pressable>

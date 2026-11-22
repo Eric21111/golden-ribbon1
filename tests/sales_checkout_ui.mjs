@@ -32,6 +32,8 @@ const { SaleDetailsBody } = loadTs('src/features/sales/SalesScreens.tsx', {
   '@/hooks/useSales': { useSale: () => saleQuery },
   '@/components/dashboard/ManagerBadge': { ManagerBadge: ({ label }) => React.createElement('span', null, label) },
   '@/components/dashboard/SummaryCard': { SummaryCard: () => null },
+  '@/components/dashboard/StatTile': { StatTile: (p) => React.createElement('div', null, `${p.label}|${p.value}|${p.caption}`) },
+  '@/features/products/CategoryIcon': { CategoryIcon: () => null },
 });
 const details = saleId => renderToStaticMarkup(React.createElement(SaleDetailsBody, { saleId, showBack: true }));
 assert.match(details(''), /sale link is invalid/);
@@ -41,7 +43,8 @@ saleQuery = { error: new Error('offline') };
 assert.match(details(id), /does not mean the sale was not saved/);
 saleQuery = { data: { id, sale_number: 'SALE-1', sold_at: '2026-11-10T00:00:00Z', status: 'completed', total_amount: 25,
   items: [{ id: 'line', product_id: id, product: { name: 'Meal' }, drink_name: 'Cola', quantity: 1, unit_price: 25, subtotal: 25 }] } };
-assert.match(details(id), /Meal · Cola/);
+assert.match(details(id), /Meal.*\+ Cola/, 'the meal, with the drink chosen as a tag');
+assert.match(details(id), /Charged total|25|/, 'the total is at the top');
 saleQuery.data.shift = {status:'open', started_at:'2026-11-10T00:00:00Z'};
 saleQuery.data.items[0].stock_per_unit = {ingredient: 1};
 assert.match(details(id), /Void item/);

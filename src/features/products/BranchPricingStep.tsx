@@ -98,9 +98,7 @@ function PriceList({
               {offKeys.includes(variant.key) ? <Text style={styles.offTag}>{'  Off'}</Text> : null}
             </Text>
             {summaries[variant.key] ? (
-              <Text style={styles.rowSummary} numberOfLines={2}>
-                {summaries[variant.key]}
-              </Text>
+              <Text style={styles.rowSummary}>{summaries[variant.key]}</Text>
             ) : null}
           </View>
           <PriceInput

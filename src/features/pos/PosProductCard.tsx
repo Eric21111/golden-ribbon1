@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { formatMoney, formatProductPrice } from '@/lib/format';
+import { QUANTITY_BOX_MAX_FONT_SCALE, formatMoney, formatProductPrice, quantityBoxWidth } from '@/lib/format';
 import type { InventoryItem, PosVariant } from '@/types/models';
 
 interface PosProductCardProps {
@@ -38,6 +38,7 @@ function Stepper({
   onQuantityChange: (quantity: number) => void;
 }) {
   const [draft, setDraft] = useState(quantity > 0 ? String(quantity) : '');
+  const { fontScale } = useWindowDimensions();
 
   useEffect(() => {
     setDraft(quantity > 0 ? String(quantity) : '');
@@ -84,7 +85,12 @@ function Stepper({
           }
         }}
         onBlur={() => commit(draft)}
-        style={[styles.quantityInput, compact && styles.quantityInputCompact]}
+        maxFontSizeMultiplier={QUANTITY_BOX_MAX_FONT_SCALE}
+        style={[
+          styles.quantityInput,
+          compact && styles.quantityInputCompact,
+          { width: quantityBoxWidth(draft, { min: compact ? 44 : 48, fontSize: 15, fontScale }) },
+        ]}
       />
       <Pressable
         accessibilityRole="button"
@@ -164,7 +170,7 @@ export function PosProductCard({
                       onPress={() => toggleSelect(variant.id, quantity)}
                       style={({ pressed }) => [styles.variantCopy, pressed && styles.pressed]}
                     >
-                      <Text style={styles.variantName} numberOfLines={1}>{variant.name}</Text>
+                      <Text style={styles.variantName}>{variant.name}</Text>
                       <Text style={styles.variantPrice}>{formatMoney(variant.selling_price)}</Text>
                     </Pressable>
                     <Stepper

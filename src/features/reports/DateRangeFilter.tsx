@@ -126,7 +126,7 @@ export function DateRangeFilter({
 
       {isCustom ? (
         <Pressable accessibilityRole="button" onPress={openPicker} style={styles.customSummary}>
-          <Text style={styles.customSummaryText} numberOfLines={1}>
+          <Text style={styles.customSummaryText}>
             {customStart || '—'} to {customEnd || '—'}
           </Text>
           <Text style={styles.customSummaryEdit}>Edit</Text>

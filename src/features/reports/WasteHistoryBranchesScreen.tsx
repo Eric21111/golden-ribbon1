@@ -10,7 +10,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { StatTile } from '@/components/dashboard/StatTile';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
-import { DATE_RANGE_OPTIONS, DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, resolveReportRange, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
 import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import {
@@ -29,18 +29,14 @@ function initialRangeFromParams(
   range: string,
   start: string,
   end: string,
+  fallback: DateFilterType,
 ): { rangeType: DateFilterType; customStart: string; customEnd: string } {
-  const rangeType = range ? parseReportDateFilter(range) : 'all_time';
+  const rangeType = range ? parseReportDateFilter(range) : fallback;
   return {
     rangeType,
     customStart: rangeType === 'custom' ? start : '',
     customEnd: rangeType === 'custom' ? end : '',
   };
-}
-
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
 }
 
 export function WasteHistoryBranchesScreen() {
@@ -56,6 +52,8 @@ export function WasteHistoryBranchesScreen() {
     firstSearchParam(params.range),
     firstSearchParam(params.start),
     firstSearchParam(params.end),
+    // the Main Manager opens on today; the Owner on all time
+    isManager ? 'today' : 'all_time',
   );
   const [rangeType, setRangeType] = useState<DateFilterType>(initial.rangeType);
   const [customStart, setCustomStart] = useState(initial.customStart);
@@ -146,7 +144,7 @@ export function WasteHistoryBranchesScreen() {
 
         {ready && !loading && rows.length > 0 ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="BRANCHES" />
             {rows.map((row) => {
               const title = row.isActive ? row.branchName : `Inactive · ${row.branchName}`;
               const meta = wasteHistoryBranchMeta(row);

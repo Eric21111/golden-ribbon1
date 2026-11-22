@@ -198,7 +198,7 @@ sales.state.metrics = query({ data: metrics() });
   assert.match(t, /\[hamburger\]/, 'main manager keeps the sidebar entry point');
   assert.doesNotMatch(t, /BRANCH SNAPSHOT/);
   assert.doesNotMatch(t, /QUICK ACCESS/);
-  const order = ['Dashboard', 'NEEDS ATTENTION', 'REPORTS'].map((label) => t.indexOf(label));
+  const order = ['Dashboard', 'NEEDS ATTENTION'].map((label) => t.indexOf(label));
   assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), `section order ${order}`);
 
   const stats = statsSlice(t);
@@ -214,13 +214,10 @@ sales.state.metrics = query({ data: metrics() });
   assert.match(t, /Nothing needs attention/);
   assert.deepEqual(
     rendered.map((tile) => [tile.title, press(tile)]),
-    [
-      ['Shift remittances', '/manager/reports/shift-remittances'],
-      ['Waste History', '/manager/reports/waste-history'],
-      ['Void logs', '/manager/reports/stock-corrections'],
-    ],
-    'only the Reports tiles remain; Quick Access tiles are gone',
+    [],
+    'no tiles at all: the reports live in the sidebar Reports dropdown, Quick Access is gone',
   );
+  assert.doesNotMatch(t, /REPORTS/, 'no Reports section on the Main Manager dashboard');
 }
 
 // Needs Attention behaviour unchanged: positive counts become alert tiles that route to their screens.
@@ -240,7 +237,7 @@ sales.state.metrics = query({ data: metrics({ pending_incoming_transfers_count: 
 }
 
 // Main Branch Manager attention sources: hook gets the Main Branch id; counts become clickable alerts.
-const attentionSlice = (t) => t.slice(t.indexOf('NEEDS ATTENTION'), t.indexOf('REPORTS'));
+const attentionSlice = (t) => t.slice(t.indexOf('NEEDS ATTENTION'));
 sales.state.metrics = query({ data: metrics({ returns_in_transit_count: 1 }) });
 attentionHook.state.value = { pendingOutgoing: 4, transferDiscrepancies: 2, returnDiscrepancies: 3 };
 {
@@ -258,7 +255,7 @@ attentionHook.state.value = { pendingOutgoing: 4, transferDiscrepancies: 2, retu
   );
   const section = attentionSlice(t);
   assert.doesNotMatch(section, /Nothing needs attention|Checking|Couldn't check/);
-  assert.match(t, /\[tile:Shift remittances\].*\[tile:Waste History\]/, 'Reports unchanged');
+  assert.doesNotMatch(t, /\[tile:Shift remittances\]|\[tile:Waste History\]/, 'the report tiles are not on the dashboard any more');
   assert.match(statsSlice(t), /0 Pending incoming 1 Returns in transit/, 'stats untouched by the new alerts');
 }
 
@@ -357,5 +354,5 @@ sales.state.metrics = query({ data: metrics() });
 }
 
 console.log(
-  'Manager dashboard layout tests passed: "Dashboard" heading, Quick Access removed, stats unchanged, Needs Attention and Reports intact, routes reachable.',
+  'Manager dashboard layout tests passed: "Dashboard" heading, Quick Access removed, stats unchanged, Needs Attention intact, no Reports section, routes reachable.',
 );

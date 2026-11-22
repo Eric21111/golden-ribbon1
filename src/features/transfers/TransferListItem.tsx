@@ -32,18 +32,14 @@ export function TransferListItem({
       ]}
     >
       <View style={styles.row}>
-        <Text style={styles.number} numberOfLines={1}>
-          {transfer.transfer_number}
-        </Text>
+        <Text style={styles.number}>{transfer.transfer_number}</Text>
         <View style={styles.trailing}>
           <TransferStatusBadge status={transfer.status} compact />
           <Ionicons color={colors.muted} name="chevron-forward" size={18} />
         </View>
       </View>
-      <Text style={styles.route} numberOfLines={1}>
-        {route}
-      </Text>
-      <Text style={styles.meta} numberOfLines={1}>
+      <Text style={styles.route}>{route}</Text>
+      <Text style={styles.meta}>
         {productCount} {productCount === 1 ? 'item' : 'items'} · {formatDate(transfer.sent_at ?? transfer.created_at)}
       </Text>
     </Pressable>

@@ -11,6 +11,7 @@ import {
 import { Pagination } from '@/components/Pagination';
 import { Screen } from '@/components/Screen';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { BranchInventoryIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
@@ -266,7 +267,6 @@ export default function CashierPosScreen() {
 
   const searchField = (
     <View style={styles.searchBlock}>
-      <ManagerActionButton label="View branch inventory" variant="secondary" icon="create-outline" onPress={() => router.push('/cashier/inventory' as never)} />
       <SearchInput value={search} onChangeText={setSearch} placeholder="Search product name or SKU" />
       <FilterChipRow
         options={CATEGORY_CHIPS}
@@ -314,6 +314,7 @@ export default function CashierPosScreen() {
                 title="Point of Sale"
                 subtitle={shiftBranchName ?? 'Assigned branch'}
                 hideMenu
+                right={<BranchInventoryIconButton onPress={() => router.push('/cashier/inventory' as never)} />}
               />
               <View style={styles.searchWrap}>{searchField}</View>
             </View>
@@ -343,6 +344,7 @@ export default function CashierPosScreen() {
               title="Point of Sale"
               subtitle={shiftBranchName ?? 'Assigned branch'}
               hideMenu
+              right={<BranchInventoryIconButton onPress={() => router.push('/cashier/inventory' as never)} />}
             />
             <View style={styles.searchWrap}>{searchField}</View>
           </View>

@@ -39,10 +39,12 @@ const programs = loadTs('src/features/pos/pricingPrograms.ts');
 {
   const src = read('app/(cashier)/cashier/sales.tsx');
   // the same funnel button next to the search box, the shared sheet, and the shared tag + Clear all
-  assert.ok(src.includes("<FilterIconButton count={discount !== 'all' ? 1 : 0} onPress={() => setFiltersOpen(true)} />"), 'funnel next to search, badge when on');
-  assert.match(src, /<ListFiltersSheet\n\s+visible=\{filtersOpen\}\n\s+filters=\{DEFAULT_LIST_FILTERS\}\n\s+keys=\{NO_LIST_FILTERS\}\n\s+extra=\{discountFilter\}/, 'the shared sheet, with only the Discount row');
-  assert.match(src, /<ListFilterSummary\n\s+countText=[^\n]*\n\s+filters=\{DEFAULT_LIST_FILTERS\}\n\s+keys=\{NO_LIST_FILTERS\}\n\s+extra=\{discountFilter\}/, 'tag and Clear all');
-  assert.ok(src.includes("title: 'Discount',") && src.includes('options: SALE_DISCOUNT_OPTIONS,'));
+  assert.ok(src.includes('<FilterIconButton count={filterCount} onPress={() => setFiltersOpen(true)} />'), 'funnel next to search, badge counts Payment + Discount');
+  assert.ok(src.includes("const filterCount = (payment !== 'all' ? 1 : 0) + (discount !== 'all' ? 1 : 0);"));
+  assert.doesNotMatch(src, /FilterChipRow/, 'the payment pills moved into the funnel');
+  assert.match(src, /<ListFiltersSheet\n\s+visible=\{filtersOpen\}\n\s+filters=\{DEFAULT_LIST_FILTERS\}\n\s+keys=\{NO_LIST_FILTERS\}\n\s+extra=\{filterRows\}/, 'the shared sheet, with the Payment and Discount rows');
+  assert.match(src, /<ListFilterSummary\n\s+countText=[^\n]*\n\s+filters=\{DEFAULT_LIST_FILTERS\}\n\s+keys=\{NO_LIST_FILTERS\}\n\s+extra=\{filterRows\}/, 'tag and Clear all');
+  assert.ok(src.includes("title: 'Payment',") && src.includes('options: PAYMENT_FILTERS.map(') && src.includes("title: 'Discount',") && src.includes('options: SALE_DISCOUNT_OPTIONS,'));
   // search and the filter combine
   assert.ok(src.includes('matchesSaleDiscount(sale, discount) && (!term || sale.sale_number.toLowerCase().includes(term))'));
   assert.ok(src.includes("'Try another sale number or change the filter.'"), 'the empty state mentions the filter');

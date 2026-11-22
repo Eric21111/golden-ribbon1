@@ -14,7 +14,7 @@ import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader'
 import { StatTile } from '@/components/dashboard/StatTile';
 import { managerColors, statChipColors } from '@/components/dashboard/theme';
 import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
-import { DATE_RANGE_OPTIONS, DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import {
   buildInventoryReconBranchRows,
   inventoryReconBranchHref,
@@ -109,11 +109,6 @@ function signedQty(quantity: number, code?: InventoryReconciliationItem['stock_u
   return abs;
 }
 
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
-}
-
 export function InventoryReconciliationScreen() {
   const params = useLocalSearchParams<{
     branchId?: string | string[];
@@ -205,7 +200,7 @@ export function InventoryReconciliationScreen() {
 
         {showHub && !loading && !query.error && branchRows.length > 0 ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={rangeLabel(rangeType)} />
+            <ReportSectionHeading title="BRANCHES" />
             {branchRows.map((row) => {
               const title = row.isActive ? row.branchName : `Inactive · ${row.branchName}`;
               const meta = inventoryReconBranchMeta(row);

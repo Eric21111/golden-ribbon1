@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { NavTile } from '@/components/dashboard/NavTile';
-import { StatTile } from '@/components/dashboard/StatTile';
+import { StatTilePair } from '@/components/dashboard/StatTilePair';
 import { managerColors } from '@/components/dashboard/theme';
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
@@ -29,9 +29,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ children }: { children: ReactNode }) {
-  return <View style={styles.row}>{children}</View>;
-}
 
 export default function ManagerDashboard() {
   const { profile } = useAuth();
@@ -99,39 +96,37 @@ export default function ManagerDashboard() {
         ) : (
           <View style={styles.content}>
             <Section title="Dashboard">
-              <Row>
-                <StatTile
-                  style={styles.half}
-                  emphasis
-                  icon="cash-outline"
-                  label="Today's Sales"
-                  onPress={() => router.push('/manager/today-sales' as never)}
-                  value={metrics ? formatMoney(metrics.today_sales) : '—'}
-                />
-                <StatTile
-                  style={styles.half}
-                  icon="cube-outline"
-                  label="Products in stock"
-                  onPress={() => router.push('/manager/products')}
-                  value={metrics?.current_inventory_count ?? '—'}
-                />
-              </Row>
-              <Row>
-                <StatTile
-                  style={styles.half}
-                  icon="download-outline"
-                  label="Pending incoming"
-                  onPress={() => router.push('/manager/transfers')}
-                  value={metrics?.pending_incoming_transfers_count ?? '—'}
-                />
-                <StatTile
-                  style={styles.half}
-                  icon="return-up-back-outline"
-                  label="Returns in transit"
-                  onPress={() => router.push('/manager/returns')}
-                  value={metrics?.returns_in_transit_count ?? '—'}
-                />
-              </Row>
+              <StatTilePair
+                compact={false}
+                left={{
+                  emphasis: true,
+                  icon: 'cash-outline',
+                  label: "Today's Sales",
+                  onPress: () => router.push('/manager/today-sales' as never),
+                  value: metrics ? formatMoney(metrics.today_sales) : '—',
+                }}
+                right={{
+                  icon: 'cube-outline',
+                  label: 'Products in stock',
+                  onPress: () => router.push('/manager/products'),
+                  value: metrics?.current_inventory_count ?? '—',
+                }}
+              />
+              <StatTilePair
+                compact={false}
+                left={{
+                  icon: 'download-outline',
+                  label: 'Pending incoming',
+                  onPress: () => router.push('/manager/transfers'),
+                  value: metrics?.pending_incoming_transfers_count ?? '—',
+                }}
+                right={{
+                  icon: 'return-up-back-outline',
+                  label: 'Returns in transit',
+                  onPress: () => router.push('/manager/returns'),
+                  value: metrics?.returns_in_transit_count ?? '—',
+                }}
+              />
             </Section>
 
             <Section title="NEEDS ATTENTION">
@@ -168,38 +163,6 @@ export default function ManagerDashboard() {
                 </View>
               ) : null}
             </Section>
-
-            {isMain ? (
-              <Section title="REPORTS">
-                <Row>
-                  <NavTile
-                    layout="tile"
-                    icon="cash-outline"
-                    accent="pink"
-                    title="Shift remittances"
-                    onPress={() => router.push('/manager/reports/shift-remittances' as never)}
-                  />
-                  <NavTile
-                    layout="tile"
-                    icon="leaf-outline"
-                    accent="green"
-                    title="Waste History"
-                    onPress={() => router.push('/manager/reports/waste-history' as never)}
-                  />
-                </Row>
-                <Row>
-                  <NavTile
-                    layout="tile"
-                    icon="create-outline"
-                    accent="blue"
-                    title="Void logs"
-                    onPress={() => router.push('/manager/reports/stock-corrections' as never)}
-                  />
-                  {/* keeps the tile the same size as the two above (a lone tile would stretch across the row) */}
-                  <View style={styles.rowSpacer} />
-                </Row>
-              </Section>
-            ) : null}
           </View>
         )}
       </ConstrainedWidth>
@@ -254,8 +217,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
   },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  rowSpacer: { flex: 1 },
   half: { flex: 1 },
   quietCard: {
     backgroundColor: managerColors.cardSurface,

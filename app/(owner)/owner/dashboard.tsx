@@ -9,6 +9,7 @@ import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { StatTile } from '@/components/dashboard/StatTile';
+import { StatTilePair } from '@/components/dashboard/StatTilePair';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -39,10 +40,6 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
       {children}
     </View>
   );
-}
-
-function Row({ children }: { children: ReactNode }) {
-  return <View style={styles.row}>{children}</View>;
 }
 
 function chunkPairs<T>(items: readonly T[]): T[][] {
@@ -228,24 +225,15 @@ export default function OwnerDashboard() {
                   <Text style={styles.quiet}>No active selling branches.</Text>
                 </View>
               ) : (
-                chunkPairs(quickview.branches).map((pair) => (
-                  <Row key={pair.map((branch) => branch.branchId).join(':')}>
-                    {pair.map((branch) => (
-                      <StatTile
-                        key={branch.branchId}
-                        style={styles.half}
-                        compact
-                        icon="storefront-outline"
-                        label={branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`}
-                        value={formatMoney(branch.revenue)}
-                        onPress={() =>
-                          router.push(`/owner/reports/branch/${branch.branchId}?range=today` as never)
-                        }
-                      />
-                    ))}
-                    {pair.length === 1 ? <View style={styles.half} /> : null}
-                  </Row>
-                ))
+                chunkPairs(quickview.branches).map((pair) => {
+                  const [first, second] = pair.map((branch) => ({
+                    icon: 'storefront-outline' as const,
+                    label: branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`,
+                    value: formatMoney(branch.revenue),
+                    onPress: () => router.push(`/owner/reports/branch/${branch.branchId}?range=today` as never),
+                  }));
+                  return <StatTilePair key={pair.map((branch) => branch.branchId).join(':')} left={first} right={second} />;
+                })
               )}
             </Section>
 
@@ -329,8 +317,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
   },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  half: { flex: 1 },
   quietCard: {
     backgroundColor: managerColors.cardSurface,
     borderRadius: 16,

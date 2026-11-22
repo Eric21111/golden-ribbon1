@@ -6,6 +6,8 @@ interface CurrencyTextProps {
   numberOfLines?: number;
   adjustsFontSizeToFit?: boolean;
   minimumFontScale?: number;
+  /** Caps how far the system font scale may grow this text (a big figure in a tile). */
+  maxFontSizeMultiplier?: number;
 }
 
 /**
@@ -20,6 +22,7 @@ export function CurrencyText({
   numberOfLines,
   adjustsFontSizeToFit,
   minimumFontScale,
+  maxFontSizeMultiplier,
 }: CurrencyTextProps) {
   const text = String(value);
   const match = text.match(/^[^\d-]+/);
@@ -30,16 +33,21 @@ export function CurrencyText({
   const shrink = Boolean(adjustsFontSizeToFit);
   const isCurrency = /₱/.test(text) || /[\d,]+\.\d{2}\s*$/.test(text);
 
+  // An amount is never cut off: it shrinks to fit (down to 60%), and the callers stack their tiles first when it would
+  // need to shrink more than that. Without a line limit it simply wraps, so nothing is ever replaced by "…".
   return (
     <Text
       style={rest}
       numberOfLines={numberOfLines}
       adjustsFontSizeToFit={shrink}
-      minimumFontScale={minimumFontScale ?? (isCurrency ? 0.85 : 0.65)}
+      minimumFontScale={minimumFontScale ?? 0.6}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
       ellipsizeMode={isCurrency ? 'clip' : 'tail'}
     >
-      {symbol ? <Text style={rest}>{symbol}</Text> : null}
-      <Text style={fontFamily ? [rest, { fontFamily }] : rest}>{amount}</Text>
+      {/* The inner pieces carry no font size of their own (only the font family): a size set on them would stay fixed when the
+          outer text shrinks to fit, and Android would cut the amount off instead of shrinking it. */}
+      {symbol ? <Text>{symbol}</Text> : null}
+      <Text style={fontFamily ? { fontFamily } : undefined}>{amount}</Text>
     </Text>
   );
 }

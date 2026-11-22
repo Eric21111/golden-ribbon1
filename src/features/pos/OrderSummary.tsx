@@ -5,7 +5,7 @@ import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { formatMoney } from '@/lib/format';
 import { cartLineKey, toCents } from '@/lib/money';
 
-import { cartLineLabel } from './cartLine';
+import { cartLineLabel, cartLineParts } from './cartLine';
 import {
   chargedUnitPrice,
   linePricingProgram,
@@ -40,13 +40,31 @@ export function OrderSummary({
       {items.length === 0 ? <Text style={styles.empty}>No products selected.</Text> : null}
       {items.map((item) => {
         const charged = chargedUnitPrice(item.unit_price, linePricingProgram(program, categoryByProductId?.get(item.product_id)), settings);
+        const parts = cartLineParts(item);
         return (
-          <View key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)} style={styles.itemRow}>
+          <View
+            key={cartLineKey(item.product_id, item.variant_id, item.drink_product_id ?? null)}
+            accessible
+            accessibilityLabel={`${cartLineLabel(item)}, ${item.quantity} times ${formatMoney(charged)}`}
+            style={styles.itemRow}
+          >
             <CategoryIcon category={categoryByProductId?.get(item.product_id)} size={36} decorative />
             <View style={styles.copy}>
-              <Text style={styles.name}>
-                {cartLineLabel(item)}
-              </Text>
+              <Text style={styles.name}>{parts.name}</Text>
+              {parts.option || parts.drink ? (
+                <View style={styles.tags}>
+                  {parts.option ? (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagLabel}>{parts.option}</Text>
+                    </View>
+                  ) : null}
+                  {parts.drink ? (
+                    <View style={styles.tag}>
+                      <Text style={styles.tagLabel}>{`+ ${parts.drink}`}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
               <Text style={styles.calculation}>
                 {item.quantity} × {formatMoney(charged)}
                 {charged !== item.unit_price ? ` (was ${formatMoney(item.unit_price)})` : ''}
@@ -104,6 +122,9 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, minWidth: 0 },
   name: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14.5 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 3 },
+  tag: { alignSelf: 'flex-start', backgroundColor: managerColors.cardSurface, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  tagLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11.5 },
   calculation: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, marginTop: 2 },
   subtotal: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 14.5 },
   adjustments: { gap: 6, paddingTop: 12 },
@@ -111,7 +132,8 @@ const styles = StyleSheet.create({
   adjustLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 14 },
   adjustValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   discountValue: { color: '#B91C1C' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12 },
+  // the total sits in a light blue band so it reads as the answer of the card
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: '#F3F7FE' },
   totalLabel: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16 },
   total: { color: managerColors.royalBlue, fontFamily: 'Inter_700Bold', fontSize: 24 },
 });

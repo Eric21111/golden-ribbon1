@@ -45,14 +45,10 @@ export function TodayLogList({ activities }: { activities: readonly OwnerTodayAc
             </View>
             <View style={styles.body}>
               <View style={styles.head}>
-                <Text style={styles.title} numberOfLines={2}>
-                  {row.action}
-                </Text>
+                <Text style={styles.title}>{row.action}</Text>
                 <Text style={styles.time}>{row.time}</Text>
               </View>
-              <Text style={styles.who} numberOfLines={2}>
-                {who}
-              </Text>
+              <Text style={styles.who}>{who}</Text>
               {row.detail || row.discrepancy ? (
                 <View style={styles.extra}>
                   {row.detail ? <Text style={styles.detail}>{row.detail}</Text> : null}
@@ -88,9 +84,10 @@ const styles = StyleSheet.create({
   rowDivider: { borderTopWidth: 1, borderTopColor: managerColors.cardBorder },
   chip: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: 2 },
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  title: { flex: 1, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20 },
-  time: { flexShrink: 0, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 20 },
+  // the action wraps; the time keeps its width and drops under it (right-aligned) when the room beside it is too small
+  head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 8 },
+  title: { flexGrow: 1, flexShrink: 1, flexBasis: 100, minWidth: 0, color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20 },
+  time: { flexShrink: 0, marginLeft: 'auto', color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12.5, lineHeight: 20 },
   who: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   extra: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4 },
   detail: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },

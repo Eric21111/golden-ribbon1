@@ -43,7 +43,11 @@ assert.match(source, /reasonText\(row\)/);
 assert.doesNotMatch(source, /VOID_LOGS_ARCHIVE_NOTE|Export Data Archive|cleaned archive periods/);
 assert.doesNotMatch(source, /if \(!branchName\) return data/);
 
-const route = readFileSync('app/(owner)/owner/reports/void-logs/[branchId].tsx', 'utf8');
+// the Owner and Main Manager routes both render this shared branch route
+const route = readFileSync('src/features/reports/VoidLogsBranchRoute.tsx', 'utf8');
+for (const file of ['app/(owner)/owner/reports/void-logs/[branchId].tsx', 'app/(manager)/manager/reports/void-logs/[branchId].tsx']) {
+  assert.match(readFileSync(file, 'utf8'), /VoidLogsBranchRoute/);
+}
 assert.match(route, /branchLookupPending/);
 assert.match(route, /initialRangeType/);
 

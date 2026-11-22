@@ -121,25 +121,98 @@ export function remittanceSummaryAmountLabel(
 }
 
 const KPI_COL_GAP = 10;
-const COMPACT_H_PAD = 28;
-/** Inter 700 at 26px is ~0.62em per glyph. Do not rely on Android font shrinking. */
-const MIN_AMOUNT_CHAR_PX = 16;
+/** Horizontal padding of a compact tile (14 + 14) and of a regular square tile (20 + 20). */
+export const COMPACT_H_PAD = 28;
+export const SQUARE_H_PAD = 40;
+/** The figure size of a stat tile (StatTile `value`). */
+const FIGURE_SIZE = 26;
+/**
+ * A figure may shrink only a little (4%) before its tile stacks. Shrinking is a safety net, not a layout tool: Android does not
+ * always apply it, so a figure that does not fit at (nearly) full size gets a full-width tile instead.
+ */
+const MAX_FIGURE_SHRINK = 0.96;
+
+/**
+ * Width in px of a figure such as "₱1,234,567.89" in Inter 700 at `size`. Per-glyph advances come from the app's font
+ * (digits are 0.43–0.68em, so the widest digit is used; "," and "." are 0.33em); the ₱ is drawn in the system font at
+ * about a digit's width. No kerning, so it is an estimate that errs on the wide side.
+ */
+export function estimateFigureWidth(text: string, size = FIGURE_SIZE): number {
+  let em = 0;
+  for (const char of text) {
+    if (/\d/.test(char) || char === '₱') em += 0.66;
+    else if (char === ',' || char === '.') em += 0.34;
+    else if (char === '-') em += 0.47;
+    else if (char === ' ') em += 0.24;
+    else em += 0.62;
+  }
+  return em * size;
+}
+
+/**
+ * A tile's big figure scales with the system font only up to this much (it is already 26px): at 2× it would be 52px and
+ * no phone has room for a seven-figure amount at that size. Labels and captions still scale all the way.
+ */
+export const FIGURE_MAX_FONT_SCALE = 1.3;
+/** The label under a figure (StatTile `label`): Inter 500 at 13px. */
+const LABEL_SIZE = 13;
+
+/** Does the figure fit `available` px at (nearly) full size at this system font scale? */
+export function figureFits(text: string, available: number, fontScale = 1): boolean {
+  const figureScale = Math.min(Math.max(fontScale, 1), FIGURE_MAX_FONT_SCALE);
+  return estimateFigureWidth(text) * figureScale * MAX_FIGURE_SHRINK <= available;
+}
+
+/** Width in px of the longest word in `text` at `size` (a word cannot wrap, so it must fit the tile on its own). */
+export function longestWordWidth(text: string, size = LABEL_SIZE): number {
+  const longest = text.split(/\s+/).reduce((max, word) => Math.max(max, word.length), 0);
+  return longest * 0.6 * size;
+}
+
+/**
+ * Same rule as shouldStackSummaryKpis, plus the labels: two stat tiles share a row only when both figures fit their half at
+ * (nearly) full size and the longest word of each label fits too, at the system font scale. Figures stop growing at
+ * FIGURE_MAX_FONT_SCALE; labels do not. `right` may be missing (an odd tile out).
+ */
+export function shouldStackStatTiles({
+  left,
+  right,
+  width,
+  fontScale = 1,
+  hPad = COMPACT_H_PAD,
+}: {
+  left: { value: string; label?: string };
+  right?: { value: string; label?: string };
+  width: number;
+  fontScale?: number;
+  hPad?: number;
+}): boolean {
+  const halfText = (Math.max(0, width) - KPI_COL_GAP) / 2 - hPad;
+  if (halfText < 48) return true;
+  const scale = Math.max(fontScale, 1);
+  return [left, right].some(
+    (tile) =>
+      tile !== undefined &&
+      (!figureFits(tile.value, halfText, scale) || (tile.label !== undefined && longestWordWidth(tile.label) * scale > halfText)),
+  );
+}
 
 /**
  * Compact 2-column KPIs only when both values stay fully readable on this width
- * at the full 26px figure size — no ellipsis, no aggressive shrink.
+ * at the full 26px figure size (a figure may shrink at most 4%) — no ellipsis, no aggressive shrink.
+ * `hPad` is the tile's own left + right padding (compact by default).
  */
 export function shouldStackSummaryKpis(
   left: string,
   right: string,
   width: number,
   fontScale = 1,
+  hPad = COMPACT_H_PAD,
 ): boolean {
   const usable = Math.max(0, width) / Math.max(fontScale, 1);
-  const halfText = (usable - KPI_COL_GAP) / 2 - COMPACT_H_PAD;
+  const halfText = (usable - KPI_COL_GAP) / 2 - hPad;
   if (halfText < 48) return true;
-  const maxChars = Math.floor(halfText / MIN_AMOUNT_CHAR_PX);
-  return left.length > maxChars || right.length > maxChars;
+  return estimateFigureWidth(left) * MAX_FIGURE_SHRINK > halfText || estimateFigureWidth(right) * MAX_FIGURE_SHRINK > halfText;
 }
 
 /** @deprecated Use shouldStackSummaryKpis — same layout rule for remittance KPIs. */

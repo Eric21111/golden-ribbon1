@@ -54,6 +54,22 @@ export function FilterIconButton({ count, onPress, label = 'Filters' }: { count:
   );
 }
 
+/** Opens the branch's inventory list (the Cashier's POS header). */
+export function BranchInventoryIconButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="View branch inventory"
+      accessibilityHint="Opens the branch inventory"
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [styles.inventoryButton, pressed && styles.pressed]}
+    >
+      <Ionicons name="basket-outline" size={24} color={managerColors.royalBlue} />
+    </Pressable>
+  );
+}
+
 /** Opens the sort sheet. `currentLabel` is the sort in use (read out loud); `active` is true when it is not the default. */
 export function SortIconButton({ currentLabel, active, onPress }: { currentLabel?: string; active: boolean; onPress: () => void }) {
   return (
@@ -68,6 +84,17 @@ export function SortIconButton({ currentLabel, active, onPress }: { currentLabel
 }
 
 const styles = StyleSheet.create({
+  // light blue tint with a blue icon, like a secondary button (the POS header)
+  inventoryButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF0FB',
+    borderWidth: 1,
+    borderColor: '#D3E3FC',
+  },
   button: {
     width: 46,
     height: 46,

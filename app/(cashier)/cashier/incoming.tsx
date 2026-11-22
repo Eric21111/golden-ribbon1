@@ -1,6 +1,6 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
@@ -25,7 +25,13 @@ import { useMarkNotificationsReviewed } from '@/hooks/useNotifications';
 import { useProducts } from '@/hooks/useProducts';
 import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, formatSnapshottedQuantity, makeIdempotencyKey } from '@/lib/format';
+import {
+  QUANTITY_BOX_MAX_FONT_SCALE,
+  formatDate,
+  formatSnapshottedQuantity,
+  makeIdempotencyKey,
+  quantityBoxWidth,
+} from '@/lib/format';
 import type { CashierPendingTransfer, CashierPendingTransferItem } from '@/types/models';
 
 type LineItem = {
@@ -54,6 +60,7 @@ function lineStatusFor(
 
 export default function CashierIncomingShipments() {
   const { session } = useAuth();
+  const { fontScale } = useWindowDimensions();
   const pending = useCashierPendingTransfers(session?.user.id ?? '');
   const products = useProducts();
   useMarkNotificationsReviewed('transfer_pending', null, pending.isSuccess ? pending.dataUpdatedAt : 0);
@@ -341,7 +348,17 @@ export default function CashierIncomingShipments() {
                           placeholderTextColor={managerColors.subtext}
                           maxLength={6}
                           selectTextOnFocus
-                          style={styles.qtyInput}
+                          maxFontSizeMultiplier={QUANTITY_BOX_MAX_FONT_SCALE}
+                          style={[
+                            styles.qtyInput,
+                            {
+                              width: quantityBoxWidth(receivedByItem[row.line.stock_transfer_item_id], {
+                                min: 64,
+                                fontSize: 15,
+                                fontScale,
+                              }),
+                            },
+                          ]}
                         />
                       ) : (
                         <Text style={styles.itemQty}>{sentLabel}</Text>

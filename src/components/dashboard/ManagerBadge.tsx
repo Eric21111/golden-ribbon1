@@ -21,9 +21,7 @@ export function ManagerBadge({ label, tone, size = 'sm' }: ManagerBadgeProps) {
   const isMd = size === 'md';
   return (
     <View style={[styles.badge, isMd && styles.badgeMd, { backgroundColor: palette.bg }]}>
-      <Text style={[styles.label, isMd && styles.labelMd, { color: palette.text }]} numberOfLines={1}>
-        {label}
-      </Text>
+      <Text style={[styles.label, isMd && styles.labelMd, { color: palette.text }]}>{label}</Text>
     </View>
   );
 }

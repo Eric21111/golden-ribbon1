@@ -12,7 +12,7 @@ import { managerColors } from '@/components/dashboard/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { firstSearchParam, parseReportDateFilter } from '@/features/reports/branchHub';
 import { CorrectionCoverageNotice } from '@/features/reports/CorrectionCoverageNotice';
-import { DATE_RANGE_OPTIONS, DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
+import { DateRangeFilter, type DateFilterType } from '@/features/reports/DateRangeFilter';
 import { OwnerSummaryKpiPair } from '@/features/reports/OwnerSummaryKpiPair';
 import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
 import {
@@ -30,14 +30,9 @@ import { useStockCorrectionScan } from '@/hooks/useStockCorrectionScan';
 import { getErrorMessage } from '@/lib/errors';
 import { accentForName } from '@/lib/nameAccent';
 
-function initialRangeFromParams(range: string, start: string, end: string): { rangeType: DateFilterType; customStart: string; customEnd: string } {
-  const rangeType = range ? parseReportDateFilter(range) : 'all_time';
+function initialRangeFromParams(range: string, start: string, end: string, fallback: DateFilterType): { rangeType: DateFilterType; customStart: string; customEnd: string } {
+  const rangeType = range ? parseReportDateFilter(range) : fallback;
   return { rangeType, customStart: rangeType === 'custom' ? start : '', customEnd: rangeType === 'custom' ? end : '' };
-}
-
-function rangeLabel(rangeType: DateFilterType): string {
-  if (rangeType === 'custom') return 'Custom range';
-  return DATE_RANGE_OPTIONS.find((option) => option.value === rangeType)?.label ?? 'All Time';
 }
 
 /**
@@ -50,7 +45,7 @@ export function StockCorrectionsOverviewScreen() {
   const isManager = profile?.role === 'manager';
   const role = isManager ? 'manager' : 'owner';
   const params = useLocalSearchParams<{ range?: string | string[]; start?: string | string[]; end?: string | string[] }>();
-  const initial = initialRangeFromParams(firstSearchParam(params.range), firstSearchParam(params.start), firstSearchParam(params.end));
+  const initial = initialRangeFromParams(firstSearchParam(params.range), firstSearchParam(params.start), firstSearchParam(params.end), isManager ? 'today' : 'all_time');
   const [rangeType, setRangeType] = useState<DateFilterType>(initial.rangeType);
   const [customStart, setCustomStart] = useState(initial.customStart);
   const [customEnd, setCustomEnd] = useState(initial.customEnd);
@@ -138,7 +133,7 @@ export function StockCorrectionsOverviewScreen() {
 
         {showRows && branchRows.length > 0 ? (
           <View style={styles.section}>
-            <ReportSectionHeading title="BRANCHES" meta={`${rangeLabel(rangeType)}${coverage.complete ? '' : ` · newest ${coverage.loaded}`}`} />
+            <ReportSectionHeading title="BRANCHES" meta={coverage.complete ? undefined : `Newest ${coverage.loaded}`} />
             {branchRows.map((branch) => {
               const title = branch.isActive ? branch.branchName : `Inactive · ${branch.branchName}`;
               const text = correctionBranchMeta(branch.totals, coverage);
@@ -151,7 +146,7 @@ export function StockCorrectionsOverviewScreen() {
                   title={title}
                   subtitle={text.subtitle}
                   meta={text.meta}
-                  trailing={<Text style={styles.count} numberOfLines={1}>{branch.totals.corrections}</Text>}
+                  trailing={<Text style={styles.count}>{branch.totals.corrections}</Text>}
                   onPress={href ? () => router.push(href as never) : undefined}
                   accessibilityLabel={`${title}. ${text.subtitle}${text.meta ? `. ${text.meta}` : ''}${coverage.complete ? '' : '. Newest corrections only'}`}
                   accessibilityHint={href ? 'Opens stock corrections for this branch' : undefined}

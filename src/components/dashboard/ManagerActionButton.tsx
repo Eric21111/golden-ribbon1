@@ -129,40 +129,48 @@ export function ManagerActionButton({
 }
 
 const styles = StyleSheet.create({
-  content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The buttons are at least 54 tall, never exactly 54: a label that wraps (a long label, a larger system font) makes the
+  // button taller instead of being clipped.
+  content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 1 },
   primary: {
-    height: 54,
+    minHeight: 54,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryLabel: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
+  primaryLabel: { flexShrink: 1, textAlign: 'center', color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
   secondary: {
-    height: 54,
+    minHeight: 54,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#EAF0FB',
   },
-  secondaryLabel: { color: managerGradients.hero[1], fontFamily: 'Inter_700Bold', fontSize: 15 },
+  secondaryLabel: { flexShrink: 1, textAlign: 'center', color: managerGradients.hero[1], fontFamily: 'Inter_700Bold', fontSize: 15 },
   danger: {
-    height: 54,
+    minHeight: 54,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FEE2E2',
   },
-  dangerLabel: { color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 15 },
+  dangerLabel: { flexShrink: 1, textAlign: 'center', color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 15 },
   destructive: {
-    height: 54,
+    minHeight: 54,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#DC2626',
   },
-  destructiveLabel: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
+  destructiveLabel: { flexShrink: 1, textAlign: 'center', color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

@@ -3,8 +3,8 @@ import { beginCashierShiftClose } from '@/services/shiftService';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { cloneElement, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -15,7 +15,7 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { NavTile } from '@/components/dashboard/NavTile';
-import { StatTile } from '@/components/dashboard/StatTile';
+import { StatTilePair } from '@/components/dashboard/StatTilePair';
 import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -569,26 +569,22 @@ export default function CashierDashboard() {
           </View>
         ) : (
           <View style={styles.content}>
-            <View style={styles.row}>
-              <StatTile
-                style={styles.half}
-                emphasis
-                icon="cash-outline"
-                label="Total sales"
-                onPress={() => router.push('/cashier/payment-totals' as never)}
-                value={
-                  summaryQuery.isLoading && salesTotal === undefined
-                    ? '—'
-                    : formatMoney(salesTotal ?? 0)
-                }
-              />
-              <StatTile
-                style={styles.half}
-                icon="receipt-outline"
-                label="Orders"
-                value={summaryQuery.isLoading && orders === undefined ? '—' : String(orders ?? 0)}
-              />
-            </View>
+            <StatTilePair
+              compact={false}
+              left={{
+                emphasis: true,
+                icon: 'cash-outline',
+                label: 'Total sales',
+                onPress: () => router.push('/cashier/payment-totals' as never),
+                value:
+                  summaryQuery.isLoading && salesTotal === undefined ? '—' : formatMoney(salesTotal ?? 0),
+              }}
+              right={{
+                icon: 'receipt-outline',
+                label: 'Orders',
+                value: summaryQuery.isLoading && orders === undefined ? '—' : String(orders ?? 0),
+              }}
+            />
 
             <View style={styles.shiftCard}>
               <View style={styles.titleRow}>
@@ -628,26 +624,27 @@ export default function CashierDashboard() {
             {!pendingPreview ? (
               <>
                 <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-                <Row>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.actionsBleed}
+                  contentContainerStyle={styles.actionsRow}
+                >
                   <NavTile
-                    layout="tile"
+                    layout="action"
                     icon="basket-outline"
-                    accent="gold"
                     title="Branch inventory"
                     onPress={() => router.push('/cashier/inventory' as never)}
                   />
-                  {leftoverReturnTile}
-                </Row>
-                <Row>
+                  {/* the same tile as elsewhere (one definition), shown as a quick action */}
+                  {cloneElement(leftoverReturnTile, { layout: 'action' })}
                   <NavTile
-                    layout="tile"
+                    layout="action"
                     icon="create-outline"
-                    accent="blue"
                     title="Void logs"
                     onPress={() => router.push('/cashier/stock-corrections' as never)}
                   />
-                  <View style={styles.rowSpacer} />
-                </Row>
+                </ScrollView>
               </>
             ) : null}
           </View>
@@ -856,6 +853,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
   rowSpacer: { flex: 1 },
+  // the quick actions scroll sideways and run out to the screen edges (the page column pads spacing.lg on each side)
+  actionsBleed: { marginHorizontal: -spacing.lg },
+  actionsRow: { paddingHorizontal: spacing.lg, paddingVertical: 4, gap: 10, alignItems: 'stretch' },
   warningCard: {
     backgroundColor: '#FEF3C7',
     borderRadius: 12,

@@ -454,7 +454,7 @@ export function CreateTransferScreen() {
                           ) : null}
                         </View>
                         <View style={styles.availablePill}>
-                          <Text style={styles.availableText} numberOfLines={1}>
+                          <Text style={styles.availableText}>
                             <Text style={styles.availableValue}>{formatLiveStock(item.quantity_on_hand, undefined, item.product.stock_unit_code)}</Text>
                             <Text style={styles.availableLabel}> available</Text>
                           </Text>

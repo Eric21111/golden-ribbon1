@@ -145,7 +145,6 @@ export default function PaymentTotals() {
                 </View>
               );
             })}
-            <Text style={styles.hint}>Tap a payment method to see the pricing-program breakdown.</Text>
           </ScrollView>
         )}
       </ConstrainedWidth>
@@ -160,10 +159,4 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   listContent: { gap: 14, paddingBottom: 24 },
   block: { gap: 10 },
-  hint: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-  },
 });

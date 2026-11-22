@@ -39,7 +39,7 @@ function LineList({ lines, quantityCaption }: { lines: ReviewLine[]; quantityCap
               {line.name}
             </Text>
           <StockUnitHint code={line.stock_unit_code} />
-            <Text style={styles.meta} numberOfLines={1}>
+            <Text style={styles.meta}>
               {line.sku}
               {line.caption ? ` · ${line.caption}` : ''}
             </Text>

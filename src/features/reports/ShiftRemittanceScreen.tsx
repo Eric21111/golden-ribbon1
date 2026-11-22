@@ -106,9 +106,7 @@ function MetricChipRow({
     <View style={styles.metricRow}>
       <View style={styles.metricLeft}>
         <Ionicons name={icon} size={16} color={managerColors.subtext} />
-        <Text style={styles.metricLabel} numberOfLines={1}>
-          {label}
-        </Text>
+        <Text style={styles.metricLabel}>{label}</Text>
       </View>
       <View style={styles.valueChip}>
         <Text style={styles.valueChipText} numberOfLines={1} adjustsFontSizeToFit>
@@ -148,9 +146,7 @@ function RemittanceDayCard({
         </View>
         <View style={styles.dayHeaderCopy}>
           <Text style={styles.section}>{dateLabel}</Text>
-          <Text style={styles.dayMeta} numberOfLines={1}>
-            {`Total Amount: ${total == null ? '—' : formatMoney(total)}`}
-          </Text>
+          <Text style={styles.dayMeta}>{`Total Amount: ${total == null ? '—' : formatMoney(total)}`}</Text>
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -200,16 +196,12 @@ function RemittanceDayCard({
           <View style={styles.footerRow}>
             <View style={[styles.footerCell, styles.shortageCell]}>
               <Ionicons name="arrow-down" size={13} color="#B91C1C" />
-              <Text style={styles.shortageText} numberOfLines={1}>
-                {`Shortage: ${formatMoney(shortage)}`}
-              </Text>
+              <Text style={styles.shortageText}>{`Shortage: ${formatMoney(shortage)}`}</Text>
             </View>
             <View style={styles.footerDivider} />
             <View style={[styles.footerCell, styles.excessCell]}>
               <Ionicons name="arrow-up" size={13} color={managerColors.green} />
-              <Text style={styles.excessText} numberOfLines={1}>
-                {`Excess: ${formatMoney(excess)}`}
-              </Text>
+              <Text style={styles.excessText}>{`Excess: ${formatMoney(excess)}`}</Text>
             </View>
           </View>
         </View>
@@ -271,18 +263,14 @@ function ShiftRemittanceRowCard({
         </View>
       ) : null}
 
-      <Text style={styles.tenderMeta} numberOfLines={1}>
-        {tenderMeta}
-      </Text>
+      <Text style={styles.tenderMeta}>{tenderMeta}</Text>
 
       <View style={styles.shiftBottom}>
         <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
           {amount}
         </Text>
         <View style={[styles.rowBadge, { backgroundColor: tone.bg }]}>
-          <Text style={[styles.rowBadgeText, { color: tone.text }]} numberOfLines={1}>
-            {badgeLabel}
-          </Text>
+          <Text style={[styles.rowBadgeText, { color: tone.text }]}>{badgeLabel}</Text>
         </View>
       </View>
     </Pressable>
@@ -539,8 +527,9 @@ const styles = StyleSheet.create({
   footerDivider: { width: 1, backgroundColor: managerColors.cardBorder },
   shortageCell: { backgroundColor: '#FEE2E2' },
   excessCell: { backgroundColor: '#DCFCE7' },
-  shortageText: { flexShrink: 1, color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  excessText: { flexShrink: 1, color: managerColors.green, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  // the amount wraps under its label instead of being cut off ("Shortage: ₱12,34…")
+  shortageText: { flexShrink: 1, textAlign: 'center', color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  excessText: { flexShrink: 1, textAlign: 'center', color: managerColors.green, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   shiftCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

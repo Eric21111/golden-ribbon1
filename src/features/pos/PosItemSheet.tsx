@@ -1,13 +1,13 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { sortMealVariants } from '@/features/pos/pricingPrograms';
-import { formatMoney } from '@/lib/format';
+import { QUANTITY_BOX_MAX_FONT_SCALE, formatMoney, quantityBoxWidth } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { PosDrinkChoice } from '@/stores/cartStore';
 import type { InventoryItem, PosVariant } from '@/types/models';
@@ -31,6 +31,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
   const [selectedDrinkId, setSelectedDrinkId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [draft, setDraft] = useState('1');
+  const { fontScale } = useWindowDimensions();
 
   // Reset selection whenever a new item is opened.
   useEffect(() => {
@@ -195,9 +196,7 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
                         color={selected ? managerColors.royalBlue : managerColors.subtext}
                       />
                       <View style={styles.drinkCopy}>
-                        <Text style={[styles.drinkName, selected && styles.optionNameSelected]} numberOfLines={1}>
-                          {option.name}
-                        </Text>
+                        <Text style={[styles.drinkName, selected && styles.optionNameSelected]}>{option.name}</Text>
                         {out ? <Text style={styles.drinkOut}>Out of stock</Text> : null}
                       </View>
                     </Pressable>
@@ -237,7 +236,8 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
                   }
                 }}
                 onBlur={() => commitDraft(draft)}
-                style={styles.quantityInput}
+                maxFontSizeMultiplier={QUANTITY_BOX_MAX_FONT_SCALE}
+                style={[styles.quantityInput, { width: quantityBoxWidth(draft, { min: 48, fontSize: 17, fontScale }) }]}
               />
               <Pressable
                 accessibilityRole="button"

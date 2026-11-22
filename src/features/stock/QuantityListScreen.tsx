@@ -158,7 +158,7 @@ export function QuantityListScreen({
                     <Text style={styles.sku}>{row.sku}</Text>
                   </View>
                   <View style={styles.onHandPill}>
-                    <Text style={styles.onHandText} numberOfLines={1}>
+                    <Text style={styles.onHandText}>
                       <Text style={styles.onHandValue}>{formatLiveStock(row.onHand, undefined, row.stock_unit_code)}</Text>
                       <Text style={styles.onHandLabel}> on hand</Text>
                     </Text>

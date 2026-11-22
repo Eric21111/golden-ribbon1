@@ -76,12 +76,8 @@ function OrderRows({
               <Ionicons name="receipt-outline" size={nested ? 15 : 16} color={managerColors.royalBlue} />
             </View>
             <View style={styles.orderCopy}>
-              <Text style={styles.orderTitle} numberOfLines={1}>
-                {sale.sale_number}
-              </Text>
-              <Text style={styles.orderMeta} numberOfLines={nested ? 2 : 1}>
-                {`${when} · ${cashier}`}
-              </Text>
+              <Text style={styles.orderTitle}>{sale.sale_number}</Text>
+              <Text style={styles.orderMeta}>{`${when} · ${cashier}`}</Text>
             </View>
             <CurrencyText
               value={formatMoney(sale.total_amount)}

@@ -181,7 +181,7 @@ assert.equal(pair.right.value, 1);
 assert.equal(tile.caption, 'Net +13 pcs', 'the net change is shown per unit');
 assert.doesNotMatch(html, /data-notice/, 'complete: no warning');
 assert.equal(heading.title, 'BRANCHES');
-assert.equal(heading.meta, 'All Time');
+assert.equal(heading.meta, undefined, 'the range is not repeated next to BRANCHES (the filter shows it)');
 // the rows
 assert.deepEqual(rowsSeen.map((r) => r.title), ['SM 2', 'Inactive · Old Booth', 'SM 1', 'Inactive · SM 3', 'SM 4'], 'branches by count; one that is inactive or not in the list is labelled, like Void logs');
 assert.equal(rowsSeen[0].subtitle, '2 corrections');
@@ -198,7 +198,7 @@ rowsSeen[0].onPress();
 assert.deepEqual(pushed, ['/owner/reports/stock-count-changes/b2?range=custom&start=2026-11-11&end=2026-11-12']);
 html = render({ scan: everything, over: withRange('custom', '2026-01-01', '2026-01-02') });
 assert.equal(statTiles[0].value, 0);
-assert.equal(heading.meta, 'Custom range');
+assert.equal(heading.meta, undefined);
 assert.equal(rowsSeen.find((r) => r.title === 'SM 2').subtitle, 'No corrections in this range');
 // the range arrives from a link as well (back from a branch)
 params = { range: 'custom', start: '2026-11-11', end: '2026-11-11' };
@@ -210,7 +210,8 @@ params = {};
 role = 'manager';
 render({ scan: everything });
 rowsSeen[0].onPress();
-assert.deepEqual(pushed, ['/manager/reports/stock-count-changes/b2?range=all_time']);
+assert.equal(pushed.length, 1);
+assert.match(pushed[0], /^\/manager\/reports\/stock-count-changes\/b\d\?range=today$/, 'the Main Manager opens on Today (the Owner on All Time)');
 role = 'owner';
 
 // an incomplete custom range asks for the dates and shows no numbers
@@ -226,7 +227,7 @@ text = flat(html);
 assert.equal(statTiles[0].caption, 'Partial · newest 500 only', 'the headline card says it is partial');
 assert.equal(pair.left.caption, 'Partial · newest 500 only');
 assert.match(html, /data-notice="true"[^>]*>Only the newest 500 corrections were loaded \(back to Nov 1\)\./);
-assert.equal(heading.meta, 'All Time · newest 500', 'and the branch list too');
+assert.equal(heading.meta, 'Newest 500', 'and the branch list too');
 assert.equal(rowsSeen.find((r) => r.title === 'SM 2').subtitle, 'None among the newest corrections', 'never "none" when it was only the newest that were checked');
 assert.match(rowsSeen.find((r) => r.title === 'SM 1').accessibilityLabel, /Newest corrections only$/);
 // older corrections can be loaded from the overview, and the figures say how many are loaded
@@ -236,7 +237,7 @@ assert.equal(older, 1);
 const moreData = { rows: Array.from({ length: 1000 }, (_, i) => up(i + 1, 1, { branch_name: 'SM 1', created_at: new Date(Date.UTC(2026, 9, 1) + i * 3600_000).toISOString() })), complete: false, pages: 20 };
 html = render({ scan: moreData });
 assert.equal(statTiles[0].caption, 'Partial · newest 1000 only', 'after loading older ones it says 1000, not 500');
-assert.equal(heading.meta, 'All Time · newest 1000');
+assert.equal(heading.meta, 'Newest 1000');
 html = render({ scan: { ...moreData, complete: true } });
 assert.doesNotMatch(html, /data-notice/, 'everything loaded: complete, no warning');
 assert.notEqual(statTiles[0].caption, 'Partial · newest 1000 only');
@@ -246,7 +247,7 @@ assert.equal(noticeProps.onLoadOlder, undefined, 'at the ceiling there is nothin
 html = render({ scan: cutData, over: withRange('custom', '2026-11-20', '2026-11-21') });
 assert.doesNotMatch(html, /data-notice/);
 assert.notEqual(statTiles[0].caption, 'Partial · newest 500 only');
-assert.equal(heading.meta, 'Custom range');
+assert.equal(heading.meta, undefined);
 // a range that reaches back before the oldest loaded correction is partial
 html = render({ scan: cutData, over: withRange('custom', '2026-10-01', '2026-11-21') });
 assert.match(html, /data-notice="true"/);

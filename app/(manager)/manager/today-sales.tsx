@@ -141,10 +141,6 @@ export default function TodaySales() {
             );
           })
         )}
-
-        {hasSales && !query.isPending && !query.error ? (
-          <Text style={styles.hint}>Tap a payment method to see the pricing-program breakdown.</Text>
-        ) : null}
       </ConstrainedWidth>
     </Screen>
   );
@@ -154,10 +150,4 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { padding: 20, gap: 14 },
   block: { gap: 10 },
-  hint: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-  },
 });

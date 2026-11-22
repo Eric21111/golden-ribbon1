@@ -40,9 +40,7 @@ export function RouteBanner({ from, to, connectorIcon }: RouteBannerProps) {
       <View style={styles.routeRow}>
         <View style={styles.routeStop}>
           <StopBadge isMain={from.isMain} />
-          <Text style={styles.routeStopLabel} numberOfLines={1}>
-            {from.label}
-          </Text>
+          <Text style={styles.routeStopLabel}>{from.label}</Text>
         </View>
         <View style={styles.routeConnector}>
           <View style={styles.routeLine} />
@@ -58,9 +56,7 @@ export function RouteBanner({ from, to, connectorIcon }: RouteBannerProps) {
         </View>
         <View style={styles.routeStop}>
           <StopBadge isMain={to.isMain} />
-          <Text style={styles.routeStopLabel} numberOfLines={1}>
-            {to.label}
-          </Text>
+          <Text style={styles.routeStopLabel}>{to.label}</Text>
         </View>
       </View>
     </View>
@@ -96,7 +92,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  routeStopLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13, maxWidth: '100%' },
+  // a long branch name wraps under its icon instead of being cut off
+  routeStopLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13, maxWidth: '100%', textAlign: 'center' },
   routeConnector: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   routeLine: { width: 18, height: 2, borderRadius: 1, backgroundColor: '#D3E3FC' },
   routeIconChip: {

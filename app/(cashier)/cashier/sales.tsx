@@ -1,4 +1,3 @@
-import { FilterChipRow } from '@/components/dashboard/FilterChipRow';
 import { PAYMENT_FILTERS, type PaymentFilter } from '@/features/sales/paymentMethods';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -64,16 +63,25 @@ export default function CurrentShiftSales() {
     );
   }, [sales.data, search, discount, payment]);
 
-  // the funnel's one row: how the order was priced (Standard, Employee / guest meal, PWD, Back office / guard)
-  const discountFilter = useMemo(
-    () => ({
-      title: 'Discount',
-      options: SALE_DISCOUNT_OPTIONS,
-      value: discount,
-      onChange: (value: string) => setDiscount(value as SaleDiscountFilter),
-    }),
-    [discount],
+  // the funnel's two rows: how it was paid (Cash, GCash) and how the order was priced (Standard, Employee / guest meal, PWD, Back office / guard)
+  const filterRows = useMemo(
+    () => [
+      {
+        title: 'Payment',
+        options: PAYMENT_FILTERS.map((option) => (option.value === 'all' ? { ...option, label: 'All' } : option)),
+        value: payment,
+        onChange: (value: string) => setPayment(value as PaymentFilter),
+      },
+      {
+        title: 'Discount',
+        options: SALE_DISCOUNT_OPTIONS,
+        value: discount,
+        onChange: (value: string) => setDiscount(value as SaleDiscountFilter),
+      },
+    ],
+    [discount, payment],
   );
+  const filterCount = (payment !== 'all' ? 1 : 0) + (discount !== 'all' ? 1 : 0);
 
   useEffect(() => {
     if (!isTablet) return;
@@ -111,14 +119,13 @@ export default function CurrentShiftSales() {
           <View style={styles.searchGrow}>
             <SearchInput value={search} onChangeText={setSearch} placeholder="Search sale #" />
           </View>
-          <FilterIconButton count={discount !== 'all' ? 1 : 0} onPress={() => setFiltersOpen(true)} />
+          <FilterIconButton count={filterCount} onPress={() => setFiltersOpen(true)} />
         </View>
-        <FilterChipRow options={PAYMENT_FILTERS} value={payment} onChange={setPayment} />
         <ListFilterSummary
           countText={`${filtered.length} of ${sales.data?.length ?? 0} ${(sales.data?.length ?? 0) === 1 ? 'sale' : 'sales'}`}
           filters={DEFAULT_LIST_FILTERS}
           keys={NO_LIST_FILTERS}
-          extra={discountFilter}
+          extra={filterRows}
           onChange={ignoreListFilters}
         />
       </View>
@@ -142,9 +149,9 @@ export default function CurrentShiftSales() {
       }
       ListEmptyComponent={
         <EmptyState
-          title={search.trim() || discount !== 'all' ? 'No matching sales' : 'No sales yet'}
+          title={search.trim() || filterCount > 0 ? 'No matching sales' : 'No sales yet'}
           message={
-            search.trim() || discount !== 'all'
+            search.trim() || filterCount > 0
               ? 'Try another sale number or change the filter.'
               : 'Confirmed orders will appear here.'
           }
@@ -222,7 +229,7 @@ export default function CurrentShiftSales() {
         visible={filtersOpen}
         filters={DEFAULT_LIST_FILTERS}
         keys={NO_LIST_FILTERS}
-        extra={discountFilter}
+        extra={filterRows}
         onChange={ignoreListFilters}
         onClose={() => setFiltersOpen(false)}
       />

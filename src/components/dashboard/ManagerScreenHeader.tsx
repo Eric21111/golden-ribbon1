@@ -18,9 +18,11 @@ interface ManagerScreenHeaderProps {
   badge?: ReactNode;
   /** Top-level screens with no drawer to open (e.g. Cashier, which is bottom-tabs only) skip the hamburger entirely. */
   hideMenu?: boolean;
+  /** A small action at the right end of the title row (e.g. an icon button). */
+  right?: ReactNode;
 }
 
-export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, hideMenu = false }: ManagerScreenHeaderProps) {
+export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, hideMenu = false, right }: ManagerScreenHeaderProps) {
   const { profile } = useAuth();
   // Selling-branch managers have no drawer to open (see app/(manager)/_layout.tsx) — the
   // hamburger would do nothing, so it never renders for them regardless of hideMenu.
@@ -58,7 +60,7 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, 
             <Ionicons name="chevron-back" size={24} color={managerColors.ink} />
           </Pressable>
           <View style={styles.backTitleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={styles.title} numberOfLines={2}>
               {title}
             </Text>
             {subtitle || badge ? (
@@ -84,15 +86,18 @@ export function ManagerScreenHeader({ title, subtitle, showBack = false, badge, 
           <HamburgerButton />
         </View>
       ) : null}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {subtitle}
+      <View style={right ? styles.titleRow : undefined}>
+        <View style={[styles.titleBlock, right ? styles.titleBlockFlex : null]}>
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
           </Text>
-        ) : null}
+          {subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={2}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {right}
       </View>
     </View>
   );
@@ -116,6 +121,8 @@ const styles = StyleSheet.create({
   subtitleFlex: { flex: 1 },
   pressed: { opacity: 0.6 },
   titleBlock: { gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  titleBlockFlex: { flex: 1, minWidth: 0 },
   title: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 22 },
   subtitle: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13 },
 });

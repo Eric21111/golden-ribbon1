@@ -366,9 +366,7 @@ export function VariantListEditor({
                         ) : null}
                       </View>
                       {!isOpen && collapsedLine ? (
-                        <Text style={styles.cardSummary} numberOfLines={2}>
-                          {collapsedLine}
-                        </Text>
+                        <Text style={styles.cardSummary}>{collapsedLine}</Text>
                       ) : null}
                     </View>
                     <Ionicons

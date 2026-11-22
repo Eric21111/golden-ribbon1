@@ -404,31 +404,20 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
       ) : (
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel} numberOfLines={1}>
-              Expected
-            </Text>
-            <Text style={styles.summaryValue} numberOfLines={1}>
-              {formatPcsQty(product.expected_remaining, unit)}
-            </Text>
+            <Text style={styles.summaryLabel}>Expected</Text>
+            <Text style={styles.summaryValue}>{formatPcsQty(product.expected_remaining, unit)}</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel} numberOfLines={1}>
-              Actual
-            </Text>
-            <Text style={styles.summaryValue} numberOfLines={1}>
-              {formatPcsQty(product.actual_remaining, unit)}
-            </Text>
+            <Text style={styles.summaryLabel}>Actual</Text>
+            <Text style={styles.summaryValue}>{formatPcsQty(product.actual_remaining, unit)}</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel} numberOfLines={1}>
-              Discrepancy
-            </Text>
+            <Text style={styles.summaryLabel}>Discrepancy</Text>
             <Text
               style={[
                 styles.summaryValue,
                 isIssue && (product.result === 'shortage' ? styles.varianceDanger : styles.varianceSuccess),
               ]}
-              numberOfLines={1}
             >
               {product.discrepancy > 0
                 ? `+${formatPcsQty(product.discrepancy, unit)}`
