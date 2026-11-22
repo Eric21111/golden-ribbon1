@@ -49,6 +49,7 @@ import {
   canonicalStockUses,
   savedStockUsesToRecipes,
   stockUsesForSave,
+  StockUseValidationError,
   type SavedStockUse,
   type StockUsePayload,
 } from './stockUseMapping';
@@ -182,7 +183,12 @@ export function EditProductWizard({
   // never rewrite or lose them.
   const savedStockUsesRef = useRef<string | null>(null);
   if (savedStockUsesRef.current === null) {
-    savedStockUsesRef.current = canonicalStockUses(buildStockUsePayload(recipePreview, variants));
+    try {
+      savedStockUsesRef.current = canonicalStockUses(buildStockUsePayload(recipePreview, variants));
+    } catch {
+      // Corrupt/unexpected saved recipe shape must not crash edit open; baseline forces a re-save check later.
+      savedStockUsesRef.current = '';
+    }
   }
   const ingredients = useMemo(
     () => ingredientOptionsFromProducts(ingredientProducts, product.id),
@@ -555,6 +561,20 @@ export function EditProductWizard({
       sourceBranchVariantPrices,
     });
 
+    let stockUses: StockUsePayload[] | undefined;
+    try {
+      stockUses = stockUsesForSave(
+        savedStockUsesRef.current ?? '',
+        buildStockUsePayload(recipePreview, variants),
+      );
+    } catch (error) {
+      failStep3(
+        error instanceof StockUseValidationError || (error as { name?: string })?.name === 'StockUseValidationError'
+          ? (error as Error).message
+          : 'Check Stock Used Per Order quantities before saving.',
+      );
+      return;
+    }
     onSubmit(
       {
         name: name.trim(),
@@ -571,7 +591,7 @@ export function EditProductWizard({
             ? 'record_as_unsold'
             : product.closing_stock_behavior,
         isNonReturnable,
-        stockUses: stockUsesForSave(savedStockUsesRef.current ?? '', buildStockUsePayload(recipePreview, variants)),
+        stockUses,
         drinkChoices: drinkChoicesForSave(savedDrinkChoicesRef.current ?? '', buildDrinkChoicePayload(drinkChoices, variants)),
         sellInPos: true,
         productCategory: category,

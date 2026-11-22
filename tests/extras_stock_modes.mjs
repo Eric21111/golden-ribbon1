@@ -85,7 +85,11 @@ const THIS = THIS_PRODUCT_ID;
     [{ ingredient_product_id: 'self', quantity: 1 }, { ingredient_product_id: 'egg-id', quantity: 1 }],
   );
   // the same item twice can never be sent twice
-  assert.equal(buildStockUsePayload({ [PRODUCT_STOCK_KEY]: [{ itemId: 'rice-id', quantity: 1 }, { itemId: 'rice-id', quantity: 3 }] }, none).length, 1);
+  assert.throws(
+    () => buildStockUsePayload({ [PRODUCT_STOCK_KEY]: [{ itemId: 'rice-id', quantity: 1 }, { itemId: 'rice-id', quantity: 3 }] }, none),
+    /only once/i,
+    'duplicate ingredient is rejected',
+  );
   // a product-level list that is hidden because the product has options is still sent unchanged on every save (never lost)
   assert.deepEqual(
     buildStockUsePayload(

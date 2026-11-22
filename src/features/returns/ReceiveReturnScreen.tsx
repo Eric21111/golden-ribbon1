@@ -32,6 +32,12 @@ import {
   PIECE_QUANTITY_MAX_LENGTH,
   quantityBoxWidth,
 } from '@/lib/format';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import { listCashierProductCategories } from '@/services/inventoryService';
 
 const RECEIVE_HELP =
@@ -45,7 +51,14 @@ const schema = z.object({
         quantity_received: z
           .string()
           .min(1, 'Enter the physical count.')
-          .regex(/^\d{1,6}$/, 'Enter a whole PCS quantity (0–999999).'),
+          .regex(
+            FRACTIONAL_STOCK_USES_ENABLED
+              ? /^(0|[1-9]\d{0,5})(\.5)?$/
+              : /^(0|[1-9]\d{0,5})$/,
+            FRACTIONAL_STOCK_USES_ENABLED
+              ? 'Enter a whole or half-step PCS quantity (0–999999).'
+              : 'Enter a whole PCS quantity (0–999999).',
+          ),
       }),
     )
     .min(1),
@@ -386,14 +399,18 @@ export function ReceiveReturnScreen() {
                   name={`items.${index}.quantity_received`}
                   render={({ field: quantity, fieldState }) => {
                     const hasInput = quantity.value.trim() !== '';
-                    const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
-                    const atMin = !hasInput || currentQty <= 0;
-                    const matchesExpected = hasInput && currentQty === item.quantity_returned;
-                    const atMax = currentQty >= 999999;
-                    const diff = hasInput ? item.quantity_returned - currentQty : null;
-                    const step = (delta: number) => {
-                      const next = Math.min(999999, Math.max(0, currentQty + delta));
-                      quantity.onChange(String(next));
+                    const currentQty = Number(quantity.value || '0');
+                    const safeQty = Number.isFinite(currentQty) ? currentQty : 0;
+                    const atMin = !hasInput || safeQty <= 0;
+                    const matchesExpected = hasInput && safeQty === item.quantity_returned;
+                    const atMax = safeQty >= 999999;
+                    const diff = hasInput ? item.quantity_returned - safeQty : null;
+                    const step = (direction: 1 | -1) => {
+                      quantity.onChange(
+                        formatHalfStepDisplay(
+                          nudgePieceOpsQuantity(safeQty, direction, item.stock_unit_code),
+                        ),
+                      );
                     };
 
                     return (
@@ -412,8 +429,8 @@ export function ReceiveReturnScreen() {
                                 diff === 0
                                   ? 'Exact'
                                   : diff > 0
-                                    ? `${diff} missing`
-                                    : `${Math.abs(diff)} excess`
+                                    ? `${formatHalfStepDisplay(diff)} missing`
+                                    : `${formatHalfStepDisplay(Math.abs(diff))} excess`
                               }
                               tone={diff === 0 ? 'success' : diff > 0 ? 'danger' : 'warning'}
                               size="md"
@@ -440,7 +457,7 @@ export function ReceiveReturnScreen() {
                             </Pressable>
                             <TextInput
                               accessibilityLabel={`Actual received quantity for ${item.product_name}`}
-                              keyboardType="number-pad"
+                              keyboardType="decimal-pad"
                               value={quantity.value}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
@@ -452,7 +469,9 @@ export function ReceiveReturnScreen() {
                                 setFocusedIndex((current) => (current === index ? null : current))
                               }
                               onChangeText={(value) => {
-                                if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
+                                if (acceptsPieceOpsQuantityText(value, item.stock_unit_code)) {
+                                  quantity.onChange(value);
+                                }
                               }}
                               style={[
                                 styles.qtyInput,
@@ -481,7 +500,7 @@ export function ReceiveReturnScreen() {
                               accessibilityLabel={`Match expected quantity of ${item.quantity_returned}`}
                               disabled={matchesExpected}
                               hitSlop={8}
-                              onPress={() => quantity.onChange(String(item.quantity_returned))}
+                              onPress={() => quantity.onChange(formatHalfStepDisplay(item.quantity_returned))}
                               style={({ pressed }) => [
                                 styles.matchBtn,
                                 pressed && !matchesExpected && styles.pressed,

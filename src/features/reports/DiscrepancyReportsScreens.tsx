@@ -1,5 +1,5 @@
-import { stockUnit } from '@/lib/stockUnits';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,6 +26,8 @@ import {
   useTransferDiscrepanciesReport,
 } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
+import { discrepancyDiffBadgeLabel, discrepancyQuantityMeta } from '@/lib/stockUnitEra';
+import { getEggHalfUnitCutoverAt } from '@/services/stockUnitCutoverService';
 
 type DiscrepancyFilterType = 'all' | 'missing' | 'excess';
 type StatusFilter = 'all' | 'open' | 'resolved';
@@ -85,6 +87,13 @@ export function TransferDiscrepanciesReportScreen({
     startIso,
     endIso,
   );
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
+  });
+  const cutoverAt = cutoverQuery.data ?? null;
+  const cutoverKnown = cutoverQuery.isSuccess;
 
   const discrepancies = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -181,16 +190,33 @@ export function TransferDiscrepanciesReportScreen({
         {pagination.pageItems.map((item) => {
           const isMissing = item.discrepancy_type === 'missing';
           const status = item.status ?? 'open';
+          const era = {
+            occurredAt: item.created_at,
+            cutoverAt,
+            cutoverKnown,
+          };
           return (
             <ListRowCard
               key={item.id}
               title={item.transfer_number}
-              meta={`${item.branch_name} · ${stockUnit(item.stock_unit_code)?.plural ?? 'pcs'} · Sent ${item.quantity_sent} → Received ${item.quantity_received}`}
+              meta={discrepancyQuantityMeta({
+                branchName: item.branch_name,
+                stockUnitCode: item.stock_unit_code,
+                leftQty: Number(item.quantity_sent),
+                rightQty: Number(item.quantity_received),
+                leftVerb: 'Sent',
+                ...era,
+              })}
               trailing={
                 <View style={styles.trailing}>
                   <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
                   <ManagerBadge
-                    label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
+                    label={discrepancyDiffBadgeLabel({
+                      difference: Number(item.difference),
+                      discrepancyType: item.discrepancy_type,
+                      stockUnitCode: item.stock_unit_code,
+                      ...era,
+                    })}
                     tone={isMissing ? 'danger' : 'warning'}
                   />
                 </View>
@@ -289,6 +315,13 @@ export function ReturnDiscrepanciesReportScreen({
     startIso,
     endIso,
   );
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
+  });
+  const cutoverAt = cutoverQuery.data ?? null;
+  const cutoverKnown = cutoverQuery.isSuccess;
 
   const discrepancies = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -382,16 +415,33 @@ export function ReturnDiscrepanciesReportScreen({
         {pagination.pageItems.map((item) => {
           const isMissing = item.discrepancy_type === 'missing';
           const status = item.status ?? 'open';
+          const era = {
+            occurredAt: item.created_at,
+            cutoverAt,
+            cutoverKnown,
+          };
           return (
             <ListRowCard
               key={item.id}
               title={item.return_number}
-              meta={`${item.branch_name} · ${stockUnit(item.stock_unit_code)?.plural ?? 'pcs'} · Returned ${item.quantity_returned} → Received ${item.quantity_received}`}
+              meta={discrepancyQuantityMeta({
+                branchName: item.branch_name,
+                stockUnitCode: item.stock_unit_code,
+                leftQty: Number(item.quantity_returned),
+                rightQty: Number(item.quantity_received),
+                leftVerb: 'Returned',
+                ...era,
+              })}
               trailing={
                 <View style={styles.trailing}>
                   <ManagerBadge label={status === 'resolved' ? 'Resolved' : 'Open'} tone={status === 'resolved' ? 'success' : 'warning'} />
                   <ManagerBadge
-                    label={isMissing ? `${item.difference} missing` : `${Math.abs(item.difference)} excess`}
+                    label={discrepancyDiffBadgeLabel({
+                      difference: Number(item.difference),
+                      discrepancyType: item.discrepancy_type,
+                      stockUnitCode: item.stock_unit_code,
+                      ...era,
+                    })}
                     tone={isMissing ? 'danger' : 'warning'}
                   />
                 </View>

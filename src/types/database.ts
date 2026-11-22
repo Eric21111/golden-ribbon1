@@ -331,6 +331,10 @@ export type Database = {
         Args: { p_product_ids: string[] };
         Returns: Array<{ product_id: string; stock_unit_code: import('@/lib/stockUnits').StockUnitCode | null }>;
       };
+      egg_half_unit_cutover_at: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
       create_portion_stock_product: {
         Args: { p_name: string; p_sku: string; p_description: string | null; p_stock_unit_code: string; p_closing_stock_behavior?: string | null };
         Returns: Product;

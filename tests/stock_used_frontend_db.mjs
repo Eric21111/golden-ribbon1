@@ -23,15 +23,20 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 {
   // real products replace the sample items; Egg is counted in half-egg units, everything else in pieces
   const options = ingredientOptionsFromProducts(
-    [{ id: 'p-rice', name: 'Rice' }, { id: 'p-egg', name: 'Egg' }, { id: 'p-self', name: 'Chicken Curry' }, { id: 'p-bbq', name: 'BBQ' }],
+    [
+      { id: 'p-rice', name: 'Rice' },
+      { id: 'p-egg', name: 'Egg', stockUnitCode: 'half_egg' },
+      { id: 'p-self', name: 'Chicken Curry' },
+      { id: 'p-bbq', name: 'BBQ' },
+    ],
     'p-self',
   );
   assert.deepEqual(options.map((o) => o.name), ['BBQ', 'Egg', 'Rice'], 'A to Z, the product being edited is left out');
   const egg = options.find((o) => o.name === 'Egg');
   assert.equal(unitLabel(egg.unit, 1), 'half-egg unit');
   assert.equal(unitLabel(egg.unit, 2), 'half-egg units');
-  assert.equal(egg.hint, '½ egg');
-  assert.equal(unitLabel(options.find((o) => o.name === 'Rice').unit, 2), 'pcs');
+  assert.match(egg.hint, /2 units = 1 whole egg/i);
+  assert.equal(unitLabel(options.find((o) => o.name === 'Rice').unit, 2), 'stock units (legacy)');
   const stockOnly = ingredientOptionsFromProducts([
     { id: 'p-rice', name: 'Rice', sellInPos: false },
     { id: 'p-silog', name: 'Silog', sellInPos: true },
@@ -63,7 +68,11 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   assert.deepEqual(suggestedIngredientIds({ a: [{ itemId: THIS_PRODUCT_ID, quantity: 1 }, { itemId: 'p-egg', quantity: 1 }], b: [{ itemId: 'p-egg', quantity: 1 }, { itemId: 'p-rice', quantity: 1 }] }), ['p-egg', 'p-rice']);
   assert.deepEqual(getQuickAddItems([{ itemId: 'p-egg', quantity: 1 }], 'X', options, ['p-egg', 'p-rice']).map((o) => o.name), ['Rice'], 'already added items are not offered again');
   assert.deepEqual(getQuickAddItems([], 'X', options, []), [], 'nothing to suggest yet');
-  assert.equal(summarizeExtras([{ itemId: THIS_PRODUCT_ID, quantity: 1 }, { itemId: 'p-egg', quantity: 2 }, { itemId: 'p-rice', quantity: 1 }], 'Chicken Curry', options), '+ Egg ×2, Rice');
+  assert.equal(
+    summarizeExtras([{ itemId: THIS_PRODUCT_ID, quantity: 1 }, { itemId: 'p-egg', quantity: 2 }, { itemId: 'p-rice', quantity: 1 }], 'Chicken Curry', options),
+    '+ Egg ×1, Rice',
+    '2 half-egg units display as 1 physical egg',
+  );
 
   // payload: "This Product" -> "self", ids for existing options, names for new ones, product-level without a variant
   const refs = [{ key: 'k1', id: 'v-existing', name: 'Viand Only' }, { key: 'k2', id: null, name: ' New One ' }];
@@ -77,8 +86,19 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
     { ingredient_product_id: 'p-egg', quantity: 2, variant_id: 'v-existing' },
     { ingredient_product_id: 'self', quantity: 3, variant_name: 'New One' },
   ], 'a list for an option that no longer exists is dropped');
-  // invalid lines never reach the server
-  assert.deepEqual(buildStockUsePayload({ k1: [{ itemId: 'p-egg', quantity: 0 }, { itemId: 'p-rice', quantity: 100 }, { itemId: 'p-x', quantity: 1.5 }, { itemId: 'p-egg', quantity: 1 }, { itemId: 'p-egg', quantity: 2 }] }, refs), [{ ingredient_product_id: 'p-egg', quantity: 1, variant_id: 'v-existing' }], 'invalid quantities and duplicates are dropped');
+  // invalid quantities and duplicate ingredients fail closed (never silently dropped)
+  for (const bad of [0, 100, 1.5, 0.5]) {
+    assert.throws(
+      () => buildStockUsePayload({ k1: [{ itemId: 'p-egg', quantity: bad }] }, refs),
+      /Quantity must|whole number|half-step/i,
+      `quantity ${bad} is rejected`,
+    );
+  }
+  assert.throws(
+    () => buildStockUsePayload({ k1: [{ itemId: 'p-egg', quantity: 1 }, { itemId: 'p-egg', quantity: 2 }] }, refs),
+    /only once/i,
+    'duplicate ingredient is rejected',
+  );
 
   // saved rows -> wizard state (and back)
   const rows = [
@@ -213,7 +233,7 @@ async function saveEdit(state, { name, sku, prices = {}, newVariants = [], delet
 const rawRows = async (productId) => (await db.query(`select id, variant_id, ingredient_product_id, quantity, created_at, updated_at from public.product_stock_uses where product_id=$1 order by id`, [productId])).rows;
 const describe = async (productId) =>
   (await db.query(
-    `select coalesce(pv.name,'(product)') v, case when u.ingredient_product_id = u.product_id then 'self' else p.name end i, u.quantity q
+    `select coalesce(pv.name,'(product)') v, case when u.ingredient_product_id = u.product_id then 'self' else p.name end i, u.quantity::float8 q
      from public.product_stock_uses u left join public.product_variants pv on pv.id=u.variant_id join public.products p on p.id=u.ingredient_product_id
      where u.product_id=$1 order by 1,2`, [productId])).rows.map((r) => `${r.v}:${r.i}x${r.q}`);
 
@@ -337,7 +357,7 @@ const opened = {};
   // the wizard never builds an invalid payload; if one is forced through the RPC anyway the whole save is refused
   await assert.rejects(
     asUser(mainMgr, () => db.query(`select * from public.update_complete_product(p_product_id := $1, p_name := 'Changed Name', p_sku := 'XEGG-S5', p_description := null, p_is_active := false, p_variants := '[]'::jsonb, p_deleted_variant_ids := '[]'::jsonb, p_branches := $2::jsonb, p_selling_price := '25.00', p_stock_uses := $3::jsonb)`, [extraEgg.id, J([{ branch_id: booth, selling_price: '25.00' }]), J([{ ingredient_product_id: egg, quantity: 0 }])])),
-    /Quantity must be a whole number/,
+    /half-step from 0\.5 to 99/,
   );
   assert.deepEqual(await describe(extraEgg.id), before);
   assert.equal((await db.query(`select name from public.products where id=$1`, [extraEgg.id])).rows[0].name, 'Extra Egg (Whole)', 'the product was not renamed either');
@@ -423,9 +443,11 @@ const opened = {};
   assert.match(screen, /sourceStockUses=\{/);
   assert.equal((screen.match(/ingredientProducts=\{ingredientProducts\}/g) ?? []).length, 2);
   const edit = read('src/features/products/EditProductWizard.tsx');
-  assert.match(edit, /stockUsesForSave\(savedStockUsesRef\.current \?\? '', buildStockUsePayload\(recipePreview, variants\)\)/);
+  assert.match(edit, /stockUsesForSave\([\s\S]*?buildStockUsePayload\(recipePreview, variants\)/);
+  assert.match(edit, /StockUseValidationError/);
   const create = read('src/features/products/CreateProductWizard.tsx');
-  assert.match(create, /stockUses: buildStockUsePayload\(/);
+  assert.match(create, /stockUses = buildStockUsePayload\(/);
+  assert.match(create, /StockUseValidationError/);
   // no sample stock items remain anywhere in the wizard code
   for (const file of ['recipePreviewData.ts', 'VariantRecipePreview.tsx', 'InventoryItemPickerModal.tsx', 'VariantListEditor.tsx', 'CreateProductWizard.tsx', 'EditProductWizard.tsx']) {
     assert.doesNotMatch(read(`src/features/products/${file}`), /SAMPLE_INVENTORY_ITEMS|sample-rice|sample-egg/, file);

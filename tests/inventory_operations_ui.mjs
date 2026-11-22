@@ -150,10 +150,10 @@ assert.deepEqual(
     adjustment: -1061,
   }),
   [
-    { label: 'Received transfer', quantity: 1121 },
-    { label: 'Sales', quantity: -56 },
-    { label: 'Returned leftover', quantity: -2 },
-    { label: 'Adjustments', quantity: -1061 },
+    { label: 'Received transfer', quantity: 1121, era: 'live' },
+    { label: 'Sales', quantity: -56, era: 'live' },
+    { label: 'Returned leftover', quantity: -2, era: 'live' },
+    { label: 'Adjustments', quantity: -1061, era: 'live' },
   ],
 );
 assert.deepEqual(recon.reconResolvedRowDetail(resolvedReturn), {

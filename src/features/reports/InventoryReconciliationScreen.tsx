@@ -40,16 +40,17 @@ import { useBranches } from '@/hooks/useBranches';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInventoryReconciliation } from '@/hooks/useReconciliation';
 import { getErrorMessage } from '@/lib/errors';
-import { formatDate, formatLiveStock } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
 import type {
   InventoryReconciliationItem,
   InventoryReconciliationResolvedDiscrepancy,
 } from '@/types/models';
+import { formatReconEraQuantity } from '@/features/reports/inventoryReconOverview';
 
-/** Live/current reconciliation quantities are whole PCS after Revision 7. */
-function formatReconQty(quantity: number, code?: import('@/lib/stockUnits').StockUnitCode | null): string {
-  return formatLiveStock(quantity, undefined, code);
+/** Live on-hand / ledger use post-cutover meaning when a cutover exists. */
+function formatReconQty(quantity: number, item: InventoryReconciliationItem): string {
+  return formatReconEraQuantity(Math.abs(quantity), item, item.stock_unit_cutover_at ? 'post_cutover' : 'live').replace(/^[+−]/, '');
 }
 
 function qtyPart(missing: number, excess: number): string {
@@ -102,11 +103,12 @@ export function resolvedDiscrepancySummary(item: InventoryReconciliationItem): s
   return reconResolvedStatusLine(item);
 }
 
-function signedQty(quantity: number, code?: InventoryReconciliationItem['stock_unit_code']): string {
-  const abs = formatReconQty(Math.abs(quantity), code);
-  if (quantity > 0) return `+${abs}`;
-  if (quantity < 0) return `−${abs}`;
-  return abs;
+function signedQty(
+  quantity: number,
+  item: InventoryReconciliationItem,
+  era: import('@/lib/stockUnitEra').StockQuantityEra = 'live',
+): string {
+  return formatReconEraQuantity(quantity, item, era);
 }
 
 export function InventoryReconciliationScreen() {
@@ -298,7 +300,6 @@ function ReconciliationItemCard({
   const badge = reconciliationIssueBadge(item);
   const openLine = reconOpenStatusLine(item);
   const resolvedLine = resolvedDiscrepancySummary(item);
-  const code = item.stock_unit_code;
   const a11yStatus = [openLine, resolvedLine].filter(Boolean).join(', ');
 
   return (
@@ -325,11 +326,11 @@ function ReconciliationItemCard({
       ) : null}
 
       <View style={styles.ledger}>
-        <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), code)} strong />
-        <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), code)} strong />
+        <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), item)} strong />
+        <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), item)} strong />
         <LedgerLine
           label="Variance"
-          value={signedQty(Number(item.variance), code)}
+          value={signedQty(Number(item.variance), item, item.stock_unit_cutover_at ? 'post_cutover' : 'live')}
           strong
           tone={mismatch ? 'issue' : 'ok'}
         />
@@ -346,7 +347,6 @@ export function ReconDetailsBody({ item }: { item: InventoryReconciliationItem }
   const resolvedLine = resolvedDiscrepancySummary(item);
   const movements = reconNonZeroMovementLines(item);
   const resolved = reconResolvedRows(item);
-  const code = item.stock_unit_code;
 
   return (
     <View style={styles.sheetBody}>
@@ -374,16 +374,16 @@ export function ReconDetailsBody({ item }: { item: InventoryReconciliationItem }
               style={[styles.itemRow, index < movements.length - 1 && styles.itemRowDivider]}
             >
               <Text style={styles.itemName}>{line.label}</Text>
-              <Text style={styles.itemQty}>{signedQty(line.quantity, code)}</Text>
+              <Text style={styles.itemQty}>{signedQty(line.quantity, item, line.era)}</Text>
             </View>
           ))
         )}
         <View style={styles.sheetTotals}>
-          <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), code)} strong />
-          <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), code)} strong />
+          <LedgerLine label="Ledger" value={formatReconQty(Number(item.calculated_stock), item)} strong />
+          <LedgerLine label="On hand" value={formatReconQty(Number(item.current_stock), item)} strong />
           <LedgerLine
             label="Variance"
-            value={signedQty(Number(item.variance), code)}
+            value={signedQty(Number(item.variance), item, item.stock_unit_cutover_at ? 'post_cutover' : 'live')}
             strong
             tone={mismatch ? 'issue' : 'ok'}
           />

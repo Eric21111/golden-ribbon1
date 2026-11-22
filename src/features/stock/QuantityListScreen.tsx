@@ -17,6 +17,11 @@ import { productSearchText } from '@/features/products/listFilters';
 import { CATEGORY_CHIP_CHOICES, categoryOf, type CategoryFilter } from '@/features/products/productFilters';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { PIECE_QUANTITY_MAX_LENGTH, formatLiveStock, quantityBoxWidth } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 
 /**
  * The one layout for "enter a quantity for each product" screens that have no review step (Create return, Local purchase): the
@@ -141,13 +146,15 @@ export function QuantityListScreen({
             if (listRow.type === 'header') return <CategoryGroupHeading key={listRow.key} title={listRow.title} count={listRow.count} />;
             const row = listRow.item;
             const raw = quantities[row.id] ?? '';
-            const current = Number.parseInt(raw || '0', 10) || 0;
-            const atMin = current <= 0;
-            const atOnHand = current >= row.onHand;
+            const current = Number(raw || '0');
+            const safeCurrent = Number.isFinite(current) ? current : 0;
+            const atMin = safeCurrent <= 0;
+            const atOnHand = safeCurrent >= row.onHand;
             // + is off at the ceiling only when there is one (a purchase can be any amount)
             const atCeiling = capAtOnHand && atOnHand;
+            const maxQty = capAtOnHand ? row.onHand : 999999;
             return (
-              <View key={row.id} style={[styles.card, current > 0 && styles.cardSelected]}>
+              <View key={row.id} style={[styles.card, safeCurrent > 0 && styles.cardSelected]}>
                 <View style={styles.cardTop}>
                   <CategoryIcon category={row.category} size={36} decorative />
                   <View style={styles.cardInfo}>
@@ -173,14 +180,19 @@ export function QuantityListScreen({
                         accessibilityLabel={`Decrease quantity for ${row.name}`}
                         hitSlop={6}
                         disabled={atMin}
-                        onPress={() => onQuantityChange(row.id, String(Math.max(0, current - 1)))}
+                        onPress={() =>
+                          onQuantityChange(
+                            row.id,
+                            formatHalfStepDisplay(nudgePieceOpsQuantity(safeCurrent, -1, row.stock_unit_code, 0, maxQty)),
+                          )
+                        }
                         style={({ pressed }) => [styles.stepperButton, pressed && !atMin && styles.stepperButtonPressed]}
                       >
                         <Text style={[styles.stepperSymbol, atMin && styles.stepperSymbolDisabled]}>−</Text>
                       </Pressable>
                       <TextInput
                         accessibilityLabel={`Quantity for ${row.name}`}
-                        keyboardType="number-pad"
+                        keyboardType="decimal-pad"
                         value={raw}
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
@@ -190,10 +202,18 @@ export function QuantityListScreen({
                         onFocus={() => setFocusedId(row.id)}
                         onBlur={() => setFocusedId((id) => (id === row.id ? null : id))}
                         onChangeText={(value) => {
-                          if (value === '' || /^\d{1,6}$/.test(value)) {
-                            // typing 999 past what is on hand settles at what is on hand
-                            onQuantityChange(row.id, capAtOnHand && Number(value) > row.onHand ? String(row.onHand) : value);
+                          if (!acceptsPieceOpsQuantityText(value, row.stock_unit_code)) return;
+                          if (value === '' || value.endsWith('.')) {
+                            onQuantityChange(row.id, value);
+                            return;
                           }
+                          // typing 999 past what is on hand settles at what is on hand
+                          onQuantityChange(
+                            row.id,
+                            capAtOnHand && Number(value) > row.onHand
+                              ? formatHalfStepDisplay(row.onHand)
+                              : value,
+                          );
                         }}
                         style={[styles.stepperInput, { width: quantityBoxWidth(raw, { min: 48, fontSize: 18 }) }]}
                       />
@@ -202,7 +222,12 @@ export function QuantityListScreen({
                         accessibilityLabel={`Increase quantity for ${row.name}`}
                         hitSlop={6}
                         disabled={atCeiling}
-                        onPress={() => onQuantityChange(row.id, String(Math.min(capAtOnHand ? row.onHand : 999999, current + 1)))}
+                        onPress={() =>
+                          onQuantityChange(
+                            row.id,
+                            formatHalfStepDisplay(nudgePieceOpsQuantity(safeCurrent, 1, row.stock_unit_code, 0, maxQty)),
+                          )
+                        }
                         style={({ pressed }) => [styles.stepperButton, pressed && !atCeiling && styles.stepperButtonPressed]}
                       >
                         <Text style={[styles.stepperSymbol, atCeiling && styles.stepperSymbolDisabled]}>+</Text>
@@ -213,7 +238,7 @@ export function QuantityListScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`All ${row.onHand} on hand for ${row.name}`}
                         disabled={atOnHand}
-                        onPress={() => onQuantityChange(row.id, String(row.onHand))}
+                        onPress={() => onQuantityChange(row.id, formatHalfStepDisplay(row.onHand))}
                         style={({ pressed }) => [
                           styles.maxButton,
                           atOnHand && styles.maxButtonDisabled,

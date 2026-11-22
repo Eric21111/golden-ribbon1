@@ -33,7 +33,12 @@ const code = migrationSrc.replace(/--[^\n]*/g, '');
   // later migrations may redefine confirm_sale (the variant mapping fix does) but must not touch the product RPCs again unnoticed
   // (known follow-ups: Drink Choice, which adds p_drink_choices, and edit_product_keeps_branch_availability, which only stops the
   // branch upserts from forcing is_active = true; each has its own tests)
-  const KNOWN_FOLLOW_UPS = ['20261024100000_save_product_drink_choices.sql', '20261027100000_edit_product_keeps_branch_availability.sql', '20261028100000_update_complete_product_lock_order.sql']; // the last two: edit_product_atomic_availability.mjs
+  const KNOWN_FOLLOW_UPS = [
+    '20261024100000_save_product_drink_choices.sql',
+    '20261027100000_edit_product_keeps_branch_availability.sql',
+    '20261028100000_update_complete_product_lock_order.sql', // edit_product_atomic_availability.mjs
+    '20261123120000_piece_half_step_stock_uses.sql',
+  ];
   for (const later of readdirSync('supabase/migrations').filter((f) => f > MIGRATION && !KNOWN_FOLLOW_UPS.includes(f))) {
     const text = readFileSync(`supabase/migrations/${later}`, 'utf8').replace(/--[^\n]*/g, '');
     assert.doesNotMatch(text, /function public\.(create|update)_complete_product/i, `${later} redefines a product RPC`);
@@ -111,7 +116,7 @@ const update = (productId, { name, sku, active = false, variants = [], deleted =
 
 const uses = async (productId) =>
   (await db.query(
-    `select coalesce(pv.name,'(product)') v, p.name i, u.quantity q
+    `select coalesce(pv.name,'(product)') v, p.name i, u.quantity::float8 q
      from public.product_stock_uses u
      left join public.product_variants pv on pv.id = u.variant_id
      join public.products p on p.id = u.ingredient_product_id
@@ -119,7 +124,11 @@ const uses = async (productId) =>
     [productId],
   )).rows.map((r) => `${r.v}:${r.i}x${r.q}`);
 const rawUses = async (productId) =>
-  (await db.query(`select id, variant_id, ingredient_product_id, quantity, created_at, updated_at from public.product_stock_uses where product_id=$1 order by id`, [productId])).rows;
+  (await db.query(
+    `select id, variant_id, ingredient_product_id, quantity::float8 as quantity, created_at, updated_at
+     from public.product_stock_uses where product_id=$1 order by id`,
+    [productId],
+  )).rows;
 const snapshot = async () => ({
   products: Number((await db.query('select count(*)::int n from public.products')).rows[0].n),
   variants: Number((await db.query('select count(*)::int n from public.product_variants')).rows[0].n),
@@ -211,14 +220,15 @@ let bbq;
 // ---------------------------------------------------------------- 3. create validation: nothing is saved
 {
   const bad = [
-    ['quantity 0', [{ ingredient_product_id: egg, quantity: 0 }], /Quantity must be a whole number from 1 to 99/],
-    ['quantity 100', [{ ingredient_product_id: egg, quantity: 100 }], /Quantity must be a whole number/],
-    ['quantity -1', [{ ingredient_product_id: egg, quantity: -1 }], /Quantity must be a whole number/],
-    ['quantity 1.5', [{ ingredient_product_id: egg, quantity: 1.5 }], /Quantity must be a whole number/],
-    ['quantity "1.0"', [{ ingredient_product_id: egg, quantity: '1.0' }], /Quantity must be a whole number/],
-    ['quantity "abc"', [{ ingredient_product_id: egg, quantity: 'abc' }], /Quantity must be a whole number/],
-    ['quantity missing', [{ ingredient_product_id: egg }], /Quantity must be a whole number/],
-    ['quantity null', [{ ingredient_product_id: egg, quantity: null }], /Quantity must be a whole number/],
+    ['quantity 0', [{ ingredient_product_id: egg, quantity: 0 }], /Quantity must be a (whole number|half-step)/],
+    ['quantity 100', [{ ingredient_product_id: egg, quantity: 100 }], /Quantity must be a (whole number|half-step)/],
+    ['quantity -1', [{ ingredient_product_id: egg, quantity: -1 }], /Quantity must be a (whole number|half-step)/],
+    ['quantity 0.3', [{ ingredient_product_id: egg, quantity: 0.3 }], /Quantity must be a (whole number|half-step)/],
+    ['quantity "1.0"', [{ ingredient_product_id: egg, quantity: '1.0' }], /Quantity must be a (whole number|half-step)/],
+    ['quantity "abc"', [{ ingredient_product_id: egg, quantity: 'abc' }], /Quantity must be a (whole number|half-step)/],
+    ['quantity missing', [{ ingredient_product_id: egg }], /Quantity must be a (whole number|half-step)/],
+    ['quantity null', [{ ingredient_product_id: egg, quantity: null }], /Quantity must be a (whole number|half-step)/],
+    ['quantity 0.5 while gate off', [{ ingredient_product_id: egg, quantity: 0.5 }], /whole number from 1 to 99/],
     ['ingredient missing', [{ quantity: 1 }], /needs an ingredient_product_id/],
     ['ingredient not a uuid', [{ ingredient_product_id: 'egg', quantity: 1 }], /product id or "self"/],
     ['unknown ingredient', [{ ingredient_product_id: id(999), quantity: 1 }], /ingredient product could not be found/],
@@ -409,8 +419,8 @@ let bbq;
     ['variant of another product', [{ variant_id: foreignVariant, ingredient_product_id: egg, quantity: 1 }], /does not belong to this product/],
     ['unknown variant id', [{ variant_id: id(888), ingredient_product_id: egg, quantity: 1 }], /does not belong to this product/],
     ['unknown variant name', [{ variant_name: 'Missing', ingredient_product_id: egg, quantity: 1 }], /variant name that this product does not have/],
-    ['quantity 0', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 0 }], /whole number from 1 to 99/],
-    ['quantity 100', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 100 }], /whole number/],
+    ['quantity 0', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 0 }], /whole number from 1 to 99|half-step from 0\.5 to 99/],
+    ['quantity 100', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 100 }], /whole number from 1 to 99|half-step from 0\.5 to 99/],
     ['unknown ingredient', [{ variant_id: vOnly, ingredient_product_id: id(999), quantity: 1 }], /ingredient product could not be found/],
     ['duplicate in one variant', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 1 }, { variant_id: vOnly, ingredient_product_id: egg, quantity: 2 }], /duplicate_stock_use/],
     ['id and name for the same variant', [{ variant_id: vOnly, ingredient_product_id: egg, quantity: 1 }, { variant_name: 'Renamed', ingredient_product_id: egg, quantity: 1 }], /duplicate_stock_use/],

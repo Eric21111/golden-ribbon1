@@ -7,7 +7,13 @@ import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton'
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
 import { getErrorMessage } from '@/lib/errors';
-import { formatLiveStock, makeIdempotencyKey } from '@/lib/format';
+import { formatLiveStock, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  isValidPieceOpsQuantity,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import { stockUnit } from '@/lib/stockUnits';
 import { recordMainInventoryWaste } from '@/services/stockCorrectionService';
 import type { InventoryItem } from '@/types/models';
@@ -31,7 +37,13 @@ export function MainInventoryWasteSheet({
   const sending = useRef(false);
 
   const onHand = Number(item?.quantity_on_hand ?? 0);
-  const amount = /^[1-9][0-9]{0,5}$/.test(quantity) ? Number(quantity) : 0;
+  const parsed = Number(quantity);
+  const amount =
+    quantity !== '' &&
+    !quantity.endsWith('.') &&
+    isValidPieceOpsQuantity(parsed, { stockUnitCode: item?.product.stock_unit_code })
+      ? parsed
+      : 0;
   const after = onHand - amount;
   const unit = stockUnit(item?.product.stock_unit_code)?.plural ?? 'pcs';
   const finalReason = reasonChoice === 'Other' ? reason.trim() : reasonChoice;
@@ -95,7 +107,13 @@ export function MainInventoryWasteSheet({
               accessibilityLabel="Decrease quantity"
               disabled={amount === 0 || busy}
               style={styles.stepBtn}
-              onPress={() => setQuantity(String(Math.max(0, amount - 1)))}
+              onPress={() =>
+                setQuantity(
+                  formatHalfStepDisplay(
+                    nudgePieceOpsQuantity(amount, -1, item.product.stock_unit_code, 0, onHand),
+                  ),
+                )
+              }
             >
               <Text style={styles.stepText}>−</Text>
             </Pressable>
@@ -104,10 +122,10 @@ export function MainInventoryWasteSheet({
                 label="Quantity to waste"
                 value={quantity}
                 onChangeText={(value) => {
-                  if (/^[0-9]*$/.test(value)) setQuantity(value);
+                  if (acceptsPieceOpsQuantityText(value, item.product.stock_unit_code)) setQuantity(value);
                 }}
-                keyboardType="number-pad"
-                maxLength={6}
+                keyboardType="decimal-pad"
+                maxLength={PIECE_QUANTITY_MAX_LENGTH}
               />
             </View>
             <Pressable
@@ -115,7 +133,13 @@ export function MainInventoryWasteSheet({
               accessibilityLabel="Increase quantity"
               disabled={amount >= Math.min(onHand, 999999) || busy}
               style={styles.stepBtn}
-              onPress={() => setQuantity(String(amount + 1))}
+              onPress={() =>
+                setQuantity(
+                  formatHalfStepDisplay(
+                    nudgePieceOpsQuantity(amount, 1, item.product.stock_unit_code, 0, onHand),
+                  ),
+                )
+              }
             >
               <Text style={styles.stepText}>+</Text>
             </Pressable>

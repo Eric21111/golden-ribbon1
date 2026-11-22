@@ -21,7 +21,15 @@ const migrationSrc = readFileSync(`supabase/migrations/${NEW_MIGRATION}`, 'utf8'
   assert.equal((code.match(/jsonb_to_recordset\(v_deductions\)/g) ?? []).length, 2, 'check and deduct share one list');
   // a later migration must not silently replace confirm_sale. The one known follow-up is the variant mapping fix, which
   // has its own regression test (confirm_sale_variant_mapping.mjs), as does the active-option guard; anything else needs this test revisited.
-  const KNOWN_FOLLOW_UPS = ['20261023120000_confirm_sale_variant_mapping.sql', '20261024120000_confirm_sale_drink_choice.sql', '20261026100000_pos_require_active_branch_variant.sql']; // the last one: pos_variant_fallback.mjs
+  const KNOWN_FOLLOW_UPS = [
+    '20261023120000_confirm_sale_variant_mapping.sql',
+    '20261024120000_confirm_sale_drink_choice.sql',
+    '20261026100000_pos_require_active_branch_variant.sql', // pos_variant_fallback.mjs
+    '20261111151853_cashier_payment_methods.sql',
+    '20261111155918_cashier_item_voids.sql',
+    '20261112101643_guard_discount_categories.sql',
+    '20261123120100_confirm_sale_half_step_deductions.sql',
+  ];
   for (const later of readdirSync('supabase/migrations').filter((f) => f > NEW_MIGRATION && !KNOWN_FOLLOW_UPS.includes(f))) {
     const text = readFileSync(`supabase/migrations/${later}`, 'utf8').replace(/--[^\n]*/g, '');
     assert.doesNotMatch(text, /function public\.confirm_sale/i, `${later} redefines confirm_sale`);
@@ -402,11 +410,14 @@ await t.config([
 
 // ---------------------------------------------------------------- 13. the function itself
 {
-  const fns = (await db.query(`select p.oid, pg_get_function_identity_arguments(p.oid) a, pg_get_functiondef(p.oid) d from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='confirm_sale'`)).rows;
-  assert.equal(fns.length, 1, 'still a single confirm_sale (no overload was added)');
-  assert.match(fns[0].a, /p_shift_id uuid, p_items jsonb, p_amount_paid numeric, p_idempotency_key text, p_pricing_program text/);
-  assert.match(fns[0].d, /product_stock_uses/);
-  const grants = (await db.query(`select grantee from information_schema.routine_privileges where routine_schema='public' and routine_name='confirm_sale' and privilege_type='EXECUTE' and grantee in ('anon','authenticated','PUBLIC') order by grantee`)).rows.map((r) => r.grantee);
+  const fns = (await db.query(`select p.oid, pg_get_function_identity_arguments(p.oid) a, pg_get_functiondef(p.oid) d from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='confirm_sale' order by pg_get_function_identity_arguments(p.oid)`)).rows;
+  // Payment methods keeps a 5-arg SQL wrapper plus the 6-arg implementation; half-step only patches the 6-arg body.
+  assert.equal(fns.length, 2, 'confirm_sale stays at the payment-method wrapper + implementation pair');
+  assert.match(fns[0].a, /^p_shift_id uuid, p_items jsonb, p_amount_paid numeric, p_idempotency_key text, p_pricing_program text$/);
+  assert.match(fns[1].a, /p_payment_method text$/);
+  assert.match(fns[1].d, /product_stock_uses/);
+  assert.match(fns[1].d, /v_stock numeric\(14,3\);/);
+  const grants = (await db.query(`select distinct grantee from information_schema.routine_privileges where routine_schema='public' and routine_name='confirm_sale' and privilege_type='EXECUTE' and grantee in ('anon','authenticated','PUBLIC') order by grantee`)).rows.map((r) => r.grantee);
   assert.deepEqual(grants, ['authenticated'], 'only signed-in users may execute it');
 }
 

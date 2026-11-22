@@ -114,6 +114,8 @@ const screen = loadTs('src/features/reports/WasteHistoryScreen.tsx', {
       return { data: { days }, isLoading: false, error: null, isFetched: true, refetch() {} };
     },
   },
+  '@tanstack/react-query': { useQuery: () => ({ data: null, isSuccess: true }) },
+  '@/services/stockUnitCutoverService': { getEggHalfUnitCutoverAt: async () => null },
 });
 const html = renderToStaticMarkup(React.createElement(screen.WasteHistoryScreen, { branchId: 'b' }));
 const text = flat(html);

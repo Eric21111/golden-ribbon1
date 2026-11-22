@@ -35,7 +35,12 @@ import {
 import { confirmAction } from '@/lib/confirmAction';
 import { buildFinalizePayload, requiresRemittanceCount } from './remittanceProducts';
 import { TABLET_MIN_EDGE } from '@/lib/layout';
-import { formatMoney, previewCashResult } from '@/lib/format';
+import { formatMoney, PIECE_QUANTITY_MAX_LENGTH, previewCashResult } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import { listCashierProductCategories } from '@/services/inventoryService';
 import type {
   ShiftCloseFinalizeProduct,
@@ -61,7 +66,7 @@ const DEFAULT_SORT: CountSort = 'stock-desc';
 // The pills are the count status; the funnel holds the Category.
 const COUNT_LIST_FILTERS: ListFilterKey[] = ['category'];
 
-/** A small − 12 + control: tap to step or type. Digits only, up to 6. */
+/** A small − qty + control: tap to step 0.5 or type half-steps. */
 function MiniStepper({
   label,
   value,
@@ -84,7 +89,8 @@ function MiniStepper({
   onBlur?: () => void;
 }) {
   const [focused, setFocused] = useState(false);
-  const current = Number.parseInt(value || '0', 10) || 0;
+  const current = Number(value || '0');
+  const safeCurrent = Number.isFinite(current) ? current : 0;
   return (
     <View style={styles.stepperField}>
       <Text style={styles.stepperLabel}>{label}</Text>
@@ -93,22 +99,22 @@ function MiniStepper({
           accessibilityRole="button"
           accessibilityLabel={`Decrease ${label.toLowerCase()}`}
           hitSlop={6}
-          disabled={current <= 0}
-          onPress={() => onChange(String(Math.max(0, current - 1)))}
-          style={({ pressed }) => [styles.stepperButton, pressed && current > 0 && styles.stepperButtonPressed]}
+          disabled={safeCurrent <= 0}
+          onPress={() => onChange(formatHalfStepDisplay(nudgePieceOpsQuantity(safeCurrent, -1)))}
+          style={({ pressed }) => [styles.stepperButton, pressed && safeCurrent > 0 && styles.stepperButtonPressed]}
         >
-          <Text style={[styles.stepperSymbol, current <= 0 && styles.stepperSymbolDisabled]}>−</Text>
+          <Text style={[styles.stepperSymbol, safeCurrent <= 0 && styles.stepperSymbolDisabled]}>−</Text>
         </Pressable>
         <TextInput
           ref={inputRef}
           accessibilityLabel={accessibilityLabel}
           accessibilityHint={accessibilityHint}
-          keyboardType="number-pad"
+          keyboardType="decimal-pad"
           returnKeyType="next"
           value={value}
           placeholder={placeholder}
           placeholderTextColor={managerColors.subtext}
-          maxLength={6}
+          maxLength={PIECE_QUANTITY_MAX_LENGTH}
           selectTextOnFocus
           underlineColorAndroid="transparent"
           onFocus={() => setFocused(true)}
@@ -117,14 +123,16 @@ function MiniStepper({
             onBlur?.();
           }}
           onSubmitEditing={onSubmit}
-          onChangeText={(text) => onChange(text.replace(/[^\d]/g, '').slice(0, 6))}
+          onChangeText={(text) => {
+            if (acceptsPieceOpsQuantityText(text)) onChange(text);
+          }}
           style={styles.stepperInput}
         />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label.toLowerCase()}`}
           hitSlop={6}
-          onPress={() => onChange(String(Math.min(999999, current + 1)))}
+          onPress={() => onChange(formatHalfStepDisplay(nudgePieceOpsQuantity(safeCurrent, 1)))}
           style={({ pressed }) => [styles.stepperButton, pressed && styles.stepperButtonPressed]}
         >
           <Text style={styles.stepperSymbol}>+</Text>

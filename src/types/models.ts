@@ -902,6 +902,8 @@ export type InventoryReconciliationItem = {
   branch_name: string;
   product_id: string;
   stock_unit_code?: StockUnitCode | null;
+  /** Active Approach C′ cutover timestamp for this product, if any. */
+  stock_unit_cutover_at?: string | null;
   product_name: string;
   product_sku: string;
   inventory_mode: InventoryMode;
@@ -911,7 +913,24 @@ export type InventoryReconciliationItem = {
   sale: number;
   return_out: number;
   return_in?: number;
+  /** Ordinary adjustments only (excludes unit_conversion when era fields are present). */
   adjustment: number;
+  /** Egg unit-scale conversion delta; not a purchase or stock add. */
+  unit_conversion?: number;
+  adjustment_pre?: number;
+  adjustment_post?: number;
+  opening_stock_pre?: number;
+  opening_stock_post?: number;
+  transfer_out_pre?: number;
+  transfer_out_post?: number;
+  transfer_in_pre?: number;
+  transfer_in_post?: number;
+  sale_pre?: number;
+  sale_post?: number;
+  return_out_pre?: number;
+  return_out_post?: number;
+  return_in_pre?: number;
+  return_in_post?: number;
   calculated_stock: number;
   current_stock: number;
   variance: number;

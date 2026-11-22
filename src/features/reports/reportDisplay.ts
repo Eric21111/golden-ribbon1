@@ -1,4 +1,6 @@
 import { formatDateShort, formatLiveStock, formatMoney } from '@/lib/format';
+import { formatEraStockQuantity } from '@/lib/stockUnitEra';
+import type { StockUnitCode } from '@/lib/stockUnits';
 import type {
   CashReconciliationResult,
   ShiftCloseReportProduct,
@@ -63,8 +65,24 @@ export function gcashResult(
   return { shortage: difference < 0 ? -difference : 0, excess: difference > 0 ? difference : 0 };
 }
 
-export function formatPcsQty(quantity: number | null | undefined, code?: import('@/lib/stockUnits').StockUnitCode | null): string {
+export function formatPcsQty(
+  quantity: number | null | undefined,
+  code?: StockUnitCode | null,
+  options?: {
+    occurredAt?: string | null;
+    cutoverAt?: string | null;
+    /** false when cutover RPC failed/pending — avoids silent physical-egg mislabels. */
+    cutoverKnown?: boolean;
+  },
+): string {
   if (quantity == null || !Number.isFinite(Number(quantity))) return '—';
+  if (code === 'half_egg' && options) {
+    return formatEraStockQuantity(quantity, code, {
+      occurredAt: options.occurredAt,
+      cutoverAt: options.cutoverAt ?? null,
+      cutoverKnown: options.cutoverKnown ?? true,
+    });
+  }
   return formatLiveStock(quantity, undefined, code);
 }
 

@@ -156,7 +156,7 @@ async function saveEdit(state, { name, sku, price = '20.00', recipes = state.rec
 }
 const describe = async (productId) =>
   (await db.query(
-    `select coalesce(pv.name,'(product)') v, case when u.ingredient_product_id = u.product_id then 'self' else p.name end i, u.quantity q
+    `select coalesce(pv.name,'(product)') v, case when u.ingredient_product_id = u.product_id then 'self' else p.name end i, u.quantity::float8 q
      from public.product_stock_uses u left join public.product_variants pv on pv.id=u.variant_id join public.products p on p.id=u.ingredient_product_id
      where u.product_id=$1 order by 1,2`, [productId])).rows.map((r) => `${r.v}:${r.i}x${r.q}`);
 const rawRows = async (productId) => (await db.query(`select id, variant_id, ingredient_product_id, quantity, created_at, updated_at from public.product_stock_uses where product_id=$1 order by id`, [productId])).rows;

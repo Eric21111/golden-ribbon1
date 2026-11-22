@@ -22,7 +22,12 @@ import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { categoryRowProps } from '@/features/products/productCategoryIndicator';
 import { formatCashResultLabel } from '@/features/shifts/closeDisplay';
 import { alertNotice } from '@/lib/confirmAction';
-import { formatLiveStock, formatMoney, previewCashResult } from '@/lib/format';
+import { formatLiveStock, formatMoney, PIECE_QUANTITY_MAX_LENGTH, previewCashResult } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import { listCashierProductCategories } from '@/services/inventoryService';
 import type { CashReconciliationResult, ShiftClosePreview, ShiftReturnSelection } from '@/types/models';
 
@@ -468,13 +473,14 @@ export function SelectedReturnCloseForm({
                     const category = categories.data?.get(p.product_id) ?? null;
                     const raw = waste[p.product_id] ?? '';
                     const amount = Number(raw || 0);
-                    const atMin = amount <= 0;
-                    const atMax = amount >= p.available;
+                    const safeAmount = Number.isFinite(amount) ? amount : 0;
+                    const atMin = safeAmount <= 0;
+                    const atMax = safeAmount >= p.available;
                     const setAmount = (next: number) => {
                       const clamped = Math.max(0, Math.min(p.available, next));
                       setWaste((previous) => ({
                         ...previous,
-                        [p.product_id]: clamped === 0 ? '' : String(clamped),
+                        [p.product_id]: clamped === 0 ? '' : formatHalfStepDisplay(clamped),
                       }));
                     };
                     return (
@@ -501,10 +507,10 @@ export function SelectedReturnCloseForm({
                             <Text style={styles.wasteQtyLabel}>Waste qty</Text>
                             {p.lost > p.available ? (
                               <Text style={styles.danger}>Exceeds available</Text>
-                            ) : amount > 0 ? (
+                            ) : safeAmount > 0 ? (
                               <ManagerBadge
-                                label={`After: Qty ${Math.max(0, p.available - amount)}`}
-                                tone={amount >= p.available ? 'neutral' : 'info'}
+                                label={`After: Qty ${formatHalfStepDisplay(Math.max(0, p.available - safeAmount))}`}
+                                tone={safeAmount >= p.available ? 'neutral' : 'info'}
                                 size="sm"
                               />
                             ) : null}
@@ -515,7 +521,11 @@ export function SelectedReturnCloseForm({
                               accessibilityLabel={`Decrease waste for ${p.product_name_snapshot}`}
                               disabled={atMin}
                               hitSlop={8}
-                              onPress={() => setAmount(amount - 1)}
+                              onPress={() =>
+                                setAmount(
+                                  nudgePieceOpsQuantity(safeAmount, -1, p.stock_unit_code, 0, p.available),
+                                )
+                              }
                               style={({ pressed }) => [
                                 styles.stepBtn,
                                 pressed && !atMin && styles.pressed,
@@ -528,20 +538,20 @@ export function SelectedReturnCloseForm({
                               accessibilityLabel="Waste qty"
                               value={raw}
                               onChangeText={(value) => {
-                                if (!/^\d*$/.test(value)) return;
-                                if (value === '') {
-                                  setWaste((previous) => ({ ...previous, [p.product_id]: '' }));
+                                if (!acceptsPieceOpsQuantityText(value, p.stock_unit_code)) return;
+                                if (value === '' || value.endsWith('.')) {
+                                  setWaste((previous) => ({ ...previous, [p.product_id]: value }));
                                   return;
                                 }
                                 const next = Number(value);
                                 if (!Number.isFinite(next)) return;
                                 setWaste((previous) => ({
                                   ...previous,
-                                  [p.product_id]: String(Math.min(p.available, next)),
+                                  [p.product_id]: formatHalfStepDisplay(Math.min(p.available, next)),
                                 }));
                               }}
-                              keyboardType="number-pad"
-                              maxLength={6}
+                              keyboardType="decimal-pad"
+                              maxLength={PIECE_QUANTITY_MAX_LENGTH}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
                               style={styles.qtyInput}
@@ -551,7 +561,11 @@ export function SelectedReturnCloseForm({
                               accessibilityLabel={`Increase waste for ${p.product_name_snapshot}`}
                               disabled={atMax}
                               hitSlop={8}
-                              onPress={() => setAmount(amount + 1)}
+                              onPress={() =>
+                                setAmount(
+                                  nudgePieceOpsQuantity(safeAmount, 1, p.stock_unit_code, 0, p.available),
+                                )
+                              }
                               style={({ pressed }) => [
                                 styles.stepBtn,
                                 pressed && !atMax && styles.pressed,

@@ -10,7 +10,13 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { getErrorMessage } from '@/lib/errors';
-import { makeIdempotencyKey } from '@/lib/format';
+import { makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  isValidPieceOpsQuantity,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import { stockUnit } from '@/lib/stockUnits';
 import type { listCashierDayStock } from '@/services/inventoryService';
 import { recordBranchStockAction, type BranchStockRequest } from '@/services/stockCorrectionService';
@@ -79,7 +85,13 @@ export function BranchStockActions({
     setError('');
   }, [productId, initialAction]);
 
-  const amount = /^[1-9][0-9]{0,5}$/.test(quantity) ? Number(quantity) : 0;
+  const parsed = Number(quantity);
+  const amount =
+    quantity !== '' &&
+    !quantity.endsWith('.') &&
+    isValidPieceOpsQuantity(parsed, { stockUnitCode: row?.stock_unit_code })
+      ? parsed
+      : 0;
   const available = Number(row?.available ?? 0);
   const after = available + (action === 'add' ? amount : -amount);
   const unit = stockUnit(row?.stock_unit_code)?.plural ?? 'pcs';
@@ -226,7 +238,19 @@ export function BranchStockActions({
                           pressed && styles.pressed,
                           (amount === 0 || busy) && styles.stepDisabled,
                         ]}
-                        onPress={() => setQuantity(String(Math.max(0, amount - 1)))}
+                        onPress={() =>
+                          setQuantity(
+                            formatHalfStepDisplay(
+                              nudgePieceOpsQuantity(
+                                amount,
+                                -1,
+                                row?.stock_unit_code,
+                                0,
+                                action === 'waste' ? available : 999999,
+                              ),
+                            ),
+                          )
+                        }
                       >
                         <Text style={styles.stepText}>−</Text>
                       </Pressable>
@@ -234,10 +258,10 @@ export function BranchStockActions({
                         accessibilityLabel={action === 'add' ? 'Quantity to add' : 'Quantity to waste'}
                         value={quantity}
                         onChangeText={(value) => {
-                          if (/^[0-9]*$/.test(value)) setQuantity(value);
+                          if (acceptsPieceOpsQuantityText(value, row?.stock_unit_code)) setQuantity(value);
                         }}
-                        keyboardType="number-pad"
-                        maxLength={6}
+                        keyboardType="decimal-pad"
+                        maxLength={PIECE_QUANTITY_MAX_LENGTH}
                         editable={!busy}
                         placeholder="0"
                         placeholderTextColor={managerColors.subtext}
@@ -256,7 +280,19 @@ export function BranchStockActions({
                           (amount >= (action === 'waste' ? Math.min(available, 999999) : 999999) || busy) &&
                             styles.stepDisabled,
                         ]}
-                        onPress={() => setQuantity(String(amount + 1))}
+                        onPress={() =>
+                          setQuantity(
+                            formatHalfStepDisplay(
+                              nudgePieceOpsQuantity(
+                                amount,
+                                1,
+                                row?.stock_unit_code,
+                                0,
+                                action === 'waste' ? available : 999999,
+                              ),
+                            ),
+                          )
+                        }
                       >
                         <Text style={styles.stepText}>+</Text>
                       </Pressable>

@@ -1,4 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -16,6 +17,7 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useStockCorrectionScan } from '@/hooks/useStockCorrectionScan';
 import { getErrorMessage } from '@/lib/errors';
 import type { CorrectionHistory } from '@/services/stockCorrectionService';
+import { getEggHalfUnitCutoverAt } from '@/services/stockUnitCutoverService';
 
 import {
   correctionChange,
@@ -36,7 +38,15 @@ const CHANGE_COLORS = {
 /** The corrections of one branch are shown 10 to a page, like Void logs. */
 const PAGE_SIZE = 10;
 
-function CorrectionCard({ row }: { row: CorrectionHistory }) {
+function CorrectionCard({
+  row,
+  cutoverAt,
+  cutoverKnown,
+}: {
+  row: CorrectionHistory;
+  cutoverAt: string | null;
+  cutoverKnown: boolean;
+}) {
   const change = correctionChange(row.details);
   const tone = CHANGE_COLORS[correctionDirection(change)];
   return (
@@ -54,7 +64,13 @@ function CorrectionCard({ row }: { row: CorrectionHistory }) {
         </View>
       </View>
       <Text style={styles.meta}>{row.details.action === 'add' ? 'Added stock' : 'Recount'}</Text>
-      <Text style={styles.quantity}>{correctionQuantityLine(row.details, row.stock_unit_code)}</Text>
+      <Text style={styles.quantity}>
+        {correctionQuantityLine(row.details, row.stock_unit_code, {
+          occurredAt: row.created_at,
+          cutoverAt,
+          cutoverKnown,
+        })}
+      </Text>
       <View style={styles.bottom}>
         <View style={styles.reasonPill}>
           <Text style={styles.reasonText}>{row.details.reason}</Text>
@@ -96,6 +112,13 @@ export default function StockCorrectionsScreen({
   const customIncomplete = rangeType === 'custom' && correctionDateWindow(filters) === null;
 
   const query = useStockCorrectionScan();
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
+  });
+  const cutoverAt = cutoverQuery.data ?? null;
+  const cutoverKnown = cutoverQuery.isSuccess;
   const scan = query.data;
 
   // only this branch's corrections (the server list is company-wide); no branch chosen is not "everything"
@@ -165,7 +188,11 @@ export default function StockCorrectionsScreen({
         ) : null}
         {showRows && filtered.length === 0 ? <EmptyState title={empty.title} message={empty.message} /> : null}
 
-        {showRows ? pagination.pageItems.map((row) => <CorrectionCard key={row.id} row={row} />) : null}
+        {showRows
+          ? pagination.pageItems.map((row) => (
+              <CorrectionCard key={row.id} row={row} cutoverAt={cutoverAt} cutoverKnown={cutoverKnown} />
+            ))
+          : null}
 
         {showRows ? (
           <Pagination page={pagination.page} totalPages={pagination.totalPages} visible={pagination.showPagination} onPageChange={pagination.setPage} />

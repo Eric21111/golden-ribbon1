@@ -65,7 +65,8 @@ assert.doesNotMatch(ACTUAL_REMAINING_HELPER, /plus waste|including waste|and was
 
 // --- Waste defaults / validation ---
 assert.match(closeForm, /wasteQuantity: '0'/);
-assert.equal(isValidClosePieceQuantity('1.5'), false);
+assert.equal(isValidClosePieceQuantity('1.5'), false, 'client gate OFF');
+assert.equal(isValidClosePieceQuantity('0.3'), false);
 assert.equal(isValidClosePieceQuantity('-1'), false);
 assert.equal(isValidClosePieceQuantity('10'), true);
 
@@ -96,10 +97,10 @@ assert.match(formatCashResultLabel(100, '110', 'excess'), /excess/);
 assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Sales and stock changes stop for this booth today/, 'the full-day freeze is still said, in three short bullets');
 assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Review stock and enter collections/);
 assert.match(BEGIN_CLOSE_CONFIRM_MESSAGE, /Today cannot be reopened/);
-assert.match(dashboard, /BEGIN_CLOSE_CONFIRM_MESSAGE/);
+assert.match(closeDisplaySource, /BEGIN_CLOSE_CONFIRM_MESSAGE/);
 assert.match(dashboard, /confirmAction\(/);
-assert.match(dashboard, /Confirm End Shift/);
-assert.match(dashboard, /End Shift \/ Remit/);
+assert.match(dashboard, /End Shift/);
+assert.match(dashboard, /requestEndShift/);
 assert.doesNotMatch(dashboard, /Step 1/);
 assert.doesNotMatch(dashboard, /Begin close/);
 assert.doesNotMatch(dashboard, /stock operations pause/i);

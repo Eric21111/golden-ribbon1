@@ -81,9 +81,35 @@ export function getErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
+function stockUseValidationMessage(error: unknown): string | null {
+  if (
+    typeof error === 'object'
+    && error
+    && 'name' in error
+    && error.name === 'StockUseValidationError'
+    && 'message' in error
+    && error.message
+  ) {
+    return String(error.message);
+  }
+  const message = readErrorMessage(error).toLowerCase();
+  if (message.includes('duplicate_stock_use') || message.includes('each ingredient may appear only once')) {
+    return 'Each ingredient may appear only once per product or variant.';
+  }
+  if (message.includes('invalid_stock_use') && message.includes('quantity')) {
+    return 'Enter a valid Stock Used Per Order quantity.';
+  }
+  if (message.includes('portion-unit ingredients require whole')) {
+    return 'Portion-unit ingredients require whole stock-unit quantities.';
+  }
+  return null;
+}
+
 /** Create/Edit product screens only — product-specific PGRST202 wording. */
 export function getProductErrorMessage(error: unknown): string {
   logDevError(error);
+  const stockUseMessage = stockUseValidationMessage(error);
+  if (stockUseMessage) return stockUseMessage;
   const message = readErrorMessage(error).toLowerCase();
   if (
     message.includes('create_inventory_product')

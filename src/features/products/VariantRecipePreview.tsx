@@ -3,14 +3,21 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { managerColors } from '@/components/dashboard/theme';
-import { portionRatioNote, unitsPerWhole } from '@/lib/stockUnits';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  formatRecipeQuantityInput,
+  nudgeRecipeQuantity,
+  parseOrdinaryRecipeQuantityText,
+  recipeQuantityMin,
+  recipeQuantityModeForStockUnit,
+  RECIPE_QTY_MAX,
+} from '@/lib/halfStepQuantity';
+import { portionRatioNote, portionsToUnits, unitsPerWhole } from '@/lib/stockUnits';
 
 import { CategoryIcon } from './CategoryIcon';
 import { InventoryItemPickerModal } from './InventoryItemPickerModal';
-import { PortionPickerSheet } from './PortionPickerSheet';
 import { MIN_TOUCH_TARGET } from './touchTargets';
 import {
-  MAX_RECIPE_QUANTITY,
   OWN_STOCK_LINES,
   effectiveLines,
   THIS_PRODUCT_ID,
@@ -44,6 +51,8 @@ export function VariantRecipePreview({
   ingredients,
   suggestedIds = [],
   onChange,
+  /** Override only for tests. Production uses FRACTIONAL_STOCK_USES_ENABLED (still false in Phase 3). */
+  fractionalEnabled = FRACTIONAL_STOCK_USES_ENABLED,
 }: {
   /** Section label; it varies by product category. */
   label?: string;
@@ -80,10 +89,11 @@ export function VariantRecipePreview({
   /** Ingredients already used elsewhere in this product, offered as one-tap chips. */
   suggestedIds?: string[];
   onChange: (lines: RecipeLine[]) => void;
+  fractionalEnabled?: boolean;
 }) {
   const [quantityError, setQuantityError] = useState('');
-  // Index of the portion line whose amount sheet is open (portion items only; whole-number items keep the stepper).
-  const [portionSheetIndex, setPortionSheetIndex] = useState<number | null>(null);
+  // Draft text while typing a physical portion or half-step (e.g. "1.") before commit.
+  const [portionDraft, setPortionDraft] = useState<{ index: number; text: string } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // True while the sheet was opened by tapping "Take from other items" with nothing to restore: the pick STARTS the list
   // instead of being added to "This Product". Closing the sheet without a pick changes nothing, so an "other items"
@@ -108,8 +118,102 @@ export function VariantRecipePreview({
   const showAddRow = !mainOnly || mainMissing;
 
   function setQuantity(index: number, quantity: number) {
-    const clamped = Math.max(0, Math.min(quantity, MAX_RECIPE_QUANTITY));
+    const clamped = Math.max(0, Math.min(quantity, RECIPE_QTY_MAX));
     onChange(lines.map((line, i) => (i === index ? { ...line, quantity: clamped } : line)));
+  }
+
+  function clearPortionDraft(index?: number) {
+    setPortionDraft((current) => (current && (index === undefined || current.index === index) ? null : current));
+  }
+
+  function ordinaryModeFor(item: InventoryItemOption) {
+    return recipeQuantityModeForStockUnit(item.stockUnitCode, fractionalEnabled);
+  }
+
+  /** Apply typed physical portions for half/quarter stock; reject anything that is not an exact whole-unit amount. */
+  function applyPortionText(index: number, item: InventoryItemOption, text: string) {
+    if (text === '') {
+      setPortionDraft({ index, text: '' });
+      setQuantityError('');
+      return;
+    }
+    if (!/^\d{0,2}(\.\d{0,2})?$/.test(text)) {
+      setQuantityError('Enter a valid portion such as 0.5, 1, or 1.5.');
+      return;
+    }
+    if (text.endsWith('.')) {
+      setPortionDraft({ index, text });
+      setQuantityError('');
+      return;
+    }
+    const units = portionsToUnits(Number(text), item.stockUnitCode);
+    if (units === null) {
+      setPortionDraft({ index, text });
+      setQuantityError('Use an exact portion for this stock item. Values are not rounded.');
+      return;
+    }
+    setQuantityError('');
+    clearPortionDraft(index);
+    setQuantity(index, units);
+  }
+
+  function commitPortionText(index: number, item: InventoryItemOption, quantity: number) {
+    if (portionDraft?.index !== index) {
+      if (quantity < 1) setQuantity(index, 1);
+      return;
+    }
+    const text = portionDraft.text.trim();
+    const units = text === '' ? null : portionsToUnits(Number(text), item.stockUnitCode);
+    clearPortionDraft(index);
+    if (units === null) {
+      setQuantityError('Use an exact portion for this stock item. Values are not rounded.');
+      if (quantity < 1) setQuantity(index, 1);
+      return;
+    }
+    setQuantityError('');
+    setQuantity(index, units);
+  }
+
+  /** Ordinary piece/legacy quantity typing (integer today; half-steps when fractionalEnabled). */
+  function applyOrdinaryText(index: number, item: InventoryItemOption, text: string) {
+    const parsed = parseOrdinaryRecipeQuantityText(text, ordinaryModeFor(item));
+    if (parsed.kind === 'error') {
+      setQuantityError(parsed.message);
+      return;
+    }
+    if (parsed.kind === 'draft') {
+      setPortionDraft({ index, text: parsed.text });
+      setQuantityError('');
+      return;
+    }
+    if (parsed.kind === 'empty') {
+      setPortionDraft({ index, text: '' });
+      setQuantityError('');
+      setQuantity(index, 0);
+      return;
+    }
+    setQuantityError('');
+    clearPortionDraft(index);
+    setQuantity(index, parsed.value);
+  }
+
+  function commitOrdinaryText(index: number, item: InventoryItemOption, quantity: number) {
+    const min = recipeQuantityMin(ordinaryModeFor(item));
+    if (portionDraft?.index === index) {
+      const text = portionDraft.text.trim();
+      clearPortionDraft(index);
+      const parsed = parseOrdinaryRecipeQuantityText(text === '' ? '0' : text, ordinaryModeFor(item));
+      if (parsed.kind === 'ok' && parsed.value >= min) {
+        setQuantityError('');
+        setQuantity(index, parsed.value);
+        return;
+      }
+      if (parsed.kind === 'error') setQuantityError(parsed.message);
+      else setQuantityError('');
+      setQuantity(index, Math.max(min, quantity || min));
+      return;
+    }
+    if (quantity < min) setQuantity(index, min);
   }
 
   function selectMode(next: StockMode) {
@@ -171,6 +275,11 @@ export function VariantRecipePreview({
           // The main product shows its real name ("Beef Pares"), not the generic "This Product".
           const shownName = item.id === THIS_PRODUCT_ID && productName.trim() ? productName.trim() : item.name;
           const portion = item.id !== THIS_PRODUCT_ID && unitsPerWhole(item.stockUnitCode) ? item.stockUnitCode : null;
+          const ordinaryMode = ordinaryModeFor(item);
+          const minQty = portion ? 1 : recipeQuantityMin(ordinaryMode);
+          const atMin = line.quantity <= minQty;
+          const atMax = line.quantity >= RECIPE_QTY_MAX;
+          const useDecimalPad = Boolean(portion) || ordinaryMode === 'half_step';
           return (
             <View key={line.itemId} style={[styles.line, index > 0 && styles.lineDivider]}>
               {item.id !== THIS_PRODUCT_ID ? <CategoryIcon category={item.category} size={22} /> : null}
@@ -187,59 +296,77 @@ export function VariantRecipePreview({
                       : `${unitLabel(item.unit, line.quantity)}${item.id !== THIS_PRODUCT_ID && item.hint ? ` · ${item.hint}` : ''}`}
                 </Text>
               </View>
-              {portion ? (
-                <View style={styles.portionCol}>
-                  <Text style={styles.portionCaption}>Quantity</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.name} quantity per order, ${lineAmount(item, line.quantity)}. Change quantity`}
-                    onPress={() => setPortionSheetIndex(index)}
-                    style={({ pressed }) => [styles.portionSelect, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.portionValue}>{lineAmount(item, line.quantity)}</Text>
-                    <Ionicons name="chevron-down" size={16} color={managerColors.subtext} />
-                  </Pressable>
-                </View>
-              ) : (
               <View style={styles.stepper}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Decrease ${item.name} quantity`}
-                  disabled={line.quantity <= 1}
-                  onPress={() => setQuantity(index, line.quantity - 1)}
+                  disabled={atMin}
+                  onPress={() => {
+                    clearPortionDraft(index);
+                    setQuantityError('');
+                    setQuantity(
+                      index,
+                      portion ? line.quantity - 1 : nudgeRecipeQuantity(line.quantity, -1, ordinaryMode),
+                    );
+                  }}
                   style={({ pressed }) => [styles.stepTouch, pressed && styles.pressed]}
                 >
-                  <View style={[styles.stepButton, line.quantity <= 1 && styles.stepButtonDisabled]}>
+                  <View style={[styles.stepButton, atMin && styles.stepButtonDisabled]}>
                     <Ionicons name="remove" size={16} color={managerColors.royalBlue} />
                   </View>
                 </Pressable>
                 <TextInput
-                  accessibilityLabel={`${item.name} quantity used`}
-                  keyboardType="number-pad"
+                  accessibilityLabel={
+                    portion
+                      ? `${item.name} quantity per order, ${lineAmount(item, line.quantity)}`
+                      : `${item.name} quantity used`
+                  }
+                  keyboardType={useDecimalPad ? 'decimal-pad' : 'number-pad'}
                   selectTextOnFocus
-                  value={line.quantity === 0 ? '' : String(line.quantity)}
+                  value={
+                    portion
+                      ? portionDraft?.index === index
+                        ? portionDraft.text
+                        : lineAmount(item, line.quantity)
+                      : portionDraft?.index === index
+                        ? portionDraft.text
+                        : formatRecipeQuantityInput(line.quantity)
+                  }
                   onChangeText={(text) => {
-                    if (!/^\d{0,2}$/.test(text)) { setQuantityError('Enter whole stock units. For half portions, choose a half-unit stock item.'); return; }
-                    setQuantityError(''); setQuantity(index, Number(text || '0'));
+                    if (portion) {
+                      applyPortionText(index, item, text);
+                      return;
+                    }
+                    applyOrdinaryText(index, item, text);
                   }}
                   onBlur={() => {
-                    if (line.quantity === 0) setQuantity(index, 1);
+                    if (portion) {
+                      commitPortionText(index, item, line.quantity);
+                      return;
+                    }
+                    commitOrdinaryText(index, item, line.quantity);
                   }}
                   style={styles.quantityInput}
                 />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Increase ${item.name} quantity`}
-                  disabled={line.quantity >= MAX_RECIPE_QUANTITY}
-                  onPress={() => setQuantity(index, line.quantity + 1)}
+                  disabled={atMax}
+                  onPress={() => {
+                    clearPortionDraft(index);
+                    setQuantityError('');
+                    setQuantity(
+                      index,
+                      portion ? line.quantity + 1 : nudgeRecipeQuantity(line.quantity, 1, ordinaryMode),
+                    );
+                  }}
                   style={({ pressed }) => [styles.stepTouch, pressed && styles.pressed]}
                 >
-                  <View style={[styles.stepButton, line.quantity >= MAX_RECIPE_QUANTITY && styles.stepButtonDisabled]}>
+                  <View style={[styles.stepButton, atMax && styles.stepButtonDisabled]}>
                     <Ionicons name="add" size={16} color={managerColors.royalBlue} />
                   </View>
                 </Pressable>
               </View>
-              )}
               {locked ? (
                 <View
                   accessible
@@ -356,24 +483,6 @@ export function VariantRecipePreview({
 
       {stockModeChoice ? null : listBlock}
 
-      {(() => {
-        const open = portionSheetIndex === null ? undefined : lines[portionSheetIndex];
-        const openItem = open ? findInventoryItem(open.itemId, productName, ingredients) : undefined;
-        if (!open || !openItem || !unitsPerWhole(openItem.stockUnitCode)) return null;
-        return (
-          <PortionPickerSheet
-            item={openItem}
-            quantity={open.quantity}
-            onClose={() => setPortionSheetIndex(null)}
-            onSelect={(units) => {
-              setQuantityError('');
-              setQuantity(portionSheetIndex!, units);
-              setPortionSheetIndex(null);
-            }}
-          />
-        );
-      })()}
-
       {mainOnly ? null : (
         <InventoryItemPickerModal
           visible={pickerOpen}
@@ -420,23 +529,6 @@ const styles = StyleSheet.create({
   itemName: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   itemUnit: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12 },
   stepper: { flexDirection: 'row', alignItems: 'center' },
-  // portion items: a labelled select that shows the physical portion (0.5), not the stored unit count
-  portionCol: { alignItems: 'flex-start', gap: 2 },
-  portionCaption: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 11, paddingLeft: 4 },
-  portionSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    minWidth: 84,
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-  },
-  portionValue: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   // 44px tap area (stepTouch); the visible circle (stepButton) stays compact.
   stepTouch: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
   stepButton: {

@@ -1,3 +1,4 @@
+import { stockUnitCodeAt } from '@/lib/stockUnitEra';
 import { stockUnit, type StockUnitCode } from '@/lib/stockUnits';
 
 /** Corrections come from the server 50 at a time. */
@@ -18,9 +19,26 @@ export function formatCorrectionChange(change: number): string {
   return change > 0 ? `+${change}` : change < 0 ? `−${Math.abs(change)}` : '0';
 }
 
-/** "5 → 8 pcs" / "10 → 1 half-egg unit": the count the cashier replaced and the verified one, in the item's own unit. */
-export function correctionQuantityLine(details: { before: number; after: number }, code: StockUnitCode | null | undefined): string {
-  const unit = stockUnit(code);
+/**
+ * "5 → 8 pcs" / "10 → 8 half-egg units".
+ * When cutoverAt is provided, pre-cutover Egg rows keep whole-egg meaning (not live half_egg).
+ */
+export function correctionQuantityLine(
+  details: { before: number; after: number },
+  code: StockUnitCode | null | undefined,
+  options?: { occurredAt?: string | null; cutoverAt?: string | null; cutoverKnown?: boolean },
+): string {
+  if (code === 'half_egg' && options?.cutoverKnown === false) {
+    const after = Number(details.after);
+    const unit = stockUnit('half_egg');
+    return `${Number(details.before)} → ${after} ${after === 1 ? unit!.singular : unit!.plural}`;
+  }
+  const eraCode = stockUnitCodeAt(code, options?.occurredAt ?? null, options?.cutoverAt ?? null);
+  if (code === 'half_egg' && eraCode === null) {
+    const after = Number(details.after);
+    return `${Number(details.before)} → ${after} ${Math.abs(after) === 1 ? 'egg' : 'eggs'}`;
+  }
+  const unit = stockUnit(eraCode ?? code);
   const after = Number(details.after);
   const label = unit ? (after === 1 ? unit.singular : unit.plural) : after === 1 ? 'pc' : 'pcs';
   return `${Number(details.before)} → ${after} ${label}`;

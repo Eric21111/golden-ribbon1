@@ -8,6 +8,8 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { FilterIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { confirmAction } from '@/lib/confirmAction';
+import { PIECE_QUANTITY_MAX_LENGTH } from '@/lib/format';
+import { acceptsPieceOpsQuantityText } from '@/lib/halfStepQuantity';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { DEFAULT_LIST_FILTERS, type ListFilters } from '@/features/products/listFilters';
 import { ListFiltersSheet } from '@/features/products/ProductFilterControls';
@@ -268,11 +270,11 @@ export function BulkQuantityPicker({ rows, onApply, filledCount, onClearAll }: {
             accessibilityLabel="Quantity per selected product"
             placeholder="e.g. 10"
             placeholderTextColor={managerColors.subtext}
-            keyboardType="number-pad"
-            maxLength={6}
+            keyboardType="decimal-pad"
+            maxLength={PIECE_QUANTITY_MAX_LENGTH}
             value={quantity}
             onChangeText={value => {
-              if (/^\d*$/.test(value)) setQuantity(value);
+              if (acceptsPieceOpsQuantityText(value)) setQuantity(value);
             }}
             style={[styles.quantity, !!error && styles.quantityError]}
           />

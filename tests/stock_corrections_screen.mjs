@@ -63,6 +63,8 @@ const Screen = loadTs('src/features/reports/StockCorrectionsScreen.tsx', {
   '@/hooks/useClientPagination': { useClientPagination: (items, key, size) => ({ pageItems: items.slice(0, size), page: 0, setPage() {}, totalPages: Math.max(1, Math.ceil(items.length / size)), showPagination: items.length > size, key, size }) },
   '@/hooks/useStockCorrectionScan': { useStockCorrectionScan: () => scanState },
   '@/lib/errors': { getErrorMessage: (error) => error.message },
+  '@tanstack/react-query': { useQuery: () => ({ data: null, isSuccess: true }) },
+  '@/services/stockUnitCutoverService': { getEggHalfUnitCutoverAt: async () => null },
 }).default;
 
 const row = (n, over = {}) => ({

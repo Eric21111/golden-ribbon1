@@ -1,18 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
-import vm from 'node:vm';
-
-function loadTs(sourcePath) {
-  const source = readFileSync(sourcePath, 'utf8');
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    fileName: sourcePath,
-  });
-  const module = { exports: {} };
-  vm.runInNewContext(outputText, { module, exports: module.exports }, { filename: sourcePath });
-  return module.exports;
-}
+import { loadTs } from './_load_ts.mjs';
 
 const {
   INVALID_QUANTITY_LABEL,
@@ -70,16 +58,18 @@ assert.equal(formatReportLiveOnHand(24, 'kg_meal', true), '24 pcs');
 assert.equal(formatReportLiveOnHand(24, 'piece_stock', true), '24 pcs');
 assert.equal(formatReportLiveOnHand(0, undefined, false), '0 pcs');
 
-// C. Piece formatting — integer-equivalent only
+// C. Piece formatting — display accepts half-steps; ops input gated OFF by default
 assert.equal(formatInventoryQuantity(24, 'piece_stock'), '24 pcs');
 assert.equal(formatInventoryQuantity('24', 'piece_stock'), '24 pcs');
 assert.equal(formatInventoryQuantity('24.000', 'piece_stock'), '24 pcs');
-assert.equal(formatInventoryQuantity(24.5, 'piece_stock'), INVALID_QUANTITY_LABEL);
+assert.equal(formatInventoryQuantity(24.5, 'piece_stock'), '24.5 pcs');
+assert.equal(formatInventoryQuantity(24.3, 'piece_stock'), INVALID_QUANTITY_LABEL);
 assert.equal(isValidPieceQuantity('24'), true);
-assert.equal(isValidPieceQuantity('24.5'), false);
+assert.equal(isValidPieceQuantity('24.5'), false, 'client gate OFF rejects half-step ops input');
+assert.equal(isValidPieceQuantity('24.3'), false);
 assert.equal(isValidInventoryQuantity('125.750', 'kg_meal'), true);
 assert.equal(KG_QUANTITY_MAX_LENGTH, 10);
-assert.equal(PIECE_QUANTITY_MAX_LENGTH, 6);
+assert.equal(PIECE_QUANTITY_MAX_LENGTH, 8);
 assert.doesNotMatch(setupSource, /KG_QUANTITY_MAX_LENGTH/);
 assert.doesNotMatch(createTransferSource, /KG_QUANTITY_MAX_LENGTH/);
 assert.match(setupSource, /PIECE_QUANTITY_MAX_LENGTH/);
@@ -109,7 +99,8 @@ assert.equal(formatTransferLineSummary('received', 10.5, null, 'kg_meal'), 'Sent
 assert.equal(formatTransferReceivedQuantity('pending_receipt', null, 'kg_meal'), 'Pending');
 assert.match(cashierIncoming, /formatSnapshottedQuantity/);
 assert.doesNotMatch(cashierIncoming, /isKgMeal/);
-assert.match(managerTransfer, /formatTransferLineSummary/);
+assert.match(managerTransfer, /formatSnapshottedQuantity/);
+assert.match(managerTransfer, /formatTransferReceivedQuantity/);
 
 // H. Piece receipt
 assert.equal(formatSnapshottedQuantity(24, 'piece_stock'), '24 pcs');

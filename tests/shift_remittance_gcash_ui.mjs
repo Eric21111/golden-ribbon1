@@ -82,6 +82,8 @@ const Detail = loadTs('src/features/reports/ShiftRemittanceDetailScreen.tsx', {
     useManagerShiftPayments: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }),
   },
   '@/lib/errors': { getErrorMessage: (e) => String(e) },
+  '@tanstack/react-query': { useQuery: () => ({ data: null, isSuccess: true }) },
+  '@/services/stockUnitCutoverService': { getEggHalfUnitCutoverAt: async () => null },
 }).ShiftRemittanceDetailScreen;
 const base = {
   branch_name: 'SM1', cashier_name: 'SM1-Cashier', started_at: '2026-11-12T07:32:00+08:00', ended_at: '2026-11-12T08:34:00+08:00', sales_cutoff_at: '2026-11-12T08:34:00+08:00',

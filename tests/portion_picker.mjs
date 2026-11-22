@@ -114,70 +114,97 @@ const mapping = loadTs('src/features/products/stockUseMapping.ts', {
 const payload = mapping.buildStockUsePayload({ product: [{ itemId: 'egg', quantity: toUnits(0.5, 'half_egg') }] }, []);
 assert.deepEqual(payload, [{ ingredient_product_id: 'egg', quantity: 1 }], '0.5 egg is saved as 1 half-egg unit');
 assert.ok(Number.isInteger(payload[0].quantity));
-assert.deepEqual(mapping.buildStockUsePayload({ product: [{ itemId: 'egg', quantity: 0.5 }] }, []), [], 'a raw fraction is dropped, never saved');
+assert.throws(
+  () => mapping.buildStockUsePayload({ product: [{ itemId: 'egg', quantity: 0.5 }] }, []),
+  /whole number|half-step|Quantity must/i,
+  'a raw fraction is rejected explicitly (never silently dropped)',
+);
 // reopening a saved row shows the same amount again
 const saved = mapping.savedStockUsesToRecipes([{ variant_id: null, ingredient_product_id: 'egg', quantity: 3 }], 'p', []);
 assert.equal(data.lineAmount(egg, saved.product[0].quantity), '1.5');
 
-// ---- 7. rendered editor
-const stubs = (extra = {}) => ({
-  'react-native': { ...rnw, TextInput: (props) => React.createElement('input', { value: props.value, readOnly: true, 'aria-label': props.accessibilityLabel }) },
+// ---- 7. rendered editor: portion items use the same [-] [qty] [+] stepper, showing physical portions
+let inputProps;
+let decreaseProps;
+let increaseProps;
+let changes = [];
+const captureStubs = {
+  'react-native': {
+    ...rnw,
+    TextInput: (props) => {
+      inputProps = props;
+      return React.createElement('input', { value: props.value, readOnly: true, 'aria-label': props.accessibilityLabel });
+    },
+    Pressable: (props) => {
+      const label = props.accessibilityLabel ?? '';
+      if (label.startsWith('Decrease ')) decreaseProps = props;
+      if (label.startsWith('Increase ')) increaseProps = props;
+      return React.createElement('button', { 'aria-label': label, disabled: props.disabled }, props.children);
+    },
+  },
   '@react-native-vector-icons/ionicons': { __esModule: true, default: () => null },
   './InventoryItemPickerModal': { InventoryItemPickerModal: () => null },
-  './PortionPickerSheet': { PortionPickerSheet: () => null },
   './CategoryIcon': { CategoryIcon: () => null },
-  ...extra,
-});
-const { VariantRecipePreview } = loadTs('src/features/products/VariantRecipePreview.tsx', stubs());
-const render = (lines) => renderToStaticMarkup(React.createElement(VariantRecipePreview, { lines, productName: 'Meal', ingredients: items, onChange: () => {} }));
+};
+const { VariantRecipePreview } = loadTs('src/features/products/VariantRecipePreview.tsx', captureStubs);
+const render = (lines, onChange = () => {}) => {
+  inputProps = undefined;
+  decreaseProps = undefined;
+  increaseProps = undefined;
+  return renderToStaticMarkup(React.createElement(VariantRecipePreview, { lines, productName: 'Meal', ingredients: items, onChange }));
+};
 
 const portionHtml = render([{ itemId: 'egg', quantity: 1 }]);
-assert.match(portionHtml, /Egg quantity per order, 0\.5\. Change quantity/, 'a select showing the physical portion');
-assert.match(portionHtml, />Quantity</, 'the select is labelled Quantity');
+assert.match(portionHtml, /Egg quantity per order, 0\.5/, 'middle field shows the physical portion');
+assert.match(portionHtml, /Increase Egg quantity/, 'portion items use the stepper');
+assert.match(portionHtml, /Decrease Egg quantity/);
 assert.match(portionHtml, /Stored as 1 half-egg unit/, 'the stored unit is shown separately');
 assert.match(portionHtml, /2 units = 1 whole egg/);
-assert.doesNotMatch(portionHtml, /<input/, 'no free-text box that could take a fraction');
-assert.doesNotMatch(portionHtml, /Increase Egg quantity/, 'no raw-unit stepper on a portion item');
+assert.match(portionHtml, /<input/, 'middle quantity is directly editable');
+assert.doesNotMatch(portionHtml, /Change quantity|chevron-down/, 'portion picker select is gone');
+assert.equal(inputProps.value, '0.5');
+assert.equal(inputProps.keyboardType, 'decimal-pad');
+assert.equal(decreaseProps.disabled, true, 'minimum physical portion is 0.5 (1 stored unit)');
 
-assert.match(render([{ itemId: 'egg', quantity: 3 }]), /Egg quantity per order, 1\.5\./);
-assert.match(render([{ itemId: 'bihon', quantity: 1 }]), /Bihon quantity per order, 0\.25\./);
+changes = [];
+render([{ itemId: 'egg', quantity: 1 }], (next) => { changes.push(next); });
+increaseProps.onPress();
+assert.deepEqual(changes.at(-1), [{ itemId: 'egg', quantity: 2 }], '+ adds exactly one half-egg unit (0.5 physical)');
+changes = [];
+render([{ itemId: 'egg', quantity: 3 }], (next) => { changes.push(next); });
+assert.equal(inputProps.value, '1.5');
+decreaseProps.onPress();
+assert.deepEqual(changes.at(-1), [{ itemId: 'egg', quantity: 2 }], '− removes exactly 0.5 physical');
+
+changes = [];
+render([{ itemId: 'egg', quantity: 2 }], (next) => { changes.push(next); });
+for (const [text, units] of [['0.5', 1], ['1', 2], ['1.5', 3], ['2', 4], ['2.5', 5]]) {
+  changes = [];
+  inputProps.onChangeText(text);
+  assert.deepEqual(changes.at(-1), [{ itemId: 'egg', quantity: units }], `typing ${text} saves ${units} units`);
+}
+changes = [];
+inputProps.onChangeText('0.3');
+assert.equal(changes.length, 0, '0.3 is refused, never rounded');
+inputProps.onChangeText('1.2');
+assert.equal(changes.length, 0, '1.2 is refused, never rounded');
+
+assert.match(render([{ itemId: 'bihon', quantity: 1 }]), /Bihon quantity per order, 0\.25/);
 assert.match(render([{ itemId: 'bihon', quantity: 4 }]), /Stored as 4 quarter-serving units/);
 
 for (const [id, label] of [['rice', 'Rice'], ['old', 'Old Egg']]) {
   const html = render([{ itemId: id, quantity: 2 }]);
   assert.match(html, new RegExp(`Increase ${label} quantity`), `${label}: the whole-number stepper is unchanged`);
   assert.match(html, /<input/, `${label}: the number input is unchanged`);
-  assert.doesNotMatch(html, /quantity per order/, `${label}: no portion select`);
+  assert.doesNotMatch(html, /quantity per order/, `${label}: no portion a11y wording`);
+  // FRACTIONAL_STOCK_USES_ENABLED is false: ordinary items stay on the integer pad (half-step UI is gated).
+  assert.equal(inputProps.keyboardType, 'number-pad', `${label}: integer pad while gate is off`);
 }
 const mixed = render([{ itemId: 'rice', quantity: 1 }, { itemId: 'egg', quantity: 1 }]);
 assert.match(mixed, /Increase Rice quantity/);
-assert.match(mixed, /Egg quantity per order, 0\.5\./, 'a meal can mix whole-number and portion items');
+assert.match(mixed, /Egg quantity per order, 0\.5/, 'a meal can mix whole-number and portion items');
 
-// ---- 8. the sheet
-let sheetProps;
-const sheetStubs = {
-  'react-native': rnw,
-  '@react-native-vector-icons/ionicons': { __esModule: true, default: () => null },
-  '@/components/BottomSheet': { BottomSheet: (props) => { sheetProps = props; return React.createElement('div', null, props.children); } },
-  '@/components/dashboard/theme': { managerColors: { subtext: '#667', ink: '#111', royalBlue: '#13c' } },
-};
-const { PortionPickerSheet } = loadTs('src/features/products/PortionPickerSheet.tsx', sheetStubs);
-const sheet = (item, quantity) => renderToStaticMarkup(React.createElement(PortionPickerSheet, { item, quantity, onSelect: () => {}, onClose: () => {} }));
-const sheetHtml = sheet(egg, 2);
-assert.equal(sheetProps.title, 'Quantity per order');
-assert.match(sheetHtml, /2 units = 1 whole egg/);
-for (const [portion, stored] of [['0.5', 1], ['1', 2], ['1.5', 3], ['2', 4]]) {
-  assert.match(sheetHtml, new RegExp(`${portion} Egg, saved as ${stored} half-egg unit`), `${portion} -> ${stored}`);
-}
-assert.match(sheetHtml, /Saved as 1 half-egg unit/);
-assert.match(sheetHtml, /Saved as 2 half-egg units/);
-const rowClass = (label) => sheetHtml.match(new RegExp(`aria-label="${label}"[^>]*class="([^"]*)"`))[1];
-assert.notEqual(rowClass('1 Egg, saved as 2 half-egg units'), rowClass('0.5 Egg, saved as 1 half-egg unit'), 'the saved amount (1 egg = 2 units) is highlighted');
-assert.equal(rowClass('1.5 Egg, saved as 3 half-egg units'), rowClass('0.5 Egg, saved as 1 half-egg unit'), 'other rows are not');
-assert.equal(sheet(items.find((i) => i.id === 'old'), 2), '', 'legacy stock never gets a portion sheet');
-assert.equal(sheet(items.find((i) => i.id === 'rice'), 2), '', 'pieces never get a portion sheet');
-
-// ---- 9. Create Product: "Split into halves or quarters" switch (off = whole pieces), plain words, live "Try it"
+// ---- 8. Create Product: "Split into halves or quarters" switch (off = whole pieces), plain words, live "Try it"
 let chips = [];
 let row;
 let tryInput;
@@ -273,4 +300,4 @@ for (const code of ['half_egg', 'half_serving', 'quarter_serving']) {
 }
 assert.equal(Object.keys(units.STOCK_UNITS).length, 4, 'no new unit was added');
 
-console.log('Portion picker passed: exact conversion, refused fractions, unchanged legacy/piece items, integer payload, rendered editor and sheet.');
+console.log('Portion picker passed: exact conversion, refused fractions, unchanged legacy/piece items, integer payload, portion stepper entry.');

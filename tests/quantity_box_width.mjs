@@ -13,7 +13,7 @@ const screens = [
   { file: 'src/features/returns/ReceiveReturnScreen.tsx', min: 40, fontSize: 15, value: 'quantity.value' },
   { file: 'src/features/stock/QuantityListScreen.tsx', min: 48, fontSize: 18, value: 'raw' },
 ];
-assert.equal(PIECE_QUANTITY_MAX_LENGTH, 6, 'the largest quantity is 6 digits');
+assert.equal(PIECE_QUANTITY_MAX_LENGTH, 8, 'fits 999999.5 half-step quantities');
 
 for (const { min, fontSize } of screens) {
   const opts = { min, fontSize };
@@ -33,6 +33,7 @@ for (const { min, fontSize } of screens) {
   }
   assert.ok(width('9999', opts) > min || min >= 56, '4 digits (1000+) get a wider box than the fixed one');
   assert.ok(width('999999', opts) <= 90, 'and it stays reasonable at the 6-digit maximum');
+  assert.ok(width('999999.5', opts) >= width('999999', opts), 'half-step max is fully visible');
 }
 assert.equal(width(undefined, { min: 48, fontSize: 18 }), 48);
 assert.equal(width(null, { min: 48, fontSize: 18 }), 48);
@@ -52,4 +53,4 @@ for (const { file, min, fontSize, value } of screens) {
 // the shift-close count box already fills its field (flex: 1), so it needs nothing
 assert.match(read('src/features/shifts/CashierShiftCloseForm.tsx'), /stepperInput: \{\n\s+flex: 1,/);
 
-console.log('Quantity box width passed: grows with the digits up to 6, short numbers unchanged, all four stepper screens use it.');
+console.log('Quantity box width passed: grows with the digits up to half-step max, short numbers unchanged, all four stepper screens use it.');

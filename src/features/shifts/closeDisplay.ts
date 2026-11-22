@@ -1,4 +1,9 @@
 import { formatMoney } from '@/lib/format';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  formatHalfStepDisplay,
+  isValidPieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import type {
   CashReconciliationResult,
   ShiftCloseProductPreview,
@@ -7,12 +12,19 @@ import type {
   ShiftProductReconResult,
 } from '@/types/models';
 
-/** Whole PCS including 0. Blank is invalid (not coerced to zero). */
+/** PCS including 0. Half-steps only when the client activation gate is on. Blank is invalid. */
 export function isValidClosePieceQuantity(raw: string): boolean {
   const text = raw.trim();
   if (!text) return false;
-  if (!/^\d{1,6}$/.test(text)) return false;
-  return Number(text) >= 0;
+  if (FRACTIONAL_STOCK_USES_ENABLED) {
+    if (!/^(0|[1-9]\d{0,5})(\.5)?$/.test(text)) return false;
+  } else if (!/^(0|[1-9]\d{0,5})$/.test(text)) {
+    return false;
+  }
+  return isValidPieceOpsQuantity(Number(text), {
+    allowZero: true,
+    fractionalOps: FRACTIONAL_STOCK_USES_ENABLED,
+  });
 }
 
 export function parseClosePieceQuantity(raw: string): number | null {
@@ -52,17 +64,19 @@ export function formatInventoryResultLabel(
 ): string {
   if (!preview) return '—';
   if (preview.result === 'exact') return 'Exact';
+  const mag = formatHalfStepDisplay(preview.magnitude);
   if (preview.result === 'shortage') {
-    return `${preview.magnitude} pc${preview.magnitude === 1 ? '' : 's'} shortage`;
+    return `${mag} pc${preview.magnitude === 1 ? '' : 's'} shortage`;
   }
-  return `${preview.magnitude} pc${preview.magnitude === 1 ? '' : 's'} excess`;
+  return `${mag} pc${preview.magnitude === 1 ? '' : 's'} excess`;
 }
 
 /** Hide confusing negative expected remaining; still compute semantic result. */
 export function formatExpectedRemainingLabel(expectedRemaining: number | null, hasActual: boolean): string {
   if (!hasActual || expectedRemaining == null) return '—';
   if (expectedRemaining < 0) return 'See inventory result';
-  return `${expectedRemaining} pc${expectedRemaining === 1 ? '' : 's'}`;
+  const label = formatHalfStepDisplay(expectedRemaining);
+  return `${label} pc${expectedRemaining === 1 ? '' : 's'}`;
 }
 
 export function formatCashResultLabel(

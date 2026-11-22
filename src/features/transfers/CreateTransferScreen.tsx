@@ -40,6 +40,12 @@ import { useInventory } from '@/hooks/useInventory';
 import { useSendTransfer } from '@/hooks/useTransfers';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatLiveStock, formatMoney, isValidPieceQuantity, makeIdempotencyKey, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 
 type StockFilter = 'in_stock' | 'all';
 type SortOption = 'name-asc' | 'name-desc' | 'available-desc' | 'available-asc';
@@ -62,7 +68,14 @@ const schema = z
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole stock-unit quantity.'),
+        quantity: z
+          .string()
+          .regex(
+            FRACTIONAL_STOCK_USES_ENABLED ? /^(\d{1,6}(\.5)?)?$/ : /^(\d{1,6})?$/,
+            FRACTIONAL_STOCK_USES_ENABLED
+              ? 'Enter a whole or half-step stock-unit quantity.'
+              : 'Enter a whole stock-unit quantity.',
+          ),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -430,16 +443,26 @@ export function CreateTransferScreen() {
                 control={control}
                 name={`items.${index}.quantity`}
                 render={({ field: quantity }) => {
-                  const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
+                  const currentQty = Number(quantity.value || '0');
+                  const safeQty = Number.isFinite(currentQty) ? currentQty : 0;
                   const isFocused = focusedIndex === index;
-                  const atMin = currentQty <= 0;
-                  const atMax = currentQty >= item.quantity_on_hand;
-                  const step = (delta: number) => {
-                    const next = Math.min(item.quantity_on_hand, Math.max(0, currentQty + delta));
-                    quantity.onChange(String(next));
+                  const atMin = safeQty <= 0;
+                  const atMax = safeQty >= item.quantity_on_hand;
+                  const step = (direction: 1 | -1) => {
+                    quantity.onChange(
+                      formatHalfStepDisplay(
+                        nudgePieceOpsQuantity(
+                          safeQty,
+                          direction,
+                          item.product.stock_unit_code,
+                          0,
+                          item.quantity_on_hand,
+                        ),
+                      ),
+                    );
                   };
                   return (
-                    <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
+                    <View style={[styles.card, safeQty > 0 && styles.cardSelected]}>
                       <View style={styles.cardTop}>
                         <CategoryIcon category={item.product.product_category} size={36} decorative />
                         <View style={styles.cardInfo}>
@@ -460,7 +483,7 @@ export function CreateTransferScreen() {
                           </Text>
                         </View>
                       </View>
-                      {isNew && currentQty > 0 && item.product.sell_in_pos !== false && item.product.selling_price != null ? (
+                      {isNew && safeQty > 0 && item.product.sell_in_pos !== false && item.product.selling_price != null ? (
                         <Text style={styles.body}>
                           New to this branch — initial selling price: {formatMoney(item.product.selling_price)}
                         </Text>
@@ -484,7 +507,7 @@ export function CreateTransferScreen() {
                             </Pressable>
                             <TextInput
                               accessibilityLabel={`Send quantity for ${item.product.name}`}
-                              keyboardType="number-pad"
+                              keyboardType="decimal-pad"
                               value={quantity.value}
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
@@ -494,17 +517,19 @@ export function CreateTransferScreen() {
                               onFocus={() => setFocusedIndex(index)}
                               onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
                               onChangeText={(value) => {
-                                if (value === '') {
+                                if (!acceptsPieceOpsQuantityText(value, item.product.stock_unit_code)) return;
+                                if (value === '' || value.endsWith('.')) {
                                   quantity.onChange(value);
                                   return;
                                 }
-                                if (!/^\d{0,6}$/.test(value)) return;
                                 // Clamp to available stock as the user types, not just via the
                                 // stepper/Max button — typing "999" past what's on hand should
                                 // settle at the real ceiling instead of staying invalid until review.
                                 const numeric = Number(value);
                                 quantity.onChange(
-                                  numeric > item.quantity_on_hand ? String(item.quantity_on_hand) : value,
+                                  numeric > item.quantity_on_hand
+                                    ? formatHalfStepDisplay(item.quantity_on_hand)
+                                    : value,
                                 );
                               }}
                               style={[styles.stepperInput, { width: quantityBoxWidth(quantity.value, { min: 40, fontSize: 17 }) }]}
@@ -528,7 +553,7 @@ export function CreateTransferScreen() {
                             accessibilityLabel={`Send all ${item.quantity_on_hand} available`}
                             disabled={atMax}
                             onPress={() =>
-                              quantity.onChange(String(item.quantity_on_hand))
+                              quantity.onChange(formatHalfStepDisplay(item.quantity_on_hand))
                             }
                             style={({ pressed }) => [
                               styles.maxButton,

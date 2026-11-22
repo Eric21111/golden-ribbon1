@@ -1,5 +1,6 @@
 import { productSearchText } from '@/features/products/listFilters';
 import { categoryOf, type CategoryFilter } from '@/features/products/productFilters';
+import { formatHalfStepDisplay, isExactHalfStep } from '@/lib/halfStepQuantity';
 import type { ShiftCloseProductPreview } from '@/types/models';
 
 /**
@@ -16,10 +17,10 @@ export type ProductCounts = Record<string, { actualRemaining: string; wasteQuant
 
 export const isCounted = (counts: ProductCounts, productId: string) => Boolean(counts[productId]?.actualRemaining?.trim());
 
-/** The system balance as the whole number it can be counted against (null when it is not a whole, non-negative piece count). */
+/** System balance as an exact half-step count (null when not a non-negative half-step). */
 export function systemPieces(product: Pick<ShiftCloseProductPreview, 'system_balance_before_waste'>): number | null {
   const value = Number(product.system_balance_before_waste);
-  return Number.isInteger(value) && value >= 0 ? value : null;
+  return Number.isFinite(value) && value >= 0 && isExactHalfStep(value) ? value : null;
 }
 
 /** No stock in the system for this shift. (A fractional or negative balance is NOT empty: it is stock to count.) */
@@ -79,7 +80,7 @@ export function splitByStock(shown: ShiftCloseProductPreview[]): { withStock: Sh
   return { withStock: shown.filter((product) => !hasNoSystemStock(product)), noStock: shown.filter(hasNoSystemStock) };
 }
 
-/** The products (of a section) that are not counted yet and have a whole-piece system balance to copy. */
+/** The products (of a section) that are not counted yet and have a half-step system balance to copy. */
 export function fillableProducts(shown: ShiftCloseProductPreview[], counts: ProductCounts): ShiftCloseProductPreview[] {
   return shown.filter((product) => !isCounted(counts, product.product_id) && systemPieces(product) != null);
 }
@@ -90,7 +91,10 @@ export function fillWithSystem(counts: ProductCounts, products: ShiftCloseProduc
   for (const product of products) {
     const system = systemPieces(product);
     if (system == null) continue;
-    next[product.product_id] = { actualRemaining: String(system), wasteQuantity: next[product.product_id]?.wasteQuantity ?? '0' };
+    next[product.product_id] = {
+      actualRemaining: formatHalfStepDisplay(system),
+      wasteQuantity: next[product.product_id]?.wasteQuantity ?? '0',
+    };
   }
   return next;
 }

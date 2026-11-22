@@ -8,13 +8,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { MIN_TOUCH_TARGET } from '../src/features/products/touchTargets.ts';
-import { MAX_RECIPE_QUANTITY } from '../src/features/products/recipePreviewData.ts';
-import {
-  flowSteps,
-  getWizardFlow,
-  isPriceMissing,
-} from '../src/features/products/wizardGuards.ts';
+import { loadTs } from './_load_ts.mjs';
+
+const { MIN_TOUCH_TARGET } = loadTs('src/features/products/touchTargets.ts');
+const { MAX_RECIPE_QUANTITY } = loadTs('src/features/products/recipePreviewData.ts');
+const { flowSteps, getWizardFlow, isPriceMissing } = loadTs('src/features/products/wizardGuards.ts');
 
 const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 const recipeSrc = read('src/features/products/VariantRecipePreview.tsx');
@@ -62,13 +60,16 @@ const count = (src, re) => (src.match(re) ?? []).length;
   assert.match(editorSrc, /minHeight: 48,\n\s*\},\n\s*doneButtonText/);
   assert.match(editorSrc, /minHeight: 48,\n\s*\},\n\s*addButtonText/);
 
-  // quantity limits and validation are unchanged
+  // quantity limits: max 99; portion items still store whole units; ordinary half-steps stay gated
   assert.equal(MAX_RECIPE_QUANTITY, 99);
-  assert.match(recipeSrc, /Math\.max\(0, Math\.min\(quantity, MAX_RECIPE_QUANTITY\)\)/);
-  assert.match(recipeSrc, /maxLength=\{2\}/);
-  assert.match(recipeSrc, /disabled=\{line\.quantity <= 1\}/);
-  assert.match(recipeSrc, /disabled=\{line\.quantity >= MAX_RECIPE_QUANTITY\}/);
-  assert.match(recipeSrc, /if \(line\.quantity === 0\) setQuantity\(index, 1\);/);
+  assert.match(recipeSrc, /Math\.max\(0, Math\.min\(quantity, RECIPE_QTY_MAX\)\)/);
+  assert.match(recipeSrc, /disabled=\{atMin\}/);
+  assert.match(recipeSrc, /disabled=\{atMax\}/);
+  assert.match(recipeSrc, /FRACTIONAL_STOCK_USES_ENABLED/);
+  assert.match(recipeSrc, /nudgeRecipeQuantity/);
+  assert.match(recipeSrc, /portionsToUnits/);
+  assert.match(recipeSrc, /decimal-pad/);
+  assert.doesNotMatch(recipeSrc, /PortionPickerSheet/);
   console.log('phase4 touch targets: ok');
 }
 

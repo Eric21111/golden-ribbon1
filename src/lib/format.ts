@@ -1,4 +1,16 @@
-import { labelStockQuantity, type StockUnitCode } from './stockUnits';
+import {
+  formatPortions,
+  labelStockQuantity,
+  unitsPerWhole,
+  unitsToPortions,
+  type StockUnitCode,
+} from './stockUnits';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  formatHalfStepDisplay,
+  isExactHalfStep,
+  isValidPieceOpsQuantity,
+} from './halfStepQuantity';
 import type {
   CashReconciliationResult,
   ClosingStockBehavior,
@@ -19,7 +31,8 @@ export function formatProductPrice(product: { selling_price: number | null; sell
 export const INVALID_QUANTITY_LABEL = 'Invalid quantity';
 /** Fits 999999.999, matching parse_inventory_quantity. Do not use 6. */
 export const KG_QUANTITY_MAX_LENGTH = 10;
-export const PIECE_QUANTITY_MAX_LENGTH = 6;
+/** Fits 999999.5 half-step piece quantities. */
+export const PIECE_QUANTITY_MAX_LENGTH = 8;
 
 /**
  * Width of a quantity box that grows with what is typed: it stays at `min` for short numbers and widens for longer ones, so up to
@@ -57,12 +70,12 @@ export function closingStockBehaviorLabel(behavior: ClosingStockBehavior | null 
 function formatPieceQuantity(quantity: number | string | null | undefined): string {
   if (quantity == null || quantity === '') return INVALID_QUANTITY_LABEL;
   const n = Number(quantity);
-  // Integer-equivalent only: 24, "24", "24.000" → 24 pcs. Do not trunc/round 24.500.
-  if (!Number.isFinite(n) || !Number.isInteger(n)) return INVALID_QUANTITY_LABEL;
-  return `${n} pcs`;
+  // Exact half-steps (incl. integers): 24, "24", "24.000", 9.5 → label. Reject 24.3 / 24.51.
+  if (!Number.isFinite(n) || n < 0 || !isExactHalfStep(n)) return INVALID_QUANTITY_LABEL;
+  return `${formatHalfStepDisplay(n)} pcs`;
 }
 
-/** Live on-hand at selling branches — operational inventory is always whole PCS. */
+/** Live on-hand at selling branches — piece_stock half-steps or portion units. */
 export function formatSellingBranchOnHand(
   quantity: number | string,
   _mode?: InventoryMode | null | undefined,
@@ -71,7 +84,7 @@ export function formatSellingBranchOnHand(
   return formatLiveStock(quantity, undefined, stockUnitCode);
 }
 
-/** Report/live on-hand — operational inventory is always whole PCS. */
+/** Report/live on-hand — piece_stock half-steps (or KG mode dash when mode unknown elsewhere). */
 export function formatReportLiveOnHand(
   quantity: number | string,
   mode?: InventoryMode | null | undefined,
@@ -92,14 +105,34 @@ export function formatInventoryQuantity(
     if (!Number.isFinite(n)) return INVALID_QUANTITY_LABEL;
     return `${n.toFixed(3)} kg`;
   }
+  if (unitsPerWhole(stockUnitCode)) {
+    const n = Number(value);
+    if (value == null || value === '' || !Number.isFinite(n) || !Number.isInteger(n)) {
+      return INVALID_QUANTITY_LABEL;
+    }
+  }
   return labelStockQuantity(formatPieceQuantity(value), stockUnitCode);
 }
 
+/**
+ * Live on-hand for staff: portion units show physical amounts (10 half-egg units → "5 eggs").
+ * Audit/report paths that need stored unit counts use formatInventoryQuantity / labelStockQuantity.
+ */
 export function formatLiveStock(
   quantity: number | string,
   _mode?: InventoryMode | null | undefined,
   stockUnitCode?: StockUnitCode | null,
 ): string {
+  const n = Number(quantity);
+  const per = unitsPerWhole(stockUnitCode);
+  // Portion codes stay integer internal units — never reinterpret 0.5 as a physical half-egg.
+  if (per) {
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return INVALID_QUANTITY_LABEL;
+    const physical = unitsToPortions(n, stockUnitCode);
+    const singular = stockUnitCode === 'half_egg' ? 'egg' : 'serving';
+    const plural = stockUnitCode === 'half_egg' ? 'eggs' : 'servings';
+    return `${formatPortions(physical)} ${Math.abs(physical) === 1 ? singular : plural}`;
+  }
   return labelStockQuantity(formatPieceQuantity(quantity), stockUnitCode);
 }
 
@@ -168,16 +201,22 @@ export function isKgMeal(mode: InventoryMode | null | undefined): boolean {
   return mode === 'kg_meal';
 }
 
-const PIECE_QTY = /^\d{1,6}$/;
+/** Positive whole pcs; half-steps only when the client activation gate is on. */
+const PIECE_QTY_INTEGER = /^[1-9]\d{0,5}$/;
+const PIECE_QTY_HALF = /^(0\.5|[1-9]\d{0,5}(\.5)?)$/;
 const KG_QTY = /^\d{1,6}(\.\d{1,3})?$/;
 
 export function isValidPieceQuantity(raw: string): boolean {
   const text = raw.trim();
-  if (!text || Number(text) <= 0) return false;
-  return PIECE_QTY.test(text);
+  if (!text) return false;
+  if (!(FRACTIONAL_STOCK_USES_ENABLED ? PIECE_QTY_HALF : PIECE_QTY_INTEGER).test(text)) return false;
+  return isValidPieceOpsQuantity(Number(text), {
+    allowZero: false,
+    fractionalOps: FRACTIONAL_STOCK_USES_ENABLED,
+  });
 }
 
-/** Active operational inputs are whole PCS only. KG pattern remains for historical snapshot validation. */
+/** Operational inputs: half-steps only when client gate is on. KG pattern remains for historical snapshot validation. */
 export function isValidInventoryQuantity(raw: string, mode: InventoryMode | null | undefined): boolean {
   if (mode === 'kg_meal') {
     const text = raw.trim();

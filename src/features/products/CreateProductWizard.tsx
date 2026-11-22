@@ -46,7 +46,7 @@ import { StockUnitField } from './StockUnitField';
 /**
  * Offering "split into halves or quarters" when creating a stock item is switched off for now. While it is off the unit
  * stays 'piece' (whole pieces), which is the same as leaving the switch off. Existing half-egg / half-serving items and
- * their Quantity picker in Stock Used Per Order are not affected. Set to true to bring the switch back.
+ * their Stock Used Per Order half-unit stepper are not affected. Set to true to bring the switch back.
  */
 const STOCK_UNIT_SPLIT_ENABLED = false;
 import {
@@ -58,7 +58,7 @@ import {
   type IngredientProduct,
   type RecipeLine,
 } from './recipePreviewData';
-import { buildStockUsePayload, type StockUsePayload } from './stockUseMapping';
+import { buildStockUsePayload, StockUseValidationError, type StockUsePayload } from './stockUseMapping';
 import { buildDrinkChoicePayload, drinkChoicesForSave, canonicalDrinkChoices, savedDrinkChoicesToState, type DrinkChoicePayload, type SavedDrinkChoice } from './drinkChoiceMapping';
 
 export type CreateProductVariantDraft = { id: string; name: string; default_price: string };
@@ -454,6 +454,20 @@ export function CreateProductWizard({
       return;
     }
 
+    let stockUses: StockUsePayload[];
+    try {
+      stockUses = buildStockUsePayload(
+        recipePreview,
+        variantValues.map((variant) => ({ key: variant.id, id: null, name: variant.name })),
+      );
+    } catch (error) {
+      failStep3(
+        error instanceof StockUseValidationError || (error as { name?: string })?.name === 'StockUseValidationError'
+          ? (error as Error).message
+          : 'Check Stock Used Per Order quantities before saving.',
+      );
+      return;
+    }
     onSubmit(
       {
         name: name.trim(),
@@ -463,10 +477,7 @@ export function CreateProductWizard({
         variants: variantValues,
         closingStockBehavior: isNonReturnable ? 'keep_at_branch' : 'record_as_unsold',
         isNonReturnable,
-        stockUses: buildStockUsePayload(
-          recipePreview,
-          variantValues.map((variant) => ({ key: variant.id, id: null, name: variant.name })),
-        ),
+        stockUses,
         drinkChoices: buildDrinkChoicePayload(
           drinkChoices,
           variantValues.map((variant) => ({ key: variant.id, id: null, name: variant.name })),

@@ -4,7 +4,7 @@ const memory=new Map();
 globalThis.localStorage={getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
 const logic=loadTs('src/features/pos/stockCorrection.ts');
 for(const value of ['0','1','999999']) assert.equal(logic.parseStockCount(value),Number(value));
-for(const value of ['','-1','0.5','1.5','1000000','1e2',' 1','12x']) assert.equal(logic.parseStockCount(value),null);
+for(const value of ['','-1','0.5','1.5','0.3','1.25','999999.5','1000000','1e2',' 1','12x']) assert.equal(logic.parseStockCount(value),null);
 const request={p_shift_id:'shift',p_product_id:'rice',p_expected_quantity:0,p_expected_updated_at:'2026-11-10T00:00:00Z',p_actual_quantity:10,p_reason:'Incorrect kitchen count',p_idempotency_key:'correction-persisted-001'};
 logic.savePendingCorrection('cashier',request);
 assert.deepEqual(logic.readPendingCorrection('cashier'),request);

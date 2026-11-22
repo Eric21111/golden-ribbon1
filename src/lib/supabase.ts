@@ -20,4 +20,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  // Marks this build as half-egg capable after Egg unit cutover. Outdated clients
+  // omit the header and are refused for direct Egg stock writes (see migration).
+  global: {
+    headers: {
+      'x-gr-half-egg': '1',
+    },
+  },
 });

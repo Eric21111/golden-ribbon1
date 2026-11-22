@@ -417,7 +417,7 @@ export default function OwnerDiscrepancyAnalytics() {
                   {option.label}
                 </Text>
                 {selectedOption ? <Ionicons name="checkmark" size={20} color={managerColors.royalBlue} /> : null}
-              </Pressable>
+    </Pressable>
             );
           })}
         </View>

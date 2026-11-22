@@ -19,7 +19,8 @@ import { alertNotice } from '@/lib/confirmAction';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { isMainBranchManager } from '@/features/auth/roles';
 import { getInventoryErrorMessage } from '@/lib/errors';
-import { formatDate, formatLiveStock } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { formatEraStockQuantity } from '@/lib/stockUnitEra';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getReturnDiscrepancy,
@@ -28,6 +29,7 @@ import {
   resolveTransferDiscrepancy,
   type DiscrepancyKind,
 } from '@/services/discrepancyService';
+import { getEggHalfUnitCutoverAt } from '@/services/stockUnitCutoverService';
 import type { DiscrepancyResolutionReason } from '@/types/models';
 
 const REASON_OPTIONS: Array<{ label: string; value: DiscrepancyResolutionReason | '' }> = [
@@ -62,6 +64,11 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
     queryKey: ['discrepancy-detail', 'transfer', id],
     queryFn: () => getTransferDiscrepancy(id),
     enabled: Boolean(id) && kind === 'transfer',
+  });
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
   });
   const query = kind === 'return' ? returnQuery : transferQuery;
 
@@ -127,10 +134,15 @@ export function DiscrepancyDetailScreen({ kind, id }: { kind: DiscrepancyKind; i
   const returnRow = isReturn && 'stock_return' in row ? row : null;
   const transferRow = !isReturn && 'stock_transfer' in row ? row : null;
   const productName = row.product?.name ?? 'Product';
-  const expectedLabel = formatLiveStock(row.quantity_expected, undefined, row.stock_unit_code);
-  const receivedLabel = formatLiveStock(row.quantity_received, undefined, row.stock_unit_code);
+  const eraOpts = {
+    occurredAt: row.created_at,
+    cutoverAt: cutoverQuery.data ?? null,
+    cutoverKnown: cutoverQuery.isSuccess,
+  };
+  const expectedLabel = formatEraStockQuantity(row.quantity_expected, row.stock_unit_code, eraOpts);
+  const receivedLabel = formatEraStockQuantity(row.quantity_received, row.stock_unit_code, eraOpts);
   const differenceAbs = Math.abs(Number(row.difference));
-  const differenceLabel = formatLiveStock(differenceAbs, undefined, row.stock_unit_code);
+  const differenceLabel = formatEraStockQuantity(differenceAbs, row.stock_unit_code, eraOpts);
   const differenceTone = isMissing ? styles.diffMissing : styles.diffExcess;
   const showResolve = canResolve && status === 'open';
 

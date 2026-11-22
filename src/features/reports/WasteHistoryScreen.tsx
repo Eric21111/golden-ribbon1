@@ -1,4 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,6 +20,7 @@ import { useShiftWaste } from '@/hooks/useShifts';
 import { getErrorMessage } from '@/lib/errors';
 import { formatManilaDate } from '@/lib/format';
 import { accentForName } from '@/lib/nameAccent';
+import { getEggHalfUnitCutoverAt } from '@/services/stockUnitCutoverService';
 import type { ShiftWasteOccurrenceRow, ShiftWasteShiftRow, ShiftWasteStatus } from '@/types/models';
 
 /** A day is a summary card plus compact shift rows (or one quiet line when nothing was wasted), so a handful fit a page. */
@@ -95,7 +97,15 @@ function parseRangeParam(value: string): DateFilterType {
 }
 
 /** What one shift / Main inventory day wrote off, product by product (shown in the details sheet). */
-export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
+export function WasteDetailsBody({
+  shift,
+  cutoverAt = null,
+  cutoverKnown = true,
+}: {
+  shift: ShiftWasteShiftRow;
+  cutoverAt?: string | null;
+  cutoverKnown?: boolean;
+}) {
   const total = shiftTotalPcs(shift.occurrences);
   const isMain = shift.entry_kind === 'main_inventory' || shift.shift_id == null;
   return (
@@ -122,7 +132,13 @@ export function WasteDetailsBody({ shift }: { shift: ShiftWasteShiftRow }) {
               {occurrenceMeta(item) ? <Text style={styles.itemNote}>{occurrenceMeta(item)}</Text> : null}
             </View>
             {item.quantity != null && Number.isFinite(Number(item.quantity)) ? (
-              <Text style={styles.occurrenceQty}>{formatPcsQty(item.quantity, item.stock_unit_code)}</Text>
+              <Text style={styles.occurrenceQty}>
+                {formatPcsQty(item.quantity, item.stock_unit_code, {
+                  occurredAt: shift.ended_at ?? shift.started_at,
+                  cutoverAt,
+                  cutoverKnown,
+                })}
+              </Text>
             ) : null}
           </View>
         ))}
@@ -153,6 +169,13 @@ export function WasteHistoryScreen({
   const [selected, setSelected] = useState<ShiftWasteShiftRow | null>(null);
   const { rpcRangeType, startIso, endIso } = resolveReportRange(rangeType, customStart, customEnd);
   const query = useShiftWaste(rpcRangeType, startIso, endIso, branchId || null);
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
+  });
+  const cutoverAt = cutoverQuery.data ?? null;
+  const cutoverKnown = cutoverQuery.isSuccess;
   const branches = useBranches();
   const days = query.data?.days ?? [];
   const pagination = useClientPagination(days, `${rangeType}|${customStart}|${customEnd}|${branchId}`, DAYS_PER_PAGE);
@@ -315,7 +338,9 @@ export function WasteHistoryScreen({
       </ConstrainedWidth>
 
       <ManagerBottomSheet visible={selected != null} title="Waste details" scroll onClose={() => setSelected(null)}>
-        {selected ? <WasteDetailsBody shift={selected} /> : null}
+        {selected ? (
+          <WasteDetailsBody shift={selected} cutoverAt={cutoverAt} cutoverKnown={cutoverKnown} />
+        ) : null}
       </ManagerBottomSheet>
     </Screen>
   );

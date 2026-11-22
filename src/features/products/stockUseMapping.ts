@@ -5,11 +5,20 @@
  * Kept free of React and path aliases so it can be unit-tested directly. It does not talk to the backend.
  *
  * Payload (sent as the COMPLETE recipe set of the product; see the 20261023110000 migration):
- *   { ingredient_product_id: "<products.id>" | "self", quantity: 1..99,
+ *   { ingredient_product_id: "<products.id>" | "self", quantity: 1..99 (integer while
+ *     FRACTIONAL_STOCK_USES_ENABLED is false — Phase 3 UI is wired but gated; Phase 4 enables save),
  *     variant_id?: "<product_variants.id>"   (an option that already exists)
  *     variant_name?: "<name>"                (a new option; resolved after it is created)
  *   }  — neither variant field = the product-level list (a product sold at one price)
+ *
+ * Invalid quantities throw StockUseValidationError (never silently dropped). Duplicate
+ * ingredient lines in the same scope also throw (never silently dropped).
  */
+import {
+  assertValidStockUsePayloadQuantity,
+  FRACTIONAL_STOCK_USES_ENABLED,
+  StockUseValidationError,
+} from '@/lib/halfStepQuantity';
 import { MAIN_PRODUCT_ITEM_ID, PRODUCT_STOCK_KEY } from './wizardGuards';
 
 export type RecipeLineLike = { itemId: string; quantity: number };
@@ -31,12 +40,7 @@ export type SavedStockUse = {
 /** An option as the wizard knows it: its draft key, its database id (null while new) and its current name. */
 export type WizardVariantRef = { key: string; id: string | null; name: string };
 
-const MIN_QUANTITY = 1;
-const MAX_QUANTITY = 99;
-
-function validLine(line: RecipeLineLike): boolean {
-  return Number.isInteger(line.quantity) && line.quantity >= MIN_QUANTITY && line.quantity <= MAX_QUANTITY;
-}
+export { FRACTIONAL_STOCK_USES_ENABLED, StockUseValidationError };
 
 /** "This Product" is saved as "self": a new product has no id yet, and "self" always means the product itself. */
 function ingredientRef(itemId: string): string {
@@ -52,6 +56,8 @@ export function isDefaultProductLevel(lines: RecipeLineLike[]): boolean {
  * Builds the complete payload from the wizard's recipe state. Only options that currently exist in the wizard are
  * included (a removed option's list goes with it). Existing options are referenced by id, so renaming one keeps
  * its list; new options by name.
+ *
+ * @throws {StockUseValidationError} when any line quantity is invalid for the current feature gate
  */
 export function buildStockUsePayload(
   recipes: Record<string, RecipeLineLike[]>,
@@ -60,10 +66,14 @@ export function buildStockUsePayload(
   const payload: StockUsePayload[] = [];
   const seen = new Set<string>();
   const push = (scope: Pick<StockUsePayload, 'variant_id' | 'variant_name'>, line: RecipeLineLike) => {
-    if (!validLine(line)) return;
+    assertValidStockUsePayloadQuantity(line.quantity, FRACTIONAL_STOCK_USES_ENABLED);
     const ingredient = ingredientRef(line.itemId);
     const dedupe = `${scope.variant_id ?? scope.variant_name?.toLowerCase() ?? ''}|${ingredient}`;
-    if (seen.has(dedupe)) return;
+    if (seen.has(dedupe)) {
+      throw new StockUseValidationError(
+        'Each ingredient may appear only once per product or variant.',
+      );
+    }
     seen.add(dedupe);
     payload.push({ ingredient_product_id: ingredient, quantity: line.quantity, ...scope });
   };

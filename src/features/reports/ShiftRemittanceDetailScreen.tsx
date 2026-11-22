@@ -1,10 +1,12 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { Alert } from 'react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { getEggHalfUnitCutoverAt } from '@/services/stockUnitCutoverService';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Pagination } from '@/components/Pagination';
@@ -168,6 +170,13 @@ export function ShiftRemittanceDetailScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const query = useShiftCloseReportDetail(id ?? '');
+  const cutoverQuery = useQuery({
+    queryKey: ['egg-half-unit-cutover-at'],
+    queryFn: getEggHalfUnitCutoverAt,
+    staleTime: 60_000,
+  });
+  const cutoverAt = cutoverQuery.data ?? null;
+  const cutoverKnown = cutoverQuery.isSuccess;
   const detail = query.data;
   const [resultFilter, setResultFilter] = useState<ResultFilter>('shortage');
 
@@ -317,7 +326,14 @@ export function ShiftRemittanceDetailScreen() {
                     <EmptyState title="No matching products" message="Try a different filter." />
                   ) : (
                     pagination.pageItems.map((product) => (
-                      <ProductCard key={product.id} product={product} systemClose={detail.selected_return_close} />
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        systemClose={detail.selected_return_close}
+                        occurredAt={detail.ended_at}
+                        cutoverAt={cutoverAt}
+                        cutoverKnown={cutoverKnown}
+                      />
                     ))
                   )}
                   {pagination.showPagination ? (
@@ -343,11 +359,24 @@ function hasQty(value: number) {
   return Number(value) !== 0;
 }
 
-function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduct; systemClose?: boolean }) {
+function ProductCard({
+  product,
+  systemClose,
+  occurredAt = null,
+  cutoverAt = null,
+  cutoverKnown = true,
+}: {
+  product: ShiftCloseReportProduct;
+  systemClose?: boolean;
+  occurredAt?: string | null;
+  cutoverAt?: string | null;
+  cutoverKnown?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const badge = inventoryResultBadge[product.result];
   const isIssue = product.result !== 'exact';
   const unit = product.stock_unit_code;
+  const qtyOpts = { occurredAt, cutoverAt, cutoverKnown };
   // Collapse noise: only non-zero movement lines; disposition covers unsold/carried outcome.
   const movementRows = (
     [
@@ -399,17 +428,17 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
 
       {systemClose ? (
         <Text style={styles.systemQty}>
-          System quantity after waste · {formatPcsQty(product.expected_remaining, unit)}
+          System quantity after waste · {formatPcsQty(product.expected_remaining, unit, qtyOpts)}
         </Text>
       ) : (
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Expected</Text>
-            <Text style={styles.summaryValue}>{formatPcsQty(product.expected_remaining, unit)}</Text>
+            <Text style={styles.summaryValue}>{formatPcsQty(product.expected_remaining, unit, qtyOpts)}</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Actual</Text>
-            <Text style={styles.summaryValue}>{formatPcsQty(product.actual_remaining, unit)}</Text>
+            <Text style={styles.summaryValue}>{formatPcsQty(product.actual_remaining, unit, qtyOpts)}</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Discrepancy</Text>
@@ -420,8 +449,8 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
               ]}
             >
               {product.discrepancy > 0
-                ? `+${formatPcsQty(product.discrepancy, unit)}`
-                : formatPcsQty(product.discrepancy, unit)}
+                ? `+${formatPcsQty(product.discrepancy, unit, qtyOpts)}`
+                : formatPcsQty(product.discrepancy, unit, qtyOpts)}
             </Text>
           </View>
         </View>
@@ -441,7 +470,7 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
             movementRows.map((row, index) => (
               <View key={row.label} style={[styles.ledgerRow, index > 0 && styles.ledgerRowGap]}>
                 <Text style={styles.ledgerLabel}>{row.label}</Text>
-                <Text style={styles.ledgerValue}>{formatPcsQty(row.value, unit)}</Text>
+                <Text style={styles.ledgerValue}>{formatPcsQty(row.value, unit, qtyOpts)}</Text>
               </View>
             ))
           )}
@@ -449,7 +478,7 @@ function ProductCard({ product, systemClose }: { product: ShiftCloseReportProduc
             <Text style={styles.ledgerCloseLabel}>
               {closesAsUnsold(product) ? 'Unsold at close' : 'Carried to next day'}
             </Text>
-            <Text style={styles.ledgerCloseValue}>{formatPcsQty(closingDispositionQty(product), unit)}</Text>
+            <Text style={styles.ledgerCloseValue}>{formatPcsQty(closingDispositionQty(product), unit, qtyOpts)}</Text>
           </View>
         </View>
       ) : null}

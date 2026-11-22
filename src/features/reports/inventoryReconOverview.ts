@@ -1,3 +1,5 @@
+import type { StockQuantityEra } from '@/lib/stockUnitEra';
+import { formatEraStockQuantity } from '@/lib/stockUnitEra';
 import type {
   Branch,
   DiscrepancyResolutionReason,
@@ -120,19 +122,121 @@ export function reconCollapsedStatusLine(item: InventoryReconciliationItem): str
   return reconOpenStatusLine(item) ?? reconCompactReasonLine(item);
 }
 
-export type ReconMovementLine = { label: string; quantity: number };
+export type ReconMovementLine = {
+  label: string;
+  quantity: number;
+  era: StockQuantityEra;
+};
 
-/** Movement rows for the details sheet. Zero-qty lines are omitted. */
+function pushEraSplit(
+  lines: ReconMovementLine[],
+  label: string,
+  pre: number,
+  post: number,
+  sign: 1 | -1,
+  cutover: boolean,
+  fallback: number,
+) {
+  if (!cutover) {
+    if (fallback !== 0) lines.push({ label, quantity: sign * fallback, era: 'live' });
+    return;
+  }
+  if (pre !== 0) lines.push({ label: `${label} (before unit change)`, quantity: sign * pre, era: 'pre_cutover' });
+  if (post !== 0) lines.push({ label: `${label} (after unit change)`, quantity: sign * post, era: 'post_cutover' });
+}
+
+/** Movement rows for the details sheet. Zero-qty lines are omitted. Spanning cutover eras are separated. */
 export function reconNonZeroMovementLines(item: InventoryReconciliationItem): ReconMovementLine[] {
-  return [
-    { label: 'Opening stock', quantity: Number(item.opening_stock) },
-    { label: 'Received transfer', quantity: Number(item.transfer_in) },
-    { label: 'Sent transfer', quantity: -Number(item.transfer_out) },
-    { label: 'Sales', quantity: -Number(item.sale) },
-    { label: 'Return received', quantity: Number(item.return_in ?? 0) },
-    { label: 'Returned leftover', quantity: -Number(item.return_out) },
-    { label: 'Adjustments', quantity: Number(item.adjustment) },
-  ].filter((line) => line.quantity !== 0);
+  const cutover = Boolean(item.stock_unit_cutover_at);
+  const lines: ReconMovementLine[] = [];
+
+  pushEraSplit(
+    lines,
+    'Opening stock',
+    Number(item.opening_stock_pre ?? 0),
+    Number(item.opening_stock_post ?? 0),
+    1,
+    cutover,
+    Number(item.opening_stock),
+  );
+  pushEraSplit(
+    lines,
+    'Received transfer',
+    Number(item.transfer_in_pre ?? 0),
+    Number(item.transfer_in_post ?? 0),
+    1,
+    cutover,
+    Number(item.transfer_in),
+  );
+  pushEraSplit(
+    lines,
+    'Sent transfer',
+    Number(item.transfer_out_pre ?? 0),
+    Number(item.transfer_out_post ?? 0),
+    -1,
+    cutover,
+    Number(item.transfer_out),
+  );
+  pushEraSplit(
+    lines,
+    'Sales',
+    Number(item.sale_pre ?? 0),
+    Number(item.sale_post ?? 0),
+    -1,
+    cutover,
+    Number(item.sale),
+  );
+  pushEraSplit(
+    lines,
+    'Return received',
+    Number(item.return_in_pre ?? 0),
+    Number(item.return_in_post ?? 0),
+    1,
+    cutover,
+    Number(item.return_in ?? 0),
+  );
+  pushEraSplit(
+    lines,
+    'Returned leftover',
+    Number(item.return_out_pre ?? 0),
+    Number(item.return_out_post ?? 0),
+    -1,
+    cutover,
+    Number(item.return_out),
+  );
+
+  pushEraSplit(
+    lines,
+    'Adjustments',
+    Number(item.adjustment_pre ?? 0),
+    Number(item.adjustment_post ?? 0),
+    1,
+    cutover,
+    Number(item.adjustment),
+  );
+
+  const conversion = Number(item.unit_conversion ?? 0);
+  if (conversion !== 0) {
+    lines.push({ label: 'Unit conversion', quantity: conversion, era: 'unit_conversion' });
+  }
+
+  return lines;
+}
+
+/** Format a recon quantity with cutover-aware unit meaning. */
+export function formatReconEraQuantity(
+  quantity: number,
+  item: InventoryReconciliationItem,
+  era: StockQuantityEra = 'live',
+): string {
+  const abs = Math.abs(quantity);
+  const formatted = formatEraStockQuantity(abs, item.stock_unit_code, {
+    cutoverAt: item.stock_unit_cutover_at,
+    era: item.stock_unit_cutover_at && era === 'live' ? 'post_cutover' : era,
+  });
+  if (quantity > 0) return `+${formatted}`;
+  if (quantity < 0) return `−${formatted}`;
+  return formatted;
 }
 
 export function reconResolvedRowDetail(row: InventoryReconciliationResolvedDiscrepancy): {

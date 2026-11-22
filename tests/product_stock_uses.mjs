@@ -19,8 +19,11 @@ const migration = readFileSync(migrationFile, 'utf8');
   assert.doesNotMatch(code, /\binsert into\b/i, 'no data is added');
   // the only thing it does to an existing table is add a unique index that cannot reject existing rows
   assert.match(code, /create unique index if not exists product_variants_id_product_id_key\s+on public\.product_variants \(id, product_id\)/);
-  // later migrations may build on the table (Step 2 wires it into confirm_sale) but must not alter its shape
+  // later migrations may build on the table (Step 2 wires it into confirm_sale).
+  // Approach A Phase 2 intentionally widens quantity to numeric half-steps.
+  const ALLOW_SHAPE = new Set(['20261123120000_piece_half_step_stock_uses.sql']);
   for (const later of readdirSync('supabase/migrations').filter((f) => f > '20261023090000_product_stock_uses.sql')) {
+    if (ALLOW_SHAPE.has(later)) continue;
     const text = readFileSync(`supabase/migrations/${later}`, 'utf8').replace(/--[^\n]*/g, '');
     assert.doesNotMatch(text, /alter table public\.product_stock_uses|drop table public\.product_stock_uses|drop index[^;]*product_stock_uses/i, later);
   }
@@ -119,7 +122,7 @@ const addUse = (product, variant, ingredient, quantity) =>
     where table_schema='public' and table_name='product_stock_uses' order by ordinal_position`)).rows;
   const byName = Object.fromEntries(cols.map((c) => [c.column_name, c]));
   assert.deepEqual(Object.keys(byName), ['id', 'product_id', 'variant_id', 'ingredient_product_id', 'quantity', 'created_at', 'updated_at']);
-  assert.equal(byName.quantity.data_type, 'integer', 'whole numbers only');
+  assert.equal(byName.quantity.data_type, 'numeric', 'half-step recipe quantities (Approach A)');
   assert.equal(byName.quantity.is_nullable, 'NO');
   assert.equal(byName.variant_id.is_nullable, 'YES', 'variant is optional (products without variants)');
   for (const required of ['id', 'product_id', 'ingredient_product_id']) assert.equal(byName[required].is_nullable, 'NO');
@@ -151,20 +154,20 @@ const addUse = (product, variant, ingredient, quantity) =>
   console.log('accepted rows: ok');
 }
 
-// ---------------------------------------------------------------- 3. quantity must be a positive whole number
+// ---------------------------------------------------------------- 3. quantity must be a positive half-step (0.5–99)
 {
-  for (const bad of [0, -1, 100, 1000]) {
+  for (const bad of [0, -1, 0.3, 100, 1000, 1.25]) {
     await rejects(
       `insert into public.product_stock_uses(product_id,variant_id,ingredient_product_id,quantity) values ('${tapa}','${tapaOnly}','${rice}',${bad})`,
       /check|violates/i,
       `quantity ${bad}`,
     );
   }
-  await rejects(`insert into public.product_stock_uses(product_id,variant_id,ingredient_product_id,quantity) values ('${tapa}','${tapaOnly}','${rice}','1.5')`, /invalid input syntax for type integer/i, 'quantity 1.5 as text');
   await rejects(`insert into public.product_stock_uses(product_id,variant_id,ingredient_product_id,quantity) values ('${tapa}','${tapaOnly}','${rice}',null)`, /null value|not-null/i, 'null quantity');
   await rejects(`update public.product_stock_uses set quantity = 0 where product_id='${tapa}'`, /check|violates/i, 'update to 0');
-  // the boundaries are accepted
-  await addUse(tapa, tapaOnly, rice, 1);
+  // half-steps and boundaries are accepted for ordinary piece_stock ingredients
+  await addUse(tapa, tapaOnly, rice, 0.5);
+  await db.exec(`update public.product_stock_uses set quantity = 1.5 where product_id='${tapa}' and ingredient_product_id='${rice}'`);
   await db.exec(`update public.product_stock_uses set quantity = 99 where product_id='${tapa}' and ingredient_product_id='${rice}'`);
   await db.exec(`delete from public.product_stock_uses where product_id='${tapa}' and ingredient_product_id='${rice}'`);
   assert.equal(await count(), 7);
@@ -276,10 +279,9 @@ const addUse = (product, variant, ingredient, quantity) =>
   await db.exec(`insert into public.product_variants(product_id,name,default_price) values ('${curry}','Extra Large',100)`);
   await db.exec(`update public.product_variants set name='XL' where product_id='${curry}' and name='Extra Large'`);
   await assert.rejects(db.exec(`insert into public.product_variants(product_id,name,default_price) values ('${curry}','XL',1)`), /duplicate key|unique/i, 'the (product, name) rule still applies');
-  // confirm_sale: still exactly one function. (Step 2 later teaches it to read the table; that is tested in
-  // shared_inventory_confirm_sale.mjs.)
+  // confirm_sale: payment-method wrapper + implementation (half-step body covered in shared_inventory_confirm_sale.mjs).
   const def = (await db.query(`select pg_get_functiondef(p.oid) d from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='confirm_sale'`)).rows;
-  assert.equal(def.length, 1);
+  assert.equal(def.length, 2);
   // branch inventory and products are untouched by the new table
   const refs = (await db.query(`
     select conrelid::regclass::text t from pg_constraint

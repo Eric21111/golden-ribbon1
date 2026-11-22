@@ -39,13 +39,26 @@ import { useClientPagination } from '@/hooks/useClientPagination';
 import { useInitializeMainInventory, useInventory } from '@/hooks/useInventory';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import { formatLiveStock, isValidPieceQuantity, PIECE_QUANTITY_MAX_LENGTH, quantityBoxWidth } from '@/lib/format';
+import {
+  FRACTIONAL_STOCK_USES_ENABLED,
+  acceptsPieceOpsQuantityText,
+  formatHalfStepDisplay,
+  nudgePieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 
 const schema = z
   .object({
     items: z.array(
       z.object({
         product_id: z.string(),
-        quantity: z.string().regex(/^(\d{1,6})?$/, 'Enter a whole stock-unit quantity.'),
+        quantity: z
+          .string()
+          .regex(
+            FRACTIONAL_STOCK_USES_ENABLED ? /^(\d{1,6}(\.5)?)?$/ : /^(\d{1,6})?$/,
+            FRACTIONAL_STOCK_USES_ENABLED
+              ? 'Enter a whole or half-step stock-unit quantity.'
+              : 'Enter a whole stock-unit quantity.',
+          ),
       }),
     ),
     notes: z.string().max(1000).optional(),
@@ -454,16 +467,20 @@ export function InventorySetupScreen() {
                 control={control}
                 name={`items.${index}.quantity`}
                 render={({ field: quantity, fieldState }) => {
-                  const currentQty = Number.parseInt(quantity.value || '0', 10) || 0;
+                  const currentQty = Number(quantity.value || '0');
+                  const safeQty = Number.isFinite(currentQty) ? currentQty : 0;
                   const isFocused = focusedIndex === index;
-                  const atMin = currentQty <= 0;
-                  const step = (delta: number) => {
-                    const next = Math.min(999999, Math.max(0, currentQty + delta));
-                    quantity.onChange(String(next));
+                  const atMin = safeQty <= 0;
+                  const step = (direction: 1 | -1) => {
+                    quantity.onChange(
+                      formatHalfStepDisplay(
+                        nudgePieceOpsQuantity(safeQty, direction, item.product.stock_unit_code),
+                      ),
+                    );
                   };
                   return (
                     <View>
-                      <View style={[styles.card, currentQty > 0 && styles.cardSelected]}>
+                      <View style={[styles.card, safeQty > 0 && styles.cardSelected]}>
                         <View style={styles.cardTop}>
                           <CategoryIcon category={item.product.product_category} size={36} decorative />
                           <View style={styles.cardInfo}>
@@ -503,9 +520,11 @@ export function InventorySetupScreen() {
                               accessibilityLabel={`${initialized ? 'Add quantity' : 'Opening quantity'} for ${item.product.name}`}
                               value={quantity.value}
                               onChangeText={(value) => {
-                                if (value === '' || /^\d{0,6}$/.test(value)) quantity.onChange(value);
+                                if (acceptsPieceOpsQuantityText(value, item.product.stock_unit_code)) {
+                                  quantity.onChange(value);
+                                }
                               }}
-                              keyboardType="number-pad"
+                              keyboardType="decimal-pad"
                               placeholder="0"
                               placeholderTextColor={managerColors.subtext}
                               maxLength={PIECE_QUANTITY_MAX_LENGTH}

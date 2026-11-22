@@ -27,11 +27,16 @@ import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { getInventoryErrorMessage } from '@/lib/errors';
 import {
   QUANTITY_BOX_MAX_FONT_SCALE,
+  PIECE_QUANTITY_MAX_LENGTH,
   formatDate,
   formatSnapshottedQuantity,
   makeIdempotencyKey,
   quantityBoxWidth,
 } from '@/lib/format';
+import {
+  acceptsPieceOpsQuantityText,
+  isValidPieceOpsQuantity,
+} from '@/lib/halfStepQuantity';
 import type { CashierPendingTransfer, CashierPendingTransferItem } from '@/types/models';
 
 type LineItem = {
@@ -50,7 +55,9 @@ function lineStatusFor(
 ): DetailLineStatus {
   if (!reporting) return 'pending';
   const raw = receivedByItem[line.stock_transfer_item_id] ?? '';
-  if (!/^\d+$/.test(raw)) return 'pending';
+  if (!isValidPieceOpsQuantity(Number(raw), { allowZero: true, stockUnitCode: line.stock_unit_code })) {
+    return 'pending';
+  }
   const received = Number(raw);
   const sent = Number(line.quantity_sent);
   if (received === sent) return 'match';
@@ -146,8 +153,21 @@ export default function CashierIncomingShipments() {
       stock_transfer_item_id: line.stock_transfer_item_id,
       quantity_received: Number(receivedByItem[line.stock_transfer_item_id] ?? ''),
     }));
-    if (items.some((item) => !Number.isInteger(item.quantity_received) || item.quantity_received < 0)) {
-      alertNotice('Check quantities', 'Enter a whole PCS quantity of zero or greater for every line.', 'warning');
+    if (
+      items.some(
+        (item) =>
+          !isValidPieceOpsQuantity(item.quantity_received, {
+            allowZero: true,
+            stockUnitCode: transfer.items.find((line) => line.stock_transfer_item_id === item.stock_transfer_item_id)
+              ?.stock_unit_code,
+          }),
+      )
+    ) {
+      alertNotice(
+        'Check quantities',
+        'Enter a whole or half-step PCS quantity of zero or greater for every line.',
+        'warning',
+      );
       return;
     }
     if (
@@ -200,9 +220,10 @@ export default function CashierIncomingShipments() {
 
   function actionState(transfer: CashierPendingTransfer) {
     const reporting = reportingId === transfer.id;
-    const countsReady = transfer.items.every((line) =>
-      /^\d+$/.test(receivedByItem[line.stock_transfer_item_id] ?? ''),
-    );
+    const countsReady = transfer.items.every((line) => {
+      const raw = receivedByItem[line.stock_transfer_item_id] ?? '';
+      return isValidPieceOpsQuantity(Number(raw), { allowZero: true, stockUnitCode: line.stock_unit_code });
+    });
     const hasDifference = transfer.items.some(
       (line) => Number(receivedByItem[line.stock_transfer_item_id] ?? '') !== Number(line.quantity_sent),
     );
@@ -334,10 +355,10 @@ export default function CashierIncomingShipments() {
                       reporting ? (
                         <TextInput
                           accessibilityLabel={`Actual received quantity for ${row.name}`}
-                          keyboardType="number-pad"
+                          keyboardType="decimal-pad"
                           value={receivedByItem[row.line.stock_transfer_item_id] ?? ''}
                           onChangeText={(value) => {
-                            if (value === '' || /^\d{1,6}$/.test(value)) {
+                            if (acceptsPieceOpsQuantityText(value, row.line.stock_unit_code)) {
                               setReceivedByItem((current) => ({
                                 ...current,
                                 [row.line.stock_transfer_item_id]: value,
@@ -346,7 +367,7 @@ export default function CashierIncomingShipments() {
                           }}
                           placeholder="0"
                           placeholderTextColor={managerColors.subtext}
-                          maxLength={6}
+                          maxLength={PIECE_QUANTITY_MAX_LENGTH}
                           selectTextOnFocus
                           maxFontSizeMultiplier={QUANTITY_BOX_MAX_FONT_SCALE}
                           style={[
