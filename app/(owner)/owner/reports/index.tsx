@@ -66,7 +66,7 @@ export default function OwnerReportsHub() {
           <NavTile
             icon="swap-vertical-outline"
             accent="teal"
-            title="Stock correction"
+            title="Stock corrections"
             onPress={() => router.push('/owner/reports/stock-count-changes' as never)}
           />
         </ReportSection>

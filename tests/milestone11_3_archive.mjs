@@ -155,13 +155,17 @@ await db.exec(`
 
 assert.match(readFileSync('src/types/models.ts', 'utf8'), /DELETE ARCHIVED DATA/);
 assert.match(readFileSync('src/types/models.ts', 'utf8'), /ARCHIVE_EXPORT_FORMAT_VERSION = 2/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Export → Save Copy → Verify → Confirm Cleanup/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Related shifts \(kept\)/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Delete archived sales details/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Read notifications/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /backupSavedAcknowledged/);
-assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /I saved the backup files/);
-assert.doesNotMatch(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /Saved \$\{pack\.manifest\.package_name\}/);
+const archiveSource = ['DataArchiveScreen', 'OldSalesDetailsScreen', 'ReadNoticesScreen'].map((name) => readFileSync(`src/features/archive/${name}.tsx`, 'utf8')).join('\n');
+assert.match(archiveSource, /Export → Save Copy → Verify → Confirm Cleanup/);
+assert.match(archiveSource, /Related shifts \(kept\)/);
+assert.match(archiveSource, /Delete archived sales details/);
+assert.match(archiveSource, /Read notifications/);
+assert.match(archiveSource, /backupSavedAcknowledged/);
+assert.match(archiveSource, /I saved the backup files/);
+assert.doesNotMatch(archiveSource, /Saved \$\{pack\.manifest\.package_name\}/);
+// the hub opens the two tools; the steps are one at a time
+assert.match(readFileSync('src/features/archive/DataArchiveScreen.tsx', 'utf8'), /data-archive\/notifications[\s\S]*data-archive\/sales/);
+assert.match(readFileSync('src/features/archive/OldSalesDetailsScreen.tsx', 'utf8'), /canCleanup =\s+archive\?\.status === 'verified' && confirmation === ARCHIVE_CLEANUP_CONFIRMATION && !busy/, 'deleting still needs a verified archive and the typed phrase');
 assert.match(readFileSync('supabase/migrations/20260913140000_milestone_11_3_data_archive.sql', 'utf8'), /DELETE ARCHIVED DATA/);
 assert.match(
   readFileSync('supabase/migrations/20261117090000_archive_cleanup_sales_only.sql', 'utf8'),

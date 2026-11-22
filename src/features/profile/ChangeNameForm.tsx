@@ -91,6 +91,7 @@ export function ChangeNameForm({
         render={({ field, fieldState }) => (
           <FormField
             label="Full name"
+            required
             value={field.value}
             onBlur={field.onBlur}
             onChangeText={field.onChange}
@@ -149,7 +150,7 @@ export function ChangeNameForm({
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md },
+  form: { gap: 14, paddingBottom: 8 },
   actions: { flexDirection: 'row', gap: spacing.sm },
   action: { flex: 1 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },

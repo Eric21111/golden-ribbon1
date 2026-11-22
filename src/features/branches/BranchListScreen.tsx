@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
-import { BranchForm } from '@/features/branches/BranchForm';
+import { BranchForm, type BranchFormHandle } from '@/features/branches/BranchForm';
 import {
   BRANCH_FILTER_CHOICES,
   branchFilterEmptyMessage,
@@ -41,6 +41,9 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
   const query = useBranches();
   const createMutation = useCreateBranch();
   const updateMutation = useUpdateBranch(editBranch?.id ?? '');
+  const editForm = useRef<BranchFormHandle>(null);
+  // after a failed save the next close discards the changes (so the sheet can always be left)
+  const discardOnNextClose = useRef(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -68,17 +71,38 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
     );
   };
 
+  // saved when the sheet closes: the form only sends what changed and valid, and the sheet stays open if it could not be saved
   const submitEdit = (values: BranchFormValues) => {
-    if (!editBranch) return;
-    updateMutation.mutate(
-      {
-        ...values,
-        is_main_branch: editBranch.is_main_branch,
-        is_active: editBranch.is_main_branch ? true : values.is_active,
-        address: values.address?.trim() || null,
-      },
-      { onSuccess: () => setEditBranch(null) },
-    );
+    if (!editBranch) return Promise.resolve();
+    return updateMutation.mutateAsync({
+      ...values,
+      is_main_branch: editBranch.is_main_branch,
+      is_active: editBranch.is_main_branch ? true : values.is_active,
+      address: values.address?.trim() || null,
+    });
+  };
+
+  const openEdit = (branch: Branch) => {
+    updateMutation.reset();
+    discardOnNextClose.current = false;
+    setEditBranch(branch);
+  };
+
+  const closeEdit = async () => {
+    if (updateMutation.isPending) return;
+    if (discardOnNextClose.current) {
+      discardOnNextClose.current = false;
+      updateMutation.reset();
+      setEditBranch(null);
+      return;
+    }
+    const result = await editForm.current?.flush();
+    if (!result || result === 'unchanged' || result === 'saved') {
+      updateMutation.reset();
+      setEditBranch(null);
+    } else {
+      discardOnNextClose.current = true;
+    }
   };
 
   return (
@@ -119,7 +143,7 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
                       tone={item.is_active ? 'success' : 'neutral'}
                     />
                   }
-                  onPress={canEdit ? () => setEditBranch(item) : openBranchCatalog}
+                  onPress={canEdit ? () => openEdit(item) : openBranchCatalog}
                 />
               );
             }}
@@ -153,7 +177,8 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
       {canCreate ? (
         <BottomSheet visible={createOpen} title="Create branch" scroll onClose={() => setCreateOpen(false)}>
           <BranchForm
-            submitLabel="Create selling branch"
+            submitLabel="Create"
+            onCancel={() => setCreateOpen(false)}
             hideMainToggle
             loading={createMutation.isPending}
             error={createMutation.error ? getErrorMessage(createMutation.error) : undefined}
@@ -167,11 +192,13 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
           visible={editBranch != null}
           title="Edit branch"
           scroll
-          onClose={() => setEditBranch(null)}
+          onClose={() => void closeEdit()}
         >
           {editBranch ? (
             <BranchForm
               key={editBranch.id}
+              ref={editForm}
+              autoSave
               defaultValues={{
                 name: editBranch.name,
                 code: editBranch.code,
@@ -182,7 +209,6 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
               }}
               hideMainToggle
               protectMainBranch={editBranch.is_main_branch}
-              submitLabel="Save changes"
               loading={updateMutation.isPending}
               error={updateMutation.error ? getErrorMessage(updateMutation.error) : undefined}
               onSubmit={submitEdit}

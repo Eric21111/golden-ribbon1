@@ -29,7 +29,8 @@ const branches = [
   const { CreateEmployeeForm } = loadTs('src/features/employees/CreateEmployeeForm.tsx', stubs);
   const html = renderToStaticMarkup(React.createElement(CreateEmployeeForm, { branches, onSubmit() {}, onCancel() {} }));
   const text = flat(html);
-  assert.match(text, /ACCOUNT\|Full name\|Email\|PIN\|Confirm PIN\|Six digits\.\|ACCESS\|Role\|Manager\|Cashier\|Branch\|SM 1\|SM 2\|Active\|Inactive employees cannot use the app\.\|Cancel\|Create\|$/, 'ACCOUNT then ACCESS, the cashier\'s branches (not Main), Cancel | Create');
+  assert.match(text, /^\|Full name\| \*\|Email\| \*\|PIN\| \*\|Confirm PIN\| \*\|Role\| \*\|Manager\|Cashier\|Branch\| \*\|SM 1\|SM 2\|Active\|Inactive employees cannot use the app\.\|Cancel\|Create\|$/, 'no section headings; no hint under the PIN; Active in its card; Cancel | Create');
+  assert.doesNotMatch(text, /ACCOUNT|ACCESS/);
   assert.doesNotMatch(text, /Jane Doe|name@example\.com|Never stored|never stored|app database|Full Name|Temporary Password|Assigned Branch|Active employee|protected app features|Create employee/, 'no placeholders that repeat the labels, no jargon, no Title Case, no long button');
   assert.doesNotMatch(html, /placeholder="/, 'no placeholders at all');
   assert.match(html, /data-variant="secondary"[^>]*>Cancel</, 'Cancel is the light one, on the left');
@@ -45,10 +46,10 @@ const branches = [
   const employee = { id: 'e', full_name: 'Cashier 1', email: 'c1@x.com', role: 'cashier', branch_id: 'sm1', is_active: true };
   const html = renderToStaticMarkup(React.createElement(EditEmployeeForm, { employee, branches, onSubmit() {}, onResetPassword() {}, onToggleActive() {} }));
   const text = flat(html);
-  assert.match(text, /Email\|c1@x\.com\|Full name\|Role\|Manager\|Cashier\|Branch\|SM 1\|SM 2\|Active\. Cannot be deactivated while there is an open shift\.\|Reset PIN\|Save\|Deactivate\|$/, 'Reset PIN | Save side by side, then Deactivate');
-  assert.doesNotMatch(text, /Save employee|Assigned Branch|Full Name|Status:|Jane Doe/);
-  assert.match(html, /data-variant="danger"[^>]*>Deactivate</, 'Deactivate stays the red one');
-  assert.match(html, /data-variant="secondary"[^>]*>Reset PIN</);
+  assert.match(text, /Email\|c1@x\.com\|Full name\| \*\|Role\| \*\|Manager\|Cashier\|Branch\| \*\|SM 1\|SM 2\|Active\|Cannot be deactivated while there is an open shift\.\|Reset PIN\|Set a new PIN for this employee\|Deactivate\|They lose access to the app\|$/, 'status, fields, the Active card, then Reset PIN and Deactivate as rows');
+  assert.doesNotMatch(text, /Save employee|Assigned Branch|Full Name|Status:|Jane Doe|Saves when you close/);
+  assert.doesNotMatch(html, />Save</, 'no Save button: the changes are saved when the sheet closes');
+  assert.match(html, /aria-label="Deactivate"/, 'Deactivate is a row (red), with a confirm in the hub');
   console.log('2. edit: ok');
 }
 
@@ -57,7 +58,8 @@ const branches = [
   const { ResetPasswordForm } = loadTs('src/features/employees/ResetPasswordForm.tsx', stubs);
   const html = renderToStaticMarkup(React.createElement(ResetPasswordForm, { employeeName: 'Cashier 1', employeeEmail: 'c1@x.com', onSubmit() {} }));
   const text = flat(html);
-  assert.match(text, /Cashier 1 · c1@x\.com\|This replaces the employee&#x27;s PIN\.\|New PIN\|Confirm PIN\|Reset PIN\|$/);
+  assert.match(text, /^\|Cashier 1\|c1@x\.com\|New PIN\| \*\|Confirm PIN\| \*\|Reset PIN\|$/, 'name, email, required marks, one button without a Cancel handler');
+  assert.match(flat(renderToStaticMarkup(React.createElement(ResetPasswordForm, { employeeName: 'Cashier 1', employeeEmail: 'c1@x.com', onSubmit() {}, onCancel() {} }))), /Cancel\|Reset PIN\|$/, 'Cancel | Reset PIN like Change PIN');
   assert.doesNotMatch(text, /cannot be viewed|New Temporary Password|Confirm Temporary Password/);
   assert.doesNotMatch(html, /placeholder="/);
   console.log('3. reset: ok');
@@ -73,7 +75,8 @@ const branches = [
   const hub = read('src/features/employees/EmployeeHub.tsx');
   assert.ok(hub.includes('onCancel={() => setCreateOpen(false)}'), 'Cancel closes the sheet');
   const edit = read('src/features/employees/EditEmployeeForm.tsx');
-  assert.ok(edit.includes('onPress={handleSubmit(onSubmit)}') && edit.includes('onPress={onToggleActive}') && edit.includes('onPress={onResetPassword}'), 'the same three actions');
+  assert.ok(edit.includes('onPress={onToggleActive}') && edit.includes('onPress={onResetPassword}') && edit.includes('await onSubmit(values)'), 'Reset PIN and Deactivate are still there; the save runs as the sheet closes');
+  assert.ok(hub.includes('onClose={() => void closeEdit()}') && hub.includes('mutateAsync') && hub.includes('discardOnNextClose'), 'closing the Edit sheet saves; after a failure the next close discards');
   console.log('4. behaviour: ok');
 }
 

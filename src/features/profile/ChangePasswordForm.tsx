@@ -14,6 +14,7 @@ import {
   newPinStepSchema,
   type ChangePasswordValues,
 } from '@/features/profile/changePasswordSchema';
+import { StepIndicator } from '@/features/profile/StepIndicator';
 import { getChangePasswordErrorMessage } from '@/lib/errors';
 import { changeOwnPassword, verifyOwnPassword } from '@/services/accountService';
 
@@ -156,7 +157,7 @@ export function ChangePasswordForm({
 
   return (
     <View style={styles.form}>
-      <PinStepIndicator step={step} />
+      <StepIndicator step={step} labels={{ 1: 'Current PIN', 2: 'New PIN' }} />
 
       {step === 1 ? (
         <Controller
@@ -266,30 +267,6 @@ export function ChangePasswordForm({
   );
 }
 
-function PinStepIndicator({ step }: { step: 1 | 2 }) {
-  const labels = { 1: 'Current PIN', 2: 'New PIN' } as const;
-  const steps = [1, 2] as const;
-  return (
-    <View style={styles.indicatorWrap}>
-      <View style={styles.indicatorRow}>
-        {steps.map((id, index) => (
-          <View key={id} style={styles.indicatorSegment}>
-            <View style={[styles.indicatorDot, id <= step && styles.indicatorDotActive]}>
-              <Text style={[styles.indicatorDotLabel, id <= step && styles.indicatorDotLabelActive]}>
-                {index + 1}
-              </Text>
-            </View>
-            {index < steps.length - 1 ? (
-              <View style={[styles.indicatorLine, id < step && styles.indicatorLineActive]} />
-            ) : null}
-          </View>
-        ))}
-      </View>
-      <Text style={styles.indicatorLabel}>{labels[step]}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   form: { gap: spacing.md, width: '100%' },
   fields: { gap: spacing.md, width: '100%' },
@@ -297,23 +274,4 @@ const styles = StyleSheet.create({
   action: { flex: 1, minWidth: 0 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   success: { color: colors.success, fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  indicatorWrap: { gap: 8, alignItems: 'center' },
-  indicatorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  indicatorSegment: { flexDirection: 'row', alignItems: 'center' },
-  indicatorDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: managerColors.cardSurface,
-    borderWidth: 1,
-    borderColor: managerColors.cardBorder,
-  },
-  indicatorDotActive: { backgroundColor: managerColors.royalBlue, borderColor: managerColors.royalBlue },
-  indicatorDotLabel: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 12 },
-  indicatorDotLabelActive: { color: '#FFFFFF' },
-  indicatorLine: { width: 48, height: 2, backgroundColor: managerColors.cardBorder, marginHorizontal: 4 },
-  indicatorLineActive: { backgroundColor: managerColors.royalBlue },
-  indicatorLabel: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });

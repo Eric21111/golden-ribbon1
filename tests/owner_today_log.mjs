@@ -7,6 +7,7 @@ import { closeShiftExact } from './_close_shift_helper.mjs';
 import {
   activityDetail,
   describeActivity,
+  describeActivityCompact,
   formatManilaTime,
   sortActivitiesNewestFirst,
 } from '../src/features/reports/todayLog.ts';
@@ -42,12 +43,33 @@ import {
     actor_id: '1', actor_name: 'Ana', actor_role: 'cashier', branch_id: '2', branch_name: 'SM1', detail: {},
   });
   assert.deepEqual(described, { time: '8:30 AM', action: 'Started shift', employee: 'Ana · Cashier', branch: 'SM1', detail: null });
+
+  // The short version on the dashboard: name only, "from/to · count · reference", the discrepancy as a flag
+  const received = {
+    id: 'y', action: 'transfer_received', occurred_at: '2026-11-08T08:51:00Z', actor_id: '1', actor_name: 'SM2-Cashier Angie',
+    actor_role: 'cashier', branch_id: '2', branch_name: 'SM2',
+    detail: { reference: 'TR-000089', counterpart_branch_name: 'Main Branch', item_count: 34, with_issue: true },
+  };
+  assert.deepEqual(describeActivityCompact(received), {
+    time: '4:51 PM', action: 'Received stock', branch: 'SM2', actor: 'SM2-Cashier Angie',
+    detail: 'from Main Branch · 34 items · TR-000089', discrepancy: true,
+  });
+  assert.equal(activityDetail(received), 'TR-000089 · from Main Branch · 34 items · with discrepancy', 'the full line is unchanged');
+  const opening = { id: 'o', action: 'opening_stock_set', occurred_at: '2026-11-08T03:12:00Z', actor_id: '1', actor_name: 'Manager', actor_role: 'manager', branch_id: '1', branch_name: 'Main Branch', detail: { product_count: 35, added_count: 35 } };
+  assert.equal(describeActivityCompact(opening).detail, '35 products', 'no "added to existing stock" in the short line');
+  assert.equal(activityDetail(opening), '35 products · added to existing stock', 'but the full line keeps it');
+  assert.equal(describeActivityCompact({ ...received, detail: {} }).discrepancy, false);
+  const autoClose = { id: 'c', action: 'shift_ended', occurred_at: '2026-11-08T13:00:00Z', actor_id: '1', actor_name: 'Ana', actor_role: 'cashier', branch_id: '2', branch_name: 'SM1', detail: { possibly_automatic: true } };
+  assert.equal(describeActivityCompact(autoClose).actor, 'Shift of Ana');
+  assert.equal(describeActivityCompact(autoClose).action, 'Shift closed');
+  assert.equal(describeActivityCompact(autoClose).detail, 'Automatic 9 PM close or cashier (not recorded)', 'the disclosure is kept');
 }
 
 // --- Source wiring ----------------------------------------------------------------------------
 {
   const dashboard = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
-  assert.match(dashboard, /<Section title="Today Log">/);
+  assert.match(dashboard, /<Section\s+title="Today Log"/);
+  assert.match(dashboard, /<TodayLogList activities=\{visibleLog\} \/>/, 'one grouped card of compact rows');
   assert.match(dashboard, /useOwnerTodayActivityLog\(\)/);
   assert.match(dashboard, /Loading today's activity…/);
   assert.match(dashboard, /No employee activity yet today\./);

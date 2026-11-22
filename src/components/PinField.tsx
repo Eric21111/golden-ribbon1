@@ -30,6 +30,8 @@ type Props = {
   required?: boolean;
   autoFocus?: boolean;
   appearance?: 'default' | 'dark';
+  /** Forms that are not laid out around reserved error space: with no error or hint there is no empty strip under the boxes. */
+  compact?: boolean;
 };
 
 export function PinField({
@@ -46,6 +48,7 @@ export function PinField({
   required = false,
   autoFocus = false,
   appearance = 'default',
+  compact = false,
 }: Props) {
   const isDark = appearance === 'dark';
   const refs = useRef<Array<TextInput | null>>([]);
@@ -147,7 +150,7 @@ export function PinField({
           const isFocused = focused === index;
           const hasError = Boolean(error);
           return (
-            <View key={index} style={styles.boxSlot}>
+            <View key={index} style={[styles.boxSlot, compact && styles.boxSlotCompact]}>
               <TextInput
                 ref={(el) => {
                   refs.current[index] = el;
@@ -194,7 +197,7 @@ export function PinField({
           );
         })}
       </View>
-      <View style={styles.meta}>{meta}</View>
+      {compact && !error && !hint && !allowPassword ? null : <View style={compact ? styles.metaCompact : styles.meta}>{meta}</View>}
     </View>
   );
 }
@@ -242,6 +245,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     aspectRatio: 1,
   },
+  boxSlotCompact: { aspectRatio: undefined, height: 48 },
   box: {
     flex: 1,
     width: '100%',
@@ -268,6 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
+  metaCompact: { justifyContent: 'center', width: '100%' },
   metaText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,

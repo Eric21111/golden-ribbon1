@@ -1,19 +1,19 @@
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { router } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
 import { Screen } from '@/components/Screen';
 import { HamburgerButton } from '@/components/dashboard/HamburgerButton';
-import { ListRowCard } from '@/components/dashboard/ListRowCard';
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
 import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
 import { StatTile } from '@/components/dashboard/StatTile';
-import { managerColors, type StatChipColor } from '@/components/dashboard/theme';
-import type { GlyphName } from '@/components/GlyphIcon';
+import { managerColors } from '@/components/dashboard/theme';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { describeActivity, sortActivitiesNewestFirst } from '@/features/reports/todayLog';
+import { sortActivitiesNewestFirst } from '@/features/reports/todayLog';
+import { TodayLogList } from '@/features/reports/TodayLogList';
 import { buildTodayQuickview, todayQuickviewStatus } from '@/features/reports/todayQuickview';
 import { useArchiveStatus, useDismissArchiveReminder } from '@/hooks/useArchive';
 import { useManilaDayRefresh } from '@/hooks/useManilaDayRefresh';
@@ -24,12 +24,18 @@ import {
 } from '@/hooks/useSales';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
-import type { OwnerActivityAction } from '@/types/models';
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      {action ? (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {action}
+        </View>
+      ) : (
+        <Text style={styles.sectionTitle}>{title}</Text>
+      )}
       {children}
     </View>
   );
@@ -45,16 +51,9 @@ function chunkPairs<T>(items: readonly T[]): T[][] {
   return rows;
 }
 
-const ACTIVITY_ICONS: Record<OwnerActivityAction, { icon: GlyphName; color: StatChipColor }> = {
-  opening_stock_set: { icon: 'layers-outline', color: 'gold' },
-  transfer_sent: { icon: 'car-outline', color: 'blue' },
-  shift_started: { icon: 'play-circle-outline', color: 'green' },
-  transfer_received: { icon: 'download-outline', color: 'teal' },
-  shift_ended: { icon: 'stop-circle-outline', color: 'gray' },
-  return_sent: { icon: 'return-up-back-outline', color: 'orange' },
-  return_received: { icon: 'archive-outline', color: 'lilac' },
-};
-const TODAY_LOG_PREVIEW = 8;
+const TODAY_LOG_PREVIEW = 5;
+
+const issueCount = (count: number) => `${count} issue${count === 1 ? '' : 's'}`;
 
 function InlineError({
   title,
@@ -86,6 +85,14 @@ export default function OwnerDashboard() {
   const [showFullLog, setShowFullLog] = useState(false);
 
   const metrics = metricsQuery.data;
+  const transferIssues = metrics?.transfer_discrepancies_count ?? 0;
+  const returnIssues = metrics?.return_discrepancies_count ?? 0;
+  const discrepancySplit =
+    transferIssues > 0 && returnIssues > 0
+      ? `${transferIssues} transfer · ${returnIssues} return`
+      : transferIssues > 0
+        ? 'From transfers'
+        : 'From returns';
   const archive = archiveQuery.data;
   const quickview = useMemo(
     () => buildTodayQuickview(branchSalesQuery.data?.branches),
@@ -158,28 +165,26 @@ export default function OwnerDashboard() {
           />
         ) : (
           <View style={styles.content}>
-            {metrics && (metrics.transfer_discrepancies_count > 0 || metrics.return_discrepancies_count > 0) ? (
-              <View style={styles.alertCard}>
-                <Text style={styles.alertTitle}>Quantity discrepancy reported</Text>
-                <Text style={styles.alertBody}>
-                  {[
-                    metrics.transfer_discrepancies_count > 0
-                      ? `${metrics.transfer_discrepancies_count} transfer issue${metrics.transfer_discrepancies_count === 1 ? '' : 's'}`
-                      : null,
-                    metrics.return_discrepancies_count > 0
-                      ? `${metrics.return_discrepancies_count} return issue${metrics.return_discrepancies_count === 1 ? '' : 's'}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  . Transfer issues credit counted PCS only; return issues do not restock Main.
-                </Text>
-                <ManagerActionButton
-                  label="Review discrepancies"
-                  icon="alert-circle-outline"
-                  onPress={() => router.push('/owner/reports/discrepancies' as never)}
-                />
-              </View>
+            {transferIssues + returnIssues > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Quantity discrepancies, ${issueCount(transferIssues + returnIssues)}, ${discrepancySplit}`}
+                accessibilityHint="Opens the discrepancies report"
+                onPress={() => router.push('/owner/reports/discrepancies' as never)}
+                style={({ pressed }) => [styles.alertCard, pressed && styles.alertPressed]}
+              >
+                <Ionicons name="alert-circle-outline" size={26} color="#B91C1C" />
+                <View style={styles.alertText}>
+                  <Text style={styles.alertTitle}>Quantity discrepancies</Text>
+                  <View style={styles.alertSubRow}>
+                    <Text style={styles.alertBody}>{discrepancySplit}</Text>
+                    <View style={styles.alertPill}>
+                      <Text style={styles.alertPillLabel}>{issueCount(transferIssues + returnIssues)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#B91C1C" />
+              </Pressable>
             ) : null}
 
             {archive?.reminder_visible ? (
@@ -244,7 +249,22 @@ export default function OwnerDashboard() {
               )}
             </Section>
 
-            <Section title="Today Log">
+            <Section
+              title="Today Log"
+              action={
+                todayLogStatus === 'ready' && todayLog.length > TODAY_LOG_PREVIEW ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showFullLog ? 'Show fewer activities' : `Show all ${todayLog.length} activities`}
+                    hitSlop={10}
+                    onPress={() => setShowFullLog((value) => !value)}
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <Text style={styles.sectionLink}>{showFullLog ? 'Show fewer' : `Show all ${todayLog.length}`}</Text>
+                  </Pressable>
+                ) : null
+              }
+            >
               {todayLogStatus === 'loading' ? (
                 <LoadingState label="Loading today's activity…" />
               ) : todayLogStatus === 'error' ? (
@@ -260,29 +280,7 @@ export default function OwnerDashboard() {
                 </View>
               ) : (
                 <>
-                  {visibleLog.map((activity) => {
-                    const row = describeActivity(activity);
-                    const look = ACTIVITY_ICONS[activity.action] ?? { icon: 'time-outline', color: 'gray' };
-                    return (
-                      <ListRowCard
-                        key={activity.id}
-                        icon={look.icon}
-                        iconColor={look.color}
-                        title={row.action}
-                        subtitle={row.employee}
-                        meta={row.detail ? `${row.branch} · ${row.detail}` : row.branch}
-                        trailing={<Text style={styles.logTime}>{row.time}</Text>}
-                      />
-                    );
-                  })}
-                  {todayLog.length > TODAY_LOG_PREVIEW ? (
-                    <ManagerActionButton
-                      label={showFullLog ? 'Show fewer' : `Show all ${todayLog.length}`}
-                      icon={showFullLog ? 'chevron-up-outline' : 'chevron-down-outline'}
-                      variant="secondary"
-                      onPress={() => setShowFullLog((value) => !value)}
-                    />
-                  ) : null}
+                  <TodayLogList activities={visibleLog} />
                   {todayLogQuery.data?.truncated ? (
                     <Text style={styles.quiet}>
                       Showing the latest {todayLog.length} of {todayLogQuery.data.total_count} activities.
@@ -340,18 +338,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14 },
-  logTime: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  sectionLink: { color: managerColors.royalBlue, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  pressed: { opacity: 0.6 },
+  // the discrepancy alert: the whole card is the tap target (icon, title + split + count pill, chevron), no button
   alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',
+    borderWidth: 1,
     borderLeftWidth: 3,
     borderLeftColor: '#B91C1C',
     borderRadius: 16,
-    padding: spacing.md,
-    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  alertTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 17 },
-  alertBody: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
+  alertPressed: { opacity: 0.85 },
+  alertText: { flex: 1, minWidth: 0, gap: 4 },
+  alertTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 16, lineHeight: 21 },
+  alertSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  alertBody: { flex: 1, minWidth: 0, color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  alertPill: { flexShrink: 0, backgroundColor: '#FBDBD8', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  alertPillLabel: { color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 12.5 },
   reminderCard: {
     backgroundColor: '#FFFBEF',
     borderColor: '#F1DFA8',

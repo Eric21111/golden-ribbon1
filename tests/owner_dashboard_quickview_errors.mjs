@@ -158,9 +158,10 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;|&apos;/g, "
 const quickviewSlice = (t) => t.slice(t.indexOf('Today Quickview'), t.indexOf('Today Log'));
 const assertUnrelatedSections = (t) => {
   assert.match(t, /Hi, Test Owner/);
-  assert.match(t, /Quantity discrepancy reported/);
-  assert.match(t, /2 transfer issues · 1 return issue/);
-  assert.match(t, /\[button:Review discrepancies\]/);
+  assert.match(t, /Quantity discrepancies/);
+  assert.match(t, /2 transfer · 1 return/, 'the split by kind');
+  assert.match(t, /3 issues/, 'the total, in the pill');
+  assert.doesNotMatch(t, /\[button:Review|Review issues|Review discrepancies|Quantity discrepancy reported|do not restock/, 'no button and no repeated wording or long note');
   assert.match(t, /Data Archive Due/);
   assert.match(t, /\[button:Export &amp; review\]|\[button:Export & review\]/);
   assert.doesNotMatch(t, /TODAY'S PRODUCT PERFORMANCE/);
@@ -355,31 +356,55 @@ sales.state.metrics = query({ data: metricsData });
     }),
     activity('e', 'shift_ended', '2026-11-08T09:55:00Z', 'Cara One', 'cashier', 'SM1'),
   ];
+  // Each row reads: action, time, "branch · name" (the name only, no role), then "from/to · count · reference" and a
+  // Discrepancy flag when there is one. Rows are [action, time, who, detail, flag].
+  const assertRows = (log, expected) => {
+    let cursor = 0;
+    for (const [action, time, who, detail, flag] of expected) {
+      const at = log.indexOf(action, cursor);
+      assert.ok(at >= cursor, `${action} appears after the previous (newer) row`);
+      const wanted = [action, time, who, detail, flag].filter(Boolean).join(' ');
+      const row = log.slice(at, at + wanted.length + 10).replace(/\s+/g, ' ');
+      assert.ok(row.startsWith(wanted), `${action}: expected "${wanted}" but got "${row}"`);
+      cursor = at + action.length;
+    }
+  };
   todayLogHook.state.log = query({ data: logData(rows) });
   {
     const t = text(render());
     assertUnrelatedSections(t);
     const log = logSlice(t);
-    const expected = [
-      ['Received returned stock', 'Mara Main · Manager', 'Main · RT-000001 · from SM1', '6:45 PM'],
-      ['Returned stock', 'Cara One · Cashier', 'SM1 · RT-000001 · to Main', '6:00 PM'],
-      ['Ended shift', 'Cara One · Cashier', 'SM1', '5:55 PM'],
-      ['Received stock', 'Cara One · Cashier', 'SM1 · TR-000001 · from Main · 3 items · with discrepancy', '9:30 AM'],
-      ['Started shift', 'Cara One · Cashier', 'SM1', '9:00 AM'],
-      ['Sent stock out for delivery', 'Mara Main · Manager', 'Main · TR-000001 · to SM1 · 3 items', '8:15 AM'],
-      ['Set opening stock', 'Mara Main · Manager', 'Main · 2 products', '6:30 AM'],
-    ];
-    let cursor = 0;
-    for (const [action, employee, meta, time] of expected) {
-      const at = log.indexOf(action, cursor);
-      assert.ok(at >= cursor, `${action} appears after the previous (newer) row`);
-      const segment = log.slice(at, at + action.length + employee.length + meta.length + time.length + 10);
-      assert.ok(segment.includes(employee), `${action}: employee shown`);
-      assert.ok(segment.includes(meta), `${action}: branch/detail shown (${segment})`);
-      assert.ok(segment.includes(time), `${action}: Manila time shown (${segment})`);
-      cursor = at + action.length;
-    }
+    // 7 activities, the 5 newest show (newest first); the two oldest are behind "Show all 7"
+    assertRows(log, [
+      ['Received returned stock', '6:45 PM', 'Main · Mara Main', 'from SM1 · RT-000001'],
+      ['Returned stock', '6:00 PM', 'SM1 · Cara One', 'to Main · RT-000001'],
+      ['Ended shift', '5:55 PM', 'SM1 · Cara One'],
+      ['Received stock', '9:30 AM', 'SM1 · Cara One', 'from Main · 3 items · TR-000001', 'Discrepancy'],
+      ['Started shift', '9:00 AM', 'SM1 · Cara One'],
+    ]);
+    assert.doesNotMatch(log, /Manager|Cashier/, 'no role label: the name is enough');
+    assert.doesNotMatch(log, /Sent stock out for delivery|Set opening stock/, 'the two oldest wait behind the toggle');
+    assert.match(log, /Show all 7/);
+  }
+  // the two that were hidden, shown when they are the whole log
+  todayLogHook.state.log = query({ data: logData(rows.filter((r) => r.id === 'a' || r.id === 'b')) });
+  {
+    const log = logSlice(text(render()));
+    assertRows(log, [
+      ['Sent stock out for delivery', '8:15 AM', 'Main · Mara Main', 'to SM1 · 3 items · TR-000001'],
+      ['Set opening stock', '6:30 AM', 'Main · Mara Main', '2 products'],
+    ]);
     assert.doesNotMatch(log, /Show all|Show fewer|Showing the latest/, 'no toggle or note for a short log');
+    assert.doesNotMatch(log, /Discrepancy/, 'the flag only shows for a discrepancy');
+  }
+  // the opening-stock wording that is long on the full line stays short here
+  todayLogHook.state.log = query({
+    data: logData([activity('z', 'opening_stock_set', '2026-11-08T03:00:00Z', 'Mara Main', 'manager', 'Main', { product_count: 35, added_count: 35 })]),
+  });
+  {
+    const log = logSlice(text(render()));
+    assert.match(log, /35 products/);
+    assert.doesNotMatch(log, /added to existing stock/);
   }
 
   const many = Array.from({ length: 10 }, (_, i) =>
@@ -388,13 +413,35 @@ sales.state.metrics = query({ data: metricsData });
   todayLogHook.state.log = query({ data: logData(many, { total_count: 650, truncated: true }) });
   {
     const log = logSlice(text(render()));
-    assert.equal((log.match(/Started shift/g) ?? []).length, 8, 'preview shows the 8 newest');
+    assert.equal((log.match(/Started shift/g) ?? []).length, 5, 'preview shows the 5 newest');
     assert.match(log, /Cashier 9 /);
-    assert.doesNotMatch(log, /Cashier 0 |Cashier 1 /, 'oldest rows hidden behind the toggle');
-    assert.match(log, /\[button:Show all 10\]/);
+    assert.match(log, /Cashier 5 /);
+    assert.doesNotMatch(log, /Cashier 0 |Cashier 1 |Cashier 4 /, 'oldest rows hidden behind the toggle');
+    assert.match(log, /Show all 10/, 'the toggle is a link in the section header');
+    assert.doesNotMatch(log, /\[button:Show/, 'not a full-width button any more');
     assert.match(log, /Showing the latest 10 of 650 activities\./);
   }
   todayLogHook.state.log = query({ data: logData([]) });
+}
+
+// 10. The discrepancy alert: the whole card is the tap target (no button); the line under the title says where the issues come from.
+{
+  const source = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
+  assert.match(source, /accessibilityRole="button"[\s\S]{0,200}accessibilityHint="Opens the discrepancies report"[\s\S]{0,120}router\.push\('\/owner\/reports\/discrepancies' as never\)/, 'the card opens the report');
+  assert.match(source, /name="chevron-forward"/, 'with a chevron');
+  const only = (transfer_discrepancies_count, return_discrepancies_count) => {
+    sales.state.metrics = query({ data: { ...metricsData, transfer_discrepancies_count, return_discrepancies_count } });
+    return text(render());
+  };
+  let t = only(0, 8);
+  assert.match(t, /Quantity discrepancies From returns 8 issues/);
+  t = only(1, 0);
+  assert.match(t, /Quantity discrepancies From transfers 1 issue(?!s)/);
+  t = only(2, 6);
+  assert.match(t, /Quantity discrepancies 2 transfer · 6 return 8 issues/);
+  t = only(0, 0);
+  assert.doesNotMatch(t, /Quantity discrepancies/, 'nothing to flag, no alert');
+  sales.state.metrics = query({ data: metricsData });
 }
 
 assert.ok(routing.pushed.length === 0, 'rendering does not navigate');

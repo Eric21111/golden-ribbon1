@@ -30,7 +30,8 @@ function OwnerStack() {
         <Stack.Screen name="owner/reports/product-sales/[branchId]" />
         <Stack.Screen name="owner/reports/void-logs/index" />
         <Stack.Screen name="owner/reports/void-logs/[branchId]" />
-        <Stack.Screen name="owner/reports/stock-count-changes" />
+        <Stack.Screen name="owner/reports/stock-count-changes/index" />
+        <Stack.Screen name="owner/reports/stock-count-changes/[branchId]" />
         <Stack.Screen name="owner/reports/stock-corrections/index" />
         <Stack.Screen name="owner/reports/stock-corrections/[branchId]" />
         <Stack.Screen name="owner/reports/branch-performance/index" />
@@ -43,7 +44,9 @@ function OwnerStack() {
         <Stack.Screen name="owner/inventory-by-branch" />
         <Stack.Screen name="owner/employees/index" />
         <Stack.Screen name="owner/branches/index" />
-        <Stack.Screen name="owner/data-archive" />
+        <Stack.Screen name="owner/data-archive/index" />
+        <Stack.Screen name="owner/data-archive/notifications" />
+        <Stack.Screen name="owner/data-archive/sales" />
         <Stack.Screen name="owner/profile" />
         <Stack.Screen name="owner/change-password" />
       </Stack>

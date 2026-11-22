@@ -27,8 +27,8 @@ const ROLE_OPTIONS = [
 ];
 
 /**
- * Two short sections, ACCOUNT (who) and ACCESS (what they can do): no explanation paragraphs, no placeholders that repeat the labels,
- * and Cancel | Create side by side like the other sheets.
+ * Same look as Edit employee: fields, Role and Branch choices and the Active card with one even gap, no section headings, no
+ * placeholders that repeat the labels, and Cancel | Create side by side. (Create keeps its button: it makes a new account.)
  */
 export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCancel }: CreateEmployeeFormProps) {
   const { control, handleSubmit, formState, watch, setValue } = useForm<CreateEmployeeValues>({
@@ -56,13 +56,13 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
   return (
     <View style={styles.form}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>ACCOUNT</Text>
         <Controller
           control={control}
           name="full_name"
           render={({ field, fieldState }) => (
             <FormField
               label="Full name"
+              required
               autoCapitalize="words"
               value={field.value}
               onBlur={field.onBlur}
@@ -81,6 +81,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           render={({ field, fieldState }) => (
             <FormField
               label="Email"
+              required
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
@@ -99,19 +100,17 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           control={control}
           name="password"
           render={({ field, fieldState }) => (
-            <PinField label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+            <PinField label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
           )}
         />
         <Controller control={control} name="confirm_password" render={({field, fieldState}) => (
-          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
         )} />
-        {formState.errors.password?.message ? null : <Text style={styles.hint}>Six digits.</Text>}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>ACCESS</Text>
         <View style={styles.group}>
-          <Text style={styles.label}>Role</Text>
+          <Text style={styles.label}>Role<Text style={styles.required}> *</Text></Text>
           <Controller
             control={control}
             name="role"
@@ -130,33 +129,35 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           />
         </View>
         <View style={styles.group}>
-          <Text style={styles.label}>Branch</Text>
+          <Text style={styles.label}>Branch<Text style={styles.required}> *</Text></Text>
           <Controller
             control={control}
             name="branch_id"
             render={({ field, fieldState }) => (
               <>
-                <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} />
+                <BranchSelector branches={assignableBranches} value={field.value} onChange={field.onChange} variant="card" />
                 {fieldState.error?.message ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
               </>
             )}
           />
         </View>
-        <Controller
-          control={control}
-          name="is_active"
-          render={({ field }) => (
-            <SwitchField
-              label="Active"
-              description="Inactive employees cannot use the app."
-              value={field.value}
-              onValueChange={field.onChange}
-              labelStyle={styles.fieldLabel}
-              descriptionStyle={styles.switchDescription}
-              activeTrackColor={managerColors.royalBlue}
-            />
-          )}
-        />
+        <View style={styles.card}>
+          <Controller
+            control={control}
+            name="is_active"
+            render={({ field }) => (
+              <SwitchField
+                label="Active"
+                description="Inactive employees cannot use the app."
+                value={field.value}
+                onValueChange={field.onChange}
+                labelStyle={styles.fieldLabel}
+                descriptionStyle={styles.switchDescription}
+                activeTrackColor={managerColors.royalBlue}
+              />
+            )}
+          />
+        </View>
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -184,12 +185,12 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
 }
 
 const styles = StyleSheet.create({
-  form: { gap: 22 },
+  form: { gap: 14, paddingBottom: 8 },
   section: { gap: 14 },
-  sectionTitle: { color: managerColors.subtext, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.6 },
+  card: { paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: managerColors.cardBorder, borderRadius: 14, backgroundColor: '#FFFFFF' },
   group: { gap: 8 },
   label: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 12.5, lineHeight: 18, marginTop: -8 },
+  required: { color: '#B91C1C', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13 },
   formHint: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, textAlign: 'center' },
   fieldLabel: { fontFamily: 'Inter_600SemiBold', color: managerColors.ink },

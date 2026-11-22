@@ -108,7 +108,7 @@ assert.match(incomingSource, /What is wrong/);
 const ownerHome = readFileSync('app/(owner)/owner/dashboard.tsx', 'utf8');
 assert.match(ownerHome, /transfer_discrepancies_count/);
 assert.match(ownerHome, /return_discrepancies_count/);
-assert.match(ownerHome, /Quantity discrepancy reported/);
+assert.match(ownerHome, /Quantity discrepancies/);
 
 await asUser(cashier, async () => {
   const visible = (await db.query('select product_id, quantity_on_hand from public.branch_inventory')).rows;

@@ -1,5 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
@@ -14,7 +14,7 @@ import { SearchInput } from '@/components/dashboard/SearchInput';
 import { FilterIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { managerColors } from '@/components/dashboard/theme';
 import { CreateEmployeeForm } from '@/features/employees/CreateEmployeeForm';
-import { EditEmployeeForm } from '@/features/employees/EditEmployeeForm';
+import { EditEmployeeForm, type EditEmployeeFormHandle } from '@/features/employees/EditEmployeeForm';
 import { EmployeeListItem } from '@/features/employees/EmployeeListItem';
 import { ResetPasswordForm } from '@/features/employees/ResetPasswordForm';
 import { ListFilterSummary, ListFiltersSheet } from '@/features/products/ProductFilterControls';
@@ -175,37 +175,49 @@ export function EmployeeHub({
     );
   };
 
+  // saved when the sheet closes: the form only sends what changed and is valid; the sheet stays open if it could not be saved
   const submitEdit = (values: EditEmployeeValues) => {
-    if (!editEmployee || updateMutation.isPending) return;
-    updateMutation.mutate(
-      {
-        id: editEmployee.id,
-        fullName: values.full_name.trim(),
-        role: values.role,
-        branchId: values.branch_id,
-        isActive: values.is_active,
-      },
-      {
-        onSuccess: () => setEditEmployee(null),
-      }
-    );
+    if (!editEmployee) return Promise.resolve();
+    return updateMutation.mutateAsync({
+      id: editEmployee.id,
+      fullName: values.full_name.trim(),
+      role: values.role,
+      branchId: values.branch_id,
+      isActive: values.is_active,
+    });
   };
 
+  const editForm = useRef<EditEmployeeFormHandle>(null);
+  // after a failed save the next close discards the changes (so the sheet can always be left)
+  const discardOnNextClose = useRef(false);
+  const openEdit = (employee: EmployeeRecord) => {
+    updateMutation.reset();
+    discardOnNextClose.current = false;
+    setEditEmployee(employee);
+  };
+  const closeEdit = async (afterClose?: () => void) => {
+    if (updateMutation.isPending) return;
+    if (discardOnNextClose.current) {
+      discardOnNextClose.current = false;
+      updateMutation.reset();
+      setEditEmployee(null);
+      afterClose?.();
+      return;
+    }
+    const result = await editForm.current?.flush();
+    if (!result || result === 'unchanged' || result === 'saved') {
+      updateMutation.reset();
+      setEditEmployee(null);
+      afterClose?.();
+    } else {
+      discardOnNextClose.current = true;
+    }
+  };
+
+  // the form shows "PIN reset." and the sheet closes about a second later (onSuccess below)
   const submitReset = (values: ResetPasswordValues) => {
-    if (!resetEmployee) return;
-    resetMutation.mutate(
-      { employeeId: resetEmployee.id, password: values.password },
-      {
-        onSuccess: () => {
-          setResetEmployee(null);
-          alertNotice(
-            'PIN reset',
-            'Give the new PIN privately to the employee.',
-            'success',
-          );
-        },
-      }
-    );
+    if (!resetEmployee) return Promise.resolve();
+    return resetMutation.mutateAsync({ employeeId: resetEmployee.id, password: values.password });
   };
 
   return (
@@ -277,7 +289,7 @@ export function EmployeeHub({
                   onEdit={() => {
                     createMutation.reset();
                     updateMutation.reset();
-                    setEditEmployee(item);
+                    openEdit(item);
                   }}
                 />
               )}
@@ -347,10 +359,12 @@ export function EmployeeHub({
         visible={editEmployee != null}
         title="Edit employee"
         scroll
-        onClose={() => setEditEmployee(null)}
+        onClose={() => void closeEdit()}
       >
         {editEmployee ? (
           <EditEmployeeForm
+            key={editEmployee.id}
+            ref={editForm}
             employee={editEmployee}
             branches={assignableBranches}
             error={updateMutation.error ? getEmployeeErrorMessage(updateMutation.error) : undefined}
@@ -360,9 +374,11 @@ export function EmployeeHub({
             onToggleActive={() => toggleEmployee(editEmployee)}
             onResetPassword={() => {
               const current = editEmployee;
-              setEditEmployee(null);
-              resetMutation.reset();
-              setResetEmployee(current);
+              // pending edits are saved first, then the Reset PIN sheet opens
+              void closeEdit(() => {
+                resetMutation.reset();
+                setResetEmployee(current);
+              });
             }}
           />
         ) : null}
@@ -381,6 +397,8 @@ export function EmployeeHub({
             error={resetMutation.error ? getEmployeeErrorMessage(resetMutation.error) : undefined}
             loading={resetMutation.isPending}
             onSubmit={submitReset}
+            onCancel={() => setResetEmployee(null)}
+            onSuccess={() => setResetEmployee(null)}
           />
         ) : null}
       </BottomSheet>

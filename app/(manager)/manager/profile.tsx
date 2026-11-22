@@ -144,7 +144,6 @@ export default function ManagerAccountScreen() {
           onSuccess={() => setPasswordOpen(false)}
           hintStyle={styles.formHint}
           labelStyle={styles.formLabel}
-          inputStyle={styles.formInput}
           errorStyle={styles.formError}
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
@@ -159,19 +158,19 @@ export default function ManagerAccountScreen() {
 
       <BottomSheet visible={emailOpen} title="Change email" scroll onClose={() => setEmailOpen(false)}>
         <ChangeEmailForm
+          key={emailOpen ? 'change-email-open' : 'change-email-closed'}
           currentEmail={email}
           onCancel={() => setEmailOpen(false)}
-          currentStyle={styles.formLabel}
+          onDone={() => setEmailOpen(false)}
           labelStyle={styles.formLabel}
-          inputStyle={styles.formInput}
           errorStyle={styles.formError}
           successStyle={styles.formSuccess}
           accentColor={managerColors.royalBlue}
-          renderSubmitButton={({ loading, disabled, onPress }) => (
-            <ManagerActionButton label="Update" loading={loading} disabled={disabled} onPress={onPress} />
+          renderSubmitButton={({ loading, disabled, onPress, label }) => (
+            <ManagerActionButton label={label} loading={loading} disabled={disabled} onPress={onPress} />
           )}
-          renderCancelButton={({ disabled, onPress }) => (
-            <ManagerActionButton label="Cancel" variant="secondary" disabled={disabled} onPress={onPress} />
+          renderCancelButton={({ disabled, onPress, label }) => (
+            <ManagerActionButton label={label} variant="secondary" disabled={disabled} onPress={onPress} />
           )}
         />
       </BottomSheet>

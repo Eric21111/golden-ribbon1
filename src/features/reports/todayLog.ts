@@ -35,42 +35,84 @@ function roleLabel(role: string | null): string | null {
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
+/** The separate bits of a log row's context, so the full line and the short dashboard line are built from the same facts. */
+function detailPieces(activity: OwnerTodayActivity) {
+  const detail = activity.detail ?? {};
+  const opening = activity.action === 'opening_stock_set' && detail.product_count != null;
+  const products = opening ? Number(detail.product_count) : 0;
+  const added = opening ? Number(detail.added_count ?? 0) : 0;
+  const outgoing = activity.action === 'transfer_sent' || activity.action === 'return_sent';
+  return {
+    opening,
+    count: opening
+      ? plural(products, 'product')
+      : detail.item_count != null && activity.action !== 'opening_stock_set'
+        ? plural(Number(detail.item_count), 'item')
+        : null,
+    addedNote: added > 0 ? (added === products ? 'added to existing stock' : `${added} added to existing stock`) : null,
+    reopened: activity.action === 'shift_started' && detail.reopened ? 'Reopened after remittance' : null,
+    automatic:
+      activity.action === 'shift_ended' && detail.possibly_automatic ? 'Automatic 9 PM close or cashier (not recorded)' : null,
+    reference: detail.reference ? String(detail.reference) : null,
+    counterpart: detail.counterpart_branch_name ? `${outgoing ? 'to' : 'from'} ${detail.counterpart_branch_name}` : null,
+    discrepancy: Boolean(detail.with_issue),
+  };
+}
+
+const join = (parts: (string | null)[]) => {
+  const kept = parts.filter((part): part is string => Boolean(part));
+  return kept.length ? kept.join(' · ') : null;
+};
+
 /** One-line context for a log row, e.g. "TR-000123 · to SM1 · 4 items". */
 export function activityDetail(activity: OwnerTodayActivity): string | null {
-  const detail = activity.detail ?? {};
-  const parts: string[] = [];
-  if (activity.action === 'opening_stock_set' && detail.product_count != null) {
-    const products = Number(detail.product_count);
-    const added = Number(detail.added_count ?? 0);
-    parts.push(plural(products, 'product'));
-    if (added > 0) parts.push(added === products ? 'added to existing stock' : `${added} added to existing stock`);
-  }
-  if (activity.action === 'shift_started' && detail.reopened) parts.push('Reopened after remittance');
-  if (activity.action === 'shift_ended' && detail.possibly_automatic) {
-    parts.push('Automatic 9 PM close or cashier (not recorded)');
-  }
-  if (detail.reference) parts.push(detail.reference);
-  if (detail.counterpart_branch_name) {
-    const outgoing = activity.action === 'transfer_sent' || activity.action === 'return_sent';
-    parts.push(`${outgoing ? 'to' : 'from'} ${detail.counterpart_branch_name}`);
-  }
-  if (detail.item_count != null && activity.action !== 'opening_stock_set') {
-    parts.push(plural(Number(detail.item_count), 'item'));
-  }
-  if (detail.with_issue) parts.push('with discrepancy');
-  return parts.length ? parts.join(' · ') : null;
+  const p = detailPieces(activity);
+  return join([
+    p.opening ? p.count : null,
+    p.addedNote,
+    p.reopened,
+    p.automatic,
+    p.reference,
+    p.counterpart,
+    p.opening ? null : p.count,
+    p.discrepancy ? 'with discrepancy' : null,
+  ]);
+}
+
+/** Who did it, as the name is saved. A shift the system may have closed on its own says so ("Shift of Ana"). */
+function actorName(activity: OwnerTodayActivity): string {
+  const possiblyAutomatic = activity.action === 'shift_ended' && activity.detail?.possibly_automatic === true;
+  return possiblyAutomatic ? `Shift of ${activity.actor_name}` : activity.actor_name;
 }
 
 export function describeActivity(activity: OwnerTodayActivity) {
   const role = roleLabel(activity.actor_role);
   const possiblyAutomatic = activity.action === 'shift_ended' && activity.detail?.possibly_automatic === true;
-  const name = possiblyAutomatic ? `Shift of ${activity.actor_name}` : activity.actor_name;
+  const name = actorName(activity);
   return {
     time: formatManilaTime(activity.occurred_at),
     action: possiblyAutomatic ? 'Shift closed' : activityLabel(activity.action),
     employee: role ? `${name} · ${role}` : name,
     branch: activity.branch_name,
     detail: activityDetail(activity),
+  };
+}
+
+/**
+ * The short version for the dashboard row: the name only (no role, which names like "SM2-Cashier Angie" already carry),
+ * "from / to branch · count · reference" in that order, and the discrepancy as its own flag instead of a trailing phrase.
+ * The longer "added to existing stock" wording is left to the full line.
+ */
+export function describeActivityCompact(activity: OwnerTodayActivity) {
+  const p = detailPieces(activity);
+  const { time, action, branch } = describeActivity(activity);
+  return {
+    time,
+    action,
+    branch,
+    actor: actorName(activity),
+    detail: join([p.reopened, p.automatic, p.counterpart, p.count, p.reference]),
+    discrepancy: p.discrepancy,
   };
 }
 

@@ -27,7 +27,7 @@ const stubs = {
   const { ChangeNameForm } = loadTs('src/features/profile/ChangeNameForm.tsx', stubs);
   const html = renderToStaticMarkup(React.createElement(ChangeNameForm, { currentName: 'Cashier 1', onCancel() {} }));
   const text = flat(html);
-  assert.match(text, /Full name\|Cancel\|Save\|$/, 'the field, then Cancel and Save');
+  assert.match(text, /Full name\| \*\|Cancel\|Save\|$/, 'the field with a red star, then Cancel and Save');
   assert.match(html, /value="Cashier 1"/);
   assert.doesNotMatch(text, /Updates your own display name|Role, branch|Enter your full name|Full Name|Save name/, 'no paragraph, no placeholder, no long label');
   assert.match(html, /data-variant="secondary"[^>]*>Cancel</, 'Cancel is the light one, on the left');
@@ -70,32 +70,6 @@ const stubs = {
   console.log('3. behaviour and screens: ok');
 }
 
-// ---------------------------------------------------------------- 4. Change email: the same look as Change password
-{
-  const { ChangeEmailForm } = loadTs('src/features/profile/ChangeEmailForm.tsx', {
-    ...stubs,
-    '@/services/accountService': { changeOwnEmail: async () => ({ confirmed: true }) },
-  });
-  const html = renderToStaticMarkup(React.createElement(ChangeEmailForm, { currentEmail: 'golden-ribbons@gmail.com', onCancel() {} }));
-  const text = flat(html);
-  assert.match(text, /Current email: golden-ribbons@gmail\.com\|Current password\|New email\|Confirm email\|Cancel\|Update\|$/, 'the current email, three fields, then Cancel | Update');
-  assert.doesNotMatch(text, /Updates the sign-in email for this account only|historical records|Enter current password|name@example\.com|Re-enter new email|Current Password|New Email|Confirm New Email|Change email\|/, 'no paragraph, no placeholders, no Title Case labels');
-  assert.match(html, /data-variant="secondary"[^>]*>Cancel</, 'Cancel is the light one, on the left');
-  assert.match(html, /aria-label="Show password"/, 'the show / hide eye is still there');
-  assert.equal((html.match(/type="password"/g) ?? []).length, 1, 'the password starts hidden');
-  assert.doesNotMatch(renderToStaticMarkup(React.createElement(ChangeEmailForm, { currentEmail: 'a@b.c' })), />Cancel</);
-
-  const src = read('src/features/profile/ChangeEmailForm.tsx');
-  assert.ok(src.includes('await changeOwnEmail(values.current_password, values.new_email)'), 'same call');
-  assert.ok(src.includes('Verification has been sent to your email. Complete verification to finish changing your email.'), 'the verification message is unchanged: it says something that matters');
-  assert.ok(src.includes("actions: { flexDirection: 'row', gap: spacing.sm },"));
-  for (const file of ['app/(manager)/manager/profile.tsx', 'app/(owner)/owner/profile.tsx']) {
-    const screen = read(file);
-    const emailForm = screen.slice(screen.indexOf('<ChangeEmailForm'));
-    assert.ok(emailForm.includes('<ManagerActionButton label="Update" loading={loading}'), `${file}: short button label`);
-    assert.doesNotMatch(emailForm.slice(0, emailForm.indexOf('/>')), /hintStyle|label="Change email" loading=/, `${file}: no hint, no long label`);
-  }
-  console.log('4. change email: ok');
-}
+// (Change email is two steps like Change PIN now: see change_email_steps.mjs)
 
 console.log('profile_forms_ui: ALL PASS');

@@ -1,355 +1,103 @@
-import { ReadNoticeCleanup } from './ReadNoticeCleanup';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ConstrainedWidth } from '@/components/ConstrainedWidth';
-import { FormField } from '@/components/FormField';
 import { Screen } from '@/components/Screen';
-import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
+import { ListRowCard } from '@/components/dashboard/ListRowCard';
+import { ManagerBadge } from '@/components/dashboard/ManagerBadge';
 import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
-import { ErrorState, LoadingState } from '@/components/dashboard/ManagerFeedback';
+import { ErrorState } from '@/components/dashboard/ManagerFeedback';
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
-import { StatTile } from '@/components/dashboard/StatTile';
-import { SummaryCard } from '@/components/dashboard/SummaryCard';
 import { managerColors } from '@/components/dashboard/theme';
-import {
-  useArchiveExport,
-  useArchiveStatus,
-  useCleanupArchivedSales,
-  usePrepareSalesArchive,
-  useVerifySalesArchive,
-} from '@/hooks/useArchive';
-import { saveArchivePackage } from '@/lib/archiveExport';
+import { useArchiveStatus } from '@/hooks/useArchive';
 import { getArchiveErrorMessage } from '@/lib/errors';
-import { formatDate, formatMoney } from '@/lib/format';
-import { ARCHIVE_CLEANUP_CONFIRMATION } from '@/types/models';
+import { formatDate } from '@/lib/format';
 
-function formatBytes(bytes: number | null): string {
-  if (bytes == null) return 'Unavailable';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
+import { ArchiveInfoButton } from './ArchiveInfoButton';
+import { READ_NOTICE_PAGE, useReadNoticePreview } from './readNotices';
 
+/**
+ * Data Archive: a short hub with the two Owner cleanup tools as rows, like Reports. Each opens its own screen:
+ * Read notifications (a checklist) and Old sales details (export, verify, delete).
+ */
 export function DataArchiveScreen() {
   const statusQuery = useArchiveStatus();
-  const prepare = usePrepareSalesArchive();
-  const exportArchive = useArchiveExport();
-  const verify = useVerifySalesArchive();
-  const cleanup = useCleanupArchivedSales();
-  const [confirmation, setConfirmation] = useState('');
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [backupSavedAcknowledged, setBackupSavedAcknowledged] = useState(false);
-  const [workflowInfoOpen, setWorkflowInfoOpen] = useState(false);
-  const [cleanupInfoOpen, setCleanupInfoOpen] = useState(false);
-
+  const notices = useReadNoticePreview();
+  const [infoOpen, setInfoOpen] = useState(false);
   const status = statusQuery.data;
-  const archive = status?.active_archive ?? null;
-  const busy = prepare.isPending || exportArchive.isPending || verify.isPending || cleanup.isPending;
-  const canVerify =
-    Boolean(archive?.export_generated_at) &&
-    (archive?.export_format_version ?? 0) >= 2 &&
-    backupSavedAcknowledged &&
-    !busy;
-  const canCleanup =
-    archive?.status === 'verified' && confirmation === ARCHIVE_CLEANUP_CONFIRMATION && !busy;
 
-  const run = async (work: () => Promise<void>) => {
-    setActionError(null);
-    setNotice(null);
-    try {
-      await work();
-    } catch (error) {
-      setActionError(getArchiveErrorMessage(error));
-    }
-  };
-
-  const exportAndSave = () =>
-    run(async () => {
-      setBackupSavedAcknowledged(false);
-      const prepared = archive ?? (await prepare.mutateAsync());
-      const pack = await exportArchive.mutateAsync(prepared.id);
-      const offer = await saveArchivePackage(pack);
-      setNotice(offer.message);
-    });
+  const count = notices.data?.length ?? 0;
+  const noticeSubtitle = notices.isPending
+    ? 'Checking…'
+    : notices.isError
+      ? 'Could not check'
+      : count === 0
+        ? 'None to remove'
+        : `${count}${count >= READ_NOTICE_PAGE ? '+' : ''} can be removed`;
 
   return (
     <Screen
       backgroundColor="#FFFFFF"
       edges={['top']}
       contentContainerStyle={styles.screenContent}
-      refreshing={statusQuery.isRefetching}
-      onRefresh={() => void statusQuery.refetch()}
+      refreshing={statusQuery.isRefetching || notices.isRefetching}
+      onRefresh={() => {
+        void statusQuery.refetch();
+        void notices.refetch();
+      }}
     >
       <ConstrainedWidth>
         <ManagerScreenHeader showBack title="Data Archive" />
 
         <View style={styles.body}>
-          <Text style={styles.sectionTitle}>CLEANUP OPTIONS</Text>
-          <Text style={styles.quiet}>
-            Two Owner tools only: remove eligible read notifications, or archive and delete old sales details.
-            Shifts, remittances, inventory, transfers, returns, products, and accounts are never deleted here.
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.sectionTitle}>CLEANUP OPTIONS</Text>
+            <ArchiveInfoButton label="About the cleanup options" onPress={() => setInfoOpen(true)} />
+          </View>
 
-          <Text style={styles.optionTitle}>1. Read notifications</Text>
-          <Text style={styles.optionHint}>Select specific read notices to permanently remove.</Text>
-          <ReadNoticeCleanup />
-
-          <Text style={styles.optionTitle}>2. Old sales details</Text>
-          <Text style={styles.optionHint}>
-            Export → Save Copy → Verify → Confirm Cleanup. Removes sale rows older than the retention window.
-            Related shifts stay for remittance and audit history.
-          </Text>
+          <ListRowCard
+            icon="notifications-outline"
+            iconColor="blue"
+            title="Read notifications"
+            subtitle={noticeSubtitle}
+            onPress={() => router.push('/owner/data-archive/notifications' as never)}
+            accessibilityLabel={`Read notifications. ${noticeSubtitle}`}
+            accessibilityHint="Opens the list of read notifications that can be removed"
+          />
 
           {statusQuery.error ? (
             <ErrorState message={getArchiveErrorMessage(statusQuery.error)} onRetry={() => void statusQuery.refetch()} />
-          ) : !status ? (
-            <LoadingState label="Loading archive status…" />
           ) : (
-            <>
-              {status.archive_due ? (
-                <View style={styles.warningCard}>
-                  <Text style={styles.warningTitle}>Old sales cleanup recommended</Text>
-                  <Text style={styles.warningBody}>
-                    {status.eligible_sales_count.toLocaleString()} sales are older than {status.retention_days} days.
-                    Export and verify before deleting sales details. Shifts and remittances are kept.
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.quiet}>
-                  No detailed sales are currently older than {status.retention_days} days.
-                </Text>
-              )}
-
-              <View style={styles.statsRow}>
-                <StatTile
-                  style={styles.statHalf}
-                  emphasis
-                  icon="trash-outline"
-                  label="Sales details to remove"
-                  value={status.estimated_records}
-                />
-                <StatTile style={styles.statHalf} icon="receipt-outline" label="Sales eligible" value={status.eligible_sales_count} />
-              </View>
-              <View style={styles.statsRow}>
-                <StatTile style={styles.statHalf} icon="pricetags-outline" label="Items eligible" value={status.eligible_sale_items_count} />
-                <StatTile
-                  style={styles.statHalf}
-                  icon="checkmark-done-outline"
-                  label="Related shifts (kept)"
-                  value={status.eligible_shift_count}
-                />
-              </View>
-
-              <SummaryCard
-                title="RETENTION"
-                rows={[
-                  { label: 'Detailed sales retention', value: `${status.retention_days} days`, icon: 'calendar-outline' },
-                  {
-                    label: 'Oldest sale',
-                    value: status.oldest_detailed_sale_at ? formatDate(status.oldest_detailed_sale_at) : 'None',
-                    icon: 'time-outline',
-                  },
-                  {
-                    label: 'Last archive',
-                    value: status.last_successful_archive_at ? formatDate(status.last_successful_archive_at) : 'Never',
-                    icon: 'archive-outline',
-                  },
-                  {
-                    label: 'Next archive',
-                    value: formatDate(status.next_archive_recommended_at),
-                    icon: 'calendar-outline',
-                  },
-                  { label: 'Database size', value: formatBytes(status.database_size_bytes), icon: 'server-outline' },
-                  {
-                    label: 'Archive status',
-                    value: archive?.status ?? (status.archive_due ? 'due' : 'current'),
-                    icon: 'information-circle-outline',
-                  },
-                  ...(archive
-                    ? [
-                        {
-                          label: 'Active period revenue',
-                          value: `${formatMoney(archive.revenue_total)} · ${archive.units_sold} units`,
-                          icon: 'cash-outline' as const,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="How data archiving works"
-                onPress={() => setWorkflowInfoOpen(true)}
-                style={({ pressed }) => [styles.infoRow, pressed && styles.pressed]}
-              >
-                <Ionicons name="information-circle-outline" size={16} color={managerColors.subtext} />
-                <Text style={styles.infoRowLabel}>How this works</Text>
-              </Pressable>
-
-              {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-              {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-
-              <View style={styles.actions}>
-                <ManagerActionButton
-                  label="Generate export"
-                  icon="cloud-upload-outline"
-                  loading={prepare.isPending || exportArchive.isPending}
-                  disabled={busy || !status.archive_due}
-                  onPress={() => void exportAndSave()}
-                />
-                {archive?.export_generated_at ? (
-                  <Pressable
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: backupSavedAcknowledged }}
-                    accessibilityLabel="I saved and checked the archive backup files"
-                    disabled={busy}
-                    onPress={() => setBackupSavedAcknowledged((current) => !current)}
-                    style={({ pressed }) => [styles.ackRow, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.ackMark}>{backupSavedAcknowledged ? '☑' : '☐'}</Text>
-                    <Text style={styles.ackLabel}>
-                      I saved the backup files and checked that they include sales, sale items, void_events, and the
-                      manifest.
-                    </Text>
-                  </Pressable>
-                ) : null}
-                <ManagerActionButton
-                  label="Verify export"
-                  icon="shield-checkmark-outline"
-                  variant="secondary"
-                  loading={verify.isPending}
-                  disabled={!canVerify}
-                  onPress={() =>
-                    void run(async () => {
-                      if (!archive) return;
-                      await verify.mutateAsync(archive.id);
-                      setNotice('Archive verification passed. Historical analytics are ready.');
-                    })
-                  }
-                />
-              </View>
-
-              <View style={styles.dangerCard}>
-                <View style={styles.dangerCardHeader}>
-                  <Text style={styles.dangerCardTitle}>Confirm cleanup</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="What does confirming cleanup do?"
-                    hitSlop={8}
-                    onPress={() => setCleanupInfoOpen(true)}
-                  >
-                    <Ionicons name="information-circle-outline" size={18} color="#B91C1C" />
-                  </Pressable>
-                </View>
-                <FormField
-                  label={`Type ${ARCHIVE_CLEANUP_CONFIRMATION}`}
-                  value={confirmation}
-                  onChangeText={setConfirmation}
-                  autoCapitalize="characters"
-                  editable={!busy}
-                  labelStyle={styles.dangerFieldLabel}
-                  accentColor="#B91C1C"
-                  style={styles.fieldInput}
-                />
-                <ManagerActionButton
-                  label="Delete archived sales details"
-                  icon="trash-outline"
-                  variant="danger"
-                  loading={cleanup.isPending}
-                  disabled={!canCleanup}
-                  onPress={() =>
-                    void run(async () => {
-                      if (!archive) return;
-                      await cleanup.mutateAsync({ archiveId: archive.id, confirmation });
-                      setConfirmation('');
-                      setNotice(
-                        'Eligible sales details were removed. Shifts, remittances, summaries, and inventory remain.',
-                      );
-                    })
-                  }
-                />
-              </View>
-
-              <ManagerBottomSheet
-                visible={workflowInfoOpen}
-                title="How this works"
-                onClose={() => setWorkflowInfoOpen(false)}
-              >
-                <Text style={styles.sheetBody}>
-                  Workflow: Export → Save Copy → Confirm backup saved → Verify → Confirm Cleanup. Opening downloads or
-                  the share sheet does not prove files were stored — check the backup (including void_events) before
-                  verifying. Only old sales and sale items are deleted. Shifts, remittances, waste, inventory
-                  movements, transfers, returns, products, and accounts stay.
-                </Text>
-              </ManagerBottomSheet>
-
-              <ManagerBottomSheet
-                visible={cleanupInfoOpen}
-                title="Confirm cleanup"
-                onClose={() => setCleanupInfoOpen(false)}
-              >
-                <Text style={styles.sheetBody}>
-                  This permanently removes archived sales details only. Related shifts remain for remittance and audit
-                  history. Historical analytics stay available from daily summary data.
-                </Text>
-              </ManagerBottomSheet>
-            </>
+            <ListRowCard
+              icon="archive-outline"
+              iconColor="teal"
+              title="Old sales details"
+              subtitle={status ? `${status.estimated_records.toLocaleString()} to remove` : 'Checking…'}
+              meta={status ? `Retention ${status.retention_days} days · Last archive ${status.last_successful_archive_at ? formatDate(status.last_successful_archive_at) : 'never'}` : undefined}
+              trailing={status ? <ManagerBadge label={status.archive_due ? 'Cleanup due' : 'Current'} tone={status.archive_due ? 'warning' : 'success'} /> : undefined}
+              onPress={() => router.push('/owner/data-archive/sales' as never)}
+              accessibilityLabel={`Old sales details. ${status ? `${status.estimated_records} to remove` : 'Checking'}`}
+              accessibilityHint="Opens export, verify and cleanup of old sales details"
+            />
           )}
         </View>
       </ConstrainedWidth>
+
+      <ManagerBottomSheet visible={infoOpen} title="Cleanup options" onClose={() => setInfoOpen(false)}>
+        <Text style={styles.sheetBody}>
+          Two Owner tools only: remove eligible read notifications, or archive and delete old sales details.
+          Shifts, remittances, inventory, transfers, returns, products, and accounts are never deleted here.
+        </Text>
+      </ManagerBottomSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
-  body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 14 },
-  sectionTitle: {
-    color: managerColors.subtext,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.8,
-  },
-  optionTitle: { color: managerColors.ink, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  optionHint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, marginTop: -6 },
-  ackRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 },
-  ackMark: { color: managerColors.ink, fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 22 },
-  ackLabel: { flex: 1, color: managerColors.ink, fontFamily: 'Inter_400Regular', fontSize: 13.5, lineHeight: 19 },
-  warningCard: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 16,
-    padding: 16,
-    gap: 4,
-  },
-  warningTitle: { color: '#92400E', fontFamily: 'Inter_700Bold', fontSize: 15 },
-  warningBody: { color: '#92400E', fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
-  quiet: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statHalf: { flex: 1 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
-  infoRowLabel: { color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 13 },
-  pressed: { opacity: 0.7 },
-  actions: { gap: 10 },
-  dangerCard: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-  },
-  dangerCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dangerCardTitle: { color: '#B91C1C', fontFamily: 'Inter_700Bold', fontSize: 15 },
-  dangerFieldLabel: { fontFamily: 'Inter_600SemiBold', color: '#991B1B' },
-  fieldInput: { fontFamily: 'Inter_400Regular' },
+  body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionTitle: { color: managerColors.subtext, fontFamily: 'Inter_600SemiBold', fontSize: 12, letterSpacing: 0.8 },
   sheetBody: { color: managerColors.ink, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21 },
-  notice: { color: managerColors.green, fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
-  error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
 });

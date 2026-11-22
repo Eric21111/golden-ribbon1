@@ -97,6 +97,12 @@ function getGroups(isMain: boolean): SidebarGroup[] {
               selectedIcon: 'leaf',
             },
             {
+              label: 'Stock corrections',
+              href: '/manager/reports/stock-count-changes',
+              icon: 'swap-vertical-outline',
+              selectedIcon: 'swap-vertical',
+            },
+            {
               label: 'Void logs',
               href: '/manager/reports/stock-corrections',
               icon: 'create-outline',
@@ -144,7 +150,7 @@ function getOwnerGroups(): SidebarGroup[] {
             { label: 'Inventory reconciliation', href: '/owner/reports/inventory-reconciliation', icon: 'checkmark-done-outline', selectedIcon: 'checkmark-done' },
             { label: 'Transfer & return issues', href: '/owner/reports/discrepancies', icon: 'alert-circle-outline', selectedIcon: 'alert-circle' },
             { label: 'Waste history', href: '/owner/reports/waste-history', icon: 'leaf-outline', selectedIcon: 'leaf' },
-            { label: 'Stock correction', href: '/owner/reports/stock-count-changes', icon: 'swap-vertical-outline', selectedIcon: 'swap-vertical' },
+            { label: 'Stock corrections', href: '/owner/reports/stock-count-changes', icon: 'swap-vertical-outline', selectedIcon: 'swap-vertical' },
             { label: 'Void logs', href: '/owner/reports/void-logs', icon: 'create-outline', selectedIcon: 'create' },
             { label: 'Branch operations', href: '/owner/reports/branch-performance', icon: 'git-branch-outline', selectedIcon: 'git-branch' },
           ],

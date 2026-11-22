@@ -67,7 +67,7 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(function FormFiel
       {!hideLabel ? (
         <Text style={[styles.label, isDark && styles.labelDark, labelStyle]}>
           {label}
-          {required ? <Text style={styles.required}> *</Text> : null}
+          {required ? <Text style={[styles.required, isDark && styles.requiredDark]}> *</Text> : null}
         </Text>
       ) : null}
       {hint ? <Text style={[styles.hint, isDark && styles.hintDark, hintStyle]}>{hint}</Text> : null}
@@ -125,7 +125,8 @@ const styles = StyleSheet.create({
   container: { gap: spacing.xs, width: '100%', maxWidth: '100%', alignSelf: 'stretch' },
   label: { color: colors.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   labelDark: { color: '#F3F6FF', fontSize: 14, letterSpacing: 0.2 },
-  required: { color: '#F87171', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  required: { color: '#B91C1C', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  requiredDark: { color: '#F87171' },
   hint: { color: colors.muted, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   hintDark: { color: '#93A0B8' },
   inputWrapper: { justifyContent: 'center', width: '100%', maxWidth: '100%' },
