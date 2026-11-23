@@ -76,7 +76,7 @@ export async function listInventory(branch: Branch, activeOnly = false): Promise
  * and show the neutral "Category not set" indicator.
  */
 export async function listCashierProductCategories(): Promise<Map<string, Product['product_category']>> {
-  const { data, error } = await supabase.from('products').select('id, product_category');
+  const { data, error } = await supabase.from('products').select('id, product_category').is('archived_at', null);
   if (error || !data) return new Map();
   return new Map((data as Array<Pick<Product, 'id' | 'product_category'>>).map((row) => [row.id, row.product_category]));
 }

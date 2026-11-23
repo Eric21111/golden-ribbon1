@@ -10,8 +10,9 @@
 --   shift_product_* bigint columns + finalize_cashier_shift_reconciliation ::bigint casts
 --   leftover return trunc(on_hand) filters
 --   client piece Zod/regex validators and close-count helpers
-
-begin;
+--
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own
+-- transaction. Embedded COMMIT would break that wrapper (partial apply risk).
 
 -- ---------------------------------------------------------------------------
 -- 1) Shared half-step predicate (exact; no scale rounding of invalid values)
@@ -366,5 +367,3 @@ $$;
 
 revoke all on function public.normalize_product_stock_uses(jsonb) from public, anon, authenticated;
 revoke all on function public.apply_product_stock_uses(uuid, jsonb) from public, anon, authenticated;
-
-commit;

@@ -31,6 +31,11 @@ export async function createBranch(input: BranchInput): Promise<Branch> {
   return data;
 }
 
+export async function deleteBranch(id: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_branch', { p_branch_id: id });
+  if (error) throw error;
+}
+
 export async function updateBranch(id: string, input: BranchInput): Promise<Branch> {
   const values: Partial<BranchInsert> = { ...input, code: input.code.trim().toUpperCase() };
   const { data, error } = await supabase

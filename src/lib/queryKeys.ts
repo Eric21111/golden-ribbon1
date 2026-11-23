@@ -4,6 +4,7 @@ export const queryKeys = {
   branch: (id: string) => ['branches', id] as const,
   products: (search = '', activeOnly = false) =>
     ['products', { search, activeOnly }] as const,
+  archivedProducts: (search = '') => ['products', 'archived', { search }] as const,
   product: (id: string) => ['products', id] as const,
   branchProducts: (branchId: string, activeOnly = false) =>
     ['branch-products', branchId, { activeOnly }] as const,

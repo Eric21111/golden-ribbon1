@@ -13,6 +13,10 @@ import {
   listProductStockUses,
   listProductVariants,
   listProducts,
+  listArchivedProducts,
+  archiveProduct,
+  restoreProduct,
+  deleteArchivedProduct,
   updateBranchProductVariantPrice,
   updateCompleteProduct,
   updateProductVariant,
@@ -41,6 +45,52 @@ export function useProductSkus() {
   return useQuery({
     queryKey: ['products', 'skus'] as const,
     queryFn: listProductSkus,
+  });
+}
+
+export function useArchivedProducts(search = '') {
+  return useQuery({
+    queryKey: queryKeys.archivedProducts(search),
+    queryFn: () => listArchivedProducts(search),
+  });
+}
+
+async function refreshProductLists(client: ReturnType<typeof useQueryClient>) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: ['products'] }),
+    client.invalidateQueries({ queryKey: ['inventory'] }),
+    client.invalidateQueries({ queryKey: ['branch-products'] }),
+    client.invalidateQueries({ queryKey: ['branch-product-variants'] }),
+  ]);
+}
+
+export function useArchiveProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) => archiveProduct(productId),
+    onSuccess: async () => {
+      await refreshProductLists(client);
+    },
+  });
+}
+
+export function useRestoreProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) => restoreProduct(productId),
+    onSuccess: async () => {
+      await refreshProductLists(client);
+    },
+  });
+}
+
+export function useDeleteArchivedProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) => deleteArchivedProduct(productId),
+    onSuccess: async () => {
+      await refreshProductLists(client);
+    },
   });
 }
 

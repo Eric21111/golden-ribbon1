@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
-import { createBranch, getBranch, listBranches, updateBranch } from '@/services/branchService';
+import { createBranch, deleteBranch, getBranch, listBranches, updateBranch } from '@/services/branchService';
 import type { BranchInput } from '@/types/models';
 
 export function useBranches() {
@@ -17,6 +17,16 @@ export function useCreateBranch() {
   return useMutation({
     mutationFn: createBranch,
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.branches }),
+  });
+}
+
+export function useDeleteBranch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteBranch(id),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: queryKeys.branches });
+    },
   });
 }
 

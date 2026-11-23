@@ -1,7 +1,6 @@
 -- Phase 4B: reporting + list RPC compatibility for exact 0.5 piece_stock quantities.
 -- Disposable/local only until gates are deliberately activated. No production deploy from this phase.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 -- ---------------------------------------------------------------------------
 -- list_return_inventory: return numeric on-hand; include exact half-step balances
@@ -198,5 +197,3 @@ begin
   end if;
 end;
 $guard$;
-
-commit;

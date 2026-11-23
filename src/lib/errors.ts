@@ -38,7 +38,7 @@ export function getErrorMessage(error: unknown): string {
     message.includes('products_sku_unique_ci')
     || (message.includes('sku') && (message.includes('already') || message.includes('duplicate') || message.includes('23505')))
   ) {
-    return 'That SKU is already in use. Search All products — inactive items are included.';
+    return 'That SKU is already in use. Check All products and Archived Products.';
   }
   if (message.includes('products_name_unique_ci')) return 'A product with that name already exists.';
   if (message.includes('shift remittance not found') || message.includes('shift id is required')) {
@@ -103,6 +103,28 @@ function stockUseValidationMessage(error: unknown): string | null {
     return 'Portion-unit ingredients require whole stock-unit quantities.';
   }
   return null;
+}
+
+/**
+ * Archive, restore, and delete explain why they stopped. Other failures stay on the shared safe list.
+ */
+export function getRetentionActionMessage(error: unknown): string {
+  const line = (readErrorMessage(error).split('|')[0] ?? '').trim();
+  const lower = line.toLowerCase();
+  if (
+    lower.startsWith('cannot archive')
+    || lower.startsWith('cannot restore')
+    || lower.startsWith('cannot delete')
+    || lower.startsWith('only archived')
+    || lower.startsWith('the main branch')
+    || lower.startsWith('archived products cannot')
+    || lower.startsWith('this product was already')
+    || lower.startsWith('this branch was already')
+    || lower.startsWith('archive status can only')
+  ) {
+    return line;
+  }
+  return getErrorMessage(error);
 }
 
 /** Create/Edit product screens only — product-specific PGRST202 wording. */

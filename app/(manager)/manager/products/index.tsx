@@ -47,6 +47,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { useProductBranchPrices, useProductBranchVariantPrices } from '@/hooks/useBranchProducts';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import {
+  useArchiveProduct,
   useCreateCompleteProduct,
   useCreateInventoryProduct,
   useProductDrinkChoices,
@@ -57,7 +58,7 @@ import {
   useUpdateCompleteProduct,
   useUpdateInventoryProduct,
 } from '@/hooks/useProducts';
-import { getErrorMessage, getProductErrorMessage } from '@/lib/errors';
+import { getErrorMessage, getProductErrorMessage, getRetentionActionMessage } from '@/lib/errors';
 import { confirmAction } from '@/lib/confirmAction';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
@@ -107,11 +108,14 @@ export default function ManagerProductListScreen() {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
   const [modeError, setModeError] = useState('');
   const [createNotice, setCreateNotice] = useState('');
   const client = useQueryClient();
   const submittingRef = useRef(false);
   const editSubmittingRef = useRef(false);
+  const archiveSubmittingRef = useRef(false);
   // Whether the open wizard has unsaved edits (reported by the wizard). Refs: read only when closing.
   const createDirtyRef = useRef(false);
   const editDirtyRef = useRef(false);
@@ -126,6 +130,7 @@ export default function ManagerProductListScreen() {
   const createInventoryMutation = useCreateInventoryProduct();
   const updateCompleteMutation = useUpdateCompleteProduct();
   const updateInventoryMutation = useUpdateInventoryProduct();
+  const archiveMutation = useArchiveProduct();
   const editVariants = useProductVariants(editProduct?.id ?? '');
   // Saved Stock Used Per Order. The edit form needs it up front: saving without it could wipe the saved recipes.
   const editStockUses = useProductStockUses(editProduct?.id ?? '');
@@ -351,12 +356,40 @@ export default function ManagerProductListScreen() {
     });
   };
 
+  const requestArchive = () => {
+    if (!editProduct || isArchiving || isEditSubmitting) return;
+    const product = editProduct;
+    confirmAction(
+      'Archive product?',
+      `${product.name} will be hidden from Products and the cashier. Its enabled or disabled setting, stock, recipes, and sales history stay on this same product. This is not the same as turning Enable Product off.`,
+      () => {
+        if (!tryBeginSubmit(archiveSubmittingRef)) return;
+        setIsArchiving(true);
+        setArchiveError('');
+        void archiveMutation
+          .mutateAsync(product.id)
+          .then(() => {
+            editDirtyRef.current = false;
+            setCreateNotice(`${product.name} was archived. Open Archived Products to restore or delete it.`);
+            setEditProduct(null);
+          })
+          .catch((error: unknown) => setArchiveError(getRetentionActionMessage(error)))
+          .finally(() => {
+            endSubmit(archiveSubmittingRef);
+            setIsArchiving(false);
+          });
+      },
+      { confirm: 'Archive product', cancel: 'Cancel', tone: 'warning' },
+    );
+  };
+
   const requestCloseEdit = () => {
     const closeNow = () => {
       editDirtyRef.current = false;
+      setArchiveError('');
       setEditProduct(null);
     };
-    if (decideClose({ dirty: editDirtyRef.current, submitting: isEditSubmitting }) === 'close') {
+    if (decideClose({ dirty: editDirtyRef.current, submitting: isEditSubmitting || isArchiving }) === 'close') {
       closeNow();
       return;
     }
@@ -460,6 +493,7 @@ export default function ManagerProductListScreen() {
                   }
                   onPress={() => {
                     editDirtyRef.current = false;
+                    setArchiveError('');
                     setEditProduct(item);
                   }}
                 />
@@ -478,6 +512,12 @@ export default function ManagerProductListScreen() {
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
+            />
+            <ManagerActionButton
+              label="Archived Products"
+              icon="archive-outline"
+              variant="secondary"
+              onPress={() => router.push('/manager/products/archived' as never)}
             />
             <ManagerActionButton
               label="View branch catalogs"
@@ -573,6 +613,9 @@ export default function ManagerProductListScreen() {
                 modeError
                 || (updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined)
               }
+              archiveError={archiveError}
+              archiveLoading={isArchiving}
+              onArchive={requestArchive}
               onSubmit={submitEdit}
               onDirtyChange={(dirty) => {
                 editDirtyRef.current = dirty;

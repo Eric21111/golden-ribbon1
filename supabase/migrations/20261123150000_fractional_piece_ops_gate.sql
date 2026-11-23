@@ -1,8 +1,7 @@
 -- Phase 5: gate half-step inventory OPS behind an owner flag (default OFF).
 -- Prevents creating 0.5 balances via transfer/return/waste/correction/opening/close
 -- while old clients are still in the field. Enabling recipe saving also enables ops.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 alter table public.inventory_feature_settings
   add column if not exists fractional_piece_ops_enabled boolean not null default false;
@@ -295,5 +294,3 @@ begin
   end if;
 end;
 $guard$;
-
-commit;

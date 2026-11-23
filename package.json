@@ -75,6 +75,7 @@
     "test:push-notifications": "node tests/push_notifications.mjs && node tests/push_notifications_client.mjs && node tests/push_dispatch_function.mjs",
     "test:recon-return": "node tests/inventory_reconciliation_return_issue.mjs",
     "test:product-active": "node tests/product_active_after_opening.mjs",
+    "test:archive-products": "node tests/archive_products_and_delete_branches.mjs && node tests/archive_products_ui.mjs && node tests/archive_migration_order.mjs && node tests/archive_products_concurrency_postgres.mjs",
     "test:create-product": "node tests/create_product_integrity.mjs",
     "test:update-product": "node tests/update_complete_product_integrity.mjs",
     "test:return-integrity": "node tests/return_inventory_integrity.mjs",

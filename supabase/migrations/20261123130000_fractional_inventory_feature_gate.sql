@@ -2,8 +2,7 @@
 -- Client flags/headers cannot enable this. Owner-only setter.
 -- Also tightens normalize_product_stock_uses so fractional recipes are rejected while OFF.
 -- Does not modify historical product_stock_uses rows or balances.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 create table if not exists public.inventory_feature_settings (
   id boolean primary key default true check (id),
@@ -215,5 +214,3 @@ $$;
 
 comment on function public.normalize_product_stock_uses(jsonb) is
   'Validates Stock Used payloads. Fractional 0.5 quantities require inventory_feature_settings.fractional_recipe_saving_enabled.';
-
-commit;

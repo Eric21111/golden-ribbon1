@@ -1,8 +1,7 @@
 -- Phase 4A: half-step parse_inventory_quantity + schema/constraints for ops.
 -- Historical quantity values are cast in place (whole numbers stay identical).
 -- No Egg cutover dependency.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 -- ---------------------------------------------------------------------------
 -- parse_inventory_quantity: exact 0.5 for piece_stock; reject 0.3 before coerce
@@ -173,5 +172,3 @@ alter table public.shift_product_reconciliations
   alter column discrepancy type numeric(14,3) using discrepancy::numeric(14,3),
   alter column unsold_quantity type numeric(14,3) using unsold_quantity::numeric(14,3),
   alter column carried_quantity type numeric(14,3) using carried_quantity::numeric(14,3);
-
-commit;

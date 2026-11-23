@@ -1,8 +1,7 @@
 -- Phase 4A: inventory RPC compatibility for exact 0.5 piece_stock quantities.
 -- POS cart quantities and money math are not changed.
 -- Portion-coded products stay on whole internal units via existing guards.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 -- ---------------------------------------------------------------------------
 -- aggregate_shift_product_movements: numeric opening + movement sums
@@ -569,5 +568,3 @@ begin
   execute def;
 end;
 $migration$;
-
-commit;

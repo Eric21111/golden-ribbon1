@@ -1,8 +1,7 @@
 -- Approach A Phase 2: confirm_sale / void restore exact fractional ingredient quantities.
 -- Cart order quantities, prices, discounts, and payments stay integer/money as before.
 -- Preserves the back_office_guard category pricing patch from 20261112101643.
-
-begin;
+-- No explicit BEGIN/COMMIT: Supabase CLI wraps each migration file in its own transaction.
 
 do $migration$
 declare
@@ -179,5 +178,3 @@ grant execute on function public.void_cashier_sale_item(uuid, integer, integer, 
 
 comment on function public.confirm_sale(uuid, jsonb, numeric, text, text, text) is
   'Confirm POS sale. Order quantities stay whole. Ingredient deductions use numeric half-step stock units from product_stock_uses.';
-
-commit;

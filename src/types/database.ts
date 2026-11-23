@@ -438,6 +438,10 @@ export type Database = {
         Args: { p_product_id: string; p_is_active: boolean };
         Returns: Product;
       };
+      archive_product: { Args: { p_product_id: string }; Returns: Product };
+      restore_product: { Args: { p_product_id: string }; Returns: Product };
+      delete_archived_product: { Args: { p_product_id: string }; Returns: undefined };
+      delete_branch: { Args: { p_branch_id: string }; Returns: undefined };
       set_product_category: {
         Args: { p_product_id: string; p_category: string | null };
         Returns: Product;

@@ -11,7 +11,7 @@ interface ProductFilters {
 }
 
 export async function listProducts(filters: ProductFilters = {}): Promise<Product[]> {
-  let query = supabase.from('products').select('*').order('name');
+  let query = supabase.from('products').select('*').is('archived_at', null).order('name');
   const search = filters.search?.trim();
 
   if (filters.activeOnly) query = query.eq('is_active', true);
@@ -84,6 +84,7 @@ export type UpdateInventoryProductInput = InventoryProductInput & {
   isActive: boolean;
 };
 
+/** Includes archived SKUs so a new product cannot reuse one that is only hidden. */
 export async function listProductSkus(): Promise<string[]> {
   const { data, error } = await supabase.from('products').select('sku');
   if (error) throw error;
@@ -300,6 +301,35 @@ export async function configureProductVariants(
  * Ids of every product that has configured options (any product_variants row). Branch Catalogs uses it to tell "no options
  * set up here" from a genuine single-price product, the same way the database does when it decides what the POS may sell.
  */
+export async function listArchivedProducts(search = ''): Promise<Product[]> {
+  let query = supabase.from('products').select('*').not('archived_at', 'is', null).order('archived_at', { ascending: false });
+  const term = search.trim();
+  if (term) {
+    const safeSearch = term.replace(/[,%()]/g, ' ').trim();
+    if (safeSearch) query = query.or(`name.ilike.%${safeSearch}%,sku.ilike.%${safeSearch}%`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function archiveProduct(productId: string): Promise<Product> {
+  const { data, error } = await supabase.rpc('archive_product', { p_product_id: productId });
+  if (error) throw error;
+  return data;
+}
+
+export async function restoreProduct(productId: string): Promise<Product> {
+  const { data, error } = await supabase.rpc('restore_product', { p_product_id: productId });
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteArchivedProduct(productId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_archived_product', { p_product_id: productId });
+  if (error) throw error;
+}
+
 export async function listProductIdsWithOptions(): Promise<string[]> {
   const { data, error } = await supabase.from('product_variants').select('product_id');
   if (error) throw error;

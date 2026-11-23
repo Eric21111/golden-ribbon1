@@ -28,6 +28,9 @@ interface BranchFormProps {
   protectMainBranch?: boolean;
   /** No Save button: the changes are saved when the sheet closes (through `ref.flush`). `onSubmit` must resolve when saved and reject when not. */
   autoSave?: boolean;
+  /** Permanent delete. Not a form save, so it does not mark the branch dirty or call onSubmit. */
+  onDelete?: () => void;
+  deleteLoading?: boolean;
   /** Shows Cancel next to the submit button (Cancel | Create), like Create employee. */
   onCancel?: () => void;
   ref?: Ref<BranchFormHandle>;
@@ -42,6 +45,8 @@ export function BranchForm({
   hideMainToggle = false,
   protectMainBranch = false,
   autoSave = false,
+  onDelete,
+  deleteLoading = false,
   onCancel,
   ref,
   onSubmit,
@@ -186,6 +191,16 @@ export function BranchForm({
         </View>
       )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {onDelete && !protectMainBranch && !isMainBranch ? (
+        <ManagerActionButton
+          label="Delete branch"
+          icon="trash-outline"
+          variant="destructive"
+          loading={deleteLoading}
+          disabled={loading}
+          onPress={onDelete}
+        />
+      ) : null}
       {autoSave ? null : (
         <View style={styles.actions}>
           {onCancel ? (

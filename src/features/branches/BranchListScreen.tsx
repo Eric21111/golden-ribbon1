@@ -21,8 +21,9 @@ import {
   type BranchFilter,
 } from '@/features/branches/branchFilters';
 import type { BranchFormValues } from '@/features/branches/branchSchema';
-import { useBranches, useCreateBranch, useUpdateBranch } from '@/hooks/useBranches';
-import { getErrorMessage } from '@/lib/errors';
+import { useBranches, useCreateBranch, useDeleteBranch, useUpdateBranch } from '@/hooks/useBranches';
+import { confirmAction } from '@/lib/confirmAction';
+import { getErrorMessage, getRetentionActionMessage } from '@/lib/errors';
 import { accentForName } from '@/lib/nameAccent';
 import type { Branch } from '@/types/models';
 
@@ -41,9 +42,12 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
   const query = useBranches();
   const createMutation = useCreateBranch();
   const updateMutation = useUpdateBranch(editBranch?.id ?? '');
+  const deleteMutation = useDeleteBranch();
   const editForm = useRef<BranchFormHandle>(null);
   // after a failed save the next close discards the changes (so the sheet can always be left)
   const discardOnNextClose = useRef(false);
+  // Delete closes the sheet itself. The next close must not run the edit form's auto-save.
+  const closingAfterDelete = useRef(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -84,12 +88,41 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
 
   const openEdit = (branch: Branch) => {
     updateMutation.reset();
+    deleteMutation.reset();
     discardOnNextClose.current = false;
+    closingAfterDelete.current = false;
     setEditBranch(branch);
+  };
+
+  const requestDelete = () => {
+    if (!editBranch || editBranch.is_main_branch || deleteMutation.isPending || updateMutation.isPending) return;
+    const branch = editBranch;
+    confirmAction(
+      'Delete branch?',
+      `This permanently deletes ${branch.name}. It cannot be undone. Branches with employees, stock, sales, shifts, or other history are kept. Turn Active off to deactivate a branch that must keep its records.`,
+      () => {
+        deleteMutation.mutate(branch.id, {
+          onSuccess: () => {
+            closingAfterDelete.current = true;
+            updateMutation.reset();
+            setEditBranch(null);
+          },
+        });
+      },
+      { confirm: 'Delete branch', cancel: 'Cancel', tone: 'danger' },
+    );
   };
 
   const closeEdit = async () => {
     if (updateMutation.isPending) return;
+    if (deleteMutation.isPending) return;
+    if (closingAfterDelete.current) {
+      closingAfterDelete.current = false;
+      updateMutation.reset();
+      deleteMutation.reset();
+      setEditBranch(null);
+      return;
+    }
     if (discardOnNextClose.current) {
       discardOnNextClose.current = false;
       updateMutation.reset();
@@ -210,7 +243,15 @@ export function BranchListScreen({ canCreate, canEdit, openCatalog = false }: Br
               hideMainToggle
               protectMainBranch={editBranch.is_main_branch}
               loading={updateMutation.isPending}
-              error={updateMutation.error ? getErrorMessage(updateMutation.error) : undefined}
+              deleteLoading={deleteMutation.isPending}
+              error={
+                deleteMutation.error
+                  ? getRetentionActionMessage(deleteMutation.error)
+                  : updateMutation.error
+                    ? getErrorMessage(updateMutation.error)
+                    : undefined
+              }
+              onDelete={editBranch.is_main_branch ? undefined : requestDelete}
               onSubmit={submitEdit}
             />
           ) : null}

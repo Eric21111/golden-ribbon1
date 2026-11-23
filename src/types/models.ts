@@ -118,6 +118,9 @@ export type Product = {
   /** meals, snacks, drinks, extras, or supplies. Absent until a manager saves one. */
   product_category?: 'meals' | 'snacks' | 'drinks' | 'extras' | 'supplies' | null;
   is_active: boolean;
+  /** Set when a Main Branch Manager archives the product. Null on the normal Products list. */
+  archived_at?: string | null;
+  archived_by?: string | null;
   inventory_mode: InventoryMode;
   closing_stock_behavior: ClosingStockBehavior;
   /** Stays at branch; excluded from leftover/physical returns. */
