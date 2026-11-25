@@ -73,7 +73,6 @@ export default function ArchivedProductsScreen() {
         <ConstrainedWidth style={styles.column}>
           <View style={styles.filters}>
             <SearchInput value={search} onChangeText={setSearch} placeholder="Search name or SKU" />
-            <Text style={styles.hint}>Archived products are hidden from Products and the cashier. Restore keeps the original product.</Text>
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
           </View>
@@ -141,7 +140,6 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: 0, gap: 0 },
   column: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   filters: { gap: 12, marginBottom: 14 },
-  hint: { color: managerColors.subtext, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
   notice: { color: '#166534', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   error: { color: '#B91C1C', fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18 },
   listContent: { paddingBottom: 16, flexGrow: 1 },

@@ -16,7 +16,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { SearchInput } from '@/components/dashboard/SearchInput';
 import { managerColors } from '@/components/dashboard/theme';
-import { SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
+import { MoreIconButton, SortIconButton } from '@/components/dashboard/ToolbarIconButtons';
 import { MainBranchGuard } from '@/features/auth/MainBranchGuard';
 import {
   CreateProductWizard,
@@ -59,7 +59,7 @@ import {
   useUpdateInventoryProduct,
 } from '@/hooks/useProducts';
 import { getErrorMessage, getProductErrorMessage, getRetentionActionMessage } from '@/lib/errors';
-import { confirmAction } from '@/lib/confirmAction';
+import { alertNotice, confirmAction } from '@/lib/confirmAction';
 import { endSubmit, tryBeginSubmit } from '@/lib/submitLock';
 import { DISCARD_DIALOG, decideClose } from '@/features/products/wizardGuards';
 import { setProductCategory, setProductNonReturnable, setProductSellInPos, setProductStatus } from '@/services/productService';
@@ -109,7 +109,10 @@ export default function ManagerProductListScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
-  const [archiveError, setArchiveError] = useState('');
+  // The ⋯ in the header: Archived Products and Branch catalogs.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // The product whose ⋯ menu (Edit / Archive) is open on the list.
+  const [actionProduct, setActionProduct] = useState<Product | null>(null);
   const [modeError, setModeError] = useState('');
   const [createNotice, setCreateNotice] = useState('');
   const client = useQueryClient();
@@ -356,37 +359,36 @@ export default function ManagerProductListScreen() {
     });
   };
 
-  const requestArchive = () => {
-    if (!editProduct || isArchiving || isEditSubmitting) return;
-    const product = editProduct;
+  // Archive is a product-level action, so it starts from the ⋯ menu on a row in the list, not from the Edit form.
+  const requestArchive = (product: Product) => {
+    if (isArchiving || isEditSubmitting) return;
     confirmAction(
       'Archive product?',
-      `${product.name} will be hidden from Products and the cashier. Its enabled or disabled setting, stock, recipes, and sales history stay on this same product. This is not the same as turning Enable Product off.`,
+      `${product.name} will be hidden from Products and the cashier. Stock, recipes, and sales history are kept. You can restore it anytime.`,
       () => {
         if (!tryBeginSubmit(archiveSubmittingRef)) return;
         setIsArchiving(true);
-        setArchiveError('');
+        setCreateNotice('');
         void archiveMutation
           .mutateAsync(product.id)
           .then(() => {
-            editDirtyRef.current = false;
-            setCreateNotice(`${product.name} was archived. Open Archived Products to restore or delete it.`);
-            setEditProduct(null);
+            alertNotice('Product archived', `${product.name} was archived. Open Archived Products to restore or delete it.`, 'success');
           })
-          .catch((error: unknown) => setArchiveError(getRetentionActionMessage(error)))
+          .catch((error: unknown) =>
+            alertNotice('Can’t archive product', `${product.name} was not archived. ${getRetentionActionMessage(error)}`, 'warning'),
+          )
           .finally(() => {
             endSubmit(archiveSubmittingRef);
             setIsArchiving(false);
           });
       },
-      { confirm: 'Archive product', cancel: 'Cancel', tone: 'warning' },
+      { confirm: 'Archive', cancel: 'Cancel', tone: 'warning' },
     );
   };
 
   const requestCloseEdit = () => {
     const closeNow = () => {
       editDirtyRef.current = false;
-      setArchiveError('');
       setEditProduct(null);
     };
     if (decideClose({ dirty: editDirtyRef.current, submitting: isEditSubmitting || isArchiving }) === 'close') {
@@ -403,7 +405,10 @@ export default function ManagerProductListScreen() {
   return (
     <MainBranchGuard>
       <Screen backgroundColor="#FFFFFF" edges={['top']} scroll={false} contentContainerStyle={styles.screenContent}>
-        <ManagerScreenHeader title="Products" />
+        <ManagerScreenHeader
+          title="Products"
+          right={<MoreIconButton label="More product options" hint="Opens Archived Products and Branch catalogs" onPress={() => setMoreOpen(true)} />}
+        />
 
         <ConstrainedWidth style={styles.column}>
           <View style={styles.filters}>
@@ -485,15 +490,27 @@ export default function ManagerProductListScreen() {
                   }
                   accessibilityLabel={text.spoken}
                   accessibilityHint="Opens edit product"
+                  hideChevron
+                  trailingHasControls
                   trailing={
-                    <ManagerBadge
-                      label={item.is_active ? 'Enabled' : 'Disabled'}
-                      tone={item.is_active ? 'success' : 'neutral'}
-                    />
+                    <>
+                      <ManagerBadge
+                        label={item.is_active ? 'Enabled' : 'Disabled'}
+                        tone={item.is_active ? 'success' : 'neutral'}
+                      />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`More actions for ${item.name}`}
+                        hitSlop={10}
+                        onPress={() => setActionProduct(item)}
+                        style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={20} color={managerColors.subtext} />
+                      </Pressable>
+                    </>
                   }
                   onPress={() => {
                     editDirtyRef.current = false;
-                    setArchiveError('');
                     setEditProduct(item);
                   }}
                 />
@@ -512,18 +529,6 @@ export default function ManagerProductListScreen() {
                 setCreateKey((key) => key + 1);
                 setCreateOpen(true);
               }}
-            />
-            <ManagerActionButton
-              label="Archived Products"
-              icon="archive-outline"
-              variant="secondary"
-              onPress={() => router.push('/manager/products/archived' as never)}
-            />
-            <ManagerActionButton
-              label="View branch catalogs"
-              icon="pricetags-outline"
-              variant="secondary"
-              onPress={() => router.push('/manager/catalog' as never)}
             />
           </View>
         </ConstrainedWidth>
@@ -613,9 +618,6 @@ export default function ManagerProductListScreen() {
                 modeError
                 || (updateCompleteMutation.error ? getProductErrorMessage(updateCompleteMutation.error) : undefined)
               }
-              archiveError={archiveError}
-              archiveLoading={isArchiving}
-              onArchive={requestArchive}
               onSubmit={submitEdit}
               onDirtyChange={(dirty) => {
                 editDirtyRef.current = dirty;
@@ -661,6 +663,67 @@ export default function ManagerProductListScreen() {
             })}
           </View>
         </BottomSheet>
+
+        <BottomSheet visible={moreOpen} title="Products" onClose={() => setMoreOpen(false)}>
+          <View style={styles.sortList}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setMoreOpen(false);
+                router.push('/manager/products/archived' as never);
+              }}
+              style={({ pressed }) => [styles.sortRow, pressed && styles.pressed]}
+            >
+              <Ionicons name="archive-outline" size={20} color={managerColors.ink} />
+              <Text style={styles.sortRowLabel}>Archived Products</Text>
+              <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setMoreOpen(false);
+                router.push('/manager/catalog' as never);
+              }}
+              style={({ pressed }) => [styles.sortRow, pressed && styles.pressed]}
+            >
+              <Ionicons name="pricetags-outline" size={20} color={managerColors.ink} />
+              <Text style={styles.sortRowLabel}>Branch catalogs</Text>
+              <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} />
+            </Pressable>
+          </View>
+        </BottomSheet>
+
+        <BottomSheet visible={actionProduct != null} title={actionProduct?.name ?? 'Product'} onClose={() => setActionProduct(null)}>
+          <View style={styles.sortList}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                const target = actionProduct;
+                setActionProduct(null);
+                if (!target) return;
+                editDirtyRef.current = false;
+                setEditProduct(target);
+              }}
+              style={({ pressed }) => [styles.sortRow, pressed && styles.pressed]}
+            >
+              <Ionicons name="create-outline" size={20} color={managerColors.ink} />
+              <Text style={styles.sortRowLabel}>Edit product</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isArchiving || isEditSubmitting}
+              onPress={() => {
+                const target = actionProduct;
+                setActionProduct(null);
+                if (target) requestArchive(target);
+              }}
+              style={({ pressed }) => [styles.sortRow, pressed && styles.pressed, (isArchiving || isEditSubmitting) && styles.disabledRow]}
+            >
+              <Ionicons name="archive-outline" size={20} color="#B91C1C" />
+              <Text style={[styles.sortRowLabel, styles.archiveRowLabel]}>Archive product</Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
       </Screen>
     </MainBranchGuard>
   );
@@ -677,6 +740,9 @@ const styles = StyleSheet.create({
   fact: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   factText: { flexShrink: 1, color: managerColors.subtext, fontFamily: 'Inter_500Medium', fontSize: 12 },
   pressed: { opacity: 0.75 },
+  moreButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  disabledRow: { opacity: 0.5 },
+  archiveRowLabel: { color: '#B91C1C' },
   sortList: { gap: 8, paddingBottom: 8 },
   sortRow: {
     minHeight: 52,

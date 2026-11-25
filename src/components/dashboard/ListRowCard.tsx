@@ -28,6 +28,10 @@ interface ListRowCardProps {
   titleLines?: number;
   /** A small code-style tag (e.g. the SKU) right after the title. It drops to the next line when the name is long. */
   titleTag?: string;
+  /** Hides the › on a tappable card, e.g. when the trailing area already holds its own control (a ⋯ menu). */
+  hideChevron?: boolean;
+  /** True when `trailing` contains a button of its own. It is then placed beside the tappable card body, not inside it. */
+  trailingHasControls?: boolean;
 }
 
 export function ListRowCard({
@@ -45,11 +49,16 @@ export function ListRowCard({
   accessibilityHint,
   titleLines = 2,
   titleTag,
+  hideChevron = false,
+  trailingHasControls = false,
 }: ListRowCardProps) {
   const chip = statChipColors[iconColor];
 
-  const content = (
-    <View style={styles.row}>
+  // `trailing` holds its own button: it sits NEXT TO the tappable part, not inside it (a button inside a button is invalid on web).
+  const trailingOutside = Boolean(trailing) && trailingHasControls && Boolean(onPress);
+
+  const main = (
+    <>
       {icon ? (
         <View
           accessible={iconLabel != null}
@@ -91,10 +100,29 @@ export function ListRowCard({
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
         {metaRow ? <View style={styles.metaRow}>{metaRow}</View> : null}
       </View>
-      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      {onPress ? <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} style={styles.chevron} /> : null}
-    </View>
+      {trailing && !trailingOutside ? <View style={styles.trailing}>{trailing}</View> : null}
+      {onPress && !hideChevron ? <Ionicons name="chevron-forward" size={18} color={managerColors.subtext} style={styles.chevron} /> : null}
+    </>
   );
+
+  if (trailingOutside) {
+    return (
+      <View style={[styles.card, styles.row]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityHint={accessibilityHint}
+          onPress={onPress}
+          style={({ pressed }) => [styles.row, styles.mainPressable, pressed && styles.pressed]}
+        >
+          {main}
+        </Pressable>
+        <View style={styles.trailing}>{trailing}</View>
+      </View>
+    );
+  }
+
+  const content = <View style={styles.row}>{main}</View>;
 
   if (!onPress) {
     return <View style={styles.card}>{content}</View>;
@@ -128,6 +156,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mainPressable: { flex: 1, minWidth: 0 },
   iconChip: {
     width: 40,
     height: 40,

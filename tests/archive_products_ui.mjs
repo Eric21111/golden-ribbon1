@@ -15,14 +15,47 @@ const branchList = read('src/features/branches/BranchListScreen.tsx');
 const productService = read('src/services/productService.ts');
 const migration = read('supabase/migrations/20261118000000_archive_products_and_delete_branches.sql');
 
-assert.match(products, /label="Archived Products"/);
+assert.match(products, /<Text style=\{styles\.sortRowLabel\}>Archived Products<\/Text>/);
+// Footer is Create product only. Archived Products and Branch catalogs are the rarely used places: they live in the header ⋯ sheet.
+assert.doesNotMatch(products, /label="Archived Products"|footerRow|footerSmallButton/);
+assert.doesNotMatch(products, /View branch catalogs/);
+assert.match(products, /<MoreIconButton label="More product options"[\s\S]{0,120}setMoreOpen\(true\)/);
+assert.match(products, /title="Products" onClose=\{\(\) => setMoreOpen\(false\)\}[\s\S]{0,500}router\.push\('\/manager\/products\/archived' as never\)[\s\S]{0,900}>Branch catalogs</);
+assert.match(products, /router\.push\('\/manager\/catalog' as never\)/);
 assert.match(products, /\/manager\/products\/archived/);
-assert.doesNotMatch(sidebar, /Archived Products/);
+// Main Manager sidebar: Archived Products is a child of the Products dropdown (like Branches > Branch Catalogs).
+assert.match(
+  sidebar,
+  /label: 'Products',\s*href: '\/manager\/products',[\s\S]{0,200}children: \[\s*\{ label: 'Archived Products', href: '\/manager\/products\/archived', icon: 'archive-outline', selectedIcon: 'archive' \}/,
+);
+assert.equal((sidebar.match(/Archived Products/g) ?? []).length, 1, 'only the main-manager menu lists it (owner and selling managers do not)');
 assert.match(layout, /manager\/products\/archived/);
-assert.match(wizard, /label="Archive Product"/);
+// Archive is a product-level action: it starts from the ⋯ menu on each row of the list (Edit / Archive), not from the Edit
+// form or its header. Tapping the row still opens Edit. The confirm sheet still guards the archive.
+assert.doesNotMatch(wizard, /<SectionHeader title="Archive" \/>|Archive Product|onArchive|archiveLoading|archiveError/);
+assert.doesNotMatch(read('src/components/BottomSheet.tsx'), /menuItems|setMenuOpen/);
+assert.doesNotMatch(products, /menuItems|archiveError|setArchiveError/);
+assert.match(products, /accessibilityLabel=\{`More actions for \$\{item\.name\}`\}[\s\S]{0,200}onPress=\{\(\) => setActionProduct\(item\)\}/);
+assert.match(products, /<Text style=\{styles\.sortRowLabel\}>Edit product<\/Text>/);
+assert.match(products, /<Text style=\{\[styles\.sortRowLabel, styles\.archiveRowLabel\]\}>Archive product<\/Text>/);
+assert.match(products, /if \(target\) requestArchive\(target\);/);
+assert.match(products, /accessibilityHint="Opens edit product"\s*hideChevron/);
+assert.match(read('src/components/dashboard/ListRowCard.tsx'), /onPress && !hideChevron/);
+// The row's ⋯ is a button, so it must sit BESIDE the tappable row body, never inside it (web: <button> cannot nest a <button>).
+assert.match(products, /hideChevron\s*trailingHasControls/);
+assert.match(read('src/components/dashboard/ListRowCard.tsx'), /trailingHasControls && Boolean\(onPress\)/);
+assert.match(read('src/components/dashboard/ListRowCard.tsx'), /<\/Pressable>\s*<View style=\{styles\.trailing\}>\{trailing\}<\/View>/);
+assert.match(products, /const requestArchive = \(product: Product\) =>/);
+// A refused archive (e.g. still used in a recipe) is a modal notice, not a line of text above the list.
+assert.match(products, /alertNotice\('Can’t archive product', `\$\{product\.name\} was not archived\. \$\{getRetentionActionMessage\(error\)\}`, 'warning'\)/);
+assert.doesNotMatch(products, /setCreateNotice\(`\$\{product\.name\} was not archived/);
+// ...and so is the success notice.
+assert.match(products, /alertNotice\('Product archived', `\$\{product\.name\} was archived\. Open Archived Products to restore or delete it\.`, 'success'\)/);
+assert.doesNotMatch(products, /setCreateNotice\(`\$\{product\.name\} was archived/);
 assert.match(products, /Archive product\?/);
-assert.match(products, /This is not the same as turning Enable Product off/);
-assert.match(products, /onArchive=\{requestArchive\}/);
+assert.match(products, /will be hidden from Products and the cashier\. Stock, recipes, and sales history are kept\. You can restore it anytime\./);
+assert.match(products, /\{ confirm: 'Archive', cancel: 'Cancel', tone: 'warning' \}/);
+assert.doesNotMatch(archived, /Archived products are hidden from Products and the cashier/);
 assert.match(archived, /Restore product\?/);
 assert.match(archived, /Delete product permanently\?/);
 assert.match(archived, /Search name or SKU/);

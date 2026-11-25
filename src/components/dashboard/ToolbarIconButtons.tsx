@@ -70,6 +70,21 @@ export function BranchInventoryIconButton({ onPress }: { onPress: () => void }) 
   );
 }
 
+/** The ⋯ button for a screen's less-used places (e.g. Archived Products). Same 46 x 46 size as Filter and Sort. */
+export function MoreIconButton({ onPress, label = 'More', hint = 'Opens more options' }: { onPress: () => void; label?: string; hint?: string }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      onPress={onPress}
+      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+    >
+      <Ionicons name="ellipsis-horizontal" size={20} color={managerColors.ink} />
+    </Pressable>
+  );
+}
+
 /** Opens the sort sheet. `currentLabel` is the sort in use (read out loud); `active` is true when it is not the default. */
 export function SortIconButton({ currentLabel, active, onPress }: { currentLabel?: string; active: boolean; onPress: () => void }) {
   return (

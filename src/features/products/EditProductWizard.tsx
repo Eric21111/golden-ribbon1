@@ -122,10 +122,6 @@ interface EditProductWizardProps {
   branchOptions: Array<{ id: string; name: string }>;
   loading?: boolean;
   error?: string;
-  /** Archive is separate from Enable Product. The screen confirms, then calls the archive RPC. */
-  onArchive?: () => void;
-  archiveLoading?: boolean;
-  archiveError?: string;
   /**
    * `pricing` is only the branches that need writing (new or changed prices). Saving keeps what is switched off at a branch.
    */
@@ -157,9 +153,6 @@ export function EditProductWizard({
   branchOptions,
   loading = false,
   error,
-  onArchive,
-  archiveLoading = false,
-  archiveError,
   onSubmit,
   onDirtyChange,
 }: EditProductWizardProps) {
@@ -699,23 +692,6 @@ export function EditProductWizard({
               <ProductStatusField value={isActive} onChange={setIsActive} />
             </SettingsCard>
           </View>
-          {onArchive ? (
-            <View style={styles.group}>
-              <SectionHeader title="Archive" />
-              <Text style={styles.hint}>
-                Hides this product from Products and the cashier. Enable Product, stock, recipes, and sales history stay as they are.
-              </Text>
-              {archiveError ? <Text style={styles.error}>{archiveError}</Text> : null}
-              <ManagerActionButton
-                label="Archive Product"
-                icon="archive-outline"
-                variant="danger"
-                loading={archiveLoading}
-                disabled={loading}
-                onPress={onArchive}
-              />
-            </View>
-          ) : null}
         </View>
       ) : null}
 
@@ -807,7 +783,7 @@ export function EditProductWizard({
             inventoryOnly ? (
               <ManagerActionButton label="Save changes" loading={loading} onPress={submit} />
             ) : (
-              <ManagerActionButton label="Next" disabled={archiveLoading} onPress={goToStep2} />
+              <ManagerActionButton label="Next" onPress={goToStep2} />
             )
           ) : step === 2 ? (
             <ManagerActionButton label="Next: Pricing" onPress={goToStep3} />
