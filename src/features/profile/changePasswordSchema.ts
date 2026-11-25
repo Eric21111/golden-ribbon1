@@ -4,14 +4,12 @@ export const currentPinStepSchema = z.object({
   current_password: z
     .string()
     .min(1, 'Current PIN is required.')
-    .refine((value) => !/^\d+$/.test(value) || value.length === 6, {
-      message: 'Enter exactly six digits.',
-    }),
+    .regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
 });
 
 export const newPinStepSchema = z
   .object({
-    current_password: z.string().min(1),
+    current_password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
     new_password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
     confirm_password: z.string().min(1, 'Confirm PIN is required.'),
   })

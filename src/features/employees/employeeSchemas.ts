@@ -21,7 +21,7 @@ export const editEmployeeSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
-  confirm_password: z.string().min(1, 'Confirm the temporary password.'),
+  confirm_password: z.string().min(1, 'Confirm the new PIN.'),
 }).refine((values) => values.password === values.confirm_password, {
   message: 'PINs do not match.',
   path: ['confirm_password'],

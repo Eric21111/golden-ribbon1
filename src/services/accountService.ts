@@ -29,6 +29,7 @@ export async function changeOwnName(fullName: string): Promise<string> {
  * Confirms the caller's current Auth password / PIN without changing it.
  */
 export async function verifyOwnPassword(currentPassword: string): Promise<void> {
+  if (!/^[0-9]{6}$/.test(currentPassword)) throw new Error('Enter exactly six digits.');
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user?.email) {
     throw new Error('Your session has expired. Sign in again.');
@@ -61,6 +62,7 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
  * Authorization is enforced server-side for Owner / Main Branch Manager.
  */
 export async function changeOwnEmail(currentPassword: string, newEmail: string): Promise<ChangeOwnEmailResult> {
+  if (!/^[0-9]{6}$/.test(currentPassword)) throw new Error('Enter exactly six digits.');
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user?.email) {
     throw new Error('Your session has expired. Sign in again.');

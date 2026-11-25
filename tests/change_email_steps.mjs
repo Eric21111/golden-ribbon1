@@ -32,7 +32,7 @@ const render = (props = {}, over = {}) => { index = 0; overrides = over; buttons
 let html = render();
 let text = flat(html);
 assert.match(text, /^\|1\|2\|Current PIN\|Current email\|golden-ribbon@gmail\.com\|Current PIN\| \*\|/, 'the steps, the read-only current email, then the PIN with a red star');
-assert.match(text, /Use password instead\|Cancel\|Continue\|$/, 'Cancel | Continue');
+assert.match(text, /Cancel\|Continue\|$/, 'Cancel | Continue');
 assert.doesNotMatch(text, /New email|Confirm email|Update/, 'the new email is for step 2');
 assert.match(html, /data-icon="lock-closed-outline"/, 'the current email is read-only');
 assert.equal((html.match(/aria-label="Current PIN, digit \d of 6"/g) ?? []).length, 6);
@@ -56,7 +56,7 @@ assert.ok(src.includes("setError('current_password', { message: 'Current PIN is 
 assert.ok(src.includes('Verification has been sent to your email. Complete verification to finish changing your email.'), 'the verification message is unchanged');
 assert.ok(src.includes('Your email has been updated.'));
 assert.match(src, /setTimeout\(\(\) => onDone\(\), 900\)/, 'the sheet closes about a second after the message');
-assert.match(src, /allowPassword\s+required\s+compact/, 'a red star, compact boxes, and "Use password instead" stays');
+assert.doesNotMatch(src, /allowPassword/, 'verification accepts only PINs');
 assert.match(src, /label="New email"\s+required/);
 assert.match(src, /label="Confirm email"\s+required/);
 for (const file of ['app/(manager)/manager/profile.tsx', 'app/(owner)/owner/profile.tsx']) {

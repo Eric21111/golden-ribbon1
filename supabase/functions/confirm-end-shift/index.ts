@@ -21,11 +21,11 @@ Deno.serve(async req => {
     const {data:{user},error:sessionError} = await auth.auth.getUser(token);
     if (sessionError || !user?.email) return reply(401,{message:'Sign in again.'});
     const {shiftId,credential} = await req.json();
-    if (typeof shiftId!=='string' || !/^[0-9a-f-]{36}$/i.test(shiftId) || typeof credential!=='string' || !credential || credential.length>256)
-      return reply(400,{message:'Enter your current PIN or beta password.'});
+    if (typeof shiftId!=='string' || !/^[0-9a-f-]{36}$/i.test(shiftId) || typeof credential!=='string' || !/^[0-9]{6}$/.test(credential))
+      return reply(400,{message:'Enter your current six-digit PIN.'});
     const challenge = await auth.auth.signInWithPassword({email:user.email,password:credential});
     if (challenge.error || challenge.data.user?.id!==user.id)
-      return reply(challenge.error?.status===429?429:403,{message:challenge.error?.status===429?'Too many attempts. Try again later.':'Incorrect PIN or beta password.'});
+      return reply(challenge.error?.status===429?429:403,{message:challenge.error?.status===429?'Too many attempts. Try again later.':'Incorrect six-digit PIN.'});
     // Only dispose of the temporary verification session; the device session stays signed in.
     await auth.auth.signOut({scope:'local'});
     const admin = createClient(url,adminKey,options);

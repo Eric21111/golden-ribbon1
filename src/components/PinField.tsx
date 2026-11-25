@@ -9,7 +9,6 @@ import {
   type TextStyle,
 } from 'react-native';
 
-import { FormField } from '@/components/FormField';
 import { managerColors } from '@/components/dashboard/theme';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
@@ -21,8 +20,6 @@ type Props = {
   value: string;
   onChangeText: (value: string) => void;
   error?: string;
-  allowPassword?: boolean;
-  onLegacyChange?: (legacy: boolean) => void;
   accentColor?: string;
   labelStyle?: StyleProp<TextStyle>;
   errorStyle?: StyleProp<TextStyle>;
@@ -39,8 +36,6 @@ export function PinField({
   value,
   onChangeText,
   error,
-  allowPassword,
-  onLegacyChange,
   accentColor = managerColors.royalBlue,
   labelStyle,
   errorStyle,
@@ -52,52 +47,8 @@ export function PinField({
 }: Props) {
   const isDark = appearance === 'dark';
   const refs = useRef<Array<TextInput | null>>([]);
-  const [legacy, setLegacy] = useState(false);
   const [focused, setFocused] = useState(-1);
   const [revealed, setRevealed] = useState(false);
-
-  if (legacy) {
-    return (
-      <View style={styles.wrap}>
-        <FormField
-          label="Password"
-          required={required}
-          appearance={appearance}
-          value={value}
-          onChangeText={onChangeText}
-          error={error}
-          secureTextEntry={!revealed}
-          autoCapitalize="none"
-          autoCorrect={false}
-          accentColor={accentColor}
-          labelStyle={labelStyle}
-          errorStyle={errorStyle}
-          rightIcon={revealed ? 'eye-outline' : 'eye-off-outline'}
-          rightIconAccessibilityLabel={revealed ? 'Hide password' : 'Show password'}
-          onRightIconPress={() => setRevealed((prev) => !prev)}
-          importantForAutofill="no"
-          textContentType="none"
-          autoComplete="off"
-        />
-        {allowPassword ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Use six-digit PIN instead"
-            hitSlop={10}
-            onPress={() => {
-              onChangeText('');
-              setRevealed(false);
-              setLegacy(false);
-              onLegacyChange?.(false);
-            }}
-            style={({ pressed }) => [styles.switchHit, pressed && styles.pressed]}
-          >
-            <Text style={[styles.switchText, { color: accentColor }]}>Use six-digit PIN instead</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    );
-  }
 
   const meta = error ? (
     <Text accessibilityRole="alert" style={[styles.metaText, styles.error, isDark && styles.errorDark, errorStyle]}>
@@ -105,21 +56,6 @@ export function PinField({
     </Text>
   ) : hint ? (
     <Text style={[styles.metaText, styles.hint, isDark && styles.hintDark]}>{hint}</Text>
-  ) : allowPassword ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Use password instead"
-      hitSlop={10}
-      onPress={() => {
-        onChangeText('');
-        setRevealed(false);
-        setLegacy(true);
-        onLegacyChange?.(true);
-      }}
-      style={({ pressed }) => [styles.switchHit, pressed && styles.pressed]}
-    >
-      <Text style={[styles.switchText, { color: accentColor }]}>Use password instead</Text>
-    </Pressable>
   ) : (
     <Text style={[styles.metaText, styles.metaSpacer]}> </Text>
   );
@@ -197,7 +133,7 @@ export function PinField({
           );
         })}
       </View>
-      {compact && !error && !hint && !allowPassword ? null : <View style={compact ? styles.metaCompact : styles.meta}>{meta}</View>}
+      {compact && !error && !hint ? null : <View style={compact ? styles.metaCompact : styles.meta}>{meta}</View>}
     </View>
   );
 }
@@ -289,17 +225,5 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
   },
   errorDark: { color: '#FCA5A5' },
-  switchHit: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingVertical: 8,
-    alignSelf: 'flex-start',
-  },
-  switchText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.1,
-  },
   pressed: { opacity: 0.7 },
 });

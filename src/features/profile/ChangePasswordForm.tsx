@@ -87,7 +87,7 @@ export function ChangePasswordForm({
       scrollToTop();
     } catch (error) {
       const message = getChangePasswordErrorMessage(error);
-      if (message === 'Current password is incorrect.') {
+      if (message === 'Current PIN is incorrect.') {
         setError('current_password', { message: 'Current PIN is incorrect.' });
       } else {
         setError('root', { message });
@@ -123,11 +123,11 @@ export function ChangePasswordForm({
       setSuccess('PIN updated.');
     } catch (error) {
       const message = getChangePasswordErrorMessage(error);
-      if (message === 'Current password is incorrect.') {
+      if (message === 'Current PIN is incorrect.') {
         setStep(1);
         scrollToTop();
         setError('current_password', { message: 'Current PIN is incorrect.' });
-      } else if (message === 'New password must be different from the current password.') {
+      } else if (message === 'New PIN must be different from the current PIN.') {
         setError('new_password', { message: 'Choose a different PIN.' });
       } else {
         setError('root', { message });
@@ -172,7 +172,7 @@ export function ChangePasswordForm({
                 clearErrors('current_password');
               }}
               error={fieldState.error?.message}
-              allowPassword
+
               required
               accentColor={accentColor}
               labelStyle={labelStyle}

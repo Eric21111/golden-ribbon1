@@ -57,6 +57,31 @@ assert.equal((await send('unknown','012345')).status,401);
 assert.equal((await send('valid','999999')).status,403);
 claimedId='someone-else';assert.equal((await send('valid',verified)).status,403);assert.equal(closed,0);
 claimedId=user.id;assert.equal((await send('valid',verified)).status,200);
-verified='ExistingBetaPassword';assert.equal((await send('valid',verified)).status,200);
-assert.equal(closed,2);assert.equal(revoked,2);
-console.log('PIN input, verified account, incorrect credentials and beta transition passed.');
+for (const invalid of ['ExistingBetaPassword', '12345', '1234567', '12a456', ' 12345', '', 123456]) {
+  verified=invalid;
+  assert.equal((await send('valid',invalid)).status,400);
+}
+assert.equal(closed,1);assert.equal(revoked,1);
+console.log('PIN input, verified account, incorrect credentials and rejection of beta passwords and invalid PINs passed.');
+
+// Validate at the service boundary as well as in the form.
+let authCalls=0;
+const account=loadTs('src/services/accountService.ts', {
+  '@/lib/supabase': {supabase:{auth:{
+    getUser:async()=>{authCalls++;return {data:{user}};},
+    signInWithPassword:async ({password})=>{authCalls++;assert.equal(password,'012345');return {data:{user}};},
+  }}},
+});
+for (const invalid of ['BetaPassword','12345','1234567','12345a','１２３４５６']) {
+  await assert.rejects(account.verifyOwnPassword(invalid), /six digits/);
+  await assert.rejects(account.changeOwnEmail(invalid,'new@example.test'), /six digits/);
+  await assert.rejects(account.changeOwnPassword(invalid,'012345'), /six digits/);
+}
+assert.equal(authCalls,0,'invalid PINs never reach authentication');
+await account.verifyOwnPassword('012345');
+assert.equal(authCalls,2);
+const {currentPinStepSchema}=loadTs('src/features/profile/changePasswordSchema.ts');
+for(const value of ['BetaPassword','12345','1234567','12345a'])
+  assert.equal(currentPinStepSchema.safeParse({current_password:value}).success,false);
+assert.equal(currentPinStepSchema.safeParse({current_password:'012345'}).success,true);
+console.log('PIN-only service validation and leading-zero PIN verification passed.');

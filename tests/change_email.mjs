@@ -34,13 +34,13 @@ function issues(currentEmail, values) {
 }
 
 assert.deepEqual(issues('owner@example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: 'owner-new@example.com',
   confirm_email: 'owner-new@example.com',
 }), []);
 
 assert.deepEqual(issues('owner@example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: '  owner-new@example.com  ',
   confirm_email: 'owner-new@example.com',
 }), []);
@@ -49,36 +49,36 @@ assert.ok(issues('owner@example.com', {
   current_password: '',
   new_email: 'owner-new@example.com',
   confirm_email: 'owner-new@example.com',
-}).some((message) => message.includes('Current password is required.')));
+}).some((message) => message.includes('Current PIN is required.')));
 
 assert.ok(issues('owner@example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: 'not-an-email',
   confirm_email: 'not-an-email',
 }).some((message) => message.includes('Enter a valid email address.')));
 
 const mismatch = issues('owner@example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: 'a@example.com',
   confirm_email: 'b@example.com',
 });
 assert.ok(mismatch.some((message) => message.includes('Emails do not match.')));
 
 assert.ok(issues('owner@example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: 'owner@example.com',
   confirm_email: 'owner@example.com',
 }).some((message) => message.includes('New email must be different from the current email.')));
 
 assert.ok(issues('Owner@Example.com', {
-  current_password: 'Current#1',
+  current_password: '654321',
   new_email: 'owner@example.com',
   confirm_email: 'owner@example.com',
 }).some((message) => message.includes('New email must be different from the current email.')));
 
 assert.equal(
   getChangeEmailErrorMessage(new Error('Invalid login credentials')),
-  'Current password is incorrect.'
+  'Current PIN is incorrect.'
 );
 assert.equal(
   getChangeEmailErrorMessage({ message: 'Auth session missing' }),
@@ -107,7 +107,7 @@ assert.equal(
 
 const secret = 'SuperSecretPassword!42';
 const leaked = getChangeEmailErrorMessage(new Error(`Invalid login credentials for ${secret}`));
-assert.equal(leaked, 'Current password is incorrect.');
+assert.equal(leaked, 'Current PIN is incorrect.');
 assert.equal(leaked.includes(secret), false);
 
 assert.equal(canChangeOwnEmail({ role: 'owner', branch: null }), true);
@@ -135,7 +135,8 @@ const form = readFileSync('src/features/profile/ChangeEmailForm.tsx', 'utf8');
 assert.equal(form.includes('console.log'), false);
 assert.equal(form.includes('user_id'), false);
 assert.equal(form.includes('userId'), false);
-assert.match(form, /secureTextEntry/);
+assert.match(form, /<PinField/);
+assert.match(readFileSync('src/components/PinField.tsx', 'utf8'), /secureTextEntry=\{!revealed\}/);
 assert.match(form, /Verification has been sent to your email/);
 
 const account = readFileSync('app/(owner)/owner/profile.tsx', 'utf8');

@@ -34,7 +34,7 @@ const loginSchema = z.object({
     .trim()
     .min(1, 'Email is required.')
     .email('Enter a valid email address.'),
-  password: z.string().min(1, 'PIN is required.'),
+  password: z.string().regex(/^[0-9]{6}$/, 'Enter exactly six digits.'),
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
@@ -113,7 +113,6 @@ export default function LoginScreen() {
   const horizontalPad = isTablet ? spacing.xl : spacing.lg;
   const logoWidth = Math.min(isTablet ? 260 : width * 0.48, isTablet ? 260 : 210);
   const logoHeight = logoWidth * 0.72;
-  const [legacyLogin, setLegacyLogin] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const aboveCenterBias = isKeyboardVisible ? 0 : Math.min(height * 0.04, isCompact ? 20 : 32);
 
@@ -134,7 +133,7 @@ export default function LoginScreen() {
   });
 
   const submit = async (values: LoginValues) => {
-    if (!legacyLogin && !/^[0-9]{6}$/.test(values.password)) {
+    if (!/^[0-9]{6}$/.test(values.password)) {
       setError('password', { message: 'Enter all six digits.' });
       return;
     }
@@ -243,7 +242,7 @@ export default function LoginScreen() {
                     name="password"
                     render={({ field, fieldState }) => (
                       <PinField
-                        label={legacyLogin ? 'Password' : 'PIN'}
+                        label="PIN"
                         required
                         appearance="dark"
                         value={field.value}
@@ -252,11 +251,6 @@ export default function LoginScreen() {
                           if (fieldState.error || formState.errors.root) clearErrors();
                         }}
                         error={fieldState.error?.message}
-                        allowPassword
-                        onLegacyChange={(legacy) => {
-                          setLegacyLogin(legacy);
-                          clearErrors();
-                        }}
                         accentColor={GOLD}
                       />
                     )}

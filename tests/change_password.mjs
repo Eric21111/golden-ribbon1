@@ -33,7 +33,7 @@ function issues(values) {
 }
 
 assert.deepEqual(issues({
-  current_password: 'Current#1',
+  current_password: '654321',
   new_password: '012345',
   confirm_password: '012345',
 }), []);
@@ -45,13 +45,13 @@ assert.ok(issues({
 }).some((message) => message.includes('Current PIN is required.')));
 
 assert.ok(issues({
-  current_password: 'Current#1',
+  current_password: '654321',
   new_password: 'short',
   confirm_password: 'short',
 }).some((message) => message.includes('Enter exactly six digits.')));
 
 const mismatch = issues({
-  current_password: 'Current#1',
+  current_password: '654321',
   new_password: '012345',
   confirm_password: 'Current#3ok',
 });
@@ -66,7 +66,7 @@ assert.ok(issues({
 
 assert.equal(
   getChangePasswordErrorMessage(new Error('Invalid login credentials')),
-  'Current password is incorrect.'
+  'Current PIN is incorrect.'
 );
 assert.equal(
   getChangePasswordErrorMessage({ message: 'Auth session missing' }),
@@ -74,7 +74,7 @@ assert.equal(
 );
 assert.equal(
   getChangePasswordErrorMessage(new Error('Password should be different from the old password.')),
-  'New password must be different from the current password.'
+  'New PIN must be different from the current PIN.'
 );
 assert.equal(
   getChangePasswordErrorMessage(new Error('Password is known to be leaked and is too weak')),
@@ -86,12 +86,12 @@ assert.equal(
 );
 assert.equal(
   getChangePasswordErrorMessage(new Error('unexpected gotrue stack at AuthApiError')),
-  'The password could not be changed. Please try again.'
+  'The PIN could not be changed. Please try again.'
 );
 
 const secret = 'SuperSecretPassword!42';
 const leaked = getChangePasswordErrorMessage(new Error(`Invalid login credentials for ${secret}`));
-assert.equal(leaked, 'Current password is incorrect.');
+assert.equal(leaked, 'Current PIN is incorrect.');
 assert.equal(leaked.includes(secret), false);
 
 const service = readFileSync('src/services/accountService.ts', 'utf8');

@@ -82,6 +82,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [userId, branchId, role, isActive, queryClient]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (!/^[0-9]{6}$/.test(password)) throw new Error('Enter exactly six digits.');
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured. Add the values from .env.example.');
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) throw error;

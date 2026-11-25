@@ -90,7 +90,6 @@ export default function CashierDashboard() {
   const startMutation = useStartShift(cashierId);
   const [pinPrompt,setPinPrompt] = useState(false);
   const [credential,setCredential] = useState('');
-  const [legacyClose,setLegacyClose]=useState(false);
   const [verifying,setVerifying] = useState(false);
   const verificationLock = useRef(false);
   const finalizeMutation = useFinalizeCashierShiftReconciliation(cashierId);
@@ -237,7 +236,6 @@ export default function CashierDashboard() {
     if (verifying) return;
     setPinPrompt(false);
     setCredential('');
-    setLegacyClose(false);
   };
 
   const requestEndShift = () => {
@@ -248,12 +246,11 @@ export default function CashierDashboard() {
       return;
     }
     setCredential('');
-    setLegacyClose(false);
     setPinPrompt(true);
   };
   const confirmEndShift = async () => {
     const shiftId = shiftQuery.data?.id;
-    if (!shiftId || cartItems.length || !(legacyClose ? credential.length : /^[0-9]{6}$/.test(credential)) || verificationLock.current) return;
+    if (!shiftId || cartItems.length || !(/^[0-9]{6}$/.test(credential)) || verificationLock.current) return;
     verificationLock.current=true; setVerifying(true);
     try {
       assertShiftCloseAllowed();
@@ -662,8 +659,7 @@ export default function CashierDashboard() {
             label="Confirm with your PIN"
             value={credential}
             onChangeText={setCredential}
-            allowPassword
-            onLegacyChange={setLegacyClose}
+
           />
           <View style={styles.closedActions}>
             <View style={styles.closedAction}>
@@ -678,7 +674,7 @@ export default function CashierDashboard() {
               <ManagerActionButton
                 label="Confirm"
                 loading={verifying}
-                disabled={legacyClose ? !credential : !/^[0-9]{6}$/.test(credential)}
+                disabled={!/^[0-9]{6}$/.test(credential)}
                 onPress={() => void confirmEndShift()}
               />
             </View>

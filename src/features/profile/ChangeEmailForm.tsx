@@ -85,7 +85,7 @@ export function ChangeEmailForm({
       scrollToTop();
     } catch (error) {
       const message = getChangePasswordErrorMessage(error);
-      if (message === 'Current password is incorrect.') setError('current_password', { message: 'Current PIN is incorrect.' });
+      if (message === 'Current PIN is incorrect.') setError('current_password', { message: 'Current PIN is incorrect.' });
       else setError('root', { message });
     } finally {
       setVerifying(false);
@@ -108,7 +108,7 @@ export function ChangeEmailForm({
       onSuccess?.(result);
     } catch (error) {
       const message = getChangeEmailErrorMessage(error);
-      if (message === 'Current password is incorrect.') {
+      if (message === 'Current PIN is incorrect.') {
         setStep(1);
         scrollToTop();
         setError('current_password', { message: 'Current PIN is incorrect.' });
@@ -169,7 +169,7 @@ export function ChangeEmailForm({
                 clearErrors('current_password');
               }}
               error={fieldState.error?.message}
-              allowPassword
+
               required
               compact
               accentColor={accentColor}

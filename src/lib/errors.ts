@@ -168,7 +168,7 @@ export function getAuthErrorMessage(error: unknown): string {
   const message = readErrorMessage(error).toLowerCase();
 
   if (message.includes('invalid login credentials')) {
-    return 'The email or sign-in credential is incorrect.';
+    return 'The email or PIN is incorrect.';
   }
   if (message.includes('email not confirmed')) {
     return 'This account has not been confirmed yet.';
@@ -190,7 +190,7 @@ export function getChangePasswordErrorMessage(error: unknown): string {
     message.includes('invalid_credentials') ||
     message.includes('invalid credentials')
   ) {
-    return 'Current password is incorrect.';
+    return 'Current PIN is incorrect.';
   }
   if (
     message.includes('session has expired') ||
@@ -205,7 +205,7 @@ export function getChangePasswordErrorMessage(error: unknown): string {
     message.includes('same as the old') ||
     message.includes('should be different')
   ) {
-    return 'New password must be different from the current password.';
+    return 'New PIN must be different from the current PIN.';
   }
   if (
     message.includes('leaked') ||
@@ -220,7 +220,7 @@ export function getChangePasswordErrorMessage(error: unknown): string {
   if (isNetworkError(message)) {
     return 'Unable to connect. Check your internet connection and try again.';
   }
-  return 'The password could not be changed. Please try again.';
+  return 'The PIN could not be changed. Please try again.';
 }
 
 export function getChangeEmailErrorMessage(error: unknown): string {
@@ -231,7 +231,7 @@ export function getChangeEmailErrorMessage(error: unknown): string {
     message.includes('invalid_credentials') ||
     message.includes('invalid credentials')
   ) {
-    return 'Current password is incorrect.';
+    return 'Current PIN is incorrect.';
   }
   if (
     message.includes('session has expired') ||
