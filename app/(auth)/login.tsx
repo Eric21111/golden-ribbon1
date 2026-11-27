@@ -1,9 +1,9 @@
-import { PinField } from '@/components/PinField';
+import { PinField, type PinFieldHandle } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -132,15 +132,21 @@ export default function LoginScreen() {
     defaultValues: { email: '', password: '' },
   });
 
+  const pinRef = useRef<PinFieldHandle>(null);
+  const loginLock = useRef(false);
   const submit = async (values: LoginValues) => {
+    if (loginLock.current || !isSupabaseConfigured) return;
     if (!/^[0-9]{6}$/.test(values.password)) {
       setError('password', { message: 'Enter all six digits.' });
       return;
     }
+    loginLock.current = true;
     try {
       await signIn(values.email, values.password);
     } catch (error) {
       setError('root', { message: getAuthErrorMessage(error) });
+    } finally {
+      loginLock.current = false;
     }
   };
 
@@ -232,6 +238,8 @@ export default function LoginScreen() {
                         textContentType="username"
                         keyboardType="email-address"
                         returnKeyType="next"
+                        submitBehavior="submit"
+                        onSubmitEditing={() => pinRef.current?.focus()}
                         importantForAutofill="yes"
                       />
                     )}
@@ -242,6 +250,9 @@ export default function LoginScreen() {
                     name="password"
                     render={({ field, fieldState }) => (
                       <PinField
+                        ref={pinRef}
+                        disabled={isDisabled}
+                        onSubmitEditing={() => { if (!isDisabled) void onSubmit(); }}
                         label="PIN"
                         required
                         appearance="dark"

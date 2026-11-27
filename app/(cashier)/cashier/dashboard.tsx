@@ -657,6 +657,8 @@ export default function CashierDashboard() {
         <View style={styles.endShiftSheet}>
           <PinField
             label="Confirm with your PIN"
+            disabled={verifying}
+            onSubmitEditing={() => { if (!verifying) void confirmEndShift(); }}
             value={credential}
             onChangeText={setCredential}
 

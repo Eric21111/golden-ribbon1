@@ -14,6 +14,7 @@ const rnw = require('react-native-web');
 const flat = (html) => html.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
 
 const stubs = {
+  '@/components/BottomSheet': { useSheetScrollToTop: () => () => {} },
   'react-native': rnw,
   '@react-native-vector-icons/ionicons': { __esModule: true, default: () => null },
   '@/components/AppButton': { AppButton: (p) => React.createElement('button', { disabled: p.disabled, 'data-variant': p.variant ?? 'primary' }, p.label) },
@@ -42,11 +43,11 @@ const stubs = {
   const { ChangePasswordForm } = loadTs('src/features/profile/ChangePasswordForm.tsx', stubs);
   const html = renderToStaticMarkup(React.createElement(ChangePasswordForm, { onCancel() {} }));
   const text = flat(html);
-  assert.match(text, /Current password\|New password\|At least 8 characters\.\|Confirm password\|Cancel\|Update\|$/, 'three fields, the one rule under New password, then Cancel | Update');
+  assert.match(text, /Current PIN\|Current PIN\| \*\| \|Cancel\|Continue\|$/, 'current PIN is verified before showing new PIN fields');
   assert.doesNotMatch(text, /Updates the password for this signed-in account|Role and branch|Enter current password|Enter new password|Re-enter new password|Current Password|Confirm New Password|Change password\|/, 'no paragraph, no placeholders, no Title Case labels');
   assert.match(html, /data-variant="secondary"[^>]*>Cancel</);
-  assert.match(html, /aria-label="Show current password"/, 'the show / hide eyes are still there');
-  assert.equal((html.match(/type="password"/g) ?? []).length, 3, 'all three start hidden');
+  assert.match(html, /aria-label="Show PIN"/, 'the show / hide control remains');
+  assert.equal((html.match(/type="password"/g) ?? []).length, 6, 'all six PIN digits start hidden');
   console.log('2. change password: ok');
 }
 
@@ -54,15 +55,15 @@ const stubs = {
 {
   const nameSrc = read('src/features/profile/ChangeNameForm.tsx');
   const passSrc = read('src/features/profile/ChangePasswordForm.tsx');
-  assert.ok(nameSrc.includes('await changeOwnName(values.full_name)') && passSrc.includes('await changeOwnPassword(values.current_password, values.new_password)'), 'same calls');
-  assert.ok(passSrc.includes("if (message === 'Current password is incorrect.') {"), 'same error handling');
-  assert.ok(nameSrc.includes("setSuccess('Name updated.')") && passSrc.includes("setSuccess('Password updated.')"));
-  assert.ok(passSrc.includes('formState.errors.new_password?.message ? null :'), 'the rule makes way for the real error under the field');
-  assert.ok(nameSrc.includes("actions: { flexDirection: 'row', gap: spacing.sm },") && passSrc.includes("actions: { flexDirection: 'row', gap: spacing.sm },"), 'two columns');
+  assert.ok(nameSrc.includes('await changeOwnName(values.full_name)') && passSrc.includes('await changeOwnPassword(parsed.data.current_password, parsed.data.new_password)'), 'validated values reach the account service');
+  assert.ok(passSrc.includes("if (message === 'Current PIN is incorrect.') {"), 'wrong PIN remains actionable');
+  assert.ok(nameSrc.includes("setSuccess('Name updated.')") && passSrc.includes("setSuccess('PIN updated.')"));
+  assert.ok(passSrc.includes('error={fieldState.error?.message}'), 'field validation stays visible');
+  assert.match(passSrc, /actions: \{ flexDirection: 'row'/);
 
   for (const file of ['app/(cashier)/cashier/profile.tsx', 'app/(manager)/manager/profile.tsx', 'app/(owner)/owner/profile.tsx']) {
     const src = read(file);
-    assert.ok(src.includes('<ManagerActionButton label="Save" loading={loading}') && src.includes('<ManagerActionButton label="Update" loading={loading}'), `${file}: short button labels`);
+    assert.ok(src.includes('<ManagerActionButton label="Save" loading={loading}') && src.includes('<ManagerActionButton label={label} loading={loading}'), `${file}: shared step action labels`);
     assert.doesNotMatch(src, /label="Save name"|label="Change password" loading=/, `${file}: the long labels are gone`);
     const nameForm = src.slice(src.indexOf('<ChangeNameForm'), src.indexOf('<ChangePasswordForm'));
     assert.doesNotMatch(nameForm, /hintStyle/, `${file}: no hint on the name form`);

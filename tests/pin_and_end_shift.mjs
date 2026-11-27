@@ -9,6 +9,8 @@ let stateCursor=0;
 const stateBag=[];
 const {PinField}=loadTs('src/components/PinField.tsx',{
   react:{
+    forwardRef: render => (props) => render(props, props.ref),
+    useImperativeHandle: (ref, create) => { if (ref) ref.current=create(); },
     useRef:()=>refs,
     useState(v){
       const i=stateCursor++;
@@ -25,9 +27,9 @@ const {PinField}=loadTs('src/components/PinField.tsx',{
   '@/components/dashboard/theme':{managerColors:{ink:'#111',subtext:'#667',royalBlue:'#1E3A8A'}},
 });
 let value='',focus=-1;
-function inputs(){
+function inputs(props={}){
   stateCursor=0;
-  const tree=PinField({label:'PIN',value,onChangeText:next=>{value=next;}});
+  const tree=PinField({label:'PIN',value,onChangeText:next=>{value=next;},...props});
   const result=[];
   function walk(node){if(!node)return;if(Array.isArray(node))return node.forEach(walk);
     if(node.type==='Input')result.push(node.props);else walk(node.props?.children);}
@@ -39,6 +41,19 @@ inputs()[1].onChangeText('2@');assert.equal(value,'0');
 inputs()[1].onKeyPress({nativeEvent:{key:'Backspace'}});assert.equal(value,'');assert.equal(focus,0);
 inputs()[0].onChangeText('012345');assert.equal(value,'012345');assert.equal(focus,5);
 inputs()[5].onChangeText('');assert.equal(value,'01234');assert.equal(focus,4);
+const handle={current:null};
+inputs({ref:handle}); handle.current.focus(); assert.equal(focus,0);
+let submissions=0;
+const action={onSubmitEditing:()=>{submissions++;}};
+inputs(action)[5].onSubmitEditing(); assert.equal(submissions,0); assert.equal(focus,5);
+inputs(action)[5].onChangeText('5'); assert.equal(submissions,0,'sixth digit never auto-submits');
+inputs(action)[5].onSubmitEditing(); assert.equal(submissions,1);
+inputs(action)[0].onSubmitEditing(); assert.equal(focus,1); assert.equal(submissions,1);
+inputs({...action,disabled:true})[5].onSubmitEditing(); assert.equal(submissions,1);
+assert.equal(inputs()[5].returnKeyType,'done');
+assert.equal(inputs({returnKeyType:'next'})[5].returnKeyType,'next');
+assert.equal(inputs()[0].submitBehavior,'submit');
+assert.equal(inputs({disabled:true})[0].editable,false);
 
 let handler,verified,claimedId,closed=0,revoked=0;
 const user={id:'cashier-a',email:'cashier@example.test'};

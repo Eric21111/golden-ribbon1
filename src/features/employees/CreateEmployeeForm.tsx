@@ -1,8 +1,8 @@
-import { PinField } from '@/components/PinField';
+import { PinField, type PinFieldHandle } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/FormField';
 import { SwitchField } from '@/components/SwitchField';
@@ -44,6 +44,14 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
     },
   });
   const locked = useRef(false);
+  const emailRef = useRef<TextInput>(null);
+  const pinRef = useRef<PinFieldHandle>(null);
+  const confirmRef = useRef<PinFieldHandle>(null);
+  const submit = handleSubmit((values) => {
+    if (locked.current || loading) return;
+    locked.current = true;
+    onSubmit(values);
+  });
   useEffect(() => {
     if (!loading) locked.current = false;
   }, [loading]);
@@ -62,6 +70,9 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           render={({ field, fieldState }) => (
             <FormField
               label="Full name"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => emailRef.current?.focus()}
               required
               autoCapitalize="words"
               value={field.value}
@@ -81,6 +92,10 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           render={({ field, fieldState }) => (
             <FormField
               label="Email"
+              ref={emailRef}
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => pinRef.current?.focus()}
               required
               autoCapitalize="none"
               autoCorrect={false}
@@ -100,11 +115,11 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           control={control}
           name="password"
           render={({ field, fieldState }) => (
-            <PinField label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
+            <PinField ref={pinRef} returnKeyType="next" onSubmitEditing={() => confirmRef.current?.focus()} disabled={loading} label="PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
           )}
         />
         <Controller control={control} name="confirm_password" render={({field, fieldState}) => (
-          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
+          <PinField ref={confirmRef} onSubmitEditing={() => void submit()} disabled={loading} label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
         )} />
       </View>
 
@@ -172,11 +187,7 @@ export function CreateEmployeeForm({ branches, error, loading, onSubmit, onCance
           <ManagerActionButton
             label="Create"
             loading={loading}
-            onPress={handleSubmit((values) => {
-              if (locked.current || loading) return;
-              locked.current = true;
-              onSubmit(values);
-            })}
+            onPress={() => void submit()}
           />
         </View>
       </View>

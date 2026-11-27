@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -16,6 +16,9 @@ const BOX_GAP = 8;
 const BOX_COUNT = 6;
 
 type Props = {
+  onSubmitEditing?: () => void;
+  returnKeyType?: 'next' | 'done';
+  disabled?: boolean;
   label: string;
   value: string;
   onChangeText: (value: string) => void;
@@ -31,7 +34,9 @@ type Props = {
   compact?: boolean;
 };
 
-export function PinField({
+export type PinFieldHandle = { focus: () => void };
+
+export const PinField = forwardRef<PinFieldHandle, Props>(function PinField({
   label,
   value,
   onChangeText,
@@ -44,9 +49,13 @@ export function PinField({
   autoFocus = false,
   appearance = 'default',
   compact = false,
-}: Props) {
+  onSubmitEditing,
+  returnKeyType = 'done',
+  disabled = false,
+}: Props, ref) {
   const isDark = appearance === 'dark';
   const refs = useRef<Array<TextInput | null>>([]);
+  useImperativeHandle(ref, () => ({ focus: () => refs.current[0]?.focus() }), []);
   const [focused, setFocused] = useState(-1);
   const [revealed, setRevealed] = useState(false);
 
@@ -101,6 +110,20 @@ export function PinField({
                 value={value[index] ?? ''}
                 secureTextEntry={!revealed}
                 keyboardType="number-pad"
+                editable={!disabled}
+                returnKeyType={index === BOX_COUNT - 1 ? returnKeyType : 'next'}
+                enterKeyHint={index === BOX_COUNT - 1 ? returnKeyType : 'next'}
+                submitBehavior="submit"
+                onSubmitEditing={() => {
+                  if (disabled) return;
+                  if (index < BOX_COUNT - 1) {
+                    refs.current[Math.min(index + 1, value.length)]?.focus();
+                  } else if (/^[0-9]{6}$/.test(value)) {
+                    onSubmitEditing?.();
+                  } else {
+                    refs.current[Math.min(value.length, BOX_COUNT - 1)]?.focus();
+                  }
+                }}
                 selectTextOnFocus
                 autoComplete="off"
                 textContentType="none"
@@ -136,7 +159,7 @@ export function PinField({
       {compact && !error && !hint ? null : <View style={compact ? styles.metaCompact : styles.meta}>{meta}</View>}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { gap: 8, width: '100%', maxWidth: '100%', alignSelf: 'stretch' },

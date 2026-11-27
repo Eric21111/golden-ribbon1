@@ -1,4 +1,4 @@
-import { PinField } from '@/components/PinField';
+import { PinField, type PinFieldHandle } from '@/components/PinField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -36,6 +36,7 @@ export function ResetPasswordForm({
   });
   const [success, setSuccess] = useState(false);
   const locked = useRef(false);
+  const confirmRef = useRef<PinFieldHandle>(null);
 
   useEffect(() => {
     if (!success || !onSuccess) return;
@@ -44,7 +45,7 @@ export function ResetPasswordForm({
   }, [success, onSuccess]);
 
   const submit = handleSubmit(async (values) => {
-    if (locked.current || loading) return;
+    if (locked.current || loading || success) return;
     locked.current = true;
     try {
       await onSubmit(values);
@@ -68,14 +69,14 @@ export function ResetPasswordForm({
         control={control}
         name="password"
         render={({ field, fieldState }) => (
-          <PinField label="New PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
+          <PinField returnKeyType="next" onSubmitEditing={() => confirmRef.current?.focus()} disabled={busy} label="New PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
         )}
       />
       <Controller
         control={control}
         name="confirm_password"
         render={({ field, fieldState }) => (
-          <PinField label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
+          <PinField ref={confirmRef} onSubmitEditing={() => { if (!busy) void submit(); }} disabled={busy} label="Confirm PIN" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} required compact />
         )}
       />
       {error && !success ? <Text style={styles.error}>{error}</Text> : null}

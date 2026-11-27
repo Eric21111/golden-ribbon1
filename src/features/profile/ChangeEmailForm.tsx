@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { FormField } from '@/components/FormField';
@@ -54,6 +54,9 @@ export function ChangeEmailForm({
 }: ChangeEmailFormProps) {
   const scrollToTop = useSheetScrollToTop();
   const lock = useRef(false);
+  const emailRef = useRef<TextInput>(null);
+  const confirmEmailRef = useRef<TextInput>(null);
+  const focusNewEmail = useRef(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [verifying, setVerifying] = useState(false);
   const [success, setSuccess] = useState('');
@@ -81,6 +84,7 @@ export function ChangeEmailForm({
     clearErrors();
     try {
       await verifyOwnPassword(parsed.data.current_password);
+      focusNewEmail.current = true;
       setStep(2);
       scrollToTop();
     } catch (error) {
@@ -127,6 +131,12 @@ export function ChangeEmailForm({
   });
 
   const busy = verifying || formState.isSubmitting || Boolean(success);
+  useEffect(() => {
+    if (step === 2 && !busy && focusNewEmail.current) {
+      emailRef.current?.focus();
+      focusNewEmail.current = false;
+    }
+  }, [step, busy]);
   const secondaryLabel = step === 1 ? 'Cancel' : 'Back';
   const primaryLabel = step === 1 ? 'Continue' : 'Update';
   const onSecondary = () => {
@@ -140,6 +150,7 @@ export function ChangeEmailForm({
     onCancel?.();
   };
   const onPrimary = () => {
+    if (busy || lock.current) return;
     if (step === 1) void continueFromCurrent();
     else void submit();
   };
@@ -163,6 +174,9 @@ export function ChangeEmailForm({
           render={({ field, fieldState }) => (
             <PinField
               label="Current PIN"
+              returnKeyType="next"
+              disabled={busy}
+              onSubmitEditing={onPrimary}
               value={field.value}
               onChangeText={(next) => {
                 field.onChange(next);
@@ -187,6 +201,10 @@ export function ChangeEmailForm({
               <FormField
                 label="New email"
                 required
+                ref={emailRef}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => confirmEmailRef.current?.focus()}
                 value={field.value}
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}
@@ -209,6 +227,9 @@ export function ChangeEmailForm({
               <FormField
                 label="Confirm email"
                 required
+                ref={confirmEmailRef}
+                returnKeyType="done"
+                onSubmitEditing={onPrimary}
                 value={field.value}
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}

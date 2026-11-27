@@ -1,4 +1,4 @@
-import { PinField } from '@/components/PinField';
+import { PinField, type PinFieldHandle } from '@/components/PinField';
 import { useSheetScrollToTop } from '@/components/BottomSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ReactNode } from 'react';
@@ -52,6 +52,9 @@ export function ChangePasswordForm({
 }: ChangePasswordFormProps) {
   const scrollToTop = useSheetScrollToTop();
   const lock = useRef(false);
+  const newPinRef = useRef<PinFieldHandle>(null);
+  const confirmPinRef = useRef<PinFieldHandle>(null);
+  const focusNewPin = useRef(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [verifying, setVerifying] = useState(false);
   const [success, setSuccess] = useState('');
@@ -83,6 +86,7 @@ export function ChangePasswordForm({
     clearErrors();
     try {
       await verifyOwnPassword(parsed.data.current_password);
+      focusNewPin.current = true;
       setStep(2);
       scrollToTop();
     } catch (error) {
@@ -138,6 +142,12 @@ export function ChangePasswordForm({
   });
 
   const busy = verifying || formState.isSubmitting;
+  useEffect(() => {
+    if (step === 2 && !busy && focusNewPin.current) {
+      newPinRef.current?.focus();
+      focusNewPin.current = false;
+    }
+  }, [step, busy]);
   const secondaryLabel = step === 1 ? 'Cancel' : 'Back';
   const primaryLabel = step === 1 ? 'Continue' : 'Update';
   const onSecondary = () => {
@@ -151,6 +161,7 @@ export function ChangePasswordForm({
     onCancel?.();
   };
   const onPrimary = () => {
+    if (busy || lock.current) return;
     if (step === 1) void continueFromCurrent();
     else void submitNewPin();
   };
@@ -166,6 +177,9 @@ export function ChangePasswordForm({
           render={({ field, fieldState }) => (
             <PinField
               label="Current PIN"
+              returnKeyType="next"
+              disabled={busy}
+              onSubmitEditing={onPrimary}
               value={field.value}
               onChangeText={(next) => {
                 field.onChange(next);
@@ -188,6 +202,10 @@ export function ChangePasswordForm({
             render={({ field, fieldState }) => (
               <PinField
                 label="New PIN"
+                ref={newPinRef}
+                returnKeyType="next"
+                disabled={busy}
+                onSubmitEditing={() => confirmPinRef.current?.focus()}
                 value={field.value}
                 onChangeText={(next) => {
                   field.onChange(next);
@@ -207,6 +225,9 @@ export function ChangePasswordForm({
             render={({ field, fieldState }) => (
               <PinField
                 label="Confirm PIN"
+                ref={confirmPinRef}
+                disabled={busy}
+                onSubmitEditing={onPrimary}
                 value={field.value}
                 onChangeText={(next) => {
                   field.onChange(next);
