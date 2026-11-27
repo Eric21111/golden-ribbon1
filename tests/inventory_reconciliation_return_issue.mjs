@@ -22,7 +22,7 @@ assert.match(source, /export function hasVisibleReconciliationIssue/);
 assert.match(source, /reconOpenStatusLine\(item\)/);
 assert.match(source, /resolvedDiscrepancySummary\(item\)/);
 assert.match(source, /reconResolvedRowDetail\(row\)/);
-assert.match(source, /formatLiveStock/);
+assert.match(source, /formatReconEraQuantity/);
 assert.doesNotMatch(source, /formatSnapshottedQuantity/);
 assert.doesNotMatch(source, /has_reconciliation_issue\)\.length/);
 assert.match(overviewSrc, /reconResolvedStatusLine/);

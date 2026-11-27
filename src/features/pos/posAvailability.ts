@@ -197,6 +197,29 @@ export function maxLineQuantity(
 
 export type StockShortage = { ingredientId: string; name: string; needed: number; available: number };
 
+/** Prefer an in-stock preparation on open; keep an explicit choice on refresh. */
+export function preferredVariantId(item: InventoryItem, previousId: string | null = null): string | null {
+  const variants = item.variants ?? [];
+  if (previousId && variants.some((variant) => variant.id === previousId)) return previousId;
+  return (variants.find((variant) => !variant.unavailable &&
+    (variant.max_quantity ?? variant.sellable_quantity ?? item.quantity_on_hand) > 0)
+    ?? variants.find((variant) => !variant.unavailable) ?? variants[0])?.id ?? null;
+}
+
+/** Explain a recipe shortage without treating another similarly named stock as a substitute. */
+export function unavailableIngredientNames(item: InventoryItem): string[] {
+  if (item.quantity_on_hand > 0 || !item.stock_uses) return [];
+  const ctx = buildStockContext([item]);
+  const variants = item.variants ?? [];
+  const names = new Set<string>();
+  for (const variantId of variants.length ? variants.map((v) => v.id) : [null]) {
+    for (const shortage of findShortages(ctx, [{ product_id: item.product.id, variant_id: variantId, quantity: 1 }])) {
+      if (shortage.ingredientId !== item.product.id) names.add(shortage.name);
+    }
+  }
+  return [...names];
+}
+
 /** Ingredients and drinks the cart needs more of than the branch has (for the final live check before payment). */
 export function findShortages(ctx: PosStockContext, cart: CartLineLike[]): StockShortage[] {
   const shortages: StockShortage[] = [];

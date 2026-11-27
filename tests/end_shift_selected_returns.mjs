@@ -77,6 +77,26 @@ await assert.rejects(close([blocked]));
 await assert.rejects(close([id(99)]));
 await assert.rejects(close([product,product]));
 await assert.rejects(close([product],{[product]:5}));
+await assert.rejects(close([product],{[product]:null}),/Invalid waste quantity/);
+await assert.rejects(close([product],{[product]:'1'}),/Invalid waste quantity/);
+await assert.rejects(close([product],{[product]:0.5}),/not enabled/);
+// Exact numeric scale must work without silently rounding unsupported values.
+await db.exec('reset role');
+assert.equal(Number((await db.query("select public.parse_inventory_quantity('3.000','piece_stock',false) q")).rows[0].q),3);
+for (const value of ['0.001','1.4999','1e2','-1','0']) {
+  await assert.rejects(db.query("select public.parse_inventory_quantity($1,'piece_stock',false)",[value]));
+}
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${cashier}',false)`);
+// Enabling half-steps only within this rolled-back test must allow fractional
+// waste and the generated fractional return, with exactly-once retry behavior.
+await db.exec('begin');
+await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);
+await db.query('select public.set_fractional_piece_ops_enabled(true)');
+await db.query("select set_config('request.jwt.claim.sub',$1,false)",[cashier]);
+const halfClose=await close([product],{[product]:0.5});
+assert.equal(Number((await db.query('select quantity_returned from public.stock_return_items where stock_return_id=$1',[halfClose.return_id])).rows[0].quantity_returned),3.5);
+assert.equal((await close([product],{[product]:0.5})).idempotent,true);
+await db.exec('rollback');
 await db.exec('reset role');
 assert.equal((await db.query('select count(*)::int n from public.shift_reconciliations where shift_id=$1',[shift])).rows[0].n,0);
 await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${manager}',false)`);

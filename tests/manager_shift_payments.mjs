@@ -36,8 +36,8 @@ const receipt = (program, amount, method = 'gcash', status = 'completed') => ({
 assert.deepEqual(paymentBreakdown([receipt('standard', 10.01), receipt('employee_meal', 0)], 'gcash').employeeMeals, 1);
 
 assert.match(readFileSync('supabase/migrations/20261117160000_manager_shift_payments.sql', 'utf8'), /manager_shift_payments/);
-assert.match(readFileSync('src/features/reports/ShiftRemittanceDetailScreen.tsx', 'utf8'), /Show standard \/ PWD \/ back office \/ meals/);
-assert.match(readFileSync('src/features/reports/ShiftRemittanceDetailScreen.tsx', 'utf8'), /not remitted cash/);
+assert.match(readFileSync('src/features/reports/ShiftRemittanceDetailScreen.tsx', 'utf8'), /<ShiftSalesBreakdown key=\{id\} shiftId=\{id\}/);
+assert.match(readFileSync('src/features/reports/ShiftSalesBreakdown.tsx', 'utf8'), /not remitted cash/);
 assert.match(readFileSync('src/features/reports/ShiftRemittanceScreen.tsx', 'utf8'), /tenderMeta/);
 
 const db = new PGlite();

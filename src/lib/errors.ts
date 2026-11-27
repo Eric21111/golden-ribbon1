@@ -455,6 +455,24 @@ export function getInventoryErrorMessage(error: unknown): string {
 export function getShiftErrorMessage(error: unknown): string {
   const raw = readErrorMessage(error);
   const message = raw.toLowerCase();
+  if (message.includes('invalid input syntax for type bigint')) {
+    return 'The server could not read a stock quantity. Ask the owner to apply the remittance update, then retry with the same entries.';
+  }
+  if (message.includes('half-step inventory quantities are not enabled') || message.includes('until half-step stock ops are enabled')) {
+    return 'Half quantities are not enabled for this branch system yet. Ask the owner to check the stock settings.';
+  }
+  if (message.includes('invalid waste quantity') || message.includes('exact half-steps')) {
+    return 'Review the waste quantities. Use the stock amounts allowed by the system.';
+  }
+  if (message.includes('waste exceeds available stock')) {
+    return 'Waste exceeds the available stock. Review the waste quantities before submitting again.';
+  }
+  if (message.includes('selected stock cannot be returned') || message.includes('product outside this shift')) {
+    return 'A selected item is no longer available to return. Refresh the stock list and review your selection.';
+  }
+  if (message.includes('already closed with different details') || message.includes('shift already finalized')) {
+    return 'This shift has already been submitted. Refresh its remittance details before trying again.';
+  }
   if (message.includes('unfinished cart')) return 'Clear the unfinished cart before ending the shift.';
   if (message.includes('sale confirmation')) return 'Finish the sale confirmation before ending the shift.';
   if (message.includes('cashier access') || message.includes('unable to access')) return 'You are not authorized to use this shift.';

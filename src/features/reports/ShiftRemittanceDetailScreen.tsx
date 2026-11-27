@@ -18,6 +18,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/dashboard/Man
 import { ManagerScreenHeader } from '@/components/dashboard/ManagerScreenHeader';
 import { managerColors } from '@/components/dashboard/theme';
 import { ReportSectionHeading } from '@/features/reports/ReportSectionHeading';
+import { ShiftSalesBreakdown } from '@/features/reports/ShiftSalesBreakdown';
 import {
   closesAsUnsold,
   closingDispositionQty,
@@ -254,7 +255,7 @@ export function ShiftRemittanceDetailScreen() {
             </View>
 
             <View style={styles.sectionBlock}>
-              <ReportSectionHeading title="COLLECTIONS" />
+              <ReportSectionHeading title="REMITTANCE" />
               <TenderRemittanceCard
                 title={combinedCollections ? 'Remittance' : 'Cash'}
                 expectedLabel={combinedCollections ? 'Expected remittance' : 'Expected cash'}
@@ -280,6 +281,8 @@ export function ShiftRemittanceDetailScreen() {
                 />
               ) : null}
             </View>
+
+            {id && (profile?.role === 'owner' || profile?.role === 'manager') ? <ShiftSalesBreakdown key={id} shiftId={id} /> : null}
 
             <View style={styles.sectionBlock}>
               <ReportSectionHeading title={detail.selected_return_close ? 'END SHIFT STOCK' : 'INVENTORY CLOSE'} />

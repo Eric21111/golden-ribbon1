@@ -36,6 +36,7 @@ import {
 import { buildStockContext, maxLineQuantity, withCartLimits } from '@/features/pos/posAvailability';
 import { useClientPagination } from '@/hooks/useClientPagination';
 import { useCashierPosInventory } from '@/hooks/useInventory';
+import { usePosStockRefresh } from '@/hooks/usePosStockRefresh';
 import { useActiveShift } from '@/hooks/useShifts';
 import { getInventoryErrorMessage, getShiftErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
@@ -67,6 +68,7 @@ export default function CashierPosScreen() {
   const shiftQuery = useActiveShift(cashierId);
   const posBranchId = shiftQuery.data?.branch_id ?? null;
   const inventory = useCashierPosInventory(posBranchId);
+  usePosStockRefresh(Boolean(posBranchId), inventory.refetch);
   const shiftBranchName = inventory.data?.[0]?.branch.name ?? profile?.branch?.name;
   const items = useCartStore((state) => state.items);
   const beginShift = useCartStore((state) => state.beginShift);
@@ -179,7 +181,7 @@ export default function CashierPosScreen() {
     return map;
   }, [items]);
 
-  const activeSheetItem = sheetItem ? inventoryById.get(sheetItem.product.id) ?? sheetItem : null;
+  const activeSheetItem = sheetItem ? inventoryById.get(sheetItem.product.id) ?? null : null;
 
   const addFromSheet = (variant: PosVariant | null, quantity: number, drink: PosDrinkChoice | null = null) => {
     if (!activeSheetItem || quantity <= 0) return;

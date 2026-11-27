@@ -32,6 +32,18 @@ export type InventoryItemOption = {
 /** One inventory item used by a variant, and how many whole stock units each order uses. */
 export type RecipeLine = { itemId: string; quantity: number };
 
+/** Warn about saved links without guessing a substitute from product names. */
+export function recipeStockWarnings(lines: RecipeLine[], ingredients: InventoryItemOption[]): string[] {
+  const items = new Map(ingredients.map((item) => [item.id, item]));
+  return [...new Set(lines.map((line) => line.itemId))].flatMap((id) => {
+    if (id === THIS_PRODUCT_ID) return [];
+    const item = items.get(id);
+    if (!item) return ['A stock item used by this order is unavailable in the product list. Review the stock selection before saving.'];
+    if (item.inactive) return [`${item.name} is disabled but is still used by this order. Check this stock item in Products, or select the stock actually used. Another item's stock will not be used automatically.`];
+    return [];
+  });
+}
+
 export const MAX_RECIPE_QUANTITY = 99;
 
 /** A real product offered as a stock item. */

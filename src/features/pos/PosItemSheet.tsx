@@ -1,5 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { ManagerActionButton } from '@/components/dashboard/ManagerActionButton';
@@ -7,6 +7,7 @@ import { ManagerBottomSheet } from '@/components/dashboard/ManagerBottomSheet';
 import { managerColors } from '@/components/dashboard/theme';
 import { CategoryIcon } from '@/features/products/CategoryIcon';
 import { sortMealVariants } from '@/features/pos/pricingPrograms';
+import { preferredVariantId } from './posAvailability';
 import { QUANTITY_BOX_MAX_FONT_SCALE, formatMoney, quantityBoxWidth } from '@/lib/format';
 import { toCents } from '@/lib/money';
 import type { PosDrinkChoice } from '@/stores/cartStore';
@@ -33,12 +34,20 @@ export function PosItemSheet({ item, quantityByVariant, quantityByLine, onAdd, o
   const [draft, setDraft] = useState('1');
   const { fontScale } = useWindowDimensions();
 
-  // Reset selection whenever a new item is opened.
+  const openedProduct = useRef<string | null>(null);
+  // Refresh stock without silently changing a cashier's chosen preparation.
   useEffect(() => {
-    if (!item) return;
-    setSelectedVariantId((item.variants?.find((variant) => !variant.unavailable) ?? item.variants?.[0])?.id ?? null);
-    setQuantity(1);
-    setDraft('1');
+    if (!item) {
+      openedProduct.current = null;
+      return;
+    }
+    const newlyOpened = openedProduct.current !== item.product.id;
+    openedProduct.current = item.product.id;
+    setSelectedVariantId((previous) => preferredVariantId(item, newlyOpened ? null : previous));
+    if (newlyOpened) {
+      setQuantity(1);
+      setDraft('1');
+    }
   }, [item]);
 
   const selectedVariant: PosVariant | null = hasVariants

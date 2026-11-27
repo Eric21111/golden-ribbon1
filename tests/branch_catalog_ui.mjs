@@ -216,27 +216,29 @@ console.log('3. listing rule: ok');
   assert.match(screen, /<MainBranchGuard>/);
   assert.match(screen, /ListFiltersSheet/);
   assert.match(screen, /title: 'Branch'/);
-  assert.match(screen, /useClientPagination\(visibleRows, `\$\{branchId\}\|\$\{search\}\|\$\{sort\}\|\$\{category\}`, 10\)/);
-  assert.match(screen, /case 'price-asc':\s+return priceA - priceB/);
+  assert.match(screen, /useClientPagination\(\s*visibleRows,\s*`\$\{branchId\}\|\$\{search\}\|\$\{sort\}\|\$\{category\}\|\$\{stockFilter\}`,\s*10,?\s*\)/);
+  assert.match(screen, /case 'qty-asc':\s+return a.available - b.available \|\| byName/);
+  assert.match(screen, /matchesStockPresence\(available, stockFilter\)/);
   assert.match(screen, /buildCatalogRows\(\s*products\.data \?\? \[\],\s*catalog\.data \?\? \[\],\s*branchVariants\.data \?\? \[\],\s*productIdsWithOptions\.data \?\? \[\],\s*\)/, 'the listing rule lives in one tested function');
-  assert.match(screen, /for \(const productId of stock\.data\?\.keys\(\) \?\? \[\]\)/, 'list is driven by branch stock');
+  assert.match(screen, /new Set<string>\(\[\.\.\.byId.keys\(\), \.\.\.\(stock.data\?\.keys\(\) \?\? \[\]\)\]\)/, 'catalog and branch stock are combined without duplicate rows');
   assert.doesNotMatch(screen, /STOCK ONLY AT BRANCH/, 'stock and listed products share one list');
   assert.match(read('src/hooks/useProducts.ts'), /queryKey: \['product-variants', 'with-options'\]/, 'refreshed by the existing product-save invalidation');
   assert.match(read('src/services/productService.ts'), /from\('product_variants'\)\.select\('product_id'\)/);
   // wording
   assert.doesNotMatch(screen, /No available products|available here/);
-  assert.match(screen, /catalogEmptyState\(branchName, Boolean\(search\.trim\(\)\) \|\| category !== 'all'\)/);
+  assert.match(screen, /catalogEmptyState\(branchName, false\)/);
+  assert.match(screen, /No matching stock/);
   assert.doesNotMatch(screen, /Listed means priced|Stock levels are not shown here/, 'the long explainer is gone from the list screen');
   assert.match(screen, /label="Go to Products"/, 'empty state offers one way forward');
   assert.match(screen, /manager_branch_stock/);
   assert.match(screen, /balance\?\.sellable/);
-  assert.match(screen, /On hand \$\{balance\.onHand\}/);
-  assert.match(screen, /Held \$\{balance\.held\}/);
-  assert.match(screen, /Not listed/);
+  assert.match(screen, />On hand<\/Text>/);
+  assert.match(screen, />Held<\/Text>/);
+  assert.match(screen, /Not in menu/);
   // cards: listed rows open the detail sheet; badges still show blockers
-  assert.match(screen, /onPress=\{listed \? \(\) => setSelectedId\(product\.id\) : undefined\}/);
-  assert.match(screen, /catalogRow\?\.priceText/);
-  assert.match(screen, /<ManagerBadge key=\{badge\.key\} label=\{badge\.label\} tone=\{badge\.tone\} \/>/);
+  assert.match(screen, /onPress=\{item.catalog \? \(\) => setSelectedId\(item.product.id\) : undefined\}/);
+  assert.match(screen, /value: row.priceText/);
+  assert.match(screen, /label=\{row.inPos \? 'In menu' : 'Not in menu'\}/);
   assert.match(screen, /<CatalogDetails/);
   assert.doesNotMatch(screen.replace("router.push('/manager/products')", ''), /router\.push|setEditProduct|configureBranch/, 'no management actions here (only the empty-state link to Products)');
   // the extra read is one bulk query, refreshed when a product is saved (that invalidates the whole prefix)
@@ -259,8 +261,8 @@ console.log('3. listing rule: ok');
   }
   const screen = read('app/(manager)/manager/catalog.tsx');
   assert.match(screen, /badgeRow: \{ flexDirection: 'row', flexWrap: 'wrap'/, 'badges wrap onto the next line');
-  assert.match(screen, /priceValue: \{/, 'list rows show the branch price');
-  assert.match(screen, /trailing: \{ alignItems: 'flex-end'/, 'price and badges sit in the trailing column');
+  assert.match(screen, /label=\{`Qty: \$\{item.available\}`\}/, 'list rows show quantity; prices are in details');
+  assert.match(screen, /trailing=\{\s*<ManagerBadge/, 'quantity is the trailing badge');
   console.log('8. widths: ok');
 }
 

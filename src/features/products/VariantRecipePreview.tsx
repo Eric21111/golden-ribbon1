@@ -26,6 +26,7 @@ import {
   lineAmount,
   stockModeOf,
   summarizeDeduction,
+  recipeStockWarnings,
   unitLabel,
   type InventoryItemOption,
   type RecipeLine,
@@ -443,6 +444,9 @@ export function VariantRecipePreview({
   return (
     <View style={styles.wrap}>
       {quantityError ? <Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{quantityError}</Text> : null}
+      {recipeStockWarnings(effective, ingredients).map((warning) => (
+        <Text key={warning} accessibilityRole="alert" style={{ color: '#92400E' }}>{warning}</Text>
+      ))}
       {/* the Extras & Sides choice sits under its own page heading, so the section label would only repeat it */}
       {stockModeChoice ? null : <Text style={styles.label}>{label}</Text>}
 

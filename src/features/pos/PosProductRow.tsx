@@ -6,6 +6,7 @@ import { managerColors, statChipColors } from '@/components/dashboard/theme';
 import { getCategoryIndicator } from '@/features/products/productCategoryIndicator';
 import { formatMoney, formatProductPrice } from '@/lib/format';
 import type { InventoryItem } from '@/types/models';
+import { unavailableIngredientNames } from './posAvailability';
 
 interface PosProductRowProps {
   item: InventoryItem;
@@ -26,6 +27,7 @@ function priceParts(item: InventoryItem): { from: boolean; value: string } {
 
 export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProps) {
   const outOfStock = item.quantity_on_hand === 0;
+  const missing = unavailableIngredientNames(item);
   const indicator = getCategoryIndicator(item.product.product_category);
   const tint = statChipColors[indicator.color];
   const price = priceParts(item);
@@ -56,7 +58,7 @@ export function PosProductRow({ item, cartQuantity, onPress }: PosProductRowProp
           </View>
         </View>
         <Text style={[styles.stock, outOfStock && styles.stockOut]}>
-          {outOfStock ? 'Out of stock' : `Available: ${item.quantity_on_hand} pcs`}
+          {outOfStock ? (missing.length ? `Out of stock · Needs ${missing.join(', ')}` : 'Out of stock') : `Available: ${item.quantity_on_hand} pcs`}
         </Text>
       </View>
       {outOfStock ? null : (

@@ -78,6 +78,7 @@ const Detail = loadTs('src/features/reports/ShiftRemittanceDetailScreen.tsx', {
   '@/hooks/useClientPagination': { useClientPagination: () => ({ pageItems: [], showPagination: false, page: 0, totalPages: 1, setPage: () => {} }) },
   '@/hooks/useSales': { useShiftSales: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }) },
   '@/hooks/useShifts': {
+    useManagerShiftPayments: () => ({ data: [], isLoading: false, error: null }),
     useShiftCloseReportDetail: () => ({ data: detail, isLoading: false, error: null, refetch: () => {} }),
     useManagerShiftPayments: () => ({ data: [], isLoading: false, error: null, refetch: () => {} }),
   },

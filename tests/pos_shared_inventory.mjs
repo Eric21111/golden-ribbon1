@@ -23,7 +23,7 @@ import {
 } from '../src/features/pos/posAvailability.ts';
 
 const MIGRATION = '20261023130000_pos_shared_inventory_availability.sql';
-const migrationSrc = readFileSync(`supabase/migrations/${MIGRATION}`, 'utf8');
+const migrationSrc = readFileSync(`supabase/migrations/${MIGRATION}`, 'utf8').replace(/\r\n/g, '\n');
 
 // ---------------------------------------------------------------- 0. static: scope of the migration and the wiring
 {

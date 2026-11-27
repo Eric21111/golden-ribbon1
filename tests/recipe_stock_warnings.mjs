@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { loadTs } from './_load_ts.mjs';
+const { recipeStockWarnings, THIS_PRODUCT_ID } = loadTs('src/features/products/recipePreviewData.ts');
+const lines = [{itemId:'egg',quantity:1}];
+const options = [{id:'egg',name:'Egg',inactive:true},{id:'boiled',name:'Boiled Egg'}];
+assert.match(recipeStockWarnings(lines,options)[0], /Egg is disabled/);
+assert.equal(recipeStockWarnings([...lines,...lines],options).length,1);
+assert.match(recipeStockWarnings(lines,[])[0], /unavailable in the product list/);
+assert.deepEqual(recipeStockWarnings([{itemId:THIS_PRODUCT_ID,quantity:1}],[]),[]);
+assert.deepEqual(recipeStockWarnings(lines,[{...options[0],inactive:false}]),[]);
+assert.deepEqual(lines,[{itemId:'egg',quantity:1}], 'diagnostics never replace saved ingredients');
+console.log('Recipe stock warnings passed.');

@@ -16,7 +16,7 @@ import { unitsPerWhole, type StockUnitCode } from '@/lib/stockUnits';
  */
 
 /** Must stay false until fractional stock is deliberately activated. */
-export const FRACTIONAL_STOCK_USES_ENABLED = true;
+export const FRACTIONAL_STOCK_USES_ENABLED = false;
 
 /** Ops / live piece_stock max (matches parse_inventory_quantity). */
 export const PIECE_OPS_MAX = 999999;
